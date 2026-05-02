@@ -4,17 +4,21 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 import os
+import re
 import uuid
+import random
 import logging
 import bcrypt
 import jwt
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Literal
+from typing import Optional, Literal
 
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, Field, EmailStr, ConfigDict
+from pydantic import BaseModel, Field, EmailStr
+
+from toner_master_seed import TONER_MASTER, SUPPLIERS_25, CUSTOMERS
 
 
 # ----- Config -----
@@ -22,7 +26,7 @@ MONGO_URL = os.environ['MONGO_URL']
 DB_NAME = os.environ['DB_NAME']
 JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = "HS256"
-ACCESS_TOKEN_MINUTES = 60 * 24  # 1 day for B2B convenience
+ACCESS_TOKEN_MINUTES = 60 * 24
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
@@ -34,23 +38,18 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger("tonerscart")
 
 
+# ----- Helpers: normalization -----
+def normalize_model(s: str) -> str:
+    """Lowercase, strip non-alphanumeric. 'HP 88A', 'hp-88a', 'HP88 A' → 'hp88a'."""
+    if not s:
+        return ""
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
 # ----- Models -----
 Role = Literal["customer", "supplier", "admin"]
 SupplierStatus = Literal["pending", "approved", "rejected"]
 OrderStatus = Literal["requested", "accepted", "shipped", "completed", "rejected"]
-
-
-class UserPublic(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str
-    email: EmailStr
-    name: str
-    role: Role
-    company: Optional[str] = None
-    city: Optional[str] = None
-    phone: Optional[str] = None
-    supplier_status: Optional[SupplierStatus] = None
-    created_at: datetime
 
 
 class RegisterRequest(BaseModel):
@@ -69,15 +68,18 @@ class LoginRequest(BaseModel):
 
 
 class ProductCreate(BaseModel):
+    master_id: Optional[str] = None  # preferred: chosen from TonerMaster
     model_number: str
     brand: str
-    title: str
+    title: Optional[str] = None
     description: Optional[str] = ""
     price: float
     stock: int
     city: str
     color: Optional[str] = "Black"
+    toner_type: Optional[str] = "Original"
     compatible_printers: Optional[str] = ""
+    page_yield: Optional[int] = None
 
 
 class ProductUpdate(BaseModel):
@@ -87,24 +89,8 @@ class ProductUpdate(BaseModel):
     stock: Optional[int] = None
     city: Optional[str] = None
     color: Optional[str] = None
+    toner_type: Optional[str] = None
     compatible_printers: Optional[str] = None
-
-
-class ProductOut(BaseModel):
-    id: str
-    supplier_id: str
-    supplier_name: str
-    supplier_company: Optional[str] = None
-    model_number: str
-    brand: str
-    title: str
-    description: Optional[str] = ""
-    price: float
-    stock: int
-    city: str
-    color: Optional[str] = "Black"
-    compatible_printers: Optional[str] = ""
-    created_at: datetime
 
 
 class OrderCreate(BaseModel):
@@ -120,31 +106,7 @@ class OrderStatusUpdate(BaseModel):
     tracking_number: Optional[str] = None
 
 
-class OrderOut(BaseModel):
-    id: str
-    customer_id: str
-    customer_name: str
-    customer_email: str
-    supplier_id: str
-    supplier_name: str
-    supplier_company: Optional[str] = None
-    product_id: str
-    product_title: str
-    model_number: str
-    brand: str
-    unit_price: float
-    quantity: int
-    total: float
-    notes: Optional[str] = ""
-    delivery_address: str
-    contact_phone: str
-    status: OrderStatus
-    tracking_number: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-
-
-# ----- Helpers -----
+# ----- Helpers: auth -----
 def hash_password(pw: str) -> str:
     return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
@@ -158,9 +120,7 @@ def verify_password(pw: str, hashed: str) -> bool:
 
 def create_access_token(user_id: str, email: str, role: str) -> str:
     payload = {
-        "sub": user_id,
-        "email": email,
-        "role": role,
+        "sub": user_id, "email": email, "role": role,
         "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_MINUTES),
         "type": "access",
     }
@@ -169,13 +129,8 @@ def create_access_token(user_id: str, email: str, role: str) -> str:
 
 def user_to_public(u: dict) -> dict:
     return {
-        "id": u["id"],
-        "email": u["email"],
-        "name": u["name"],
-        "role": u["role"],
-        "company": u.get("company"),
-        "city": u.get("city"),
-        "phone": u.get("phone"),
+        "id": u["id"], "email": u["email"], "name": u["name"], "role": u["role"],
+        "company": u.get("company"), "city": u.get("city"), "phone": u.get("phone"),
         "supplier_status": u.get("supplier_status"),
         "created_at": u["created_at"] if isinstance(u["created_at"], datetime) else datetime.fromisoformat(u["created_at"]),
     }
@@ -195,7 +150,6 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
-
     user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
@@ -207,25 +161,17 @@ def require_role(*roles: str):
         if user["role"] not in roles:
             raise HTTPException(status_code=403, detail="Forbidden")
         if user["role"] == "supplier" and user.get("supplier_status") != "approved":
-            # only restrict supplier-only endpoints; admin is allowed implicitly
             raise HTTPException(status_code=403, detail="Supplier account not approved yet")
         return user
     return dep
 
 
 def set_auth_cookie(response: Response, token: str):
-    response.set_cookie(
-        key="access_token",
-        value=token,
-        httponly=True,
-        secure=False,
-        samesite="lax",
-        max_age=ACCESS_TOKEN_MINUTES * 60,
-        path="/",
-    )
+    response.set_cookie(key="access_token", value=token, httponly=True, secure=False,
+                        samesite="lax", max_age=ACCESS_TOKEN_MINUTES * 60, path="/")
 
 
-# ----- Auth Endpoints -----
+# ===== Auth =====
 @api.post("/auth/register")
 async def register(payload: RegisterRequest, response: Response):
     email = payload.email.lower()
@@ -234,13 +180,8 @@ async def register(payload: RegisterRequest, response: Response):
     user_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
     doc = {
-        "id": user_id,
-        "email": email,
-        "name": payload.name,
-        "role": payload.role,
-        "company": payload.company,
-        "city": payload.city,
-        "phone": payload.phone,
+        "id": user_id, "email": email, "name": payload.name, "role": payload.role,
+        "company": payload.company, "city": payload.city, "phone": payload.phone,
         "password_hash": hash_password(payload.password),
         "supplier_status": "pending" if payload.role == "supplier" else None,
         "created_at": now.isoformat(),
@@ -273,25 +214,63 @@ async def me(user: dict = Depends(get_current_user)):
     return user_to_public(user)
 
 
-# ----- Public Product Endpoints -----
+# ===== TonerMaster =====
+@api.get("/toner-master")
+async def list_toner_master(q: Optional[str] = None, brand: Optional[str] = None, limit: int = 50):
+    """Smart, typo-tolerant search. Tries:
+       1. exact normalized prefix match
+       2. normalized substring match (handles 'HP88A', '88-A', 'hp 88 a' all → '88a')
+    """
+    query: dict = {}
+    if brand and brand != "all":
+        query["brand"] = brand
+    if q:
+        nq = normalize_model(q)
+        if nq:
+            query["$or"] = [
+                {"search_norm": {"$regex": nq, "$options": "i"}},
+                {"normalized": {"$regex": nq, "$options": "i"}},
+                {"model_number": {"$regex": re.escape(q), "$options": "i"}},
+                {"printer_compatibility": {"$regex": re.escape(q), "$options": "i"}},
+            ]
+    cursor = db.toner_master.find(query, {"_id": 0}).limit(limit)
+    return await cursor.to_list(length=limit)
+
+
+@api.get("/toner-master/brands")
+async def toner_master_brands():
+    return sorted(await db.toner_master.distinct("brand"))
+
+
+@api.get("/toner-master/{master_id}")
+async def get_toner_master(master_id: str):
+    item = await db.toner_master.find_one({"id": master_id}, {"_id": 0})
+    if not item:
+        raise HTTPException(404, "Toner not found")
+    return item
+
+
+# ===== Public products =====
 @api.get("/products/search")
-async def search_products(q: Optional[str] = None, brand: Optional[str] = None, city: Optional[str] = None, limit: int = 100):
+async def search_products(q: Optional[str] = None, brand: Optional[str] = None,
+                          city: Optional[str] = None, limit: int = 200):
     query: dict = {}
     if q:
-        query["$or"] = [
-            {"model_number": {"$regex": q, "$options": "i"}},
-            {"title": {"$regex": q, "$options": "i"}},
-            {"compatible_printers": {"$regex": q, "$options": "i"}},
-        ]
+        nq = normalize_model(q)
+        if nq:
+            query["$or"] = [
+                {"search_norm": {"$regex": nq, "$options": "i"}},
+                {"model_normalized": {"$regex": nq, "$options": "i"}},
+                {"model_number": {"$regex": re.escape(q), "$options": "i"}},
+                {"title": {"$regex": re.escape(q), "$options": "i"}},
+                {"compatible_printers": {"$regex": re.escape(q), "$options": "i"}},
+            ]
     if brand and brand != "all":
         query["brand"] = brand
     if city and city != "all":
         query["city"] = city
     cursor = db.products.find(query, {"_id": 0}).limit(limit)
     items = await cursor.to_list(length=limit)
-    for item in items:
-        if isinstance(item.get("created_at"), str):
-            item["created_at"] = datetime.fromisoformat(item["created_at"])
     return items
 
 
@@ -304,19 +283,29 @@ async def product_facets():
 
 
 @api.get("/products/grouped")
-async def grouped_products(q: Optional[str] = None, brand: Optional[str] = None, city: Optional[str] = None):
-    items = await search_products(q=q, brand=brand, city=city, limit=500)
+async def grouped_products(q: Optional[str] = None, brand: Optional[str] = None,
+                           city: Optional[str] = None, toner_type: Optional[str] = None):
+    items = await search_products(q=q, brand=brand, city=city, limit=1000)
+    if toner_type and toner_type != "all":
+        items = [i for i in items if i.get("toner_type") == toner_type]
     groups: dict = {}
     for it in items:
         key = it["model_number"]
-        groups.setdefault(key, {"model_number": key, "brand": it["brand"], "title": it["title"], "listings": []})
+        groups.setdefault(key, {
+            "model_number": key, "brand": it["brand"], "title": it.get("title", key),
+            "color": it.get("color", "Black"),
+            "compatible_printers": it.get("compatible_printers", ""),
+            "page_yield": it.get("page_yield"),
+            "listings": [],
+        })
         groups[key]["listings"].append(it)
-    # sort listings by price asc
     result = []
     for g in groups.values():
         g["listings"].sort(key=lambda x: x["price"])
         g["min_price"] = g["listings"][0]["price"] if g["listings"] else 0
+        g["max_price"] = g["listings"][-1]["price"] if g["listings"] else 0
         g["supplier_count"] = len(g["listings"])
+        g["cities"] = sorted({li["city"] for li in g["listings"]})
         result.append(g)
     result.sort(key=lambda x: x["model_number"])
     return result
@@ -326,30 +315,44 @@ async def grouped_products(q: Optional[str] = None, brand: Optional[str] = None,
 async def get_product(product_id: str):
     p = await db.products.find_one({"id": product_id}, {"_id": 0})
     if not p:
-        raise HTTPException(status_code=404, detail="Product not found")
-    if isinstance(p.get("created_at"), str):
-        p["created_at"] = datetime.fromisoformat(p["created_at"])
+        raise HTTPException(404, "Product not found")
     return p
 
 
-# ----- Supplier Product Management -----
+# ===== Supplier =====
 @api.post("/supplier/products")
 async def create_product(payload: ProductCreate, user: dict = Depends(require_role("supplier"))):
+    master = None
+    if payload.master_id:
+        master = await db.toner_master.find_one({"id": payload.master_id}, {"_id": 0})
     pid = str(uuid.uuid4())
+    model_number = (master["model_number"] if master else payload.model_number).strip()
+    brand = (master["brand"] if master else payload.brand).strip()
+    title = payload.title or (master["title"] if master else f"{brand} {model_number} Toner")
+    color = (master["color"] if master else payload.color) or "Black"
+    toner_type = payload.toner_type or (master["toner_type"] if master else "Original")
+    printers = payload.compatible_printers or (master["printer_compatibility"] if master else "")
+    page_yield = payload.page_yield or (master.get("page_yield") if master else None)
+
     doc = {
         "id": pid,
         "supplier_id": user["id"],
         "supplier_name": user["name"],
         "supplier_company": user.get("company"),
-        "model_number": payload.model_number.upper().strip(),
-        "brand": payload.brand.strip(),
-        "title": payload.title.strip(),
+        "master_id": payload.master_id,
+        "model_number": model_number,
+        "model_normalized": normalize_model(model_number),
+        "search_norm": normalize_model(f"{brand} {model_number} {color}"),
+        "brand": brand,
+        "title": title,
         "description": payload.description or "",
         "price": float(payload.price),
         "stock": int(payload.stock),
         "city": payload.city.strip(),
-        "color": payload.color or "Black",
-        "compatible_printers": payload.compatible_printers or "",
+        "color": color,
+        "toner_type": toner_type,
+        "compatible_printers": printers,
+        "page_yield": page_yield,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.products.insert_one(doc.copy())
@@ -359,65 +362,53 @@ async def create_product(payload: ProductCreate, user: dict = Depends(require_ro
 
 @api.get("/supplier/products")
 async def list_supplier_products(user: dict = Depends(require_role("supplier"))):
-    items = await db.products.find({"supplier_id": user["id"]}, {"_id": 0}).to_list(500)
-    return items
+    return await db.products.find({"supplier_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
 
 
 @api.put("/supplier/products/{product_id}")
 async def update_product(product_id: str, payload: ProductUpdate, user: dict = Depends(require_role("supplier"))):
     p = await db.products.find_one({"id": product_id})
     if not p or p["supplier_id"] != user["id"]:
-        raise HTTPException(status_code=404, detail="Product not found")
+        raise HTTPException(404, "Product not found")
     update = {k: v for k, v in payload.model_dump().items() if v is not None}
     if update:
         await db.products.update_one({"id": product_id}, {"$set": update})
-    p2 = await db.products.find_one({"id": product_id}, {"_id": 0})
-    return p2
+    return await db.products.find_one({"id": product_id}, {"_id": 0})
 
 
 @api.delete("/supplier/products/{product_id}")
 async def delete_product(product_id: str, user: dict = Depends(require_role("supplier"))):
     p = await db.products.find_one({"id": product_id})
     if not p or p["supplier_id"] != user["id"]:
-        raise HTTPException(status_code=404, detail="Product not found")
+        raise HTTPException(404, "Product not found")
     await db.products.delete_one({"id": product_id})
     return {"ok": True}
 
 
-# ----- Orders -----
+# ===== Orders =====
 @api.post("/orders")
 async def create_order(payload: OrderCreate, user: dict = Depends(get_current_user)):
     if user["role"] != "customer":
-        raise HTTPException(status_code=403, detail="Only customers can place order requests")
+        raise HTTPException(403, "Only customers can place order requests")
     p = await db.products.find_one({"id": payload.product_id}, {"_id": 0})
     if not p:
-        raise HTTPException(status_code=404, detail="Product not found")
+        raise HTTPException(404, "Product not found")
     if payload.quantity > p["stock"]:
-        raise HTTPException(status_code=400, detail="Requested quantity exceeds stock")
+        raise HTTPException(400, f"Requested quantity exceeds stock ({p['stock']} available)")
     oid = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     doc = {
         "id": oid,
-        "customer_id": user["id"],
-        "customer_name": user["name"],
-        "customer_email": user["email"],
-        "supplier_id": p["supplier_id"],
-        "supplier_name": p["supplier_name"],
-        "supplier_company": p.get("supplier_company"),
-        "product_id": p["id"],
-        "product_title": p["title"],
-        "model_number": p["model_number"],
-        "brand": p["brand"],
-        "unit_price": p["price"],
-        "quantity": payload.quantity,
+        "customer_id": user["id"], "customer_name": user["name"], "customer_email": user["email"],
+        "supplier_id": p["supplier_id"], "supplier_name": p["supplier_name"], "supplier_company": p.get("supplier_company"),
+        "product_id": p["id"], "product_title": p.get("title", p["model_number"]),
+        "model_number": p["model_number"], "brand": p["brand"],
+        "unit_price": p["price"], "quantity": payload.quantity,
         "total": round(p["price"] * payload.quantity, 2),
         "notes": payload.notes or "",
-        "delivery_address": payload.delivery_address,
-        "contact_phone": payload.contact_phone,
-        "status": "requested",
-        "tracking_number": None,
-        "created_at": now,
-        "updated_at": now,
+        "delivery_address": payload.delivery_address, "contact_phone": payload.contact_phone,
+        "status": "requested", "tracking_number": None,
+        "created_at": now, "updated_at": now,
     }
     await db.orders.insert_one(doc.copy())
     doc.pop("_id", None)
@@ -432,45 +423,41 @@ async def my_orders(user: dict = Depends(get_current_user)):
         q = {"supplier_id": user["id"]}
     else:
         q = {}
-    items = await db.orders.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return items
+    return await db.orders.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
 
 
 @api.put("/orders/{order_id}/status")
 async def update_order_status(order_id: str, payload: OrderStatusUpdate, user: dict = Depends(get_current_user)):
     if user["role"] not in ("supplier", "admin"):
-        raise HTTPException(status_code=403, detail="Forbidden")
+        raise HTTPException(403, "Forbidden")
     order = await db.orders.find_one({"id": order_id})
     if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+        raise HTTPException(404, "Order not found")
     if user["role"] == "supplier" and order["supplier_id"] != user["id"]:
-        raise HTTPException(status_code=403, detail="Not your order")
+        raise HTTPException(403, "Not your order")
     update = {"status": payload.status, "updated_at": datetime.now(timezone.utc).isoformat()}
     if payload.tracking_number:
         update["tracking_number"] = payload.tracking_number
     await db.orders.update_one({"id": order_id}, {"$set": update})
-    o2 = await db.orders.find_one({"id": order_id}, {"_id": 0})
-    return o2
+    return await db.orders.find_one({"id": order_id}, {"_id": 0})
 
 
-# ----- Admin -----
+# ===== Admin =====
 @api.get("/admin/users")
 async def admin_users(user: dict = Depends(require_role("admin"))):
-    items = await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(1000)
-    return items
+    return await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(2000)
 
 
 @api.get("/admin/suppliers/pending")
 async def admin_pending_suppliers(user: dict = Depends(require_role("admin"))):
-    items = await db.users.find({"role": "supplier", "supplier_status": "pending"}, {"_id": 0, "password_hash": 0}).to_list(500)
-    return items
+    return await db.users.find({"role": "supplier", "supplier_status": "pending"}, {"_id": 0, "password_hash": 0}).to_list(500)
 
 
 @api.post("/admin/suppliers/{supplier_id}/approve")
 async def admin_approve(supplier_id: str, user: dict = Depends(require_role("admin"))):
     res = await db.users.update_one({"id": supplier_id, "role": "supplier"}, {"$set": {"supplier_status": "approved"}})
     if res.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Supplier not found")
+        raise HTTPException(404, "Supplier not found")
     return {"ok": True}
 
 
@@ -478,19 +465,19 @@ async def admin_approve(supplier_id: str, user: dict = Depends(require_role("adm
 async def admin_reject(supplier_id: str, user: dict = Depends(require_role("admin"))):
     res = await db.users.update_one({"id": supplier_id, "role": "supplier"}, {"$set": {"supplier_status": "rejected"}})
     if res.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Supplier not found")
+        raise HTTPException(404, "Supplier not found")
     return {"ok": True}
 
 
 @api.delete("/admin/users/{user_id}")
 async def admin_delete_user(user_id: str, user: dict = Depends(require_role("admin"))):
     if user_id == user["id"]:
-        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+        raise HTTPException(400, "Cannot delete yourself")
     target = await db.users.find_one({"id": user_id})
     if not target:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(404, "User not found")
     if target.get("role") == "admin":
-        raise HTTPException(status_code=400, detail="Cannot delete admin")
+        raise HTTPException(400, "Cannot delete admin")
     await db.users.delete_one({"id": user_id})
     if target.get("role") == "supplier":
         await db.products.delete_many({"supplier_id": user_id})
@@ -499,14 +486,12 @@ async def admin_delete_user(user_id: str, user: dict = Depends(require_role("adm
 
 @api.get("/admin/products")
 async def admin_products(user: dict = Depends(require_role("admin"))):
-    items = await db.products.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
-    return items
+    return await db.products.find({}, {"_id": 0}).sort("created_at", -1).to_list(5000)
 
 
 @api.get("/admin/orders")
 async def admin_orders(user: dict = Depends(require_role("admin"))):
-    items = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
-    return items
+    return await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(5000)
 
 
 @api.get("/admin/stats")
@@ -518,6 +503,7 @@ async def admin_stats(user: dict = Depends(require_role("admin"))):
         "suppliers_pending": await db.users.count_documents({"role": "supplier", "supplier_status": "pending"}),
         "products": await db.products.count_documents({}),
         "orders": await db.orders.count_documents({}),
+        "toner_master": await db.toner_master.count_documents({}),
     }
 
 
@@ -537,61 +523,39 @@ app.add_middleware(
 )
 
 
-# ----- Seed -----
-SAMPLE_SUPPLIERS = [
-    {"email": "delhi.toners@tonerscart.in", "name": "Rohit Sharma", "company": "Delhi Toner House", "city": "Delhi", "phone": "+91-9810000001"},
-    {"email": "mumbai.print@tonerscart.in", "name": "Anil Mehta", "company": "Mumbai Print Supplies", "city": "Mumbai", "phone": "+91-9820000002"},
-    {"email": "blr.cartridge@tonerscart.in", "name": "Priya Iyer", "company": "Bangalore Cartridge Co.", "city": "Bangalore", "phone": "+91-9840000003"},
-    {"email": "chennai.ink@tonerscart.in", "name": "Karthik Rajan", "company": "Chennai Ink & Toner", "city": "Chennai", "phone": "+91-9840000004"},
-    {"email": "pune.printers@tonerscart.in", "name": "Sneha Patil", "company": "Pune Printer Hub", "city": "Pune", "phone": "+91-9890000005"},
-]
-
-SAMPLE_CUSTOMERS = [
-    {"email": "buyer@tonerscart.in", "name": "Amit Verma", "company": "Verma Office Solutions", "city": "Delhi", "phone": "+91-9811112222"},
-    {"email": "buyer2@tonerscart.in", "name": "Neha Singh", "company": "Singh Enterprises", "city": "Mumbai", "phone": "+91-9822223333"},
-]
-
-SAMPLE_TONERS = [
-    # (model, brand, title, color, printers)
-    ("HP 88A", "HP", "HP 88A Black LaserJet Toner Cartridge", "Black", "HP LaserJet P1007, P1008, M1213nf, M1136"),
-    ("HP 12A", "HP", "HP 12A Black Original Toner", "Black", "HP LaserJet 1010, 1012, 1015, 1018, 1020, 3015"),
-    ("HP 78A", "HP", "HP 78A Black LaserJet Toner", "Black", "HP LaserJet P1566, P1606dn, M1536"),
-    ("HP 05A", "HP", "HP 05A Black LaserJet Toner", "Black", "HP LaserJet P2035, P2055"),
-    ("HP 26A", "HP", "HP 26A Black Original Toner", "Black", "HP LaserJet Pro M402, M426"),
-    ("Canon 925", "Canon", "Canon 925 Black Toner Cartridge", "Black", "Canon LBP6018, LBP6030, MF3010"),
-    ("Canon 337", "Canon", "Canon 337 Black Toner", "Black", "Canon imageCLASS MF211, MF212w, MF215, MF217w"),
-    ("Brother TN-2365", "Brother", "Brother TN-2365 Black Toner", "Black", "Brother HL-L2321D, L2361DN, L2366DW, MFC-L2701D"),
-    ("Brother TN-1020", "Brother", "Brother TN-1020 Black Toner", "Black", "Brother HL-1111, 1201, 1211W, DCP-1511, 1514"),
-    ("Samsung MLT-D101S", "Samsung", "Samsung MLT-D101S Black Toner", "Black", "Samsung ML-2160, 2165, SCX-3400, 3405"),
-    ("Samsung MLT-D111S", "Samsung", "Samsung MLT-D111S Black Toner", "Black", "Samsung Xpress M2020, M2070"),
-    ("Ricoh SP 200", "Ricoh", "Ricoh SP 200 Toner Cartridge", "Black", "Ricoh SP 200, SP 200N, SP 200S, SP 202SN"),
-]
+# ===== Seed =====
+async def seed_toner_master():
+    if await db.toner_master.count_documents({}) > 0:
+        return
+    docs = []
+    for brand, model, printers, ttype, color, page_yield in TONER_MASTER:
+        title = f"{brand} {model} {ttype} {color} Toner"
+        docs.append({
+            "id": str(uuid.uuid4()),
+            "brand": brand,
+            "model_number": model,
+            "normalized": normalize_model(model),
+            "search_norm": normalize_model(f"{brand} {model} {color} {ttype}"),
+            "title": title,
+            "printer_compatibility": printers,
+            "toner_type": ttype,
+            "color": color,
+            "page_yield": page_yield,
+        })
+    if docs:
+        await db.toner_master.insert_many(docs)
+    logger.info("Seeded %d TonerMaster entries", len(docs))
 
 
-async def seed_data():
-    # Indexes
-    await db.users.create_index("email", unique=True)
-    await db.users.create_index("role")
-    await db.products.create_index("model_number")
-    await db.products.create_index("brand")
-    await db.products.create_index("city")
-    await db.products.create_index("supplier_id")
-    await db.orders.create_index("customer_id")
-    await db.orders.create_index("supplier_id")
-
-    # Admin
+async def seed_admin():
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@tonerscart.in").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
     existing = await db.users.find_one({"email": admin_email})
     if not existing:
         await db.users.insert_one({
             "id": str(uuid.uuid4()),
-            "email": admin_email,
-            "name": "Platform Admin",
-            "role": "admin",
-            "company": "TonersCart",
-            "city": "Delhi",
-            "phone": None,
+            "email": admin_email, "name": "Platform Admin", "role": "admin",
+            "company": "TonersCart", "city": "Delhi", "phone": None,
             "password_hash": hash_password(admin_password),
             "supplier_status": None,
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -600,91 +564,148 @@ async def seed_data():
     elif not verify_password(admin_password, existing["password_hash"]):
         await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
 
-    # Suppliers (approved) + customers
-    supplier_ids = {}
-    for s in SAMPLE_SUPPLIERS:
-        u = await db.users.find_one({"email": s["email"]})
-        if not u:
-            uid = str(uuid.uuid4())
-            await db.users.insert_one({
-                "id": uid,
-                "email": s["email"],
-                "name": s["name"],
-                "role": "supplier",
-                "company": s["company"],
-                "city": s["city"],
-                "phone": s["phone"],
-                "password_hash": hash_password("Supplier@123"),
-                "supplier_status": "approved",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
-            supplier_ids[s["email"]] = (uid, s)
-        else:
-            supplier_ids[s["email"]] = (u["id"], s)
 
-    for c in SAMPLE_CUSTOMERS:
-        if not await db.users.find_one({"email": c["email"]}):
-            await db.users.insert_one({
-                "id": str(uuid.uuid4()),
-                "email": c["email"],
-                "name": c["name"],
-                "role": "customer",
-                "company": c["company"],
-                "city": c["city"],
-                "phone": c["phone"],
-                "password_hash": hash_password("Customer@123"),
-                "supplier_status": None,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
+async def seed_users_and_products():
+    if await db.products.count_documents({}) > 0:
+        return
 
-    # Pending demo supplier
+    # 25 approved suppliers
+    supplier_records = []
+    for email, name, company, city, phone in SUPPLIERS_25:
+        existing = await db.users.find_one({"email": email})
+        if existing:
+            supplier_records.append(existing)
+            continue
+        sid = str(uuid.uuid4())
+        doc = {
+            "id": sid, "email": email, "name": name, "role": "supplier",
+            "company": company, "city": city, "phone": phone,
+            "password_hash": hash_password("Supplier@123"),
+            "supplier_status": "approved",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.users.insert_one(doc.copy())
+        supplier_records.append(doc)
+
+    # Customers
+    customer_records = []
+    for email, name, company, city, phone in CUSTOMERS:
+        existing = await db.users.find_one({"email": email})
+        if existing:
+            customer_records.append(existing)
+            continue
+        cid = str(uuid.uuid4())
+        doc = {
+            "id": cid, "email": email, "name": name, "role": "customer",
+            "company": company, "city": city, "phone": phone,
+            "password_hash": hash_password("Customer@123"),
+            "supplier_status": None,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.users.insert_one(doc.copy())
+        customer_records.append(doc)
+
+    # 1 pending supplier (for admin approval testing)
     if not await db.users.find_one({"email": "pending.supplier@tonerscart.in"}):
         await db.users.insert_one({
             "id": str(uuid.uuid4()),
             "email": "pending.supplier@tonerscart.in",
-            "name": "Suresh Kumar",
-            "role": "supplier",
-            "company": "Kumar Toner Traders",
-            "city": "Hyderabad",
+            "name": "Suresh Kumar", "role": "supplier",
+            "company": "Kumar Toner Traders", "city": "Hyderabad",
             "phone": "+91-9876543210",
             "password_hash": hash_password("Supplier@123"),
             "supplier_status": "pending",
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
 
-    # Products: each toner across 2-4 suppliers with varied price
-    if await db.products.count_documents({}) == 0:
-        import random
-        random.seed(42)
-        sup_list = list(supplier_ids.values())
-        for model, brand, title, color, printers in SAMPLE_TONERS:
-            base = random.randint(1200, 6500)
-            chosen = random.sample(sup_list, k=random.randint(2, 4))
-            for (sid, sinfo) in chosen:
-                price = base + random.randint(-300, 500)
-                await db.products.insert_one({
-                    "id": str(uuid.uuid4()),
-                    "supplier_id": sid,
-                    "supplier_name": sinfo["name"],
-                    "supplier_company": sinfo["company"],
-                    "model_number": model,
-                    "brand": brand,
-                    "title": title,
-                    "description": f"Genuine {brand} {model} cartridge. Reliable quality, ready stock for B2B bulk orders.",
-                    "price": float(price),
-                    "stock": random.randint(8, 120),
-                    "city": sinfo["city"],
-                    "color": color,
-                    "compatible_printers": printers,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                })
-        logger.info("Seeded sample products")
+    # Products: each TonerMaster entry → 2-5 supplier listings with varied price & stock
+    rng = random.Random(2026)
+    masters = await db.toner_master.find({}, {"_id": 0}).to_list(5000)
+
+    base_price_band = {
+        "Original": (1800, 9500),
+        "Compatible": (700, 4200),
+        "Refilled": (450, 2200),
+    }
+
+    product_docs = []
+    for m in masters:
+        lo, hi = base_price_band.get(m["toner_type"], (1500, 6500))
+        base = rng.randint(lo, hi)
+        n_sup = rng.randint(2, 5)
+        for sup in rng.sample(supplier_records, k=min(n_sup, len(supplier_records))):
+            price = base + rng.randint(-int(base * 0.12), int(base * 0.18))
+            price = max(price, 200)
+            product_docs.append({
+                "id": str(uuid.uuid4()),
+                "supplier_id": sup["id"],
+                "supplier_name": sup["name"],
+                "supplier_company": sup.get("company"),
+                "master_id": m["id"],
+                "model_number": m["model_number"],
+                "model_normalized": m["normalized"],
+                "search_norm": normalize_model(f'{m["brand"]} {m["model_number"]} {m["color"]}'),
+                "brand": m["brand"],
+                "title": f'{m["brand"]} {m["model_number"]} {m["toner_type"]} {m["color"]} Toner',
+                "description": f'{m["toner_type"]} {m["brand"]} {m["model_number"]} cartridge. Page yield ~{m["page_yield"]} pages. Bulk pricing available.',
+                "price": float(price),
+                "stock": rng.randint(5, 180),
+                "city": sup.get("city"),
+                "color": m["color"],
+                "toner_type": m["toner_type"],
+                "compatible_printers": m["printer_compatibility"],
+                "page_yield": m["page_yield"],
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+    if product_docs:
+        await db.products.insert_many(product_docs)
+    logger.info("Seeded %d product listings across %d suppliers", len(product_docs), len(supplier_records))
+
+    # Demo orders
+    if customer_records and product_docs:
+        for _ in range(8):
+            cust = rng.choice(customer_records)
+            prod = rng.choice(product_docs)
+            qty = rng.randint(2, 12)
+            status = rng.choice(["requested", "accepted", "shipped", "completed"])
+            tracking = f"TC{rng.randint(100000, 999999)}IN" if status in ("shipped", "completed") else None
+            now = datetime.now(timezone.utc).isoformat()
+            await db.orders.insert_one({
+                "id": str(uuid.uuid4()),
+                "customer_id": cust["id"], "customer_name": cust["name"], "customer_email": cust["email"],
+                "supplier_id": prod["supplier_id"], "supplier_name": prod["supplier_name"], "supplier_company": prod["supplier_company"],
+                "product_id": prod["id"], "product_title": prod["title"],
+                "model_number": prod["model_number"], "brand": prod["brand"],
+                "unit_price": prod["price"], "quantity": qty,
+                "total": round(prod["price"] * qty, 2),
+                "notes": "Demo seed order",
+                "delivery_address": f'{cust["company"]}, {cust["city"]}',
+                "contact_phone": cust["phone"],
+                "status": status, "tracking_number": tracking,
+                "created_at": now, "updated_at": now,
+            })
+
+
+async def setup_indexes():
+    await db.users.create_index("email", unique=True)
+    await db.users.create_index("role")
+    await db.products.create_index("model_normalized")
+    await db.products.create_index("brand")
+    await db.products.create_index("city")
+    await db.products.create_index("supplier_id")
+    await db.orders.create_index("customer_id")
+    await db.orders.create_index("supplier_id")
+    await db.toner_master.create_index([("normalized", 1)])
+    await db.toner_master.create_index("brand")
 
 
 @app.on_event("startup")
 async def on_startup():
     try:
-        await seed_data()
+        await setup_indexes()
+        await seed_toner_master()
+        await seed_admin()
+        await seed_users_and_products()
     except Exception as e:
         logger.exception("Seed failed: %s", e)
 

@@ -1,41 +1,43 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 export default function Footer() {
     return (
-        <footer className="bg-[#0B1B3D] text-slate-200 mt-20" data-testid="site-footer">
-            <div className="tc-container py-12 grid md:grid-cols-4 gap-8">
+        <footer className="bg-[#0E0F12] text-slate-300 mt-24" data-testid="site-footer">
+            <div className="tc-print-marks" />
+            <div className="tc-container py-14 grid md:grid-cols-4 gap-10">
                 <div className="md:col-span-2">
-                    <div className="flex items-center gap-2 mb-3">
-                        <div className="w-8 h-8 rounded-md bg-white grid place-items-center">
-                            <span className="text-[#0B1B3D] font-bold text-sm">TC</span>
+                    <div className="flex items-center gap-2.5 mb-4">
+                        <div className="relative w-8 h-8 rounded-lg bg-white grid place-items-center overflow-hidden">
+                            <span className="text-[#0E0F12] font-bold text-sm relative z-10">TC</span>
                         </div>
-                        <div className="font-bold text-white tc-display text-lg">TonersCart</div>
+                        <div className="font-bold text-white text-lg">TonersCart</div>
                     </div>
-                    <p className="text-sm text-slate-300 max-w-md leading-relaxed">
-                        India&apos;s focused B2B marketplace for printer toners — connecting bulk buyers with verified suppliers across Delhi, Mumbai, Bangalore, Chennai, Pune and beyond.
+                    <p className="text-sm text-slate-400 max-w-md leading-relaxed">
+                        India&apos;s focused B2B marketplace for printer toners. Compare verified suppliers, place bulk order requests, track shipments — no payment gateway, just direct trade.
                     </p>
                 </div>
                 <div>
-                    <div className="tc-eyebrow text-slate-400 mb-3">For Buyers</div>
+                    <div className="tc-eyebrow text-slate-500 mb-3">Buyers</div>
                     <ul className="space-y-2 text-sm">
-                        <li>Compare suppliers</li>
-                        <li>Bulk order requests</li>
-                        <li>Track every shipment</li>
+                        <li><Link to="/search" className="hover:text-white">Browse toners</Link></li>
+                        <li><Link to="/register" className="hover:text-white">Create buyer account</Link></li>
+                        <li><Link to="/login" className="hover:text-white">Sign in</Link></li>
                     </ul>
                 </div>
                 <div>
-                    <div className="tc-eyebrow text-slate-400 mb-3">For Suppliers</div>
+                    <div className="tc-eyebrow text-slate-500 mb-3">Suppliers</div>
                     <ul className="space-y-2 text-sm">
-                        <li>Reach verified buyers</li>
+                        <li><Link to="/register?role=supplier" className="hover:text-white">List your business</Link></li>
                         <li>Manage stock & pricing</li>
                         <li>Order pipeline dashboard</li>
                     </ul>
                 </div>
             </div>
             <div className="border-t border-white/10">
-                <div className="tc-container py-5 text-xs text-slate-400 flex flex-wrap items-center justify-between gap-2">
-                    <div>© {new Date().getFullYear()} TonersCart Trade Pvt. Ltd. — A B2B trade platform.</div>
-                    <div>Suppliers handle delivery. Platform connects buyers and sellers — no payment processing.</div>
+                <div className="tc-container py-5 text-xs text-slate-500 flex flex-wrap items-center justify-between gap-2">
+                    <div>© {new Date().getFullYear()} TonersCart Trade Pvt. Ltd.</div>
+                    <div>Suppliers handle delivery. Platform connects buyers and sellers.</div>
                 </div>
             </div>
         </footer>
