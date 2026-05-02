@@ -515,6 +515,134 @@ async def root():
     return {"service": "TonersCart API", "ok": True}
 
 
+# ===== Supplier application (rich form → email + DB) =====
+SUPPLIER_INBOX = "support@digitaledgeinida.com"
+
+
+class SupplierApplication(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=6)
+    name: str
+    company: str
+    city: str
+    phone: str
+    gst_number: Optional[str] = ""
+    business_address: Optional[str] = ""
+    years_in_business: Optional[int] = 0
+    brands_carried: Optional[List[str]] = []
+    customer_base_size: Optional[str] = ""
+    areas_supplied: Optional[List[str]] = []
+    monthly_volume: Optional[str] = ""
+    website: Optional[str] = ""
+    notes: Optional[str] = ""
+
+
+@api.post("/auth/supplier-apply")
+async def supplier_apply(payload: SupplierApplication, response: Response):
+    """Rich supplier signup. Creates a pending supplier user + emails the
+    application to support@digitaledgeinida.com (if SMTP/Resend configured).
+    Currently logs the email payload until email keys are provided."""
+    email = payload.email.lower()
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    user_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    application = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "submitted_at": now,
+        "status": "pending",
+        "destination": SUPPLIER_INBOX,
+        **payload.model_dump(exclude={"password"}),
+    }
+    await db.supplier_applications.insert_one(application.copy())
+
+    user_doc = {
+        "id": user_id, "email": email, "name": payload.name, "role": "supplier",
+        "company": payload.company, "city": payload.city, "phone": payload.phone,
+        "password_hash": hash_password(payload.password),
+        "supplier_status": "pending",
+        "application_id": application["id"],
+        "created_at": now,
+    }
+    await db.users.insert_one(user_doc.copy())
+
+    # Build email body for record (logs + DB) — actual SMTP send happens
+    # only when SMTP_* env vars are configured.
+    body = f"""
+NEW TONERSCART SUPPLIER APPLICATION
+
+Submitted: {now}
+Status: pending review
+
+Contact:
+  Name:     {payload.name}
+  Email:    {payload.email}
+  Phone:    {payload.phone}
+  Website:  {payload.website or '—'}
+
+Business:
+  Company:               {payload.company}
+  City:                  {payload.city}
+  GST number:            {payload.gst_number or '—'}
+  Address:               {payload.business_address or '—'}
+  Years in business:     {payload.years_in_business or '—'}
+
+Operations:
+  Brands carried:        {', '.join(payload.brands_carried or []) or '—'}
+  Areas supplied:        {', '.join(payload.areas_supplied or []) or '—'}
+  Customer base size:    {payload.customer_base_size or '—'}
+  Monthly toner volume:  {payload.monthly_volume or '—'}
+
+Notes:
+  {payload.notes or '—'}
+
+— Approve at: TonersCart admin console
+""".strip()
+
+    sent = False
+    smtp_host = os.environ.get("SMTP_HOST")
+    if smtp_host:
+        try:
+            import smtplib
+            from email.message import EmailMessage
+            msg = EmailMessage()
+            msg["Subject"] = f"[TonersCart] New supplier application — {payload.company}"
+            msg["From"] = os.environ.get("SMTP_FROM", "noreply@tonerscart.in")
+            msg["To"] = SUPPLIER_INBOX
+            msg["Reply-To"] = payload.email
+            msg.set_content(body)
+            with smtplib.SMTP(smtp_host, int(os.environ.get("SMTP_PORT", "587"))) as s:
+                s.starttls()
+                user = os.environ.get("SMTP_USER"); pw = os.environ.get("SMTP_PASSWORD")
+                if user and pw: s.login(user, pw)
+                s.send_message(msg)
+            sent = True
+        except Exception as e:
+            logger.exception("SMTP send failed: %s", e)
+    if not sent:
+        logger.info("Supplier application email queued (SMTP not configured) →\n%s", body)
+        await db.supplier_applications.update_one({"id": application["id"]}, {"$set": {"email_sent": False, "email_body": body}})
+    else:
+        await db.supplier_applications.update_one({"id": application["id"]}, {"$set": {"email_sent": True}})
+
+    token = create_access_token(user_id, email, "supplier")
+    set_auth_cookie(response, token)
+    return {
+        "user": user_to_public(user_doc),
+        "token": token,
+        "application_id": application["id"],
+        "email_sent": sent,
+        "destination": SUPPLIER_INBOX,
+    }
+
+
+@api.get("/admin/supplier-applications")
+async def admin_supplier_applications(user: dict = Depends(require_role("admin"))):
+    return await db.supplier_applications.find({}, {"_id": 0}).sort("submitted_at", -1).to_list(500)
+
+
 # ===== Emergent Google Auth =====
 class GoogleSessionRequest(BaseModel):
     session_id: str

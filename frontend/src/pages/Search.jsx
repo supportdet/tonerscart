@@ -7,18 +7,14 @@ import { useAuth } from "../context/AuthContext";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import OrderRequestDialog from "../components/OrderRequestDialog";
 import TonerSearchInput from "../components/TonerSearchInput";
+import TonerCartridge from "../components/TonerCartridge";
 import useReveal from "../hooks/useReveal";
 
-const colorClass = (c) => ({ Cyan: "tc-pi-cyan", Magenta: "tc-pi-magenta", Yellow: "tc-pi-yellow", Black: "tc-pi-black" })[c] || "tc-pi-cyan";
-
 const SidebarItem = ({ active, onClick, children, testid }) => (
-    <button
-        onClick={onClick}
-        data-testid={testid}
+    <button onClick={onClick} data-testid={testid}
         className={`block w-full text-left px-3 py-1.5 rounded-lg text-[13.5px] transition-colors ${
             active ? "bg-black/[0.05] text-[#0A0A0B] font-semibold" : "text-[#1D1D1F] hover:bg-black/[0.03]"
-        }`}
-    >
+        }`}>
         {children}
     </button>
 );
@@ -26,13 +22,16 @@ const SidebarItem = ({ active, onClick, children, testid }) => (
 function ProductCard({ p, qty, setQty, onBuy, onCart }) {
     return (
         <div className="tc-product-card" data-testid={`product-card-${p.id}`}>
-            <div className={`tc-product-img ${colorClass(p.color)}`} />
+            <div className="tc-product-img">
+                <span className="tc-product-img-label">{p.brand}</span>
+                <TonerCartridge color={p.color || "Black"} brand={p.brand} model={p.model_number} />
+            </div>
             <div className="p-4 flex flex-col gap-2 flex-1">
                 <div className="flex items-center justify-between">
                     <div className="text-[10px] tracking-[0.16em] uppercase font-semibold text-[#6E6E73]">{p.brand}</div>
                     <span className="tc-badge tc-badge-gray">{p.toner_type || "Original"}</span>
                 </div>
-                <div className="font-mono text-[18px] font-semibold text-[#0A0A0B] tracking-tight" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{p.model_number}</div>
+                <div className="font-mono text-[18px] font-semibold text-[#0A0A0B] tracking-tight">{p.model_number}</div>
                 <div className="text-[13px] text-[#1D1D1F] truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
                     {p.supplier_company || p.supplier_name}
                 </div>
@@ -53,7 +52,7 @@ function ProductCard({ p, qty, setQty, onBuy, onCart }) {
                 </div>
 
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                    <button onClick={() => onCart(p, qty)} className="btn-primary bg-white !text-[#0A0A0B] border border-black/10 text-[12.5px] py-2 hover:bg-[#F5F5F7]" data-testid={`cart-${p.id}`}>
+                    <button onClick={() => onCart(p, qty)} className="btn-light text-[12.5px] py-2" data-testid={`cart-${p.id}`}>
                         <ShoppingCart size={13} className="inline mr-1" /> Add
                     </button>
                     <button onClick={() => onBuy(p, qty)} className="btn-cta text-[12.5px] py-2" disabled={p.stock <= 0} data-testid={`buy-${p.id}`}>
@@ -72,6 +71,7 @@ export default function SearchPage() {
     const { city, setCity } = useCity();
     const [q, setQ] = useState(params.get("q") || "");
     const [brand, setBrand] = useState(params.get("brand") || "all");
+    const [filterCity, setFilterCity] = useState(params.get("city") || "all");
     const [tonerType, setTonerType] = useState(params.get("toner_type") || "all");
     const [facets, setFacets] = useState({ brands: [], cities: [] });
     const [products, setProducts] = useState([]);
@@ -79,15 +79,8 @@ export default function SearchPage() {
     const [orderProduct, setOrderProduct] = useState(null);
     const [orderQty, setOrderQty] = useState(1);
     const [qtyMap, setQtyMap] = useState({});
-    const [cart, setCart] = useState([]);  // local cart of {product, qty}
+    const [cart, setCart] = useState([]);
     const rootRef = useReveal([products.length]);
-
-    // Sync URL ?city= with city context
-    useEffect(() => {
-        const urlCity = params.get("city");
-        if (urlCity && urlCity !== city) setCity(urlCity);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
 
     useEffect(() => { api.get("/products/facets").then((r) => setFacets(r.data)).catch(() => {}); }, []);
 
@@ -97,18 +90,19 @@ export default function SearchPage() {
             const qp = {};
             if (params.get("q")) qp.q = params.get("q");
             if (params.get("brand")) qp.brand = params.get("brand");
-            if (city) qp.city = city;
-            if (params.get("toner_type")) qp.toner_type = params.get("toner_type");
+            if (params.get("city") && params.get("city") !== "all") qp.city = params.get("city");
             try {
-                const r = await api.get("/products/search", { params: qp });
+                const r = await api.get("/products/search", { params: { ...qp, limit: 500 } });
                 let items = r.data;
-                if (qp.toner_type) items = items.filter((p) => p.toner_type === qp.toner_type);
+                if (params.get("toner_type") && params.get("toner_type") !== "all") {
+                    items = items.filter((p) => p.toner_type === params.get("toner_type"));
+                }
                 items.sort((a, b) => a.price - b.price);
                 setProducts(items);
             } finally { setLoading(false); }
         };
         fetch();
-    }, [params, city]);
+    }, [params]);
 
     const apply = (override) => {
         const useQ = override?.query ?? q;
@@ -116,7 +110,7 @@ export default function SearchPage() {
         if (useQ) p.set("q", useQ);
         if (brand && brand !== "all") p.set("brand", brand);
         if (tonerType && tonerType !== "all") p.set("toner_type", tonerType);
-        if (city) p.set("city", city);
+        if (filterCity && filterCity !== "all") p.set("city", filterCity);
         setParams(p);
     };
 
@@ -126,14 +120,19 @@ export default function SearchPage() {
         setParams(p);
         if (key === "brand") setBrand(val);
         if (key === "toner_type") setTonerType(val);
+        if (key === "city") {
+            setFilterCity(val);
+            if (val !== "all") setCity(val);
+        }
     };
 
-    const clearAll = () => { setQ(""); setBrand("all"); setTonerType("all"); const p = new URLSearchParams(); if (city) p.set("city", city); setParams(p); };
+    const clearAll = () => { setQ(""); setBrand("all"); setTonerType("all"); setFilterCity("all"); setParams(new URLSearchParams()); };
 
     const activeFilters = useMemo(() => {
         const out = [];
         if (params.get("q")) out.push({ k: "q", label: `"${params.get("q")}"` });
         if (params.get("brand")) out.push({ k: "brand", label: params.get("brand") });
+        if (params.get("city")) out.push({ k: "city", label: params.get("city") });
         if (params.get("toner_type")) out.push({ k: "toner_type", label: params.get("toner_type") });
         return out;
     }, [params]);
@@ -143,7 +142,7 @@ export default function SearchPage() {
 
     const onBuy = (p, qty) => {
         if (!user) { navigate("/login"); return; }
-        if (user.role !== "customer") { return; }
+        if (user.role !== "customer") return;
         setOrderQty(qty); setOrderProduct(p);
     };
     const onCart = (p, qty) => {
@@ -182,9 +181,7 @@ export default function SearchPage() {
                         </div>
                         <div className="space-y-0.5">
                             <SidebarItem active={brand === "all"} onClick={() => setFilter("brand", "all")} testid="filter-brand-all">All brands</SidebarItem>
-                            {facets.brands.map((b) => (
-                                <SidebarItem key={b} active={brand === b} onClick={() => setFilter("brand", b)} testid={`filter-brand-${b}`}>{b}</SidebarItem>
-                            ))}
+                            {facets.brands.map((b) => (<SidebarItem key={b} active={brand === b} onClick={() => setFilter("brand", b)} testid={`filter-brand-${b}`}>{b}</SidebarItem>))}
                         </div>
                     </div>
 
@@ -194,9 +191,8 @@ export default function SearchPage() {
                             <span className="text-[12px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>City</span>
                         </div>
                         <div className="space-y-0.5 max-h-72 overflow-auto pr-1">
-                            {KNOWN_CITIES.map((c) => (
-                                <SidebarItem key={c} active={city === c} onClick={() => setCity(c)} testid={`filter-city-${c}`}>{c}</SidebarItem>
-                            ))}
+                            <SidebarItem active={filterCity === "all"} onClick={() => setFilter("city", "all")} testid="filter-city-all">All cities</SidebarItem>
+                            {KNOWN_CITIES.map((c) => (<SidebarItem key={c} active={filterCity === c} onClick={() => setFilter("city", c)} testid={`filter-city-${c}`}>{c}</SidebarItem>))}
                         </div>
                     </div>
 
@@ -207,9 +203,7 @@ export default function SearchPage() {
                         </div>
                         <div className="space-y-0.5">
                             {["all", "Original", "Compatible", "Refilled"].map((t) => (
-                                <SidebarItem key={t} active={tonerType === t} onClick={() => setFilter("toner_type", t)} testid={`filter-type-${t}`}>
-                                    {t === "all" ? "All types" : t}
-                                </SidebarItem>
+                                <SidebarItem key={t} active={tonerType === t} onClick={() => setFilter("toner_type", t)} testid={`filter-type-${t}`}>{t === "all" ? "All types" : t}</SidebarItem>
                             ))}
                         </div>
                     </div>
@@ -238,8 +232,8 @@ export default function SearchPage() {
                     <div className="flex items-end justify-between mb-6">
                         <div>
                             <div className="tc-eyebrow"><span className="tc-strip mr-2 align-middle" />Results</div>
-                            <h1 className="tc-h2 text-[#0A0A0B] mt-2" style={{ fontFamily: "'Montserrat', sans-serif" }} data-testid="search-results-count">
-                                {loading ? "Loading…" : `${products.length} listings · ${city}`}
+                            <h1 className="mt-2 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(20px, 2.2vw, 28px)", fontWeight: 500 }} data-testid="search-results-count">
+                                {loading ? "Loading…" : `${products.length} listings${filterCity !== "all" ? ` · ${filterCity}` : ""}`}
                             </h1>
                         </div>
                     </div>
@@ -253,8 +247,8 @@ export default function SearchPage() {
                     {!loading && products.length === 0 && (
                         <div className="tc-card p-16 text-center" data-testid="search-empty-state">
                             <Boxes className="mx-auto text-[#D2D2D7]" size={48} />
-                            <div className="mt-4 tc-h3 text-[#0A0A0B]">No matching toners in {city}</div>
-                            <div className="text-[#6E6E73] text-[14px] mt-1">Try a different model, brand or city.</div>
+                            <div className="mt-4 text-[#0A0A0B] text-xl font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>No matching toners</div>
+                            <div className="text-[#6E6E73] text-[14px] mt-1">Try a different model or clear filters.</div>
                             <button className="btn-cta mt-6" onClick={clearAll} data-testid="empty-clear-btn">Clear filters</button>
                         </div>
                     )}
@@ -270,11 +264,7 @@ export default function SearchPage() {
             </div>
 
             {orderProduct && (
-                <OrderRequestDialog
-                    product={orderProduct}
-                    initialQty={orderQty}
-                    onClose={() => setOrderProduct(null)}
-                />
+                <OrderRequestDialog product={orderProduct} initialQty={orderQty} onClose={() => setOrderProduct(null)} />
             )}
         </div>
     );
