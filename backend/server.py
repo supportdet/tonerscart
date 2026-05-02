@@ -10,13 +10,16 @@ import random
 import logging
 import bcrypt
 import jwt
+import httpx
 from datetime import datetime, timezone, timedelta
-from typing import Optional, Literal
+from typing import Optional, Literal, List
 
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr
+
+from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 from toner_master_seed import TONER_MASTER, SUPPLIERS_25, CUSTOMERS
 
@@ -510,6 +513,105 @@ async def admin_stats(user: dict = Depends(require_role("admin"))):
 @api.get("/")
 async def root():
     return {"service": "TonersCart API", "ok": True}
+
+
+# ===== Emergent Google Auth =====
+class GoogleSessionRequest(BaseModel):
+    session_id: str
+
+
+@api.post("/auth/google-session")
+async def google_session(payload: GoogleSessionRequest, response: Response):
+    """Exchange Emergent Google auth session_id for our JWT token."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as http:
+            r = await http.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers={"X-Session-ID": payload.session_id},
+            )
+            if r.status_code != 200:
+                raise HTTPException(status_code=401, detail="Invalid Google session")
+            data = r.json()
+    except httpx.HTTPError as e:
+        logger.exception("Emergent auth fetch failed")
+        raise HTTPException(status_code=502, detail="Auth provider unreachable") from e
+
+    email = (data.get("email") or "").lower()
+    name = data.get("name") or email.split("@")[0]
+    picture = data.get("picture")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email missing from Google session")
+
+    user = await db.users.find_one({"email": email})
+    if not user:
+        user_id = str(uuid.uuid4())
+        doc = {
+            "id": user_id, "email": email, "name": name, "role": "customer",
+            "company": None, "city": "Bangalore", "phone": None,
+            "password_hash": "google-oauth",
+            "supplier_status": None,
+            "picture": picture,
+            "auth_provider": "google",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.users.insert_one(doc.copy())
+        user = doc
+    else:
+        if picture and not user.get("picture"):
+            await db.users.update_one({"email": email}, {"$set": {"picture": picture}})
+            user["picture"] = picture
+
+    token = create_access_token(user["id"], user["email"], user["role"])
+    set_auth_cookie(response, token)
+    return {"user": user_to_public(user), "token": token}
+
+
+# ===== AI Chat (Claude Sonnet 4.5 via Emergent LLM key) =====
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class ChatRequest(BaseModel):
+    messages: List[ChatMessage]
+    session_id: Optional[str] = None
+
+
+CHAT_SYSTEM = (
+    "You are TonerBot, a concise expert assistant for TonersCart — India's B2B printer-toner marketplace. "
+    "You help buyers identify the right toner cartridge for their printer, explain Original vs Compatible vs Refilled, "
+    "estimate page yield expectations, recommend trusted brands (HP, Canon, Brother, Samsung, Ricoh, Epson, Xerox, Kyocera), "
+    "and answer bulk-purchase / sourcing questions in the Indian B2B context. "
+    "Keep replies short (under 120 words) and practical. When you suggest a toner, mention the model number "
+    "(e.g., HP 88A, Canon 925, Brother TN-2365) and ask the buyer to search it on TonersCart. "
+    "If the user asks about anything unrelated to printers/toners, politely steer back to toner queries."
+)
+
+
+@api.post("/chat")
+async def chat(payload: ChatRequest):
+    if not payload.messages:
+        raise HTTPException(status_code=400, detail="messages required")
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="LLM key not configured")
+    session_id = payload.session_id or str(uuid.uuid4())
+    try:
+        chat_client = LlmChat(
+            api_key=api_key,
+            session_id=session_id,
+            system_message=CHAT_SYSTEM,
+        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+        latest = payload.messages[-1]
+        if latest.role != "user":
+            raise HTTPException(status_code=400, detail="last message must be from user")
+        reply = await chat_client.send_message(UserMessage(text=latest.content))
+        return {"reply": str(reply), "session_id": session_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("LLM call failed")
+        raise HTTPException(status_code=502, detail=f"Chat unavailable: {e}") from e
 
 
 app.include_router(api)

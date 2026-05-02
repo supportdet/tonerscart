@@ -8,9 +8,9 @@ import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 
-export default function OrderRequestDialog({ product, onClose }) {
+export default function OrderRequestDialog({ product, initialQty = 1, onClose }) {
     const { user } = useAuth();
-    const [qty, setQty] = useState(1);
+    const [qty, setQty] = useState(initialQty);
     const [address, setAddress] = useState(user?.company ? `${user.company}, ${user.city || ""}` : "");
     const [phone, setPhone] = useState(user?.phone || "");
     const [notes, setNotes] = useState("");
