@@ -1,14 +1,33 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { MapPin, Boxes, ChevronRight, X, Filter as FilterIcon } from "lucide-react";
-import { Button } from "../components/ui/button";
+import { MapPin, Boxes, ArrowRight, X, SlidersHorizontal } from "lucide-react";
 import { Skeleton } from "../components/ui/skeleton";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import OrderRequestDialog from "../components/OrderRequestDialog";
 import TonerSearchInput from "../components/TonerSearchInput";
+import useReveal from "../hooks/useReveal";
 
 const colorClass = (c) => ({ Cyan: "tc-thumb-cyan", Magenta: "tc-thumb-magenta", Yellow: "tc-thumb-yellow", Black: "tc-thumb-black" })[c] || "tc-thumb-cyan";
+
+const SidebarHeading = ({ accent, children }) => (
+    <div className="flex items-center gap-2 mb-3">
+        <span className="w-1 h-4 rounded-full" style={{ background: accent }} />
+        <span className="text-[12px] font-semibold tracking-tight text-[#0A0A0B]">{children}</span>
+    </div>
+);
+
+const SidebarItem = ({ active, onClick, children, testid }) => (
+    <button
+        onClick={onClick}
+        data-testid={testid}
+        className={`block w-full text-left px-3 py-1.5 rounded-lg text-[13.5px] transition-colors ${
+            active ? "bg-black/[0.05] text-[#0A0A0B] font-semibold" : "text-[#1D1D1F] hover:bg-black/[0.03]"
+        }`}
+    >
+        {children}
+    </button>
+);
 
 export default function SearchPage() {
     const [params, setParams] = useSearchParams();
@@ -22,10 +41,9 @@ export default function SearchPage() {
     const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
     const [orderProduct, setOrderProduct] = useState(null);
+    const rootRef = useReveal([groups.length]);
 
-    useEffect(() => {
-        api.get("/products/facets").then((r) => setFacets(r.data)).catch(() => {});
-    }, []);
+    useEffect(() => { api.get("/products/facets").then((r) => setFacets(r.data)).catch(() => {}); }, []);
 
     useEffect(() => {
         const fetch = async () => {
@@ -38,9 +56,7 @@ export default function SearchPage() {
             try {
                 const r = await api.get("/products/grouped", { params: qp });
                 setGroups(r.data);
-            } finally {
-                setLoading(false);
-            }
+            } finally { setLoading(false); }
         };
         fetch();
     }, [params]);
@@ -68,7 +84,7 @@ export default function SearchPage() {
 
     const activeFilters = useMemo(() => {
         const out = [];
-        if (params.get("q")) out.push({ k: "q", label: `“${params.get("q")}”` });
+        if (params.get("q")) out.push({ k: "q", label: `"${params.get("q")}"` });
         if (params.get("brand")) out.push({ k: "brand", label: params.get("brand") });
         if (params.get("city")) out.push({ k: "city", label: params.get("city") });
         if (params.get("toner_type")) out.push({ k: "toner_type", label: params.get("toner_type") });
@@ -78,70 +94,57 @@ export default function SearchPage() {
     const totalListings = groups.reduce((a, g) => a + g.supplier_count, 0);
 
     return (
-        <div className="tc-container py-8" data-testid="search-page">
-            {/* Top search */}
-            <div className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col md:flex-row gap-2 items-stretch" data-testid="search-bar">
-                <div className="flex-1 min-w-0">
-                    <TonerSearchInput value={q} onChange={setQ} onSubmit={apply} testId="search-input" />
-                </div>
-                <Button className="btn-primary text-white px-6" onClick={() => apply()} data-testid="search-apply-btn">
-                    <FilterIcon size={14} className="mr-1" /> Apply
-                </Button>
+        <div className="tc-container py-10" ref={rootRef} data-testid="search-page">
+            {/* Premium top search */}
+            <div className="tc-search-shell" style={{ gridTemplateColumns: "1fr auto" }} data-testid="search-bar">
+                <TonerSearchInput value={q} onChange={setQ} onSubmit={apply} testId="search-input" />
+                <button onClick={() => apply()} className="tc-search-go" data-testid="search-apply-btn">
+                    <SlidersHorizontal size={15} /> Apply
+                </button>
             </div>
 
-            {/* Active filter chips */}
             {activeFilters.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 mt-4">
-                    <span className="tc-eyebrow">Active:</span>
+                <div className="flex flex-wrap items-center gap-2 mt-5">
+                    <span className="text-[11px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73]">Active</span>
                     {activeFilters.map((f) => (
-                        <button key={f.k} onClick={() => setFilter(f.k, "all")} className="tc-badge tc-badge-gray flex items-center gap-1" data-testid={`active-filter-${f.k}`}>
+                        <button key={f.k} onClick={() => setFilter(f.k, "all")} className="tc-badge tc-badge-gray flex items-center gap-1 hover:bg-black/[0.06]" data-testid={`active-filter-${f.k}`}>
                             {f.label} <X size={10} />
                         </button>
                     ))}
-                    <button onClick={clearAll} className="text-xs text-[#00B7C7] font-semibold hover:underline" data-testid="clear-filters-btn">Clear all</button>
+                    <button onClick={clearAll} className="text-[12px] text-[#00B7C7] font-semibold hover:underline" data-testid="clear-filters-btn">Clear all</button>
                 </div>
             )}
 
-            <div className="grid lg:grid-cols-12 gap-6 mt-6">
-                {/* SIDEBAR */}
-                <aside className="lg:col-span-3" data-testid="search-sidebar">
-                    <div className="tc-card-flat p-5 mb-4">
-                        <div className="font-bold text-sm text-[#0E0F12] mb-3 flex items-center gap-2">
-                            <span className="w-1.5 h-4 bg-[#00B7C7]" /> Brand
-                        </div>
-                        <div className="space-y-1.5 text-sm">
-                            <button onClick={() => setFilter("brand", "all")} className={`block w-full text-left px-2 py-1 rounded ${brand === "all" ? "bg-slate-100 font-semibold" : "text-slate-600 hover:bg-slate-50"}`} data-testid="filter-brand-all">All brands</button>
+            <div className="grid lg:grid-cols-12 gap-8 mt-8">
+                {/* SIDEBAR — sticky on large screens */}
+                <aside className="lg:col-span-3 lg:sticky lg:top-20 lg:self-start space-y-5" data-testid="search-sidebar">
+                    <div className="tc-card-flat p-5">
+                        <SidebarHeading accent="#00B7C7">Brand</SidebarHeading>
+                        <div className="space-y-0.5">
+                            <SidebarItem active={brand === "all"} onClick={() => setFilter("brand", "all")} testid="filter-brand-all">All brands</SidebarItem>
                             {facets.brands.map((b) => (
-                                <button key={b} onClick={() => setFilter("brand", b)} className={`block w-full text-left px-2 py-1 rounded ${brand === b ? "bg-slate-100 font-semibold" : "text-slate-600 hover:bg-slate-50"}`} data-testid={`filter-brand-${b}`}>
-                                    {b}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="tc-card-flat p-5 mb-4">
-                        <div className="font-bold text-sm text-[#0E0F12] mb-3 flex items-center gap-2">
-                            <span className="w-1.5 h-4 bg-[#E6007E]" /> Supplier city
-                        </div>
-                        <div className="space-y-1.5 text-sm max-h-72 overflow-auto">
-                            <button onClick={() => setFilter("city", "all")} className={`block w-full text-left px-2 py-1 rounded ${city === "all" ? "bg-slate-100 font-semibold" : "text-slate-600 hover:bg-slate-50"}`} data-testid="filter-city-all">All cities</button>
-                            {facets.cities.map((c) => (
-                                <button key={c} onClick={() => setFilter("city", c)} className={`block w-full text-left px-2 py-1 rounded ${city === c ? "bg-slate-100 font-semibold" : "text-slate-600 hover:bg-slate-50"}`} data-testid={`filter-city-${c}`}>
-                                    {c}
-                                </button>
+                                <SidebarItem key={b} active={brand === b} onClick={() => setFilter("brand", b)} testid={`filter-brand-${b}`}>{b}</SidebarItem>
                             ))}
                         </div>
                     </div>
 
                     <div className="tc-card-flat p-5">
-                        <div className="font-bold text-sm text-[#0E0F12] mb-3 flex items-center gap-2">
-                            <span className="w-1.5 h-4 bg-[#F7C600]" /> Toner type
+                        <SidebarHeading accent="#E6007E">Supplier city</SidebarHeading>
+                        <div className="space-y-0.5 max-h-72 overflow-auto pr-1">
+                            <SidebarItem active={city === "all"} onClick={() => setFilter("city", "all")} testid="filter-city-all">All cities</SidebarItem>
+                            {facets.cities.map((c) => (
+                                <SidebarItem key={c} active={city === c} onClick={() => setFilter("city", c)} testid={`filter-city-${c}`}>{c}</SidebarItem>
+                            ))}
                         </div>
-                        <div className="space-y-1.5 text-sm">
+                    </div>
+
+                    <div className="tc-card-flat p-5">
+                        <SidebarHeading accent="#F5C400">Toner type</SidebarHeading>
+                        <div className="space-y-0.5">
                             {["all", "Original", "Compatible", "Refilled"].map((t) => (
-                                <button key={t} onClick={() => setFilter("toner_type", t)} className={`block w-full text-left px-2 py-1 rounded ${tonerType === t ? "bg-slate-100 font-semibold" : "text-slate-600 hover:bg-slate-50"}`} data-testid={`filter-type-${t}`}>
+                                <SidebarItem key={t} active={tonerType === t} onClick={() => setFilter("toner_type", t)} testid={`filter-type-${t}`}>
                                     {t === "all" ? "All types" : t}
-                                </button>
+                                </SidebarItem>
                             ))}
                         </div>
                     </div>
@@ -149,77 +152,78 @@ export default function SearchPage() {
 
                 {/* RESULTS */}
                 <main className="lg:col-span-9">
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-end justify-between mb-6">
                         <div>
                             <div className="tc-eyebrow"><span className="tc-strip mr-2 align-middle" />Results</div>
-                            <h1 className="text-2xl font-bold text-[#0E0F12] mt-1" data-testid="search-results-count">
+                            <h1 className="tc-h2 text-[#0A0A0B] mt-2" data-testid="search-results-count">
                                 {loading ? "Loading…" : `${groups.length} model${groups.length === 1 ? "" : "s"} · ${totalListings} listings`}
                             </h1>
                         </div>
                     </div>
 
                     {loading && (
-                        <div className="space-y-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}</div>
+                        <div className="space-y-4">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-44 rounded-2xl" />)}</div>
                     )}
 
                     {!loading && groups.length === 0 && (
-                        <div className="tc-card p-12 text-center" data-testid="search-empty-state">
-                            <Boxes className="mx-auto text-slate-300" size={42} />
-                            <div className="mt-3 text-lg font-bold text-[#0E0F12]">No matching toners</div>
-                            <div className="text-slate-500 text-sm mt-1">Try a different model number, brand or city.</div>
-                            <Button className="btn-cta mt-4" onClick={clearAll} data-testid="empty-clear-btn">Clear filters</Button>
+                        <div className="tc-card p-16 text-center" data-testid="search-empty-state">
+                            <Boxes className="mx-auto text-[#D2D2D7]" size={48} />
+                            <div className="mt-4 tc-h3 text-[#0A0A0B]">No matching toners</div>
+                            <div className="text-[#6E6E73] text-[14px] mt-1">Try a different model number, brand or city.</div>
+                            <button className="btn-cta mt-6" onClick={clearAll} data-testid="empty-clear-btn">Clear filters</button>
                         </div>
                     )}
 
-                    <div className="space-y-4">
-                        {groups.map((g) => (
-                            <div key={g.model_number} className="tc-card overflow-hidden" data-testid={`group-${g.model_number.replace(/\s+/g, '-')}`}>
+                    <div className="space-y-5">
+                        {groups.map((g, idx) => (
+                            <div key={g.model_number} className="tc-card overflow-hidden tc-reveal" style={{ transitionDelay: `${Math.min(idx * 50, 300)}ms` }} data-testid={`group-${g.model_number.replace(/\s+/g, '-')}`}>
                                 <div className="grid lg:grid-cols-12">
-                                    <div className="lg:col-span-4 bg-slate-50 p-5 border-r border-slate-100">
+                                    <div className="lg:col-span-4 bg-[#FBFBFD] p-6 border-r border-black/[0.06]">
                                         <div className={`tc-thumb ${colorClass(g.color)}`} />
-                                        <div className="tc-eyebrow mt-4">{g.brand}</div>
-                                        <div className="text-2xl font-bold text-[#0E0F12] mt-1 font-mono">{g.model_number}</div>
-                                        <div className="text-sm text-slate-600 mt-1 line-clamp-2">{g.title}</div>
+                                        <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73] mt-5">{g.brand}</div>
+                                        <div className="font-mono text-[26px] font-semibold text-[#0A0A0B] mt-1 tracking-tight">{g.model_number}</div>
+                                        <div className="text-[14px] text-[#1D1D1F] mt-1.5 line-clamp-2">{g.title}</div>
                                         {g.compatible_printers && (
-                                            <div className="text-xs text-slate-500 mt-3 line-clamp-3"><span className="font-semibold text-slate-700">Compatible:</span> {g.compatible_printers}</div>
+                                            <div className="text-[12px] text-[#6E6E73] mt-3 line-clamp-3 leading-relaxed">
+                                                <span className="font-semibold text-[#1D1D1F]">Compatible:</span> {g.compatible_printers}
+                                            </div>
                                         )}
-                                        <div className="mt-4 pt-4 border-t border-slate-200 flex items-end justify-between">
+                                        <div className="mt-5 pt-5 border-t border-black/[0.06] flex items-end justify-between">
                                             <div>
-                                                <div className="tc-eyebrow">From</div>
-                                                <div className="font-mono text-2xl font-bold text-[#0E0F12]">₹{Math.round(g.min_price).toLocaleString('en-IN')}</div>
+                                                <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73]">From</div>
+                                                <div className="font-mono text-[24px] font-semibold text-[#0A0A0B] mt-0.5">₹{Math.round(g.min_price).toLocaleString('en-IN')}</div>
                                             </div>
                                             <div className="text-right">
                                                 <span className="tc-badge tc-badge-cyan">{g.supplier_count} sellers</span>
-                                                {g.page_yield && <div className="text-xs text-slate-500 mt-1.5 font-mono">~{g.page_yield} pages</div>}
+                                                {g.page_yield && <div className="text-[11px] text-[#6E6E73] mt-2 font-mono">~{g.page_yield} pages</div>}
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="lg:col-span-8 divide-y divide-slate-100">
-                                        {g.listings.map((p, idx) => (
-                                            <div key={p.id} className="p-4 grid md:grid-cols-12 gap-3 items-center hover:bg-slate-50/60" data-testid={`listing-${p.id}`}>
+                                    <div className="lg:col-span-8 divide-y divide-black/[0.05]">
+                                        {g.listings.map((p, i) => (
+                                            <div key={p.id} className="p-5 grid md:grid-cols-12 gap-4 items-center hover:bg-black/[0.015] transition-colors" data-testid={`listing-${p.id}`}>
                                                 <div className="md:col-span-4">
-                                                    <div className="font-semibold text-[#0E0F12]">{p.supplier_company || p.supplier_name}</div>
-                                                    <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5"><MapPin size={12} /> {p.city}</div>
-                                                    <div className="text-[11px] text-slate-400 mt-1 uppercase tracking-wider">{p.toner_type || "Original"}</div>
+                                                    <div className="font-semibold text-[15px] text-[#0A0A0B] tracking-tight">{p.supplier_company || p.supplier_name}</div>
+                                                    <div className="text-[12px] text-[#6E6E73] flex items-center gap-1 mt-1"><MapPin size={12} /> {p.city}</div>
+                                                    <div className="text-[10px] text-[#86868B] mt-1.5 uppercase tracking-[0.14em]">{p.toner_type || "Original"}</div>
                                                 </div>
                                                 <div className="md:col-span-2">
-                                                    <div className="tc-eyebrow">Price/unit</div>
-                                                    <div className="font-mono font-semibold text-[#0E0F12]">₹{p.price.toLocaleString('en-IN')}</div>
+                                                    <div className="text-[10px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">Price</div>
+                                                    <div className="font-mono font-semibold text-[#0A0A0B] mt-0.5">₹{p.price.toLocaleString('en-IN')}</div>
                                                 </div>
                                                 <div className="md:col-span-2">
-                                                    <div className="tc-eyebrow">Stock</div>
-                                                    <div className={`text-sm font-semibold ${p.stock > 20 ? "text-emerald-700" : p.stock > 0 ? "text-amber-700" : "text-red-700"}`}>
+                                                    <div className="text-[10px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">Stock</div>
+                                                    <div className={`text-[14px] font-semibold mt-0.5 ${p.stock > 20 ? "text-emerald-700" : p.stock > 0 ? "text-amber-700" : "text-red-700"}`}>
                                                         {p.stock > 0 ? `${p.stock} units` : "Out of stock"}
                                                     </div>
                                                 </div>
                                                 <div className="md:col-span-1">
-                                                    <div className="tc-eyebrow">Color</div>
-                                                    <div className="text-sm">{p.color}</div>
+                                                    <div className="text-[10px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">Color</div>
+                                                    <div className="text-[13px] mt-0.5">{p.color}</div>
                                                 </div>
                                                 <div className="md:col-span-3 flex md:justify-end">
-                                                    <Button
-                                                        size="sm"
-                                                        className={idx === 0 ? "btn-cta" : "btn-primary text-white"}
+                                                    <button
+                                                        className={i === 0 ? "btn-cta text-[13px]" : "btn-primary text-[13px]"}
                                                         onClick={() => {
                                                             if (!user) { navigate("/login"); return; }
                                                             if (user.role !== "customer") return;
@@ -228,8 +232,8 @@ export default function SearchPage() {
                                                         disabled={p.stock <= 0}
                                                         data-testid={`request-order-btn-${p.id}`}
                                                     >
-                                                        Request Order <ChevronRight size={14} className="ml-1" />
-                                                    </Button>
+                                                        Request <ArrowRight size={13} className="inline ml-1" />
+                                                    </button>
                                                 </div>
                                             </div>
                                         ))}
