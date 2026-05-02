@@ -1,0 +1,88 @@
+{
+  "theme": "light",
+  "archetype": "Archetype 4 (Swiss & High-Contrast) - Adapted for Indian B2B Trade",
+  "domain": "B2B Marketplace",
+  "mood": "Professional, Rooted, Trustworthy, Serious Trade, Data-Dense",
+  "colors": {
+    "background": "#F8F9FA",
+    "surface": "#FFFFFF",
+    "primary": "#0B1B3D",
+    "primary_hover": "#1E2A4F",
+    "accent": "#E65100",
+    "accent_hover": "#FF6D00",
+    "text_primary": "#1E293B",
+    "text_secondary": "#475569",
+    "border": "#E2E8F0",
+    "success": "#059669",
+    "warning": "#D97706",
+    "info": "#2563EB"
+  },
+  "typography": {
+    "heading_font": "Cabinet Grotesk",
+    "body_font": "IBM Plex Sans",
+    "mono_font": "IBM Plex Mono",
+    "scale": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tight font-bold",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-semibold",
+      "h3": "text-xl sm:text-2xl font-medium",
+      "body": "text-sm sm:text-base leading-relaxed",
+      "small": "text-xs tracking-wider uppercase font-medium",
+      "data": "text-sm font-mono"
+    }
+  },
+  "layout_and_spacing": {
+    "container_padding": "px-4 sm:px-6 lg:px-8",
+    "section_spacing": "py-12 sm:py-16 lg:py-24",
+    "grid_system": "The Control Room Grid",
+    "dashboard_grid": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6",
+    "bento_grid": "grid-cols-1 md:grid-cols-8 lg:grid-cols-12 gap-6",
+    "card_style": "Flat, 1px subtle border, no shadow by default, hover: shadow-sm, rounded-md",
+    "table_density": "High-density data rows with 1px border-b, striped or clean. Use IBM Plex Sans for legibility."
+  },
+  "components": {
+    "hero_search": "Prominent, centered, high-contrast. Use Shadcn Input heavily customized. Include filters (Brand, City) as dropdowns alongside the main search input.",
+    "buttons": {
+      "primary": "bg-[#0B1B3D] text-white hover:bg-[#1E2A4F] rounded-md px-6 py-2 font-medium transition-colors",
+      "accent": "bg-[#E65100] text-white hover:bg-[#FF6D00] rounded-md px-6 py-2 font-medium transition-colors (Use for 'Request Order')",
+      "outline": "border border-[#E2E8F0] text-[#1E293B] hover:bg-[#F8F9FA] rounded-md px-6 py-2 font-medium transition-colors"
+    },
+    "tables": "Shadcn Table customized for data density. Crisp edges, max 4px rounding on outer container. Padded cells p-2 or p-3. Status badges with distinct colors.",
+    "status_badges": "Small, rounded-full, px-2 py-0.5 text-xs font-medium. 'Completed/In Stock' -> bg-green-100 text-green-800. 'Pending' -> bg-amber-100 text-amber-800. 'Shipped' -> bg-blue-100 text-blue-800.",
+    "navigation": "Solid background (white) header with 1px bottom border. Prominent logo. Role-based links. No glassmorphism here, keep it clinical and crisp.",
+    "modals": "Shadcn Dialog. Flat style, sharp corners or max 8px border-radius. Clear dark overlay (bg-black/50)."
+  },
+  "interactions": {
+    "hover_states": "Crisp color shifts, subtle -translate-y-[1px] for cards, clear border-color changes. Explicit hover text colors.",
+    "focus_states": "High contrast 2px ring, focus:ring-[#0B1B3D]/50 focus:outline-none.",
+    "loading": "Skeleton loaders matching exact grid dimensions. Avoid generic spinners for data tables."
+  },
+  "accessibility_and_testing": {
+    "contrast": "Ensure minimum 4.5:1 ratio. All text over images must use gradient overlay.",
+    "data_testid": "MANDATORY on all interactive and key informational elements. Use kebab-case and role-based naming (e.g., 'search-input', 'order-request-button', 'supplier-login-link')."
+  },
+  "media": {
+    "hero_background": {
+      "url": "https://images.pexels.com/photos/5860937/pexels-photo-5860937.jpeg",
+      "description": "Modern warehouse aisle with stacks of goods, symbolizing B2B trade and scale. Needs a dark overlay for text contrast."
+    },
+    "category_toners": {
+      "url": "https://images.pexels.com/photos/33475146/pexels-photo-33475146.jpeg",
+      "description": "Close-up of a black printer toner cartridge, excellent for category or product placeholders."
+    },
+    "supplier_dashboard_empty": {
+      "url": "https://images.pexels.com/photos/4487363/pexels-photo-4487363.jpeg",
+      "description": "Bright modern warehouse featuring pallets. Use as a subdued background for empty states or supplier onboarding."
+    }
+  },
+  "instructions_to_main_agent": [
+    "Install and use '@phosphor-icons/react' for dense dashboard and B2B iconography.",
+    "Install and use 'Cabinet Grotesk' for headings and 'IBM Plex Sans' for body text. Do not use Inter or Roboto.",
+    "Build a robust hero section on the landing page with an overriding search bar focused on toner models. The search bar is the main action.",
+    "Do not use generic purple/violet SaaS gradients. Stick to the deep Ink Blue and Amber palette. Keep it looking like a serious B2B platform.",
+    "For the Search Results, build a high-density comparison table or list view allowing buyers to see multiple suppliers, cities, stock, and price clearly.",
+    "Order request flow does not require payment processing, but must capture model, quantity, and supplier.",
+    "Implement Role-Based dashboards (Customer, Supplier, Admin) using a tight 'Control Room' grid layout.",
+    "Add 'data-testid' to ALL interactive elements (buttons, inputs, links).",
+    "Use pure HTML/Tailwind for marketing/landing structural layouts, and customize Shadcn components heavily for dashboard interfaces."
+  ]
+}
