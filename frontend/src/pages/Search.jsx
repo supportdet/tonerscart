@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { MapPin, Boxes, Plus, Minus, ShoppingCart, X } from "lucide-react";
+import { MapPin, Boxes, Plus, Minus, ShoppingCart, X, SlidersHorizontal } from "lucide-react";
 import { Skeleton } from "../components/ui/skeleton";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -140,6 +140,46 @@ export default function SearchPage() {
     const getQty = (pid) => qtyMap[pid] ?? 1;
     const setQty = (pid, n) => setQtyMap((m) => ({ ...m, [pid]: n }));
 
+    const [filtersOpen, setFiltersOpen] = useState(false);
+
+    const FiltersBlock = () => (
+        <>
+            <div className="tc-card-flat p-5">
+                <div className="flex items-center gap-2 mb-3">
+                    <span className="w-1 h-4 rounded-full bg-[#00B7C7]" />
+                    <span className="text-[12px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Brand</span>
+                </div>
+                <div className="space-y-0.5">
+                    <SidebarItem active={brand === "all"} onClick={() => setFilter("brand", "all")} testid="filter-brand-all">All brands</SidebarItem>
+                    {facets.brands.map((b) => (<SidebarItem key={b} active={brand === b} onClick={() => setFilter("brand", b)} testid={`filter-brand-${b}`}>{b}</SidebarItem>))}
+                </div>
+            </div>
+
+            <div className="tc-card-flat p-5">
+                <div className="flex items-center gap-2 mb-3">
+                    <span className="w-1 h-4 rounded-full bg-[#E6007E]" />
+                    <span className="text-[12px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>City</span>
+                </div>
+                <div className="space-y-0.5 max-h-72 overflow-auto pr-1">
+                    <SidebarItem active={filterCity === "all"} onClick={() => setFilter("city", "all")} testid="filter-city-all">All cities</SidebarItem>
+                    {KNOWN_CITIES.map((c) => (<SidebarItem key={c} active={filterCity === c} onClick={() => setFilter("city", c)} testid={`filter-city-${c}`}>{c}</SidebarItem>))}
+                </div>
+            </div>
+
+            <div className="tc-card-flat p-5">
+                <div className="flex items-center gap-2 mb-3">
+                    <span className="w-1 h-4 rounded-full bg-[#F5C400]" />
+                    <span className="text-[12px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Toner type</span>
+                </div>
+                <div className="space-y-0.5">
+                    {["all", "Original", "Compatible", "Refilled"].map((t) => (
+                        <SidebarItem key={t} active={tonerType === t} onClick={() => setFilter("toner_type", t)} testid={`filter-type-${t}`}>{t === "all" ? "All types" : t}</SidebarItem>
+                    ))}
+                </div>
+            </div>
+        </>
+    );
+
     const onBuy = (p, qty) => {
         if (!user) { navigate("/login"); return; }
         if (user.role !== "customer") return;
@@ -154,14 +194,28 @@ export default function SearchPage() {
     };
 
     return (
-        <div className="tc-container py-10" ref={rootRef} data-testid="search-page">
-            <div className="tc-search-shell" style={{ gridTemplateColumns: "1fr auto" }} data-testid="search-bar">
+        <div className="tc-container py-6 sm:py-10" ref={rootRef} data-testid="search-page">
+            <div className="tc-search-shell" data-testid="search-bar">
                 <TonerSearchInput value={q} onChange={setQ} onSubmit={apply} testId="search-input" />
                 <button onClick={() => apply()} className="tc-search-go" data-testid="search-apply-btn">Search</button>
             </div>
 
+            {/* Mobile filter trigger row */}
+            <div className="lg:hidden flex items-center justify-between mt-4 gap-3">
+                <button
+                    onClick={() => setFiltersOpen(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[#D2D2D7] bg-white text-[13px] font-semibold text-[#0A0A0B] hover:bg-black/[0.03]"
+                    data-testid="mobile-filters-btn"
+                >
+                    <SlidersHorizontal size={14} /> Filters {activeFilters.length > 0 && (<span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-[#0A0A0B] text-white text-[10px] font-bold">{activeFilters.length}</span>)}
+                </button>
+                <div className="text-[12px] text-[#6E6E73]" data-testid="mobile-results-count">
+                    {loading ? "Loading…" : `${products.length} listings`}
+                </div>
+            </div>
+
             {activeFilters.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 mt-5">
+                <div className="flex flex-wrap items-center gap-2 mt-4 sm:mt-5">
                     <span className="text-[11px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73]">Active</span>
                     {activeFilters.map((f) => (
                         <button key={f.k} onClick={() => setFilter(f.k, "all")} className="tc-badge tc-badge-gray flex items-center gap-1 hover:bg-black/[0.06]" data-testid={`active-filter-${f.k}`}>
@@ -172,41 +226,10 @@ export default function SearchPage() {
                 </div>
             )}
 
-            <div className="grid lg:grid-cols-12 gap-8 mt-8">
-                <aside className="lg:col-span-3 lg:sticky lg:top-24 lg:self-start space-y-5" data-testid="search-sidebar">
-                    <div className="tc-card-flat p-5">
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="w-1 h-4 rounded-full bg-[#00B7C7]" />
-                            <span className="text-[12px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Brand</span>
-                        </div>
-                        <div className="space-y-0.5">
-                            <SidebarItem active={brand === "all"} onClick={() => setFilter("brand", "all")} testid="filter-brand-all">All brands</SidebarItem>
-                            {facets.brands.map((b) => (<SidebarItem key={b} active={brand === b} onClick={() => setFilter("brand", b)} testid={`filter-brand-${b}`}>{b}</SidebarItem>))}
-                        </div>
-                    </div>
-
-                    <div className="tc-card-flat p-5">
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="w-1 h-4 rounded-full bg-[#E6007E]" />
-                            <span className="text-[12px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>City</span>
-                        </div>
-                        <div className="space-y-0.5 max-h-72 overflow-auto pr-1">
-                            <SidebarItem active={filterCity === "all"} onClick={() => setFilter("city", "all")} testid="filter-city-all">All cities</SidebarItem>
-                            {KNOWN_CITIES.map((c) => (<SidebarItem key={c} active={filterCity === c} onClick={() => setFilter("city", c)} testid={`filter-city-${c}`}>{c}</SidebarItem>))}
-                        </div>
-                    </div>
-
-                    <div className="tc-card-flat p-5">
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="w-1 h-4 rounded-full bg-[#F5C400]" />
-                            <span className="text-[12px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Toner type</span>
-                        </div>
-                        <div className="space-y-0.5">
-                            {["all", "Original", "Compatible", "Refilled"].map((t) => (
-                                <SidebarItem key={t} active={tonerType === t} onClick={() => setFilter("toner_type", t)} testid={`filter-type-${t}`}>{t === "all" ? "All types" : t}</SidebarItem>
-                            ))}
-                        </div>
-                    </div>
+            <div className="grid lg:grid-cols-12 gap-6 lg:gap-8 mt-6 lg:mt-8">
+                {/* Desktop sidebar */}
+                <aside className="hidden lg:block lg:col-span-3 lg:sticky lg:top-24 lg:self-start space-y-5" data-testid="search-sidebar">
+                    <FiltersBlock />
 
                     {cart.length > 0 && (
                         <div className="tc-card-flat p-5" data-testid="cart-summary">
@@ -229,7 +252,7 @@ export default function SearchPage() {
                 </aside>
 
                 <main className="lg:col-span-9">
-                    <div className="flex items-end justify-between mb-6">
+                    <div className="hidden lg:flex items-end justify-between mb-6">
                         <div>
                             <div className="tc-eyebrow"><span className="tc-strip mr-2 align-middle" />Results</div>
                             <h1 className="mt-2 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(24px, 2.6vw, 34px)", fontWeight: 300, letterSpacing: "-0.015em", lineHeight: 1.14 }} data-testid="search-results-count">
@@ -239,13 +262,13 @@ export default function SearchPage() {
                     </div>
 
                     {loading && (
-                        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
                             {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-72 rounded-2xl" />)}
                         </div>
                     )}
 
                     {!loading && products.length === 0 && (
-                        <div className="tc-card p-16 text-center" data-testid="search-empty-state">
+                        <div className="tc-card p-8 sm:p-16 text-center" data-testid="search-empty-state">
                             <Boxes className="mx-auto text-[#D2D2D7]" size={48} />
                             <div className="mt-4 text-[#0A0A0B] text-xl font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>No matching toners</div>
                             <div className="text-[#6E6E73] text-[14px] mt-1">Try a different model or clear filters.</div>
@@ -253,7 +276,7 @@ export default function SearchPage() {
                         </div>
                     )}
 
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
                         {products.map((p, idx) => (
                             <div key={p.id} className="tc-reveal" style={{ transitionDelay: `${Math.min(idx * 35, 280)}ms` }}>
                                 <ProductCard p={p} qty={getQty(p.id)} setQty={(n) => setQty(p.id, n)} onBuy={onBuy} onCart={onCart} />
@@ -262,6 +285,29 @@ export default function SearchPage() {
                     </div>
                 </main>
             </div>
+
+            {/* Mobile filter drawer */}
+            {filtersOpen && (
+                <div className="fixed inset-0 z-[80] lg:hidden" data-testid="mobile-filters-drawer">
+                    <div className="absolute inset-0 bg-black/40" onClick={() => setFiltersOpen(false)} />
+                    <div className="absolute inset-x-0 bottom-0 bg-white rounded-t-2xl max-h-[85vh] overflow-auto p-5 space-y-4 shadow-2xl">
+                        <div className="flex items-center justify-between sticky top-0 bg-white pb-3 -mx-1 px-1 border-b border-black/[0.06]">
+                            <div>
+                                <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B]">Refine</div>
+                                <div className="text-[18px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Filters</div>
+                            </div>
+                            <button onClick={() => setFiltersOpen(false)} className="w-9 h-9 grid place-items-center rounded-full hover:bg-black/[0.05]" aria-label="Close" data-testid="mobile-filters-close-btn">
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <FiltersBlock />
+                        <div className="grid grid-cols-2 gap-2 pt-2">
+                            <button onClick={() => { clearAll(); setFiltersOpen(false); }} className="btn-light text-[13px] py-2.5" data-testid="mobile-filters-clear-btn">Clear all</button>
+                            <button onClick={() => setFiltersOpen(false)} className="btn-cta text-[13px] py-2.5" data-testid="mobile-filters-apply-btn">Show {products.length} results</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {orderProduct && (
                 <OrderRequestDialog product={orderProduct} initialQty={orderQty} onClose={() => setOrderProduct(null)} />

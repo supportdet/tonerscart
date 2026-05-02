@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Sparkles } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import api from "../lib/api";
 import TonerSearchInput from "../components/TonerSearchInput";
 import TonerAnimation from "../components/TonerAnimation";
@@ -15,7 +14,6 @@ export default function Landing() {
     const navigate = useNavigate();
     const { city } = useCity();
     const [q, setQ] = useState("");
-    const [brand, setBrand] = useState("all");
     const [facets, setFacets] = useState({ brands: [], cities: [], models: [] });
     const [grouped, setGrouped] = useState([]);
     const rootRef = useReveal([grouped.length, city]);
@@ -43,41 +41,31 @@ export default function Landing() {
         const useQ = override?.query ?? q;
         const params = new URLSearchParams();
         if (useQ) params.set("q", useQ);
-        if (brand && brand !== "all") params.set("brand", brand);
         navigate(`/search?${params.toString()}`);
     };
 
     return (
         <div ref={rootRef} data-testid="landing-page">
             {/* ============================== HERO ============================== */}
-            <section className="tc-hero relative pt-12 pb-20 lg:pt-16 lg:pb-24">
+            <section className="tc-hero relative pt-8 pb-12 sm:pt-12 sm:pb-20 lg:pt-16 lg:pb-24">
                 <div className="tc-hero-grid" />
                 <div className="tc-container relative">
                     {/* Search bar — full-width with side gutters */}
                     <div className="flex items-center gap-3 mb-4 tc-fade-up">
                         <span className="tc-strip" />
-                        <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-white/60">Now serving Bangalore</span>
+                        <span className="text-[10px] sm:text-[11px] tracking-[0.22em] uppercase font-semibold text-white/60">Now serving {city}</span>
                     </div>
-                    <div className="tc-search-shell w-full tc-fade-up tc-fade-up-1" data-testid="hero-search-form" style={{ gridTemplateColumns: "1fr 200px auto" }}>
+                    <div className="tc-search-shell w-full tc-fade-up tc-fade-up-1" data-testid="hero-search-form">
                         <TonerSearchInput value={q} onChange={setQ} onSubmit={submit} testId="hero-search-input" />
-                        <Select value={brand} onValueChange={setBrand}>
-                            <SelectTrigger className="tc-search-pill" data-testid="hero-brand-select">
-                                <SelectValue placeholder="All brands" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All brands</SelectItem>
-                                {facets.brands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
                         <button onClick={() => submit()} className="tc-search-go" data-testid="hero-search-submit">
                             Search <ArrowRight size={16} />
                         </button>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2 tc-fade-up tc-fade-up-2">
-                        <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-[#F5C400]/90">Popular</span>
+                        <span className="text-[10px] sm:text-[11px] tracking-[0.22em] uppercase font-semibold text-[#F5C400]/90">Popular</span>
                         {POPULAR.map((m) => (
                             <button key={m} onClick={() => { setQ(m); submit({ query: m }); }}
-                                className="px-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-[12px] text-white/85 backdrop-blur transition-colors"
+                                className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-[11px] sm:text-[12px] text-white/85 backdrop-blur transition-colors"
                                 data-testid={`trending-${m.replace(/\s+/g, '-')}`}>
                                 {m}
                             </button>
@@ -85,14 +73,14 @@ export default function Landing() {
                     </div>
 
                     {/* Hero content split */}
-                    <div className="grid lg:grid-cols-12 gap-10 lg:gap-12 items-center mt-12 lg:mt-16">
-                        <div className="lg:col-span-7">
+                    <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-center mt-10 lg:mt-16">
+                        <div className="lg:col-span-7 order-2 lg:order-1">
                             <h1
                                 className="text-white max-w-2xl tc-fade-up tc-fade-up-3"
                                 style={{
                                     fontFamily: "'Montserrat', sans-serif",
-                                    fontSize: "clamp(28px, 4vw, 52px)",
-                                    lineHeight: 1.12,
+                                    fontSize: "clamp(26px, 4vw, 52px)",
+                                    lineHeight: 1.14,
                                     letterSpacing: "-0.025em",
                                     fontWeight: 300,
                                 }}
@@ -100,12 +88,12 @@ export default function Landing() {
                             >
                                 India&apos;s marketplace for printer toners — <span className="text-[#00B7C7]" style={{ fontWeight: 500 }}>verified suppliers</span>, <span className="text-[#F5C400]" style={{ fontWeight: 500 }}>real stock</span>, <span className="text-[#E6007E]" style={{ fontWeight: 500 }}>better prices</span>.
                             </h1>
-                            <p className="text-white/65 max-w-xl mt-5 text-[15px] sm:text-[16px] tc-fade-up tc-fade-up-4" style={{ fontFamily: "'Inter', sans-serif" }}>
+                            <p className="text-white/65 max-w-xl mt-4 sm:mt-5 text-[14px] sm:text-[16px] tc-fade-up tc-fade-up-4" style={{ fontFamily: "'Inter', sans-serif" }}>
                                 Search any model, compare every supplier in {city}, and place an order request in minutes. No payment gateway, just direct B2B trade.
                             </p>
                         </div>
 
-                        <div className="lg:col-span-5 tc-fade-up tc-fade-up-2">
+                        <div className="lg:col-span-5 order-1 lg:order-2 tc-fade-up tc-fade-up-2">
                             <TonerAnimation />
                         </div>
                     </div>
@@ -114,7 +102,7 @@ export default function Landing() {
 
             {/* ====== STATS STRIP ====== */}
             <section className="bg-white border-b border-black/[0.06]">
-                <div className="tc-container py-8 grid grid-cols-2 sm:grid-cols-4 gap-6">
+                <div className="tc-container py-6 sm:py-8 grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
                     {[
                         { v: facets.models.length || "—", k: "Toner SKUs" },
                         { v: 25, k: "Verified suppliers" },
@@ -122,29 +110,29 @@ export default function Landing() {
                         { v: facets.brands.length || "—", k: "Brands listed" },
                     ].map((s, i) => (
                         <div key={i} className="tc-reveal" style={{ transitionDelay: `${i * 80}ms` }}>
-                            <div className="font-mono text-2xl sm:text-3xl font-semibold text-[#0A0A0B] tracking-tight">{s.v}</div>
-                            <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73] mt-2">{s.k}</div>
+                            <div className="font-mono text-xl sm:text-2xl lg:text-3xl font-semibold text-[#0A0A0B] tracking-tight">{s.v}</div>
+                            <div className="text-[10px] sm:text-[11px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73] mt-1.5 sm:mt-2">{s.k}</div>
                         </div>
                     ))}
                 </div>
             </section>
 
             {/* ============== TOP MODELS ============== */}
-            <section className="tc-container py-16 lg:py-20">
-                <div className="flex items-end justify-between mb-8">
-                    <div>
+            <section className="tc-container py-12 sm:py-16 lg:py-20">
+                <div className="flex items-end justify-between mb-6 sm:mb-8 gap-4">
+                    <div className="flex-1">
                         <div className="tc-eyebrow"><span className="tc-strip mr-2 align-middle" />Top in {city}</div>
-                        <h2 className="mt-3 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(26px, 3.2vw, 42px)", lineHeight: 1.14, letterSpacing: "-0.02em", fontWeight: 300 }}>
+                        <h2 className="mt-3 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(22px, 3.2vw, 42px)", lineHeight: 1.14, letterSpacing: "-0.02em", fontWeight: 300 }}>
                             Most-bought toners this month.
                         </h2>
-                        <p className="tc-lead mt-3 max-w-xl">Direct from approved suppliers. Compare every listing, then send an order request — no payment online.</p>
+                        <p className="tc-lead mt-2 sm:mt-3 max-w-xl text-[13px] sm:text-[15px]">Direct from approved suppliers. Compare every listing, then send an order request — no payment online.</p>
                     </div>
-                    <button onClick={() => navigate("/search")} className="btn-primary text-[13px] hidden sm:inline-flex items-center gap-1.5" data-testid="browse-all-btn">
+                    <button onClick={() => navigate("/search")} className="btn-primary text-[12.5px] sm:text-[13px] hidden sm:inline-flex items-center gap-1.5 shrink-0" data-testid="browse-all-btn">
                         Browse all <ArrowRight size={13} />
                     </button>
                 </div>
 
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
                     {grouped.map((g, idx) => (
                         <button
                             key={g.model_number}
@@ -157,33 +145,40 @@ export default function Landing() {
                                 <span className="tc-product-img-label">{g.brand}</span>
                                 <TonerCartridge color={g.color || "Black"} brand={g.brand} model={g.model_number} />
                             </div>
-                            <div className="p-4 flex flex-col gap-1 flex-1">
-                                <div className="font-mono text-[18px] font-semibold text-[#0A0A0B] tracking-tight">{g.model_number}</div>
-                                <div className="text-[12.5px] text-[#1D1D1F] line-clamp-1">{g.supplier_count} sellers · {g.cities?.[0] || "Pan-India"}</div>
-                                <div className="mt-3 pt-3 border-t border-black/[0.05] flex items-end justify-between">
+                            <div className="p-3 sm:p-4 flex flex-col gap-1 flex-1">
+                                <div className="font-mono text-[15px] sm:text-[18px] font-semibold text-[#0A0A0B] tracking-tight">{g.model_number}</div>
+                                <div className="text-[11px] sm:text-[12.5px] text-[#1D1D1F] line-clamp-1">{g.supplier_count} sellers · {g.cities?.[0] || "Pan-India"}</div>
+                                <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-black/[0.05] flex items-end justify-between">
                                     <div>
-                                        <div className="text-[10px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">From</div>
-                                        <div className="font-mono text-[18px] font-semibold text-[#0A0A0B]">₹{Math.round(g.min_price).toLocaleString('en-IN')}</div>
+                                        <div className="text-[9px] sm:text-[10px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">From</div>
+                                        <div className="font-mono text-[15px] sm:text-[18px] font-semibold text-[#0A0A0B]">₹{Math.round(g.min_price).toLocaleString('en-IN')}</div>
                                     </div>
-                                    <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-[#F5C400] text-[#0A0A0B]"><ArrowRight size={15} /></span>
+                                    <span className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#F5C400] text-[#0A0A0B]"><ArrowRight size={14} /></span>
                                 </div>
                             </div>
                         </button>
                     ))}
                 </div>
+
+                {/* Mobile-only "browse all" */}
+                <div className="mt-6 sm:hidden">
+                    <button onClick={() => navigate("/search")} className="btn-primary w-full text-[13px] inline-flex items-center justify-center gap-1.5" data-testid="browse-all-btn-mobile">
+                        Browse all toners <ArrowRight size={13} />
+                    </button>
+                </div>
             </section>
 
             {/* CTA STRIP */}
-            <section className="tc-container pb-20">
-                <div className="tc-card-flat p-8 lg:p-10 grid md:grid-cols-2 gap-6 items-center">
+            <section className="tc-container pb-12 sm:pb-20">
+                <div className="tc-card-flat p-6 sm:p-8 lg:p-10 grid md:grid-cols-2 gap-5 sm:gap-6 items-start md:items-center">
                     <div>
                         <div className="tc-eyebrow flex items-center gap-2"><Sparkles size={12} className="text-[#00B7C7]" /> AI-powered help</div>
-                        <h3 className="mt-2 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(22px, 2.4vw, 32px)", fontWeight: 300, letterSpacing: "-0.015em", lineHeight: 1.2 }}>Not sure which toner fits your printer?</h3>
-                        <p className="tc-lead mt-2">Tap the chat bubble in the corner — TonerBot answers in seconds.</p>
+                        <h3 className="mt-2 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(20px, 2.4vw, 32px)", fontWeight: 300, letterSpacing: "-0.015em", lineHeight: 1.2 }}>Not sure which toner fits your printer?</h3>
+                        <p className="tc-lead mt-2 text-[13px] sm:text-[15px]">Tap the chat bubble in the corner — TonerBot answers in seconds.</p>
                     </div>
                     <div className="flex md:justify-end gap-3 flex-wrap">
-                        <button className="btn-cta" onClick={() => navigate("/register?role=supplier")} data-testid="cta-supplier-signup">Apply as supplier</button>
-                        <button className="btn-light" onClick={() => navigate("/search")} data-testid="cta-browse">Browse toners</button>
+                        <button className="btn-cta flex-1 md:flex-none" onClick={() => navigate("/register?role=supplier")} data-testid="cta-supplier-signup">Apply as supplier</button>
+                        <button className="btn-light flex-1 md:flex-none" onClick={() => navigate("/search")} data-testid="cta-browse">Browse toners</button>
                     </div>
                 </div>
             </section>

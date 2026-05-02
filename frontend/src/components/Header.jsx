@@ -1,12 +1,17 @@
 import React, { useState } from "react";
-import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
-import { LogOut, MapPin, ChevronDown } from "lucide-react";
+import { LogOut, MapPin, ChevronDown, Menu, X } from "lucide-react";
 
 const navLink = ({ isActive }) =>
     `text-[14px] font-medium px-3.5 py-2 rounded-md transition-colors ${
         isActive ? "text-[#0A0A0B] bg-black/[0.05]" : "text-[#1D1D1F] hover:text-[#0A0A0B] hover:bg-black/[0.04]"
+    }`;
+
+const mobileNavLink = ({ isActive }) =>
+    `block px-4 py-3 rounded-lg text-[15px] font-medium ${
+        isActive ? "text-[#0A0A0B] bg-black/[0.05]" : "text-[#1D1D1F] hover:bg-black/[0.04]"
     }`;
 
 export default function Header() {
@@ -14,16 +19,19 @@ export default function Header() {
     const { city, setCity } = useCity();
     const navigate = useNavigate();
     const [cityOpen, setCityOpen] = useState(false);
+    const [mobileOpen, setMobileOpen] = useState(false);
 
     const dashboardPath =
         user?.role === "admin" ? "/admin" :
         user?.role === "supplier" ? "/supplier" :
         user?.role === "customer" ? "/customer" : null;
 
+    const closeMobile = () => setMobileOpen(false);
+
     return (
         <header className="bg-white border-b border-black/[0.06] sticky top-0 z-50" data-testid="site-header">
-            <div className="tc-container flex items-center justify-between h-16 gap-4">
-                <Link to="/" className="flex items-center gap-2.5 group" data-testid="logo-home-link">
+            <div className="tc-container flex items-center justify-between h-16 gap-3">
+                <Link to="/" className="flex items-center gap-2.5 group shrink-0" data-testid="logo-home-link" onClick={closeMobile}>
                     <div className="relative w-8 h-8 rounded-lg bg-[#0A0A0B] grid place-items-center overflow-hidden shrink-0 transition-transform group-hover:scale-105">
                         <span className="text-white font-bold text-[13px] relative z-10 tracking-tight">TC</span>
                         <span className="absolute top-0 left-0 w-1.5 h-1.5 bg-[#00B7C7]" />
@@ -33,6 +41,7 @@ export default function Header() {
                     <span className="font-semibold text-[#0A0A0B] tracking-tight text-[17px]" style={{ fontFamily: "'Montserrat', sans-serif" }}>TonersCart</span>
                 </Link>
 
+                {/* Desktop nav */}
                 <nav className="hidden md:flex items-center gap-1">
                     <NavLink to="/search" className={navLink} data-testid="nav-search">Browse</NavLink>
                     <NavLink to="/register?role=supplier" className={navLink} data-testid="nav-sell">Sell</NavLink>
@@ -41,7 +50,8 @@ export default function Header() {
                     {user?.role === "admin" && <NavLink to="/admin" className={navLink} data-testid="nav-admin">Admin</NavLink>}
                 </nav>
 
-                <div className="flex items-center gap-2">
+                {/* Desktop right cluster */}
+                <div className="hidden md:flex items-center gap-2">
                     <div className="relative">
                         <button onClick={() => setCityOpen((o) => !o)} onBlur={() => setTimeout(() => setCityOpen(false), 150)}
                             className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-md text-[#1D1D1F] hover:bg-black/[0.04]"
@@ -80,7 +90,56 @@ export default function Header() {
                         </>
                     )}
                 </div>
+
+                {/* Mobile cluster */}
+                <div className="md:hidden flex items-center gap-1">
+                    {!user && (
+                        <button onClick={() => navigate("/register")} className="btn-cta text-[12px] px-3 py-1.5" data-testid="header-register-btn-mobile">Join</button>
+                    )}
+                    <button onClick={() => setMobileOpen((o) => !o)} className="w-10 h-10 grid place-items-center rounded-md hover:bg-black/[0.04]" aria-label="Menu" data-testid="header-mobile-menu-btn">
+                        {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+                    </button>
+                </div>
             </div>
+
+            {/* Mobile drawer */}
+            {mobileOpen && (
+                <div className="md:hidden border-t border-black/[0.06] bg-white" data-testid="mobile-menu">
+                    <div className="tc-container py-3 space-y-1">
+                        {/* City picker (mobile) */}
+                        <div className="px-1 pb-2">
+                            <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B] px-3 mb-1.5">Your city</div>
+                            <div className="flex flex-wrap gap-1.5 px-3">
+                                {KNOWN_CITIES.slice(0, 8).map((c) => (
+                                    <button key={c} onClick={() => { setCity(c); }}
+                                        className={`px-3 py-1.5 rounded-full border text-[12.5px] ${c === city ? "bg-[#0A0A0B] text-white border-[#0A0A0B]" : "bg-white text-[#1D1D1F] border-[#D2D2D7]"}`}
+                                        data-testid={`mobile-city-option-${c}`}>
+                                        {c}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <NavLink to="/search" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-search">Browse toners</NavLink>
+                        <NavLink to="/register?role=supplier" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-sell">Sell on TonersCart</NavLink>
+                        {user?.role === "supplier" && <NavLink to="/supplier" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-supplier">Seller dashboard</NavLink>}
+                        {user?.role === "customer" && <NavLink to="/customer" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-customer">My orders</NavLink>}
+                        {user?.role === "admin" && <NavLink to="/admin" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-admin">Admin</NavLink>}
+
+                        <div className="pt-2 mt-2 border-t border-black/[0.06]">
+                            {!user ? (
+                                <button onClick={() => { closeMobile(); navigate("/login"); }} className="block w-full px-4 py-3 rounded-lg text-[15px] font-medium text-[#1D1D1F] hover:bg-black/[0.04] text-left" data-testid="mobile-login-btn">
+                                    Sign in
+                                </button>
+                            ) : (
+                                <button onClick={async () => { closeMobile(); await logout(); navigate("/"); }} className="block w-full px-4 py-3 rounded-lg text-[15px] font-medium text-[#1D1D1F] hover:bg-black/[0.04] text-left flex items-center gap-2" data-testid="mobile-logout-btn">
+                                    <LogOut size={16} /> Log out ({user.name.split(" ")[0]})
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </header>
     );
 }

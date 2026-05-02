@@ -39,6 +39,25 @@ Build a full-stack B2B marketplace web application called TonersCart for India w
 - CMYK-themed UI (charcoal #0E0F12 base, cyan #00B7C7, magenta #E6007E, yellow #F7C600 CTAs)
 - Tested: 35/35 backend tests pass; all critical frontend flows verified by testing agent
 
+### 2026-05-02 — UI polish + mobile-first responsive
+- Removed glassmorphism nav, reverted to clean white sticky header
+- Realistic toner cartridge SVG (light gray plastic body, brand-coloured label band, drum roller, drop shadow) replacing dark blocks
+- Thin Montserrat headline (weight 300) across hero, top-models, register
+- Hero search bar widened, top-aligned, "All brands" select removed (user request)
+- Removed 3-second login popup (user request)
+- **Mobile-first responsive overhaul**:
+  - Hamburger drawer menu with city pills, Browse/Sell/Sign-in
+  - Hero stacks animation-on-top, text below on mobile (order-1/order-2)
+  - Stats grid: 2-col mobile → 4-col desktop
+  - Top-models grid: 2-col mobile → 4-col desktop
+  - Search page: mobile shows "Filters" button + bottom-sheet drawer; desktop shows sticky sidebar
+  - Product cards: 1-col mobile → 2-col tablet → 3-col desktop
+  - AI chat panel goes full-width on mobile, floating on desktop
+  - Search input + button: stacked on <640px, inline on ≥640px
+  - Register form: 1-col mobile → 2-col tablet+
+- Supplier registration form expanded with brands, GST, business address, areas supplied, customer base, monthly volume, notes
+- Supplier-apply endpoint (`/api/auth/supplier-apply`) writes to `supplier_applications` and emails `support@digitaledgeinida.com` (SMTP path; Resend integration pending API key)
+
 ## Prioritized backlog
 ### P1 (next phase)
 - Add pagination on /api/admin/* and /api/orders/mine

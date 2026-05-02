@@ -7,7 +7,6 @@ import { CityProvider } from "./context/CityContext";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
-import LoginPopup from "./components/LoginPopup";
 import AIChatWidget from "./components/AIChatWidget";
 import Landing from "./pages/Landing";
 import SearchPage from "./pages/Search";
@@ -38,7 +37,6 @@ function App() {
                             </Routes>
                         </main>
                         <Footer />
-                        <LoginPopup />
                         <AIChatWidget />
                         <Toaster richColors position="top-right" />
                     </AuthProvider>

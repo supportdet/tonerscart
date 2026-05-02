@@ -59,18 +59,18 @@ export default function Register() {
     };
 
     return (
-        <div className="tc-container py-12 max-w-3xl" data-testid="register-page">
+        <div className="tc-container py-8 sm:py-12 max-w-3xl" data-testid="register-page">
             <div className="tc-eyebrow"><span className="tc-strip mr-2 align-middle" />Create account</div>
-            <h1 className="text-[#0A0A0B] mt-2" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(28px, 3.4vw, 44px)", fontWeight: 300, letterSpacing: "-0.02em", lineHeight: 1.12 }}>
+            <h1 className="text-[#0A0A0B] mt-2" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(24px, 3.4vw, 44px)", fontWeight: 300, letterSpacing: "-0.02em", lineHeight: 1.12 }}>
                 Join the TonersCart trade network
             </h1>
 
-            <div className="mt-6 grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg max-w-sm">
+            <div className="mt-5 sm:mt-6 grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg w-full sm:max-w-sm">
                 <button type="button" onClick={() => setRole("customer")} className={`py-2 rounded-md text-sm font-semibold transition ${role === "customer" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-slate-500"}`} data-testid="role-customer-tab">I&apos;m a Buyer</button>
                 <button type="button" onClick={() => setRole("supplier")} className={`py-2 rounded-md text-sm font-semibold transition ${role === "supplier" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-slate-500"}`} data-testid="role-supplier-tab">I&apos;m a Supplier</button>
             </div>
 
-            <form onSubmit={submit} className="mt-6 tc-card-flat p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <form onSubmit={submit} className="mt-5 sm:mt-6 tc-card-flat p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 {role === "supplier" ? (
                     <>
                         <div className="sm:col-span-2 -mb-2">
