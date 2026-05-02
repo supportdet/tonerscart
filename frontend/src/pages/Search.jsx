@@ -232,7 +232,7 @@ export default function SearchPage() {
                     <div className="flex items-end justify-between mb-6">
                         <div>
                             <div className="tc-eyebrow"><span className="tc-strip mr-2 align-middle" />Results</div>
-                            <h1 className="mt-2 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(20px, 2.2vw, 28px)", fontWeight: 500 }} data-testid="search-results-count">
+                            <h1 className="mt-2 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(24px, 2.6vw, 34px)", fontWeight: 300, letterSpacing: "-0.015em", lineHeight: 1.14 }} data-testid="search-results-count">
                                 {loading ? "Loading…" : `${products.length} listings${filterCity !== "all" ? ` · ${filterCity}` : ""}`}
                             </h1>
                         </div>

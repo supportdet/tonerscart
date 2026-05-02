@@ -1,116 +1,182 @@
 import React from "react";
 
 /**
- * Realistic toner cartridge SVG. Renders an HP/Canon-style cartridge body
- * with a colored accent band (CMYK) based on the toner color.
+ * Photo-realistic laser toner cartridge SVG.
+ * Styled after an HP LaserJet cartridge — light gray plastic body with a
+ * brand-coloured label band running across the top. Reads at a glance as a
+ * physical product rather than a dark block.
  *
  * Props:
  *   color: "Cyan" | "Magenta" | "Yellow" | "Black"
- *   brand: e.g. "HP", "Canon" — shown on the label
- *   model: e.g. "88A", "TN-2365" — shown on the label
- *   compact: bool — uses smaller proportions
+ *   brand: e.g. "HP", "Canon", "Brother"
+ *   model: e.g. "88A", "TN-2365"
+ *   type:  "Original" | "Compatible" | "Refilled"
  */
-const ACCENTS = {
+
+const BRAND_ACCENTS = {
+    HP:      { label: "#0096D6", text: "#FFFFFF" },   // HP blue
+    Canon:   { label: "#CC0000", text: "#FFFFFF" },   // Canon red
+    Brother: { label: "#E60012", text: "#FFFFFF" },   // Brother red
+    Samsung: { label: "#1428A0", text: "#FFFFFF" },   // Samsung blue
+    Ricoh:   { label: "#D7282F", text: "#FFFFFF" },   // Ricoh red
+    Epson:   { label: "#003399", text: "#FFFFFF" },   // Epson blue
+    Xerox:   { label: "#CE1126", text: "#FFFFFF" },   // Xerox red
+    Kyocera: { label: "#E60012", text: "#FFFFFF" },   // Kyocera red
+};
+
+const COLOR_DOT = {
     Cyan:    "#00B7C7",
     Magenta: "#E6007E",
     Yellow:  "#F5C400",
-    Black:   "#222428",
+    Black:   "#1C1C1E",
 };
 
-export default function TonerCartridge({ color = "Black", brand = "HP", model = "88A" }) {
-    const accent = ACCENTS[color] || ACCENTS.Black;
-    const labelText = `${brand} ${model}`;
+export default function TonerCartridge({ color = "Black", brand = "HP", model = "88A", type = "Original" }) {
+    const brandAccent = BRAND_ACCENTS[brand] || BRAND_ACCENTS.HP;
+    const dot = COLOR_DOT[color] || COLOR_DOT.Black;
+    const uid = `${brand}-${model}`.replace(/[^a-zA-Z0-9]/g, "");
+
     return (
-        <svg viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <defs>
-                <linearGradient id={`body-${color}-${model}`} x1="0" y1="0" x2="0" y2="1">
+                {/* Main plastic body gradient — light to medium gray */}
+                <linearGradient id={`body-${uid}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#F2F3F5" />
+                    <stop offset="35%" stopColor="#D8DADE" />
+                    <stop offset="100%" stopColor="#A8ABB2" />
+                </linearGradient>
+                {/* Top fin / handle */}
+                <linearGradient id={`fin-${uid}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#E6E7EB" />
+                    <stop offset="100%" stopColor="#B4B7BD" />
+                </linearGradient>
+                {/* Brand label band */}
+                <linearGradient id={`band-${uid}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={brandAccent.label} stopOpacity="1" />
+                    <stop offset="100%" stopColor={brandAccent.label} stopOpacity="0.88" />
+                </linearGradient>
+                {/* Drum roller */}
+                <linearGradient id={`drum-${uid}`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#3A3D44" />
-                    <stop offset="55%" stopColor="#1F2025" />
-                    <stop offset="100%" stopColor="#0E0F12" />
+                    <stop offset="100%" stopColor="#141518" />
                 </linearGradient>
-                <linearGradient id={`top-${color}-${model}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#2E3036" />
-                    <stop offset="100%" stopColor="#16171A" />
-                </linearGradient>
-                <linearGradient id={`drum-${color}-${model}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3A3D44" />
-                    <stop offset="100%" stopColor="#0A0A0B" />
-                </linearGradient>
-                <linearGradient id={`lever-${color}-${model}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#4A4D54" />
-                    <stop offset="100%" stopColor="#222428" />
-                </linearGradient>
+                {/* Drop shadow under cartridge */}
+                <radialGradient id={`shadow-${uid}`} cx="0.5" cy="0.5" r="0.5">
+                    <stop offset="0%" stopColor="rgba(0,0,0,0.25)" />
+                    <stop offset="100%" stopColor="rgba(0,0,0,0)" />
+                </radialGradient>
             </defs>
 
-            {/* Main body */}
+            {/* Shadow under cartridge */}
+            <ellipse cx="200" cy="255" rx="160" ry="10" fill={`url(#shadow-${uid})`} />
+
+            {/* ====================== CARTRIDGE BODY ====================== */}
+            {/* Main body — elongated rounded trapezoid */}
             <path
-                d="M 30 50 Q 30 30 50 30 L 300 30 Q 320 30 320 50 L 320 60 L 340 60 Q 350 60 350 70 L 350 180 Q 350 195 335 195 L 60 195 Q 30 195 30 170 Z"
-                fill={`url(#body-${color}-${model})`}
-                stroke="rgba(255,255,255,0.04)"
+                d="M 40 90 Q 40 72 58 72 L 342 72 Q 360 72 360 90 L 360 210 Q 360 232 338 232 L 62 232 Q 40 232 40 210 Z"
+                fill={`url(#body-${uid})`}
+                stroke="rgba(0,0,0,0.12)"
                 strokeWidth="1"
             />
 
-            {/* Top fin */}
-            <rect x="50" y="20" width="240" height="14" rx="4" fill={`url(#top-${color}-${model})`} />
+            {/* Top specular highlight */}
+            <path
+                d="M 46 82 L 354 82 L 340 90 L 60 90 Z"
+                fill="rgba(255,255,255,0.55)"
+                opacity="0.7"
+            />
 
-            {/* Highlight strip on body */}
-            <rect x="38" y="42" width="280" height="2" fill="rgba(255,255,255,0.08)" rx="1" />
+            {/* Top fin / grip ridge */}
+            <rect x="64" y="58" width="272" height="18" rx="5" fill={`url(#fin-${uid})`} stroke="rgba(0,0,0,0.08)" />
+            <rect x="70" y="62" width="260" height="1.5" rx="1" fill="rgba(255,255,255,0.8)" />
 
-            {/* Vents */}
-            {[0, 1, 2, 3, 4].map((i) => (
-                <rect key={i} x={50} y={62 + i * 14} width={36} height={4} rx="2" fill="rgba(255,255,255,0.06)" />
+            {/* Grip ridges on top */}
+            {[0, 1, 2].map((i) => (
+                <rect key={i} x={90 + i * 80} y="64" width="40" height="1.5" rx="0.75" fill="rgba(0,0,0,0.15)" />
             ))}
 
-            {/* Color accent band — CMYK strip */}
-            <rect x="100" y="70" width="160" height="28" rx="4" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.06)" />
-            <rect x="106" y="76" width="148" height="6" rx="2" fill={accent} opacity="0.95" />
+            {/* ====================== BRAND LABEL BAND ====================== */}
+            <rect x="40" y="106" width="320" height="52" fill={`url(#band-${uid})`} />
+            {/* Subtle top & bottom rails on label */}
+            <rect x="40" y="106" width="320" height="1.5" fill="rgba(255,255,255,0.35)" />
+            <rect x="40" y="156.5" width="320" height="1.5" fill="rgba(0,0,0,0.2)" />
 
-            {/* Label box */}
-            <rect x="100" y="108" width="160" height="44" rx="6" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.08)" />
-            <text x="180" y="132"
-                fill="rgba(255,255,255,0.92)"
-                fontSize="14"
+            {/* Brand name — left side */}
+            <text x="58" y="135"
+                fill={brandAccent.text}
+                fontSize="24"
+                fontWeight="800"
+                fontFamily="'Montserrat', 'Inter', sans-serif"
+                letterSpacing="1"
+            >
+                {brand.toUpperCase()}
+            </text>
+
+            {/* Model number — right side */}
+            <text x="342" y="135"
+                fill={brandAccent.text}
+                fontSize="22"
                 fontWeight="700"
                 fontFamily="'JetBrains Mono', ui-monospace, monospace"
-                textAnchor="middle"
-                letterSpacing="1.5">
-                {labelText}
+                letterSpacing="2"
+                textAnchor="end"
+            >
+                {model}
             </text>
-            <text x="180" y="146"
-                fill="rgba(255,255,255,0.45)"
-                fontSize="7"
+
+            {/* Divider dot */}
+            <circle cx="200" cy="132" r="3" fill="rgba(255,255,255,0.85)" />
+
+            {/* ====================== LOWER BODY DETAILS ====================== */}
+            {/* LaserJet-style product line text */}
+            <text x="58" y="182"
+                fill="rgba(20,20,20,0.55)"
+                fontSize="9"
+                fontWeight="700"
+                fontFamily="'Inter', sans-serif"
+                letterSpacing="2.5"
+            >
+                LASERJET TONER CARTRIDGE
+            </text>
+
+            {/* Type tag (Original / Compatible / Refilled) */}
+            <rect x="58" y="192" width="84" height="18" rx="3" fill="rgba(20,20,20,0.08)" stroke="rgba(20,20,20,0.18)" />
+            <text x="100" y="205"
+                fill="rgba(20,20,20,0.75)"
+                fontSize="9"
+                fontWeight="700"
+                fontFamily="'Inter', sans-serif"
+                letterSpacing="1.5"
+                textAnchor="middle"
+            >
+                {type.toUpperCase()}
+            </text>
+
+            {/* TonerCart small branding on right */}
+            <text x="342" y="205"
+                fill="rgba(20,20,20,0.4)"
+                fontSize="8"
                 fontWeight="600"
                 fontFamily="'Inter', sans-serif"
-                textAnchor="middle"
-                letterSpacing="2">
-                TONERSCART
+                letterSpacing="2"
+                textAnchor="end"
+            >
+                TONERSCART · VERIFIED
             </text>
 
-            {/* Bottom branding */}
-            <text x="100" y="178"
-                fill="rgba(255,255,255,0.32)"
-                fontSize="8"
-                fontWeight="500"
-                fontFamily="'Inter', sans-serif"
-                letterSpacing="2.5">
-                ORIGINAL · {color.toUpperCase()}
-            </text>
+            {/* Color indicator dot bottom-right */}
+            <circle cx="336" cy="181" r="6" fill={dot} stroke="rgba(0,0,0,0.15)" strokeWidth="1" />
+            <circle cx="336" cy="181" r="2.2" fill="rgba(255,255,255,0.7)" />
 
-            {/* Small status LED */}
-            <circle cx="290" cy="178" r="3" fill={accent} opacity="0.9">
-                <animate attributeName="opacity" values="0.4;1;0.4" dur="2.4s" repeatCount="indefinite" />
-            </circle>
+            {/* ====================== DRUM ROLLER (bottom strip) ====================== */}
+            <rect x="60" y="226" width="280" height="14" rx="7" fill={`url(#drum-${uid})`} stroke="rgba(0,0,0,0.25)" />
+            <rect x="68" y="230" width="264" height="1" rx="0.5" fill="rgba(255,255,255,0.15)" />
 
-            {/* Drum (right side) */}
-            <g transform="translate(312 130)">
-                <circle cx="0" cy="0" r="36" fill={`url(#drum-${color}-${model})`} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
-                <circle cx="0" cy="0" r="24" fill="none" stroke={accent} strokeWidth="1.5" strokeDasharray="3 3" opacity="0.55" />
-                <circle cx="0" cy="0" r="10" fill="#16171A" stroke="rgba(255,255,255,0.10)" />
-                <line x1="0" y1="-22" x2="0" y2="-12" stroke={accent} strokeWidth="2" strokeLinecap="round" />
-            </g>
-
-            {/* Side lever */}
-            <rect x="46" y="48" width="6" height="14" rx="2" fill={`url(#lever-${color}-${model})`} />
+            {/* Drum end caps */}
+            <circle cx="60" cy="233" r="9" fill="#2A2C31" stroke="rgba(0,0,0,0.3)" />
+            <circle cx="60" cy="233" r="4" fill="#15171A" />
+            <circle cx="340" cy="233" r="9" fill="#2A2C31" stroke="rgba(0,0,0,0.3)" />
+            <circle cx="340" cy="233" r="4" fill="#15171A" />
         </svg>
     );
 }

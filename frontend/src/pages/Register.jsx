@@ -61,7 +61,7 @@ export default function Register() {
     return (
         <div className="tc-container py-12 max-w-3xl" data-testid="register-page">
             <div className="tc-eyebrow"><span className="tc-strip mr-2 align-middle" />Create account</div>
-            <h1 className="text-[#0A0A0B] mt-2" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 500, letterSpacing: "-0.02em" }}>
+            <h1 className="text-[#0A0A0B] mt-2" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(28px, 3.4vw, 44px)", fontWeight: 300, letterSpacing: "-0.02em", lineHeight: 1.12 }}>
                 Join the TonersCart trade network
             </h1>
 

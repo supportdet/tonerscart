@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@200;300;400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* ==========================================================
    TonersCart — Apple-grade design system (Montserrat headlines)
@@ -69,7 +69,7 @@
     h1, h2, h3, h4, h5, .tc-display, .tc-h1, .tc-h2, .tc-h3 {
         font-family: 'Montserrat', -apple-system, system-ui, sans-serif;
         letter-spacing: -0.025em;
-        font-weight: 700;
+        font-weight: 400;
     }
     .font-mono, code { font-family: 'JetBrains Mono', monospace; letter-spacing: -0.02em; }
 }
@@ -77,10 +77,10 @@
 .tc-container { max-width: 1280px; margin: 0 auto; padding-left: 24px; padding-right: 24px; }
 @media (min-width: 1024px) { .tc-container { padding-left: 40px; padding-right: 40px; } }
 
-.tc-display { font-size: clamp(36px, 5.6vw, 76px); line-height: 1.04; letter-spacing: -0.035em; font-weight: 800; }
-.tc-h1 { font-size: clamp(30px, 4.0vw, 56px); line-height: 1.06; letter-spacing: -0.03em; font-weight: 700; }
-.tc-h2 { font-size: clamp(24px, 2.8vw, 40px); line-height: 1.1;  letter-spacing: -0.025em; font-weight: 700; }
-.tc-h3 { font-size: clamp(18px, 1.8vw, 26px); line-height: 1.2;  letter-spacing: -0.02em; font-weight: 700; }
+.tc-display { font-size: clamp(36px, 5.6vw, 76px); line-height: 1.04; letter-spacing: -0.035em; font-weight: 300; }
+.tc-h1 { font-size: clamp(30px, 4.0vw, 56px); line-height: 1.06; letter-spacing: -0.03em; font-weight: 300; }
+.tc-h2 { font-size: clamp(24px, 2.8vw, 40px); line-height: 1.1;  letter-spacing: -0.025em; font-weight: 300; }
+.tc-h3 { font-size: clamp(18px, 1.8vw, 26px); line-height: 1.2;  letter-spacing: -0.02em; font-weight: 400; }
 .tc-lead { font-size: clamp(15px, 1.2vw, 18px); line-height: 1.55; color: var(--tc-text-muted); font-family: 'Inter', sans-serif; }
 
 .tc-eyebrow { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600; color: var(--tc-text-muted); }

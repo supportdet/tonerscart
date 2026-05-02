@@ -91,14 +91,14 @@ export default function Landing() {
                                 className="text-white max-w-2xl tc-fade-up tc-fade-up-3"
                                 style={{
                                     fontFamily: "'Montserrat', sans-serif",
-                                    fontSize: "clamp(26px, 3.6vw, 44px)",
-                                    lineHeight: 1.18,
-                                    letterSpacing: "-0.015em",
-                                    fontWeight: 400,
+                                    fontSize: "clamp(28px, 4vw, 52px)",
+                                    lineHeight: 1.12,
+                                    letterSpacing: "-0.025em",
+                                    fontWeight: 300,
                                 }}
                                 data-testid="hero-headline"
                             >
-                                India&apos;s marketplace for printer toners — <span className="text-[#00B7C7]" style={{ fontWeight: 600 }}>verified suppliers</span>, <span className="text-[#F5C400]" style={{ fontWeight: 600 }}>real stock</span>, <span className="text-[#E6007E]" style={{ fontWeight: 600 }}>better prices</span>.
+                                India&apos;s marketplace for printer toners — <span className="text-[#00B7C7]" style={{ fontWeight: 500 }}>verified suppliers</span>, <span className="text-[#F5C400]" style={{ fontWeight: 500 }}>real stock</span>, <span className="text-[#E6007E]" style={{ fontWeight: 500 }}>better prices</span>.
                             </h1>
                             <p className="text-white/65 max-w-xl mt-5 text-[15px] sm:text-[16px] tc-fade-up tc-fade-up-4" style={{ fontFamily: "'Inter', sans-serif" }}>
                                 Search any model, compare every supplier in {city}, and place an order request in minutes. No payment gateway, just direct B2B trade.
@@ -134,7 +134,7 @@ export default function Landing() {
                 <div className="flex items-end justify-between mb-8">
                     <div>
                         <div className="tc-eyebrow"><span className="tc-strip mr-2 align-middle" />Top in {city}</div>
-                        <h2 className="mt-3 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(24px, 2.8vw, 36px)", lineHeight: 1.18, letterSpacing: "-0.01em", fontWeight: 500 }}>
+                        <h2 className="mt-3 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(26px, 3.2vw, 42px)", lineHeight: 1.14, letterSpacing: "-0.02em", fontWeight: 300 }}>
                             Most-bought toners this month.
                         </h2>
                         <p className="tc-lead mt-3 max-w-xl">Direct from approved suppliers. Compare every listing, then send an order request — no payment online.</p>
@@ -178,7 +178,7 @@ export default function Landing() {
                 <div className="tc-card-flat p-8 lg:p-10 grid md:grid-cols-2 gap-6 items-center">
                     <div>
                         <div className="tc-eyebrow flex items-center gap-2"><Sparkles size={12} className="text-[#00B7C7]" /> AI-powered help</div>
-                        <h3 className="mt-2 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(20px, 2.2vw, 28px)", fontWeight: 500, letterSpacing: "-0.01em" }}>Not sure which toner fits your printer?</h3>
+                        <h3 className="mt-2 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(22px, 2.4vw, 32px)", fontWeight: 300, letterSpacing: "-0.015em", lineHeight: 1.2 }}>Not sure which toner fits your printer?</h3>
                         <p className="tc-lead mt-2">Tap the chat bubble in the corner — TonerBot answers in seconds.</p>
                     </div>
                     <div className="flex md:justify-end gap-3 flex-wrap">
