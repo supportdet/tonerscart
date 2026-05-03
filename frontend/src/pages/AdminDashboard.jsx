@@ -6,7 +6,39 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { Textarea } from "../components/ui/textarea";
 import { toast } from "sonner";
-import { CheckCircle2, XCircle, MapPin, Building2, Phone, Mail, FileText, IndianRupee } from "lucide-react";
+import { CheckCircle2, XCircle, MapPin, Building2, Phone, Mail, FileText, IndianRupee, Sparkles, AlertTriangle, MinusCircle } from "lucide-react";
+
+function aiSummary(application) {
+    const ai = application?.ai_check || {};
+    const fields = Object.values(ai).filter((v) => v && typeof v === "object");
+    if (fields.length === 0) {
+        return { tone: "muted", icon: MinusCircle, label: "AI: no docs" };
+    }
+    const total = fields.length;
+    const unclear = fields.filter((v) => v.clear === false).length;
+    const clear = fields.filter((v) => v.clear === true).length;
+    if (unclear > 0) {
+        return { tone: "warn", icon: AlertTriangle, label: `AI: ${unclear} unclear` };
+    }
+    if (clear === total) {
+        return { tone: "ok", icon: Sparkles, label: `AI: ${total} clear` };
+    }
+    return { tone: "muted", icon: MinusCircle, label: `AI: ${clear}/${total} checked` };
+}
+
+function AiVerdictPill({ application, testid }) {
+    const { tone, icon: Icon, label } = aiSummary(application);
+    const cls = tone === "ok"
+        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+        : tone === "warn"
+        ? "bg-amber-50 text-amber-700 border-amber-200"
+        : "bg-slate-100 text-slate-600 border-slate-200";
+    return (
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10.5px] font-semibold uppercase tracking-[0.06em] ${cls}`} data-testid={testid}>
+            <Icon size={11} /> {label}
+        </span>
+    );
+}
 
 export default function AdminDashboard() {
     const { user } = useAuth();
@@ -113,7 +145,10 @@ export default function AdminDashboard() {
                                             <h3 className="mt-1 text-[18px] font-semibold text-[#0A0A0B] truncate" style={{ fontFamily: "'Montserrat', sans-serif" }}>{p.business_name}</h3>
                                             <div className="text-[12px] text-[#6E6E73] flex items-center gap-1 mt-0.5"><MapPin size={11} /> {p.city}</div>
                                         </div>
-                                        <div className="text-[11px] text-[#86868B] whitespace-nowrap">{new Date(p.submitted_at).toLocaleDateString()}</div>
+                                        <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                            <AiVerdictPill application={p} testid={`ai-pill-${p.id}`} />
+                                            <div className="text-[11px] text-[#86868B] whitespace-nowrap">{new Date(p.submitted_at).toLocaleDateString()}</div>
+                                        </div>
                                     </div>
                                     <div className="mt-4 grid grid-cols-2 gap-2 text-[12.5px]">
                                         <div><span className="text-[#86868B]">Contact:</span> {p.contact_person}</div>
