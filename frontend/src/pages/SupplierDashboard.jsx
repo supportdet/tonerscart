@@ -198,7 +198,7 @@ export default function SupplierDashboard() {
 
             <div className="tc-container py-8 sm:py-10">
                 {/* Listings */}
-                <h2 className="text-[#0A0A0B] mb-4" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your products</h2>
+                <h2 id="listings" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your products</h2>
             {listings.length === 0 ? (
                 <div className="tc-card-flat p-8 text-center text-[#6E6E73]">
                     No listings yet. Tap <span className="font-semibold text-[#0A0A0B]">Add product</span> to publish your first toner.
@@ -244,7 +244,7 @@ export default function SupplierDashboard() {
             {/* Orders */}
             {orders.length > 0 && (
                 <>
-                    <h2 className="text-[#0A0A0B] mt-12 mb-4" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Recent orders</h2>
+                    <h2 id="orders" className="text-[#0A0A0B] mt-12 mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Recent orders</h2>
                     <div className="tc-card-flat p-0 overflow-x-auto">
                         <table className="w-full text-[13px]">
                             <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">

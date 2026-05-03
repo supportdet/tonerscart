@@ -121,6 +121,32 @@ class SignupCustomer(BaseModel):
     city: Optional[str] = ""
 
 
+class SellerApplication(BaseModel):
+    """Submitted by a logged-in user (any role) to apply to become a seller.
+    Does not change users.role — only admin-approval can do that."""
+    business_name: str
+    contact_person: str
+    phone: str
+    city: str
+    state: Optional[str] = ""
+    pincode: Optional[str] = ""
+    cities_served: List[str] = Field(default_factory=list)
+    gst_number: Optional[str] = ""
+    pan_number: Optional[str] = ""
+    annual_turnover: Optional[str] = ""
+    years_in_business: Optional[int] = None
+    business_address: str
+    seller_types: List[str] = Field(default_factory=list)
+    compatible_brands: List[str] = Field(default_factory=list)
+    testing_before_delivery: bool = False
+    doc_brand_authorization: Optional[str] = ""
+    doc_shop_photo: Optional[str] = ""
+    doc_gst: Optional[str] = ""
+    doc_pan: Optional[str] = ""
+    doc_bank_proof: Optional[str] = ""
+    doc_address_proof: Optional[str] = ""
+
+
 class SignupSupplier(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6)
@@ -327,6 +353,57 @@ class SupplierDocPaths(BaseModel):
     doc_address_proof: Optional[str] = None
 
 
+@api.post("/auth/apply-seller")
+async def apply_seller(payload: SellerApplication, user: dict = Depends(require_user)):
+    """Logged-in user submits an application to become a seller.
+    users.role is NOT changed — only admin approval flips it to 'supplier'."""
+    if user.get("role") == "supplier":
+        raise HTTPException(400, "You are already a seller")
+    if user.get("role") == "admin":
+        raise HTTPException(400, "Admins cannot apply as sellers")
+
+    application = {
+        "user_id": user["id"],
+        "business_name": payload.business_name,
+        "contact_person": payload.contact_person,
+        "phone": payload.phone,
+        "email": user.get("email"),
+        "city": payload.city,
+        "state": payload.state or None,
+        "pincode": payload.pincode or None,
+        "cities_served": payload.cities_served or [],
+        "gst_number": payload.gst_number or None,
+        "pan_number": payload.pan_number or None,
+        "annual_turnover": payload.annual_turnover or None,
+        "years_in_business": payload.years_in_business,
+        "business_address": payload.business_address,
+        "seller_types": payload.seller_types or [],
+        "compatible_brands": payload.compatible_brands or [],
+        "testing_before_delivery": payload.testing_before_delivery,
+        "doc_brand_authorization": payload.doc_brand_authorization or None,
+        "doc_shop_photo": payload.doc_shop_photo or None,
+        "doc_gst": payload.doc_gst or None,
+        "doc_pan": payload.doc_pan or None,
+        "doc_bank_proof": payload.doc_bank_proof or None,
+        "doc_address_proof": payload.doc_address_proof or None,
+        "status": "pending",
+        "rejection_reason": None,
+    }
+    sb_admin.table("suppliers_pending").upsert(application, on_conflict="user_id").execute()
+
+    try:
+        await _run_ai_check(user["id"], application)
+    except Exception as e:
+        logger.warning("AI check skipped: %s", e)
+
+    try:
+        await email_application_received(application)
+    except Exception as e:
+        logger.warning("application email skipped: %s", e)
+
+    return {"ok": True, "status": "pending"}
+
+
 @api.post("/auth/supplier-documents")
 async def supplier_documents_patch(payload: SupplierDocPaths, user: dict = Depends(require_user)):
     """Called by the supplier client after files are uploaded to
@@ -346,22 +423,34 @@ async def supplier_documents_patch(payload: SupplierDocPaths, user: dict = Depen
 
 @api.get("/auth/me")
 def me(user: dict = Depends(require_user)):
-    """Returns the user profile + (for suppliers) their supplier status."""
+    """Returns the user profile + application status if any.
+    Roles: 'admin' | 'supplier' (= seller) | 'customer' (= buyer).
+    application_status: 'pending' | 'rejected' | None — derived from suppliers_pending."""
     out = dict(user)
+    # Approved supplier?
     if user.get("role") == "supplier":
-        # Approved?
         s = sb_admin.table("suppliers").select("id,business_name,city,approved_at").eq(
             "user_id", user["id"]
         ).maybe_single().execute()
         if s and s.data:
             out["supplier_status"] = "approved"
+            out["application_status"] = None
             out["supplier"] = s.data
-        else:
-            p = sb_admin.table("suppliers_pending").select(
-                "id,business_name,status,rejection_reason,submitted_at"
-            ).eq("user_id", user["id"]).maybe_single().execute()
-            out["supplier_status"] = (p.data["status"] if p and p.data else "pending")
-            out["application"] = p.data if p else None
+            return out
+        # Edge case: role=supplier but no row in suppliers (shouldn't normally happen)
+        out["supplier_status"] = "pending"
+        out["application_status"] = "pending"
+        return out
+
+    # For non-suppliers, look up any pending/rejected application
+    p = sb_admin.table("suppliers_pending").select(
+        "id,business_name,status,rejection_reason,submitted_at"
+    ).eq("user_id", user["id"]).maybe_single().execute()
+    if p and p.data:
+        out["application_status"] = p.data["status"]  # pending | approved | rejected
+        out["application"] = p.data
+    else:
+        out["application_status"] = None
     return out
 
 
@@ -651,6 +740,8 @@ async def admin_approve(pending_id: str, user: dict = Depends(require_role("admi
         "reviewed_by": user["id"],
         "reviewed_at": datetime.now(timezone.utc).isoformat(),
     }).eq("id", pending_id).execute()
+    # Flip the user's role to supplier (= seller). This is the only place role becomes 'supplier'.
+    sb_admin.table("users").update({"role": "supplier"}).eq("id", P["user_id"]).execute()
     try:
         await email_application_approved(P)
     except Exception as e:

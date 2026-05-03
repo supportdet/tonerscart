@@ -12,32 +12,47 @@ export default function OAuthCallback() {
     const [msg, setMsg] = useState("Signing you in…");
 
     useEffect(() => {
+        let cancelled = false;
         const run = async () => {
+            // Wait up to ~8s for Supabase to finish hash-token exchange
+            let session = null;
+            for (let i = 0; i < 32 && !session; i++) {
+                if (cancelled) return;
+                const { data } = await supabase.auth.getSession();
+                session = data?.session;
+                if (!session) await new Promise((r) => setTimeout(r, 250));
+            }
+            if (cancelled) return;
+            if (!session) {
+                setMsg("Could not complete sign-in");
+                toast.error("Could not complete sign-in. Please try again.");
+                navigate("/login", { replace: true });
+                return;
+            }
+            // Bootstrap public.users row (idempotent — defaults role=customer/buyer)
             try {
-                // Wait for Supabase to finish hash-token exchange
-                let session = null;
-                for (let i = 0; i < 10 && !session; i++) {
-                    const { data } = await supabase.auth.getSession();
-                    session = data?.session;
-                    if (!session) await new Promise((r) => setTimeout(r, 250));
-                }
-                if (!session) { setMsg("Could not complete sign-in"); return; }
-                // Bootstrap profile row server-side (handles first-time Google sign-in)
-                const intendedRole = params.get("role") === "supplier" ? "supplier" : "customer";
-                const r = await api.post("/auth/oauth-bootstrap", { role: intendedRole });
-                await refresh();
-                toast.success("Signed in with Google");
-                const role = r.data.role;
-                if (role === "supplier") navigate("/supplier");
-                else if (role === "admin") navigate("/admin");
-                else navigate("/customer");
-            } catch (e) {
-                setMsg("Sign-in failed");
-                toast.error(e?.response?.data?.detail || "Sign-in failed");
-                navigate("/login");
+                await api.post("/auth/oauth-bootstrap", {});
+            } catch {
+                // Non-fatal — /auth/me below will still try
+            }
+            await refresh();
+            const next = params.get("next");
+            if (next && next.startsWith("/")) {
+                navigate(next, { replace: true });
+                return;
+            }
+            // Default: route by role
+            try {
+                const { data: meData } = await api.get("/auth/me");
+                if (meData.role === "admin") navigate("/admin", { replace: true });
+                else if (meData.role === "supplier") navigate("/supplier", { replace: true });
+                else navigate("/search", { replace: true });
+            } catch {
+                navigate("/search", { replace: true });
             }
         };
         run();
+        return () => { cancelled = true; };
     }, [navigate, refresh, params]);
 
     return (

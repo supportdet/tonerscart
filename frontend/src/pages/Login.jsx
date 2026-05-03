@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
@@ -20,6 +20,8 @@ const GoogleIcon = (props) => (
 export default function Login() {
     const { login, signInWithGoogle } = useAuth();
     const navigate = useNavigate();
+    const [params] = useSearchParams();
+    const next = params.get("next");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
@@ -31,6 +33,10 @@ export default function Login() {
             await login(email, password);
             const { data: me } = await api.get("/auth/me");
             toast.success(`Welcome back, ${me.name}`);
+            if (next && next.startsWith("/")) {
+                navigate(next);
+                return;
+            }
             const path = me.role === "admin" ? "/admin" : me.role === "supplier" ? "/supplier" : "/customer";
             navigate(path);
         } catch (e) { toast.error(e.message || formatApiError(e)); }
@@ -38,8 +44,8 @@ export default function Login() {
     };
 
     const onGoogle = async () => {
-        try { await signInWithGoogle("customer"); }
-        catch (e) { toast.error(e.message || "Google sign-in not enabled yet"); }
+        try { await signInWithGoogle(next || undefined); }
+        catch (e) { toast.error(e.message || "Google sign-in unavailable"); }
     };
 
     return (

@@ -17,7 +17,7 @@ export const AuthProvider = ({ children }) => {
             }
             const { data } = await api.get("/auth/me");
             setUser(data);
-        } catch (e) {
+        } catch {
             setUser(null);
         } finally {
             setLoading(false);
@@ -26,7 +26,7 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         refresh();
-        const { data: listener } = supabase.auth.onAuthStateChange((_event, _session) => {
+        const { data: listener } = supabase.auth.onAuthStateChange(() => {
             refresh();
         });
         return () => { listener?.subscription?.unsubscribe?.(); };
@@ -36,8 +36,7 @@ export const AuthProvider = ({ children }) => {
         let result;
         try {
             result = await supabase.auth.signInWithPassword({ email, password });
-        } catch (err) {
-            // supabase-js can throw a fetch body-stream error for failed sign-in
+        } catch {
             throw new Error("Incorrect email or password");
         }
         if (result?.error) {
@@ -50,28 +49,17 @@ export const AuthProvider = ({ children }) => {
         await refresh();
     };
 
-    const signInWithGoogle = async (intendedRole) => {
-        const redirect = `${window.location.origin}/auth/callback${intendedRole ? `?role=${intendedRole}` : ""}`;
+    const signInWithGoogle = async (next) => {
+        const redirect = `${window.location.origin}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ""}`;
         const { error } = await supabase.auth.signInWithOAuth({
             provider: "google",
             options: { redirectTo: redirect },
         });
-        if (error) {
-            const msg = (error.message || "").toLowerCase();
-            if (msg.includes("provider is not enabled") || msg.includes("unsupported provider")) {
-                throw new Error("Google sign-in isn't enabled yet. Please use email & password for now.");
-            }
-            throw new Error(error.message || "Google sign-in unavailable");
-        }
+        if (error) throw new Error(error.message || "Google sign-in unavailable");
     };
 
     const signupCustomer = async (payload) => {
         await api.post("/auth/signup-customer", payload);
-        await login(payload.email, payload.password);
-    };
-
-    const signupSupplier = async (payload) => {
-        await api.post("/auth/signup-supplier", payload);
         await login(payload.email, payload.password);
     };
 
@@ -81,7 +69,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, signInWithGoogle, signupCustomer, signupSupplier, logout, refresh, formatApiError }}>
+        <AuthContext.Provider value={{ user, loading, login, signInWithGoogle, signupCustomer, logout, refresh, formatApiError }}>
             {children}
         </AuthContext.Provider>
     );

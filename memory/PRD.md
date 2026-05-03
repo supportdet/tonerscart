@@ -99,6 +99,35 @@ Replaced JWT custom auth with Supabase Auth + Postgres + Storage. See iteration_
 
 Files: `frontend/src/pages/Search.jsx`, `frontend/src/pages/Checkout.jsx`, `frontend/src/components/OrderRequestDialog.jsx`, `frontend/src/pages/Register.jsx`.
 
+### 2026-05-03 (night) — Unified auth + role-by-action refactor ✅
+**Single signup / login for everyone.** Removed buyer/supplier signup split. New users default to `users.role='customer'` (presented as "buyer" in the UI). The role chooser popup on landing is **gone** (no longer rendered in `App.js`).
+
+**Becoming a seller is now decided by action, not signup.** Logged-in users click **Sell** in the navbar → land on `/sell` → smart router by application status:
+- No application → multi-step `SellerApplicationForm` (no email/password fields — user is already authenticated). On submit, calls new `POST /api/auth/apply-seller` which creates the `suppliers_pending` row but **does not change `users.role`**.
+- `application_status === 'pending'` → "Application under review" panel.
+- `application_status === 'rejected'` → red rejection banner + the form pre-loaded for re-apply.
+- `users.role === 'supplier'` → redirect to `/supplier`.
+
+**Admin approval is the only path that flips `users.role`.** The `/api/admin/suppliers/{id}/approve` endpoint now updates `users.role='supplier'` after copying the application into `suppliers`. Reject keeps `users.role='customer'` so the buyer can re-apply.
+
+**`/auth/me` now returns `application_status`** (`pending` | `rejected` | `null`) regardless of role, derived from `suppliers_pending`. This drives both the `/sell` smart router and the seller-state navbar.
+
+**Navbar is role-driven:**
+- Guest: `Browse | Sell | Sign in | Join free` (cart icon visible)
+- Buyer: `Browse | Sell | Orders` (cart icon visible)
+- Approved seller: `Browse | My stock | Orders` (no cart, no Sell — they're already a seller; "My stock" → `/supplier#listings`, "Orders" → `/supplier#orders`)
+- Admin: `Browse | Admin`
+
+**Other fixes shipped in the same pass:**
+- `OAuthCallback.jsx` — robust 8-second polling for the post-Google session, no premature "Sign-in failed" toast. Routes to `?next=` if provided, else by role.
+- `Register.jsx` collapsed from 400+ lines to a single buyer-only form with Google + email. Better duplicate-email message: "This email is already registered. Try signing in instead."
+- `Login.jsx` honours `?next=` for sign-in-then-go-back flows from `/sell`.
+- `AuthContext` no longer exports `signupSupplier` (the only path now is `/api/auth/apply-seller`).
+
+**Verified end-to-end via Playwright:** new buyer signup (`newbuyer-839842@test.com`) → `/search` → click `Sell` → `/sell` → submit application → "Application under review" → admin approves via API → re-login → lands on `/supplier` with navbar `Browse | My stock | Orders`, cart icon hidden, `users.role='supplier'`, `application_status=null`. **Zero 4xx/5xx responses across the entire flow.**
+
+Files touched: `backend/server.py`, `frontend/src/App.js`, `frontend/src/pages/Register.jsx`, `frontend/src/pages/Login.jsx`, `frontend/src/pages/Sell.jsx` (new), `frontend/src/pages/OAuthCallback.jsx`, `frontend/src/components/Header.jsx`, `frontend/src/components/SellerApplicationForm.jsx` (new), `frontend/src/context/AuthContext.jsx`, `frontend/src/pages/SupplierDashboard.jsx` (anchor IDs).
+
 ## Files of reference
 - `/app/backend/server.py` — All API endpoints
 - `/app/backend/supabase_client.py` — Service-role + anon clients

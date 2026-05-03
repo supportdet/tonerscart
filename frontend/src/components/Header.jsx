@@ -23,9 +23,10 @@ export default function Header() {
     const [cityOpen, setCityOpen] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
 
-    const dashboardPath =
-        user?.role === "supplier" ? "/supplier" :
-        user?.role === "customer" ? "/customer" : null;
+    const role = user?.role; // 'admin' | 'supplier' | 'customer' | undefined
+    const isSeller = role === "supplier";
+    const isAdmin = role === "admin";
+    const isBuyer = !!user && !isSeller && !isAdmin;
 
     const closeMobile = () => setMobileOpen(false);
 
@@ -44,17 +45,35 @@ export default function Header() {
 
                 {/* Desktop nav */}
                 <nav className="hidden md:flex items-center gap-1">
-                    <NavLink to="/search" className={navLink} data-testid="nav-search">Browse</NavLink>
-                    {user?.role !== "supplier" && (
-                        <NavLink to="/register?role=supplier" className={navLink} data-testid="nav-sell">Sell</NavLink>
+                    <NavLink to="/search" className={navLink} data-testid="nav-browse">Browse</NavLink>
+
+                    {/* Sell — visible for guests, buyers and pending sellers; hidden for approved sellers */}
+                    {!isSeller && !isAdmin && (
+                        <NavLink to="/sell" className={navLink} data-testid="nav-sell">Sell</NavLink>
                     )}
-                    {user?.role === "supplier" && <NavLink to="/supplier" className={navLink} data-testid="nav-supplier">Seller</NavLink>}
-                    {user?.role === "customer" && <NavLink to="/customer" className={navLink} data-testid="nav-customer">Orders</NavLink>}
+
+                    {/* Buyer */}
+                    {isBuyer && (
+                        <NavLink to="/customer" className={navLink} data-testid="nav-orders">Orders</NavLink>
+                    )}
+
+                    {/* Approved seller */}
+                    {isSeller && (
+                        <>
+                            <NavLink to="/supplier#listings" className={navLink} data-testid="nav-stock">My stock</NavLink>
+                            <NavLink to="/supplier#orders" className={navLink} data-testid="nav-seller-orders">Orders</NavLink>
+                        </>
+                    )}
+
+                    {/* Admin */}
+                    {isAdmin && (
+                        <NavLink to="/admin" className={navLink} data-testid="nav-admin">Admin</NavLink>
+                    )}
                 </nav>
 
                 {/* Desktop right cluster */}
                 <div className="hidden md:flex items-center gap-2">
-                    {user?.role !== "supplier" && user?.role !== "admin" && (
+                    {!isSeller && !isAdmin && (
                         <button onClick={() => navigate("/cart")} className="relative w-10 h-10 grid place-items-center rounded-md hover:bg-black/[0.04] text-[#1D1D1F]" aria-label="Cart" data-testid="header-cart-btn">
                             <ShoppingCart size={17} />
                             {cartCount > 0 && (
@@ -91,8 +110,8 @@ export default function Header() {
                         </>
                     ) : (
                         <>
-                            <button onClick={() => dashboardPath && navigate(dashboardPath)} className="text-[14px] font-medium text-[#1D1D1F] hover:text-[#0A0A0B] px-3 py-2 rounded-md hover:bg-black/[0.04]" data-testid="header-user-chip">
-                                {user.name.split(" ")[0]}
+                            <button onClick={() => navigate(isSeller ? "/supplier" : isAdmin ? "/admin" : "/customer")} className="text-[14px] font-medium text-[#1D1D1F] hover:text-[#0A0A0B] px-3 py-2 rounded-md hover:bg-black/[0.04]" data-testid="header-user-chip">
+                                {(user.name || "Account").split(" ")[0]}
                             </button>
                             <button onClick={async () => { await logout(); navigate("/"); }} className="text-[14px] text-[#6E6E73] hover:text-[#0A0A0B] p-2 rounded-md hover:bg-black/[0.04]" data-testid="header-logout-btn">
                                 <LogOut size={15} />
@@ -103,7 +122,7 @@ export default function Header() {
 
                 {/* Mobile cluster */}
                 <div className="md:hidden flex items-center gap-1">
-                    {user?.role !== "supplier" && user?.role !== "admin" && (
+                    {!isSeller && !isAdmin && (
                         <button onClick={() => navigate("/cart")} className="relative w-10 h-10 grid place-items-center rounded-md hover:bg-black/[0.04]" aria-label="Cart" data-testid="header-cart-btn-mobile">
                             <ShoppingCart size={17} />
                             {cartCount > 0 && (
@@ -124,7 +143,6 @@ export default function Header() {
             {mobileOpen && (
                 <div className="md:hidden border-t border-black/[0.06] bg-white" data-testid="mobile-menu">
                     <div className="tc-container py-3 space-y-1">
-                        {/* City picker (mobile) */}
                         <div className="px-1 pb-2">
                             <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B] px-3 mb-1.5">Your city</div>
                             <div className="flex flex-wrap gap-1.5 px-3">
@@ -138,12 +156,22 @@ export default function Header() {
                             </div>
                         </div>
 
-                        <NavLink to="/search" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-search">Browse toners</NavLink>
-                        {user?.role !== "supplier" && (
-                            <NavLink to="/register?role=supplier" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-sell">Sell on TonersCart</NavLink>
+                        <NavLink to="/search" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-browse">Browse toners</NavLink>
+                        {!isSeller && !isAdmin && (
+                            <NavLink to="/sell" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-sell">Sell on TonersCart</NavLink>
                         )}
-                        {user?.role === "supplier" && <NavLink to="/supplier" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-supplier">Seller dashboard</NavLink>}
-                        {user?.role === "customer" && <NavLink to="/customer" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-customer">My orders</NavLink>}
+                        {isBuyer && (
+                            <NavLink to="/customer" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-orders">My orders</NavLink>
+                        )}
+                        {isSeller && (
+                            <>
+                                <NavLink to="/supplier#listings" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-stock">My stock</NavLink>
+                                <NavLink to="/supplier#orders" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-seller-orders">Incoming orders</NavLink>
+                            </>
+                        )}
+                        {isAdmin && (
+                            <NavLink to="/admin" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-admin">Admin</NavLink>
+                        )}
 
                         <div className="pt-2 mt-2 border-t border-black/[0.06]">
                             {!user ? (
@@ -152,7 +180,7 @@ export default function Header() {
                                 </button>
                             ) : (
                                 <button onClick={async () => { closeMobile(); await logout(); navigate("/"); }} className="block w-full px-4 py-3 rounded-lg text-[15px] font-medium text-[#1D1D1F] hover:bg-black/[0.04] text-left flex items-center gap-2" data-testid="mobile-logout-btn">
-                                    <LogOut size={16} /> Log out ({user.name.split(" ")[0]})
+                                    <LogOut size={16} /> Log out ({(user.name || "").split(" ")[0]})
                                 </button>
                             )}
                         </div>
