@@ -81,22 +81,15 @@ export default function Login() {
                             </h2>
                             <p className="text-[13px] text-[#6E6E73] mt-1">Buyers, suppliers and admin sign in here.</p>
 
-                            {process.env.REACT_APP_GOOGLE_AUTH_ENABLED === "true" && (
-                                <>
-                                    <button onClick={onGoogle} type="button" className="mt-5 w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-full border border-[#D2D2D7] bg-white hover:bg-black/[0.03] text-[#0A0A0B] font-semibold text-[13.5px]" data-testid="login-google-btn">
-                                        <GoogleIcon /> Continue with Google
-                                    </button>
+                            <button onClick={onGoogle} type="button" className="mt-5 w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-full border border-[#D2D2D7] bg-white hover:bg-black/[0.03] text-[#0A0A0B] font-semibold text-[13.5px]" data-testid="login-google-btn">
+                                <GoogleIcon /> Continue with Google
+                            </button>
 
-                                    <div className="my-5 flex items-center gap-3">
-                                        <div className="h-px flex-1 bg-black/[0.08]" />
-                                        <span className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B]">or with email</span>
-                                        <div className="h-px flex-1 bg-black/[0.08]" />
-                                    </div>
-                                </>
-                            )}
-                            {process.env.REACT_APP_GOOGLE_AUTH_ENABLED !== "true" && (
-                                <div className="mt-5" />
-                            )}
+                            <div className="my-5 flex items-center gap-3">
+                                <div className="h-px flex-1 bg-black/[0.08]" />
+                                <span className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B]">or with email</span>
+                                <div className="h-px flex-1 bg-black/[0.08]" />
+                            </div>
 
                             <form onSubmit={submit} className="space-y-3.5">
                                 <div>

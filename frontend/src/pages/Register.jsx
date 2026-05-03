@@ -258,18 +258,14 @@ export default function Register() {
             {role === "customer" ? (
                 <div className="mt-5 sm:mt-6">
                     <div className="bg-white border border-black/[0.06] rounded-2xl shadow-2xl p-4 sm:p-6 text-[#0A0A0B]">
-                        {process.env.REACT_APP_GOOGLE_AUTH_ENABLED === "true" && (
-                            <>
-                                <button onClick={onGoogle} type="button" className="mb-4 w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-full border border-[#D2D2D7] bg-white hover:bg-black/[0.03] text-[#0A0A0B] font-semibold text-[13.5px]" data-testid="register-google-btn">
-                                    <GoogleIcon /> Continue with Google
-                                </button>
-                                <div className="my-4 flex items-center gap-3">
-                                    <div className="h-px flex-1 bg-black/[0.08]" />
-                                    <span className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B]">or with email</span>
-                                    <div className="h-px flex-1 bg-black/[0.08]" />
-                                </div>
-                            </>
-                        )}
+                        <button onClick={onGoogle} type="button" className="mb-4 w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-full border border-[#D2D2D7] bg-white hover:bg-black/[0.03] text-[#0A0A0B] font-semibold text-[13.5px]" data-testid="register-google-btn">
+                            <GoogleIcon /> Continue with Google
+                        </button>
+                        <div className="my-4 flex items-center gap-3">
+                            <div className="h-px flex-1 bg-black/[0.08]" />
+                            <span className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B]">or with email</span>
+                            <div className="h-px flex-1 bg-black/[0.08]" />
+                        </div>
                         <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                             <div className="sm:col-span-2"><Label>Full name</Label><Input value={c.name} onChange={updC("name")} required data-testid="register-name-input" /></div>
                             <div><Label>Email</Label><Input type="email" value={c.email} onChange={updC("email")} required data-testid="register-email-input" /></div>
