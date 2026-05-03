@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
-import { LogOut, MapPin, ChevronDown, Menu, X } from "lucide-react";
+import { useCart } from "../context/CartContext";
+import { LogOut, MapPin, ChevronDown, Menu, X, ShoppingCart } from "lucide-react";
 
 const navLink = ({ isActive }) =>
     `text-[14px] font-medium px-3.5 py-2 rounded-md transition-colors ${
@@ -17,6 +18,7 @@ const mobileNavLink = ({ isActive }) =>
 export default function Header() {
     const { user, logout } = useAuth();
     const { city, setCity } = useCity();
+    const { count: cartCount } = useCart();
     const navigate = useNavigate();
     const [cityOpen, setCityOpen] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
@@ -43,13 +45,23 @@ export default function Header() {
                 {/* Desktop nav */}
                 <nav className="hidden md:flex items-center gap-1">
                     <NavLink to="/search" className={navLink} data-testid="nav-search">Browse</NavLink>
-                    <NavLink to="/register?role=supplier" className={navLink} data-testid="nav-sell">Sell</NavLink>
+                    {user?.role !== "supplier" && (
+                        <NavLink to="/register?role=supplier" className={navLink} data-testid="nav-sell">Sell</NavLink>
+                    )}
                     {user?.role === "supplier" && <NavLink to="/supplier" className={navLink} data-testid="nav-supplier">Seller</NavLink>}
                     {user?.role === "customer" && <NavLink to="/customer" className={navLink} data-testid="nav-customer">Orders</NavLink>}
                 </nav>
 
                 {/* Desktop right cluster */}
                 <div className="hidden md:flex items-center gap-2">
+                    {user?.role !== "supplier" && user?.role !== "admin" && (
+                        <button onClick={() => navigate("/cart")} className="relative w-10 h-10 grid place-items-center rounded-md hover:bg-black/[0.04] text-[#1D1D1F]" aria-label="Cart" data-testid="header-cart-btn">
+                            <ShoppingCart size={17} />
+                            {cartCount > 0 && (
+                                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#E6007E] text-white text-[10px] font-bold grid place-items-center" data-testid="header-cart-count">{cartCount}</span>
+                            )}
+                        </button>
+                    )}
                     <div className="relative">
                         <button onClick={() => setCityOpen((o) => !o)} onBlur={() => setTimeout(() => setCityOpen(false), 150)}
                             className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-md text-[#1D1D1F] hover:bg-black/[0.04]"
@@ -91,6 +103,14 @@ export default function Header() {
 
                 {/* Mobile cluster */}
                 <div className="md:hidden flex items-center gap-1">
+                    {user?.role !== "supplier" && user?.role !== "admin" && (
+                        <button onClick={() => navigate("/cart")} className="relative w-10 h-10 grid place-items-center rounded-md hover:bg-black/[0.04]" aria-label="Cart" data-testid="header-cart-btn-mobile">
+                            <ShoppingCart size={17} />
+                            {cartCount > 0 && (
+                                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#E6007E] text-white text-[10px] font-bold grid place-items-center">{cartCount}</span>
+                            )}
+                        </button>
+                    )}
                     {!user && (
                         <button onClick={() => navigate("/register")} className="btn-cta text-[12px] px-3 py-1.5" data-testid="header-register-btn-mobile">Join</button>
                     )}
@@ -119,7 +139,9 @@ export default function Header() {
                         </div>
 
                         <NavLink to="/search" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-search">Browse toners</NavLink>
-                        <NavLink to="/register?role=supplier" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-sell">Sell on TonersCart</NavLink>
+                        {user?.role !== "supplier" && (
+                            <NavLink to="/register?role=supplier" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-sell">Sell on TonersCart</NavLink>
+                        )}
                         {user?.role === "supplier" && <NavLink to="/supplier" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-supplier">Seller dashboard</NavLink>}
                         {user?.role === "customer" && <NavLink to="/customer" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-customer">My orders</NavLink>}
 

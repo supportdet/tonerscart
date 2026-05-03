@@ -123,9 +123,9 @@ export default function Landing() {
                     <div className="flex-1">
                         <div className="tc-eyebrow"><span className="tc-strip mr-2 align-middle" />Top in {city}</div>
                         <h2 className="mt-3 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(22px, 3.2vw, 42px)", lineHeight: 1.14, letterSpacing: "-0.02em", fontWeight: 300 }}>
-                            Most-bought toners this month.
+                            Popular brands and highly compatible models.
                         </h2>
-                        <p className="tc-lead mt-2 sm:mt-3 max-w-xl text-[13px] sm:text-[15px]">Direct from approved suppliers. Compare every listing, then send an order request — no payment online.</p>
+                        <p className="tc-lead mt-2 sm:mt-3 max-w-xl text-[13px] sm:text-[15px]">Quick-pick the cartridges most commonly searched in your city. Tap any model to see every supplier&apos;s price.</p>
                     </div>
                     <button onClick={() => navigate("/search")} className="btn-primary text-[12.5px] sm:text-[13px] hidden sm:inline-flex items-center gap-1.5 shrink-0" data-testid="browse-all-btn">
                         Browse all <ArrowRight size={13} />

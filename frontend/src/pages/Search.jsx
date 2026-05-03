@@ -2,9 +2,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { MapPin, Boxes, Plus, Minus, ShoppingCart, X, SlidersHorizontal } from "lucide-react";
 import { Skeleton } from "../components/ui/skeleton";
+import { toast } from "sonner";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
+import { useCart } from "../context/CartContext";
 import OrderRequestDialog from "../components/OrderRequestDialog";
 import TonerSearchInput from "../components/TonerSearchInput";
 import TonerCartridge from "../components/TonerCartridge";
@@ -90,7 +92,7 @@ export default function SearchPage() {
     const [orderProduct, setOrderProduct] = useState(null);
     const [orderQty, setOrderQty] = useState(1);
     const [qtyMap, setQtyMap] = useState({});
-    const [cart, setCart] = useState([]);
+    const { items: cartItems, addItem } = useCart();
     const rootRef = useReveal([products.length]);
 
     useEffect(() => { api.get("/listings/facets").then((r) => setFacets(r.data)).catch(() => {}); }, []);
@@ -191,15 +193,12 @@ export default function SearchPage() {
 
     const onBuy = (p, qty) => {
         if (!user) { navigate("/login"); return; }
-        if (user.role !== "customer") return;
+        if (user.role !== "customer") { toast.error("Only buyer accounts can place order requests"); return; }
         setOrderQty(qty); setOrderProduct(p);
     };
     const onCart = (p, qty) => {
-        setCart((c) => {
-            const i = c.findIndex((it) => it.product.id === p.id);
-            if (i >= 0) { const next = [...c]; next[i] = { ...next[i], qty: Math.min(p.stock, next[i].qty + qty) }; return next; }
-            return [...c, { product: p, qty }];
-        });
+        addItem(p, qty);
+        toast.success(`Added ${p.brand} ${p.model_number} to cart`);
     };
 
     return (
@@ -240,22 +239,22 @@ export default function SearchPage() {
                 <aside className="hidden lg:block lg:col-span-3 lg:sticky lg:top-24 lg:self-start space-y-5" data-testid="search-sidebar">
                     <FiltersBlock />
 
-                    {cart.length > 0 && (
+                    {cartItems.length > 0 && (
                         <div className="tc-card-flat p-5" data-testid="cart-summary">
                             <div className="flex items-center gap-2 mb-3">
                                 <ShoppingCart size={14} className="text-[#0A0A0B]" />
-                                <span className="text-[12px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Cart ({cart.length})</span>
+                                <span className="text-[12px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Cart ({cartItems.length})</span>
                             </div>
                             <div className="space-y-2 mb-3">
-                                {cart.slice(0, 3).map((it) => (
-                                    <div key={it.product.id} className="flex items-center justify-between text-[12px]">
+                                {cartItems.slice(0, 3).map((it) => (
+                                    <div key={it.id} className="flex items-center justify-between text-[12px]">
                                         <span className="truncate">{it.product.model_number} ×{it.qty}</span>
-                                        <span className="font-mono">₹{(it.product.price * it.qty).toLocaleString('en-IN')}</span>
+                                        <span className="font-mono">₹{(Number(it.product.price) * it.qty).toLocaleString('en-IN')}</span>
                                     </div>
                                 ))}
-                                {cart.length > 3 && <div className="text-[11px] text-[#6E6E73]">+{cart.length - 3} more</div>}
+                                {cartItems.length > 3 && <div className="text-[11px] text-[#6E6E73]">+{cartItems.length - 3} more</div>}
                             </div>
-                            <button onClick={() => { const first = cart[0]; if (first) onBuy(first.product, first.qty); }} className="btn-cta w-full text-[12.5px] py-2">Send order request</button>
+                            <button onClick={() => navigate("/cart")} className="btn-cta w-full text-[12.5px] py-2" data-testid="cart-summary-view-btn">View cart</button>
                         </div>
                     )}
                 </aside>

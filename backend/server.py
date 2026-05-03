@@ -149,7 +149,12 @@ class SignupSupplier(BaseModel):
 
 
 class ListingCreate(BaseModel):
-    toner_id: str
+    # Either a toner_id from catalog, or brand+model_number for a new entry
+    toner_id: Optional[str] = None
+    brand: Optional[str] = None
+    model_number: Optional[str] = None
+    color: Optional[str] = "Black"
+    page_yield: Optional[int] = None
     price: float = Field(ge=0)
     stock: int = Field(ge=0)
     toner_type: str  # "Original" | "Compatible" | "Refilled"
@@ -182,6 +187,36 @@ class RejectPayload(BaseModel):
 
 
 # ===== Auth / Profile ==========================================================
+
+@api.post("/auth/oauth-bootstrap")
+def oauth_bootstrap(payload: dict, request: Request):
+    """Called after a Google OAuth redirect lands. Creates the public.users
+    profile row if missing. Default role = customer."""
+    token = get_token(request)
+    if not token:
+        raise HTTPException(401, "Not authenticated")
+    try:
+        uid_resp = sb_anon.auth.get_user(token)
+    except Exception:
+        uid_resp = None
+    if not uid_resp or not uid_resp.user:
+        raise HTTPException(401, "Not authenticated")
+    user = uid_resp.user
+    uid = user.id
+    existing = sb_admin.table("users").select("id,role").eq("id", uid).maybe_single().execute()
+    if existing and existing.data:
+        return {"ok": True, "role": existing.data["role"], "created": False}
+    intended = (payload or {}).get("role") if isinstance(payload, dict) else None
+    role = intended if intended in ("customer", "supplier") else "customer"
+    name = (user.user_metadata or {}).get("full_name") or (user.user_metadata or {}).get("name") or (user.email or "").split("@")[0]
+    sb_admin.table("users").insert({
+        "id": uid,
+        "email": user.email,
+        "name": name,
+        "role": role,
+    }).execute()
+    return {"ok": True, "role": role, "created": True}
+
 
 @api.post("/auth/signup-customer")
 def signup_customer(payload: SignupCustomer):
@@ -437,17 +472,40 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
     s = _approved_supplier(user)
     if payload.toner_type not in ("Original", "Compatible", "Refilled"):
         raise HTTPException(400, "toner_type must be Original, Compatible or Refilled")
-    tm = sb_admin.table("toner_master").select("*").eq("id", payload.toner_id).maybe_single().execute()
-    if not tm or not tm.data:
-        raise HTTPException(400, "Invalid toner_id")
-    t = tm.data
+
+    # Resolve toner_master row: use toner_id if given, else find/create by (brand, model)
+    t = None
+    if payload.toner_id:
+        tm = sb_admin.table("toner_master").select("*").eq("id", payload.toner_id).maybe_single().execute()
+        t = tm.data if tm and tm.data else None
+    if not t:
+        if not (payload.brand and payload.model_number):
+            raise HTTPException(400, "Provide toner_id or brand+model_number")
+        brand = payload.brand.strip()
+        model = payload.model_number.strip()
+        # Find existing
+        existing = sb_admin.table("toner_master").select("*").eq("brand", brand).eq("model_number", model).maybe_single().execute()
+        if existing and existing.data:
+            t = existing.data
+        else:
+            insert = {
+                "brand": brand,
+                "model_number": model,
+                "model_normalized": model.lower(),
+                "search_norm": re.sub(r"[^a-z0-9]", "", f"{brand}{model}".lower()),
+                "color": payload.color or "Black",
+                "page_yield": payload.page_yield,
+            }
+            res = sb_admin.table("toner_master").insert(insert).execute()
+            t = res.data[0] if res.data else insert
+
     row = {
         "supplier_id": s["id"],
         "toner_id": t["id"],
         "brand": t["brand"],
         "model_number": t["model_number"],
-        "search_norm": t["search_norm"],
-        "color": t.get("color") or "Black",
+        "search_norm": t.get("search_norm") or re.sub(r"[^a-z0-9]", "", f"{t['brand']}{t['model_number']}".lower()),
+        "color": payload.color or t.get("color") or "Black",
         "toner_type": payload.toner_type,
         "price": payload.price,
         "stock": payload.stock,

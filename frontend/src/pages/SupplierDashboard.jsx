@@ -6,7 +6,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Image as ImageIcon, Search, Hourglass, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle } from "lucide-react";
 import { supabase, PRODUCT_BUCKET } from "../lib/supabase";
 import TonerCartridge from "../components/TonerCartridge";
 
@@ -55,10 +55,11 @@ export default function SupplierDashboard() {
     const [open, setOpen] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    // Toner picker
-    const [masterQ, setMasterQ] = useState("");
-    const [masterResults, setMasterResults] = useState([]);
-    const [tonerPicked, setTonerPicked] = useState(null);
+    // Brand dropdown + free-text model
+    const [brands, setBrands] = useState([]);
+    const [brand, setBrand] = useState("");
+    const [modelNumber, setModelNumber] = useState("");
+    const [color, setColor] = useState("Black");
 
     // Form
     const [price, setPrice] = useState("");
@@ -70,26 +71,18 @@ export default function SupplierDashboard() {
     const load = async () => {
         if (!isApproved) return;
         try {
-            const [l, o] = await Promise.all([
+            const [l, o, b] = await Promise.all([
                 api.get("/supplier/listings"),
                 api.get("/orders/mine"),
+                api.get("/toner-master/brands"),
             ]);
-            setListings(l.data); setOrders(o.data);
+            setListings(l.data); setOrders(o.data); setBrands(b.data || []);
         } catch (e) { toast.error(formatApiError(e)); }
     };
     useEffect(() => { load(); /* eslint-disable-next-line */ }, [isApproved]);
 
-    useEffect(() => {
-        const t = setTimeout(async () => {
-            if (!masterQ || masterQ.length < 2) { setMasterResults([]); return; }
-            const r = await api.get("/toner-master", { params: { q: masterQ, limit: 8 } });
-            setMasterResults(r.data);
-        }, 200);
-        return () => clearTimeout(t);
-    }, [masterQ]);
-
     const reset = () => {
-        setMasterQ(""); setMasterResults([]); setTonerPicked(null);
+        setBrand(""); setModelNumber(""); setColor("Black");
         setPrice(""); setStock(""); setTonerType("Original");
         setImageFile(null); setImagePreview("");
     };
@@ -105,7 +98,8 @@ export default function SupplierDashboard() {
 
     const submit = async (e) => {
         e.preventDefault();
-        if (!tonerPicked) { toast.error("Please select a toner from the catalog"); return; }
+        if (!brand) { toast.error("Please select a brand"); return; }
+        if (!modelNumber.trim()) { toast.error("Please enter a model number"); return; }
         if (!price || !stock) { toast.error("Price and stock are required"); return; }
         setSaving(true);
         try {
@@ -120,7 +114,9 @@ export default function SupplierDashboard() {
                 imageUrl = pub.publicUrl;
             }
             await api.post("/supplier/listings", {
-                toner_id: tonerPicked.id,
+                brand,
+                model_number: modelNumber.trim(),
+                color,
                 price: parseFloat(price),
                 stock: parseInt(stock, 10),
                 toner_type: tonerType,
@@ -163,37 +159,46 @@ export default function SupplierDashboard() {
     }
 
     return (
-        <div className="tc-container py-8 sm:py-10" data-testid="supplier-dashboard">
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
-                <div>
-                    <div className="tc-eyebrow inline-flex items-center gap-2"><CheckCircle2 size={12} className="text-emerald-600" /> Approved supplier</div>
-                    <h1 className="mt-2 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(26px, 3.2vw, 40px)", fontWeight: 300, letterSpacing: "-0.02em", lineHeight: 1.12 }}>
-                        {user?.supplier?.business_name || user?.company || "Supplier dashboard"}
-                    </h1>
-                    <p className="text-[14px] text-[#6E6E73] mt-1">{user?.supplier?.city || user?.city}</p>
-                </div>
-                <Button className="btn-cta inline-flex items-center gap-2" onClick={openDialog} data-testid="add-listing-btn">
-                    <Plus size={16} /> Add product
-                </Button>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-                {[
-                    { k: "Listings", v: stats.listings },
-                    { k: "Active", v: stats.active },
-                    { k: "Orders", v: stats.orders },
-                    { k: "Pending", v: stats.pending },
-                ].map((s) => (
-                    <div key={s.k} className="tc-card-flat p-4">
-                        <div className="font-mono text-2xl font-semibold text-[#0A0A0B]">{s.v}</div>
-                        <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73] mt-1">{s.k}</div>
+        <div data-testid="supplier-dashboard">
+            <div className="tc-hero relative pb-12">
+                <div className="tc-hero-grid" />
+                <div className="tc-container relative pt-8 sm:pt-10">
+                    <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                        <div>
+                            <div className="flex items-center gap-3 mb-3">
+                                <span className="tc-strip" />
+                                <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-emerald-300/90 inline-flex items-center gap-1.5"><CheckCircle2 size={12} /> Approved supplier</span>
+                            </div>
+                            <h1 className="text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(28px, 3.4vw, 44px)", fontWeight: 300, letterSpacing: "-0.025em", lineHeight: 1.1 }}>
+                                {user?.supplier?.business_name || user?.company || "Supplier dashboard"}
+                            </h1>
+                            <p className="text-[14px] text-white/65 mt-2">{user?.supplier?.city || user?.city}</p>
+                        </div>
+                        <Button className="btn-cta inline-flex items-center gap-2 self-start" onClick={openDialog} data-testid="add-listing-btn">
+                            <Plus size={16} /> Add product
+                        </Button>
                     </div>
-                ))}
+
+                    {/* Stats inside hero */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-8">
+                        {[
+                            { k: "Listings", v: stats.listings },
+                            { k: "Active", v: stats.active },
+                            { k: "Orders", v: stats.orders },
+                            { k: "Pending", v: stats.pending },
+                        ].map((s) => (
+                            <div key={s.k} className="bg-white/[0.06] backdrop-blur border border-white/10 rounded-xl p-4">
+                                <div className="font-mono text-2xl font-semibold text-white">{s.v}</div>
+                                <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-white/55 mt-1">{s.k}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
 
-            {/* Listings */}
-            <h2 className="text-[#0A0A0B] mb-4" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your products</h2>
+            <div className="tc-container py-8 sm:py-10">
+                {/* Listings */}
+                <h2 className="text-[#0A0A0B] mb-4" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your products</h2>
             {listings.length === 0 ? (
                 <div className="tc-card-flat p-8 text-center text-[#6E6E73]">
                     No listings yet. Tap <span className="font-semibold text-[#0A0A0B]">Add product</span> to publish your first toner.
@@ -285,37 +290,39 @@ export default function SupplierDashboard() {
                         <DialogTitle>Add product</DialogTitle>
                     </DialogHeader>
                     <form onSubmit={submit} className="space-y-4">
-                        {/* Toner picker */}
-                        <div>
-                            <Label>Toner model<span className="text-red-500"> *</span></Label>
-                            <div className="relative">
-                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B]" />
-                                <Input
-                                    value={tonerPicked ? `${tonerPicked.brand} ${tonerPicked.model_number}` : masterQ}
-                                    onChange={(e) => { setTonerPicked(null); setMasterQ(e.target.value); }}
-                                    placeholder="Search HP 88A, Canon 925…"
-                                    className="pl-8"
-                                    data-testid="listing-toner-search"
-                                />
-                                {!tonerPicked && masterResults.length > 0 && (
-                                    <div className="absolute z-10 mt-1 w-full bg-white border border-black/[0.08] rounded-lg shadow-xl max-h-56 overflow-auto">
-                                        {masterResults.map((m) => (
-                                            <button type="button" key={m.id}
-                                                onClick={() => { setTonerPicked(m); setMasterResults([]); }}
-                                                className="block w-full text-left px-3 py-2 hover:bg-black/[0.04] text-[13px]"
-                                                data-testid={`toner-option-${m.brand}-${m.model_number}`}>
-                                                <span className="font-mono font-semibold">{m.brand} {m.model_number}</span>
-                                                <span className="text-[11px] text-[#6E6E73] ml-2">{m.color}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
+                        {/* Brand dropdown + model text */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <Label>Brand<span className="text-red-500"> *</span></Label>
+                                <select value={brand} onChange={(e) => setBrand(e.target.value)} required
+                                    className="w-full h-10 px-3 rounded-md border border-[#D2D2D7] bg-white text-[14px]"
+                                    data-testid="listing-brand-select">
+                                    <option value="">Select brand…</option>
+                                    {brands.map((b) => <option key={b} value={b}>{b}</option>)}
+                                    <option value="HP">HP</option>
+                                    <option value="Canon">Canon</option>
+                                    <option value="Brother">Brother</option>
+                                    <option value="Samsung">Samsung</option>
+                                    <option value="Ricoh">Ricoh</option>
+                                    <option value="Epson">Epson</option>
+                                    <option value="Xerox">Xerox</option>
+                                    <option value="Kyocera">Kyocera</option>
+                                </select>
                             </div>
-                            {tonerPicked && (
-                                <div className="text-[11px] text-[#6E6E73] mt-1">
-                                    {tonerPicked.printer_compatibility || "—"}
-                                </div>
-                            )}
+                            <div>
+                                <Label>Model number<span className="text-red-500"> *</span></Label>
+                                <Input value={modelNumber} onChange={(e) => setModelNumber(e.target.value)} placeholder="e.g. 88A, TN-2365, 925" required data-testid="listing-model-input" />
+                            </div>
+                        </div>
+                        <div>
+                            <Label>Color</Label>
+                            <div className="grid grid-cols-4 gap-2 mt-1">
+                                {["Black", "Cyan", "Magenta", "Yellow"].map((c) => (
+                                    <button type="button" key={c} onClick={() => setColor(c)}
+                                        className={`px-2 py-2 rounded-lg border text-[12.5px] font-semibold transition ${color === c ? "bg-[#0A0A0B] text-white border-[#0A0A0B]" : "bg-white text-[#1D1D1F] border-[#D2D2D7]"}`}
+                                        data-testid={`listing-color-${c}`}>{c}</button>
+                                ))}
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
@@ -367,6 +374,7 @@ export default function SupplierDashboard() {
                     </form>
                 </DialogContent>
             </Dialog>
+            </div>
         </div>
     );
 }

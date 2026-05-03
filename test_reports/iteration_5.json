@@ -1,0 +1,43 @@
+{
+  "summary": "TonersCart batch-fix backend testing complete. 58/58 pytest tests pass (46 regression from iteration_4 + 12 new tests covering /api/auth/oauth-bootstrap (401 without/invalid bearer, idempotent profile create with valid bearer + role default), free-text brand+model listing creation auto-creating toner_master row (verified via /api/toner-master?q=...), legacy toner_id flow still works, Refilled toner_type accepted, missing-both-fields => 400, invalid toner_type => 400, and multi-order cart-checkout simulation where two POST /orders calls on different listings both succeed and decrement stock independently). Found and fixed one defensive bug: oauth_bootstrap was returning 500 on malformed bearer tokens because sb_anon.auth.get_user raises on parse-failure; wrapped in try/except so it now returns 401 cleanly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/oauth-bootstrap", "issue": "FIXED in this iteration — was returning 500 on a structurally-invalid bearer (e.g. 'Bearer not-a-real-jwt') because sb_anon.auth.get_user(token) raises. Wrapped in try/except → now returns 401."},
+      {"endpoint": "POST /api/orders", "issue": "Carry-over: non-atomic stock decrement (read-then-write); risk of oversell under concurrency. Cart checkout fires sequential requests so OK in single-user scenario."},
+      {"endpoint": "POST /api/auth/oauth-bootstrap", "issue": "Role bootstrap accepts {role: 'customer'|'supplier'} from client but if a row already exists in public.users the intended role is silently ignored. That is by design (idempotent), just worth noting for UX."},
+      {"endpoint": "POST /api/supplier/listings", "issue": "Auto-creates toner_master rows without de-duping on case/whitespace variants — e.g. 'HP' + ' 9999X-NEW ' vs 'HP'+'9999X-NEW' would create two rows because lookup uses raw eq() on stripped values. Currently we strip both inputs so exact matches dedupe; mixed-case brand ('hp' vs 'HP') would not."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_batch_fixes.py",
+    "/app/backend/tests/test_supabase_backend.py",
+    "/app/test_reports/pytest/iteration_5.xml",
+    "/app/test_reports/pytest/iteration_5_batch.xml"
+  ],
+  "action_items": [
+    "(Optional) De-dupe toner_master lookup case-insensitively on (brand, model_number) to avoid duplicates from mixed-case input on /supplier/listings.",
+    "(Carry-over) Atomic stock decrement on POST /orders for cart-checkout under concurrency.",
+    "(Carry-over) server.py is now 715+ lines; split into routers (auth, listings, orders, admin, chat).",
+    "(Carry-over) CORS allow_origins=['*'] with allow_credentials=True is rejected by browsers — narrow origins.",
+    "(Carry-over) supplier-documents PATCH stores client-supplied paths without verifying they start with '<uid>/' — security hardening recommended."
+  ],
+  "critical_code_review_comments": [
+    "oauth_bootstrap: previously crashed on malformed JWT (now fixed). Best to log the underlying exception at debug level for observability rather than swallowing silently.",
+    "Auto-creation of toner_master entries on /supplier/listings has no admin moderation — any approved supplier can pollute the global catalog with arbitrary brand/model strings. Consider an 'unverified' flag on toner_master rows so admin can curate.",
+    "Cart checkout flow does N sequential POST /orders calls (one per cart line). Consider a bulk /orders endpoint that creates orders + decrements stock in a single transaction to avoid partial-success edge cases.",
+    "Carry-over: server.py >700 LOC threshold breached; recommend splitting into routers."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (oauth_bootstrap: wrap sb_anon.auth.get_user in try/except so invalid token → 401 instead of 500)",
+    "/app/backend/tests/test_batch_fixes.py (NEW — 12 tests for batch fixes)"
+  ],
+  "success_rate": {"backend": "100% (58/58)", "frontend": "not tested (backend-only request)"},
+  "test_credentials": "Admin: admin@tonerscart.in / Admin@123. Approved supplier: supplier1@test.com / Test@123. Customer: buyer1@test.com / Test@123. Per-run accounts use UUID-suffixed @tonerscarttest.com emails.",
+  "seed_data_creation": "Each run: oauth-bootstrap test creates 1 fresh Supabase auth user via service-role admin API and deletes it on teardown. Listing tests create 2 listings on a fresh HP 9999<RUN>-NEW model_number (Refilled + Compatible) and clean both up at end. Cart-checkout test places 2 orders against those listings (orders are NOT cleaned up — left as test-data records prefixed with 'TEST_cart_line*' in notes).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Pytest suite at /app/backend/tests/test_batch_fixes.py is idempotent (UUID-suffixed model numbers and emails). The oauth_bootstrap endpoint now handles malformed JWTs gracefully. /api/listings/search returns flattened supplier_name + supplier_city. Stock decrement is verified independent per-listing. /supplier/listings auto-creates toner_master rows when brand+model_number is new. Refilled is fully accepted everywhere.",
+  "rca of the issue": "oauth_bootstrap 500 on malformed bearer: supabase-py's auth.get_user(invalid_jwt) raises on tokens that aren't well-formed JWTs (signature/segments check fails before round-trip). The endpoint did not catch that exception so FastAPI returned a generic 500. RCA: missing defensive try/except. Fix: wrap sb_anon.auth.get_user(token) in try/except Exception -> set uid_resp=None, then fall through to existing 401 branch. Verified by tests TestOAuthBootstrap::test_bad_bearer_returns_401 and ::test_no_bearer_returns_401 (both pass)."
+}

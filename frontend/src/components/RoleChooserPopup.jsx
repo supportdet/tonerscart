@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ShoppingBag, Store, X, ArrowRight } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useCity } from "../context/CityContext";
 
 const SEEN_KEY = "tc_role_chooser_seen_v1";
 const HIDE_ROUTES = ["/login", "/register", "/admin", "/auth/callback"];
@@ -12,11 +13,13 @@ const HIDE_ROUTES = ["/login", "/register", "/admin", "/auth/callback"];
  * - Skipped while logged in.
  * - Skipped on auth/admin routes.
  * - Backdrop is blurred + dim.
+ * - Dismissal also kicks off the one-time GPS request.
  */
 export default function RoleChooserPopup() {
     const navigate = useNavigate();
     const location = useLocation();
     const { user, loading } = useAuth();
+    const { requestGps } = useCity();
     const [open, setOpen] = useState(false);
 
     useEffect(() => {
@@ -33,11 +36,13 @@ export default function RoleChooserPopup() {
     const dismiss = () => {
         try { localStorage.setItem(SEEN_KEY, "1"); } catch {}
         setOpen(false);
+        // Kick off the GPS permission prompt right after the popup closes
+        try { requestGps?.(); } catch {}
     };
 
     const choose = (role) => {
         dismiss();
-        if (role === "buyer") navigate("/search");
+        if (role === "buyer") navigate("/");
         else navigate("/register?role=supplier");
     };
 

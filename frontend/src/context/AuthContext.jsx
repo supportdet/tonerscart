@@ -33,9 +33,30 @@ export const AuthProvider = ({ children }) => {
     }, [refresh]);
 
     const login = async (email, password) => {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw new Error(error.message);
+        let result;
+        try {
+            result = await supabase.auth.signInWithPassword({ email, password });
+        } catch (err) {
+            // supabase-js can throw a fetch body-stream error for failed sign-in
+            throw new Error("Incorrect email or password");
+        }
+        if (result?.error) {
+            const m = (result.error.message || "").toLowerCase();
+            if (m.includes("invalid login") || m.includes("invalid_credentials") || m.includes("invalid email") || m.includes("invalid password") || m.includes("body stream")) {
+                throw new Error("Incorrect email or password");
+            }
+            throw new Error(result.error.message || "Sign-in failed");
+        }
         await refresh();
+    };
+
+    const signInWithGoogle = async (intendedRole) => {
+        const redirect = `${window.location.origin}/auth/callback${intendedRole ? `?role=${intendedRole}` : ""}`;
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: "google",
+            options: { redirectTo: redirect },
+        });
+        if (error) throw new Error(error.message || "Google sign-in unavailable");
     };
 
     const signupCustomer = async (payload) => {
@@ -54,7 +75,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, signupCustomer, signupSupplier, logout, refresh, formatApiError }}>
+        <AuthContext.Provider value={{ user, loading, login, signInWithGoogle, signupCustomer, signupSupplier, logout, refresh, formatApiError }}>
             {children}
         </AuthContext.Provider>
     );

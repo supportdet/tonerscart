@@ -16,6 +16,20 @@ export const CityProvider = ({ children }) => {
         try { localStorage.setItem(STORAGE_KEY, city); } catch { /* ignore */ }
     }, [city]);
 
+    // Auto-request GPS on the very first session (only once)
+    useEffect(() => {
+        try {
+            const asked = localStorage.getItem("tc_gps_asked_v1");
+            if (asked) return;
+            const t = setTimeout(() => {
+                localStorage.setItem("tc_gps_asked_v1", "1");
+                requestGps();
+            }, 1500);
+            return () => clearTimeout(t);
+        } catch { /* ignore */ }
+        // eslint-disable-next-line
+    }, []);
+
     const requestGps = () => {
         if (gpsRequested) return;
         setGpsRequested(true);

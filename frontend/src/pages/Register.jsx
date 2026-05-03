@@ -10,6 +10,15 @@ import { supabase } from "../lib/supabase";
 import { toast } from "sonner";
 import { Upload, CheckCircle2, ChevronLeft, ChevronRight, FileText } from "lucide-react";
 
+const GoogleIcon = (props) => (
+    <svg viewBox="0 0 48 48" width="18" height="18" {...props}>
+        <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.5-5.9 7.5-11.3 7.5-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 2.9l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
+        <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 16 18.9 13 24 13c3 0 5.7 1.1 7.8 2.9l5.7-5.7C34.6 6.1 29.6 4 24 4 16.3 4 9.7 8.4 6.3 14.7z" />
+        <path fill="#4CAF50" d="M24 44c5.5 0 10.4-2.1 14.1-5.5l-6.5-5.5c-2 1.5-4.7 2.5-7.6 2.5-5.4 0-9.7-3-11.3-7.5l-6.6 5.1C9.6 39.6 16.2 44 24 44z" />
+        <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.7 2-2 3.7-3.7 4.9l6.5 5.5C42.5 35.5 44 30 44 24c0-1.3-.1-2.4-.4-3.5z" />
+    </svg>
+);
+
 const KNOWN_CITIES = ["Bangalore","Mumbai","Delhi","Chennai","Hyderabad","Pune","Kolkata","Ahmedabad","Jaipur","Lucknow","Chandigarh","Surat","Indore","Nagpur","Coimbatore","Kochi","Bhopal","Noida","Gurgaon"];
 const TURNOVER = ["< ₹10 Lakh", "₹10 – 50 Lakh", "₹50 Lakh – 2 Cr", "₹2 – 10 Cr", "₹10 Cr+"];
 const SELLER_TYPES = ["Original", "Compatible", "Refilled"];
@@ -50,7 +59,7 @@ function FileSlot({ label, hint, file, setFile, testid, accept = "image/*,applic
 }
 
 export default function Register() {
-    const { signupCustomer, signupSupplier } = useAuth();
+    const { signupCustomer, signupSupplier, signInWithGoogle } = useAuth();
     const navigate = useNavigate();
     const [params] = useSearchParams();
     const [role, setRole] = useState(params.get("role") === "supplier" ? "supplier" : "customer");
@@ -149,6 +158,8 @@ export default function Register() {
         }
 
         // ----- Supplier final submit -----
+        // Guard: only allow real submission from step 4
+        if (step !== 4) return;
         if (s.seller_types.length < 1) { toast.error("Choose at least one seller type"); return; }
         setLoading(true);
         try {
@@ -204,35 +215,65 @@ export default function Register() {
         }
     };
 
-    return (
-        <div className="tc-container py-8 sm:py-12 max-w-3xl" data-testid="register-page">
-            <div className="tc-eyebrow"><span className="tc-strip mr-2 align-middle" />Create account</div>
-            <h1 className="text-[#0A0A0B] mt-2" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(24px, 3.4vw, 44px)", fontWeight: 300, letterSpacing: "-0.02em", lineHeight: 1.12 }}>
-                Join the TonersCart trade network
-            </h1>
+    const onGoogle = async () => {
+        try { await signInWithGoogle(role === "supplier" ? "supplier" : "customer"); }
+        catch (e) { toast.error(e.message || "Google sign-in not enabled yet"); }
+    };
 
-            <div className="mt-5 sm:mt-6 grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg w-full sm:max-w-sm">
-                <button type="button" onClick={() => setRole("customer")} className={`py-2 rounded-md text-sm font-semibold transition ${role === "customer" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-slate-500"}`} data-testid="role-customer-tab">I&apos;m a Buyer</button>
-                <button type="button" onClick={() => setRole("supplier")} className={`py-2 rounded-md text-sm font-semibold transition ${role === "supplier" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-slate-500"}`} data-testid="role-supplier-tab">I&apos;m a Supplier</button>
+    return (
+        <div className="tc-hero relative pb-16" data-testid="register-page">
+            <div className="tc-hero-grid" />
+            <div className="tc-container relative pt-10 sm:pt-14 max-w-3xl">
+                <div className="flex items-center gap-3 mb-3">
+                    <span className="tc-strip" />
+                    <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-white/60">Create account</span>
+                </div>
+                <h1 className="text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(28px, 4vw, 52px)", fontWeight: 300, letterSpacing: "-0.025em", lineHeight: 1.12 }}>
+                    Join the TonersCart trade network
+                </h1>
+
+            <div className="mt-6 grid grid-cols-2 gap-2 p-1 bg-white/[0.08] backdrop-blur rounded-lg w-full sm:max-w-sm border border-white/10">
+                <button type="button" onClick={() => setRole("customer")} className={`py-2 rounded-md text-sm font-semibold transition ${role === "customer" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-white/70"}`} data-testid="role-customer-tab">I&apos;m a Buyer</button>
+                <button type="button" onClick={() => setRole("supplier")} className={`py-2 rounded-md text-sm font-semibold transition ${role === "supplier" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-white/70"}`} data-testid="role-supplier-tab">I&apos;m a Supplier</button>
             </div>
 
             {/* ============================ CUSTOMER ============================ */}
             {role === "customer" ? (
-                <form onSubmit={submit} className="mt-5 sm:mt-6 tc-card-flat p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <div className="sm:col-span-2"><Label>Full name</Label><Input value={c.name} onChange={updC("name")} required data-testid="register-name-input" /></div>
-                    <div><Label>Email</Label><Input type="email" value={c.email} onChange={updC("email")} required data-testid="register-email-input" /></div>
-                    <div><Label>Password</Label><Input type="password" value={c.password} onChange={updC("password")} required minLength={6} data-testid="register-password-input" /></div>
-                    <div><Label>Phone</Label><Input value={c.phone} onChange={updC("phone")} placeholder="+91-..." data-testid="register-phone-input" /></div>
-                    <div><Label>City</Label><Input value={c.city} onChange={updC("city")} data-testid="register-city-input" /></div>
-                    <div className="sm:col-span-2">
-                        <Button type="submit" className="btn-cta w-full" disabled={loading} data-testid="register-submit-btn">
-                            {loading ? "Creating account…" : "Create account"}
-                        </Button>
+                <div className="mt-5 sm:mt-6">
+                    <div className="tc-card-flat p-4 sm:p-6">
+                        <button onClick={onGoogle} type="button" className="mb-4 w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-full border border-[#D2D2D7] bg-white hover:bg-black/[0.03] text-[#0A0A0B] font-semibold text-[13.5px]" data-testid="register-google-btn">
+                            <GoogleIcon /> Continue with Google
+                        </button>
+                        <div className="my-4 flex items-center gap-3">
+                            <div className="h-px flex-1 bg-black/[0.08]" />
+                            <span className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B]">or with email</span>
+                            <div className="h-px flex-1 bg-black/[0.08]" />
+                        </div>
+                        <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                            <div className="sm:col-span-2"><Label>Full name</Label><Input value={c.name} onChange={updC("name")} required data-testid="register-name-input" /></div>
+                            <div><Label>Email</Label><Input type="email" value={c.email} onChange={updC("email")} required data-testid="register-email-input" /></div>
+                            <div><Label>Password</Label><Input type="password" value={c.password} onChange={updC("password")} required minLength={6} data-testid="register-password-input" /></div>
+                            <div><Label>Phone</Label><Input value={c.phone} onChange={updC("phone")} placeholder="+91-..." data-testid="register-phone-input" /></div>
+                            <div><Label>City</Label><Input value={c.city} onChange={updC("city")} data-testid="register-city-input" /></div>
+                            <div className="sm:col-span-2">
+                                <Button type="submit" className="btn-cta w-full" disabled={loading} data-testid="register-submit-btn">
+                                    {loading ? "Creating account…" : "Create account"}
+                                </Button>
+                            </div>
+                        </form>
                     </div>
-                </form>
+                </div>
             ) : (
                 /* ============================ SUPPLIER ============================ */
-                <form onSubmit={submit} className="mt-5 sm:mt-6 tc-card-flat p-5 sm:p-7" data-testid="supplier-multi-step">
+                <form onSubmit={submit}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" && step < 4) {
+                            // Block Enter from auto-submitting; advance step if valid
+                            e.preventDefault();
+                            if (canNext()) setStep((st) => Math.min(4, st + 1));
+                        }
+                    }}
+                    className="mt-5 sm:mt-6 tc-card-flat p-5 sm:p-7" data-testid="supplier-multi-step">
                     <div className="flex items-center justify-between mb-5">
                         <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73]">
                             Step {step} of 4 — {step === 1 ? "Basics" : step === 2 ? "Business" : step === 3 ? "Seller types" : "Documents"}
@@ -372,8 +413,9 @@ export default function Register() {
                 </form>
             )}
 
-            <div className="text-sm text-slate-600 mt-4">
+            <div className="text-sm text-white/70 mt-4">
                 Already a member? <Link to="/login" className="text-[#00B7C7] font-semibold hover:underline" data-testid="register-to-login-link">Sign in</Link>
+            </div>
             </div>
         </div>
     );
