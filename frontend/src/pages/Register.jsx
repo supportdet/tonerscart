@@ -162,14 +162,11 @@ export default function Register() {
         if (step !== 4) return;
         if (s.seller_types.length < 1) { toast.error("Choose at least one seller type"); return; }
         setLoading(true);
-        let stage = "starting";
         try {
             // 0. Clear any stale session so the new auth user gets a clean sign-in
-            stage = "preparing session";
             try { await supabase.auth.signOut(); } catch { /* ignore */ }
 
             // 1. Create the auth user + pending row first (needs uid for storage path)
-            stage = "creating account";
             const result = await api.post("/auth/signup-supplier", {
                 ...s,
                 years_in_business: s.years_in_business ? parseInt(s.years_in_business, 10) : null,
@@ -183,7 +180,6 @@ export default function Register() {
             const uid = result.data.user_id;
 
             // 2. Sign in (so RLS-aware storage upload works under owner auth)
-            stage = "signing in";
             const { error: signInErr } = await supabase.auth.signInWithPassword({
                 email: s.email, password: s.password,
             });
@@ -201,32 +197,26 @@ export default function Register() {
             };
             for (const [field, file] of Object.entries(docMap)) {
                 if (!file) continue;
-                stage = `uploading ${field.replace("doc_", "").replace(/_/g, " ")}`;
                 const ext = (file.name.split(".").pop() || "bin").toLowerCase();
                 const path = `${uid}/${field}-${Date.now()}.${ext}`;
                 const { error: upErr } = await supabase.storage.from(DOC_BUCKET).upload(path, file, { upsert: false });
-                if (upErr) throw new Error(`${field}: ${upErr.message || upErr}`);
+                if (upErr) throw new Error(upErr.message || "Upload failed");
                 uploaded[field] = path;
             }
 
             // 4. Patch the pending row with uploaded paths (fire AI check on backend)
             if (Object.keys(uploaded).length > 0) {
-                stage = "saving documents";
                 await api.post("/auth/supplier-documents", uploaded);
             }
 
-            // 5. Refresh auth context so /supplier route recognizes the new user immediately
-            stage = "loading dashboard";
+            // 5. Refresh auth context so /supplier route recognizes the new user
             await refresh();
 
             toast.success("Application submitted — pending admin approval");
             navigate("/supplier");
         } catch (err) {
-            const detail = formatApiError(err);
-            const msg = detail && detail !== "Something went wrong" ? detail : (err?.message || "Submission failed");
-            toast.error(`Failed while ${stage}: ${msg}`);
-            // eslint-disable-next-line no-console
-            console.error(`[supplier-signup] stage=${stage}`, err);
+            const msg = formatApiError(err);
+            toast.error(msg && msg !== "Something went wrong" ? msg : (err?.message || "Submission failed"));
         } finally {
             setLoading(false);
         }

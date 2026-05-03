@@ -192,8 +192,10 @@ export default function SearchPage() {
     );
 
     const onBuy = (p, qty) => {
-        if (!user) { toast.message("Please sign in to place an order request"); navigate("/login"); return; }
-        if (user.role !== "customer") { toast.error("Only buyer accounts can place order requests"); return; }
+        if (user && user.role && user.role !== "customer") {
+            toast.error("Sign in with a buyer account to place order requests");
+            return;
+        }
         setOrderQty(qty); setOrderProduct(p);
     };
     const onCart = (p, qty) => {
