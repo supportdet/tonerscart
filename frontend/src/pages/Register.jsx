@@ -59,7 +59,7 @@ function FileSlot({ label, hint, file, setFile, testid, accept = "image/*,applic
 }
 
 export default function Register() {
-    const { signupCustomer, signupSupplier, signInWithGoogle } = useAuth();
+    const { signupCustomer, signupSupplier, signInWithGoogle, refresh } = useAuth();
     const navigate = useNavigate();
     const [params] = useSearchParams();
     const [role, setRole] = useState(params.get("role") === "supplier" ? "supplier" : "customer");
@@ -162,8 +162,14 @@ export default function Register() {
         if (step !== 4) return;
         if (s.seller_types.length < 1) { toast.error("Choose at least one seller type"); return; }
         setLoading(true);
+        let stage = "starting";
         try {
+            // 0. Clear any stale session so the new auth user gets a clean sign-in
+            stage = "preparing session";
+            try { await supabase.auth.signOut(); } catch { /* ignore */ }
+
             // 1. Create the auth user + pending row first (needs uid for storage path)
+            stage = "creating account";
             const result = await api.post("/auth/signup-supplier", {
                 ...s,
                 years_in_business: s.years_in_business ? parseInt(s.years_in_business, 10) : null,
@@ -177,6 +183,7 @@ export default function Register() {
             const uid = result.data.user_id;
 
             // 2. Sign in (so RLS-aware storage upload works under owner auth)
+            stage = "signing in";
             const { error: signInErr } = await supabase.auth.signInWithPassword({
                 email: s.email, password: s.password,
             });
@@ -194,22 +201,32 @@ export default function Register() {
             };
             for (const [field, file] of Object.entries(docMap)) {
                 if (!file) continue;
+                stage = `uploading ${field.replace("doc_", "").replace(/_/g, " ")}`;
                 const ext = (file.name.split(".").pop() || "bin").toLowerCase();
                 const path = `${uid}/${field}-${Date.now()}.${ext}`;
                 const { error: upErr } = await supabase.storage.from(DOC_BUCKET).upload(path, file, { upsert: false });
-                if (upErr) throw new Error(`${field}: ${upErr.message}`);
+                if (upErr) throw new Error(`${field}: ${upErr.message || upErr}`);
                 uploaded[field] = path;
             }
 
             // 4. Patch the pending row with uploaded paths (fire AI check on backend)
             if (Object.keys(uploaded).length > 0) {
+                stage = "saving documents";
                 await api.post("/auth/supplier-documents", uploaded);
             }
+
+            // 5. Refresh auth context so /supplier route recognizes the new user immediately
+            stage = "loading dashboard";
+            await refresh();
 
             toast.success("Application submitted — pending admin approval");
             navigate("/supplier");
         } catch (err) {
-            toast.error(formatApiError(err));
+            const detail = formatApiError(err);
+            const msg = detail && detail !== "Something went wrong" ? detail : (err?.message || "Submission failed");
+            toast.error(`Failed while ${stage}: ${msg}`);
+            // eslint-disable-next-line no-console
+            console.error(`[supplier-signup] stage=${stage}`, err);
         } finally {
             setLoading(false);
         }
@@ -241,14 +258,18 @@ export default function Register() {
             {role === "customer" ? (
                 <div className="mt-5 sm:mt-6">
                     <div className="bg-white border border-black/[0.06] rounded-2xl shadow-2xl p-4 sm:p-6 text-[#0A0A0B]">
-                        <button onClick={onGoogle} type="button" className="mb-4 w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-full border border-[#D2D2D7] bg-white hover:bg-black/[0.03] text-[#0A0A0B] font-semibold text-[13.5px]" data-testid="register-google-btn">
-                            <GoogleIcon /> Continue with Google
-                        </button>
-                        <div className="my-4 flex items-center gap-3">
-                            <div className="h-px flex-1 bg-black/[0.08]" />
-                            <span className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B]">or with email</span>
-                            <div className="h-px flex-1 bg-black/[0.08]" />
-                        </div>
+                        {process.env.REACT_APP_GOOGLE_AUTH_ENABLED === "true" && (
+                            <>
+                                <button onClick={onGoogle} type="button" className="mb-4 w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-full border border-[#D2D2D7] bg-white hover:bg-black/[0.03] text-[#0A0A0B] font-semibold text-[13.5px]" data-testid="register-google-btn">
+                                    <GoogleIcon /> Continue with Google
+                                </button>
+                                <div className="my-4 flex items-center gap-3">
+                                    <div className="h-px flex-1 bg-black/[0.08]" />
+                                    <span className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B]">or with email</span>
+                                    <div className="h-px flex-1 bg-black/[0.08]" />
+                                </div>
+                            </>
+                        )}
                         <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                             <div className="sm:col-span-2"><Label>Full name</Label><Input value={c.name} onChange={updC("name")} required data-testid="register-name-input" /></div>
                             <div><Label>Email</Label><Input type="email" value={c.email} onChange={updC("email")} required data-testid="register-email-input" /></div>

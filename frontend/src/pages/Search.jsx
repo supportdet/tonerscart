@@ -192,7 +192,7 @@ export default function SearchPage() {
     );
 
     const onBuy = (p, qty) => {
-        if (!user) { navigate("/login"); return; }
+        if (!user) { toast.message("Please sign in to place an order request"); navigate("/login"); return; }
         if (user.role !== "customer") { toast.error("Only buyer accounts can place order requests"); return; }
         setOrderQty(qty); setOrderProduct(p);
     };

@@ -56,7 +56,13 @@ export const AuthProvider = ({ children }) => {
             provider: "google",
             options: { redirectTo: redirect },
         });
-        if (error) throw new Error(error.message || "Google sign-in unavailable");
+        if (error) {
+            const msg = (error.message || "").toLowerCase();
+            if (msg.includes("provider is not enabled") || msg.includes("unsupported provider")) {
+                throw new Error("Google sign-in isn't enabled yet. Please use email & password for now.");
+            }
+            throw new Error(error.message || "Google sign-in unavailable");
+        }
     };
 
     const signupCustomer = async (payload) => {
