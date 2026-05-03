@@ -20,20 +20,29 @@ const SidebarItem = ({ active, onClick, children, testid }) => (
 );
 
 function ProductCard({ p, qty, setQty, onBuy, onCart }) {
+    const typeStyle = p.toner_type === "Original"
+        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+        : "bg-blue-50 text-blue-700 border-blue-200";
     return (
         <div className="tc-product-card" data-testid={`product-card-${p.id}`}>
             <div className="tc-product-img">
                 <span className="tc-product-img-label">{p.brand}</span>
-                <TonerCartridge color={p.color || "Black"} brand={p.brand} model={p.model_number} />
+                {p.image_url ? (
+                    <img src={p.image_url} alt={`${p.brand} ${p.model_number}`} className="w-full h-full object-cover" loading="lazy" />
+                ) : (
+                    <TonerCartridge color={p.color || "Black"} brand={p.brand} model={p.model_number} type={p.toner_type || "Original"} />
+                )}
             </div>
             <div className="p-4 flex flex-col gap-2 flex-1">
                 <div className="flex items-center justify-between">
                     <div className="text-[10px] tracking-[0.16em] uppercase font-semibold text-[#6E6E73]">{p.brand}</div>
-                    <span className="tc-badge tc-badge-gray">{p.toner_type || "Original"}</span>
+                    <span className={`text-[10px] font-bold px-2 py-1 rounded-md border uppercase tracking-[0.08em] ${typeStyle}`}>
+                        {p.toner_type || "Original"}
+                    </span>
                 </div>
                 <div className="font-mono text-[18px] font-semibold text-[#0A0A0B] tracking-tight">{p.model_number}</div>
                 <div className="text-[13px] text-[#1D1D1F] truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
-                    {p.supplier_company || p.supplier_name}
+                    {p.supplier_name || "—"}
                 </div>
                 <div className="text-[12px] text-[#6E6E73] flex items-center gap-1">
                     <MapPin size={11} /> {p.city}
@@ -42,7 +51,7 @@ function ProductCard({ p, qty, setQty, onBuy, onCart }) {
                 <div className="mt-2 pt-3 border-t border-black/[0.05] flex items-end justify-between gap-2">
                     <div>
                         <div className="text-[10px] tracking-[0.14em] uppercase font-semibold text-[#86868B]">Price</div>
-                        <div className="font-mono text-[18px] font-semibold text-[#0A0A0B]">₹{p.price.toLocaleString('en-IN')}</div>
+                        <div className="font-mono text-[18px] font-semibold text-[#0A0A0B]">₹{Number(p.price).toLocaleString('en-IN')}</div>
                     </div>
                     <div className="tc-qty" data-testid={`qty-${p.id}`}>
                         <button type="button" onClick={() => setQty(Math.max(1, qty - 1))} disabled={qty <= 1} aria-label="Decrease"><Minus size={14} /></button>
@@ -82,7 +91,7 @@ export default function SearchPage() {
     const [cart, setCart] = useState([]);
     const rootRef = useReveal([products.length]);
 
-    useEffect(() => { api.get("/products/facets").then((r) => setFacets(r.data)).catch(() => {}); }, []);
+    useEffect(() => { api.get("/listings/facets").then((r) => setFacets(r.data)).catch(() => {}); }, []);
 
     useEffect(() => {
         const fetch = async () => {
@@ -91,12 +100,10 @@ export default function SearchPage() {
             if (params.get("q")) qp.q = params.get("q");
             if (params.get("brand")) qp.brand = params.get("brand");
             if (params.get("city") && params.get("city") !== "all") qp.city = params.get("city");
+            if (params.get("toner_type") && params.get("toner_type") !== "all") qp.toner_type = params.get("toner_type");
             try {
-                const r = await api.get("/products/search", { params: { ...qp, limit: 500 } });
+                const r = await api.get("/listings/search", { params: { ...qp, limit: 500 } });
                 let items = r.data;
-                if (params.get("toner_type") && params.get("toner_type") !== "all") {
-                    items = items.filter((p) => p.toner_type === params.get("toner_type"));
-                }
                 items.sort((a, b) => a.price - b.price);
                 setProducts(items);
             } finally { setLoading(false); }
@@ -172,7 +179,7 @@ export default function SearchPage() {
                     <span className="text-[12px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Toner type</span>
                 </div>
                 <div className="space-y-0.5">
-                    {["all", "Original", "Compatible", "Refilled"].map((t) => (
+                    {["all", "Original", "Compatible"].map((t) => (
                         <SidebarItem key={t} active={tonerType === t} onClick={() => setFilter("toner_type", t)} testid={`filter-type-${t}`}>{t === "all" ? "All types" : t}</SidebarItem>
                     ))}
                 </div>

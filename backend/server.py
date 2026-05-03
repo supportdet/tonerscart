@@ -1,702 +1,515 @@
-from dotenv import load_dotenv
-from pathlib import Path
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+"""TonersCart FastAPI backend — Supabase edition.
 
+All persistence (auth, DB, storage) lives in Supabase. This service exposes
+a thin /api layer that:
+  - Verifies Supabase access tokens (Bearer)
+  - Reads/writes Postgres tables via supabase-py service-role client
+  - Handles supplier signup → suppliers_pending row + auth user
+  - Admin approval flips suppliers_pending → suppliers
+  - Hosts the Claude AI chat endpoint (TonerBot)
+"""
 import os
 import re
 import uuid
-import random
 import logging
-import bcrypt
-import jwt
-import httpx
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Literal, List
+from pathlib import Path
+from typing import List, Optional
+from datetime import datetime, timezone
 
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, Field, EmailStr
+from dotenv import load_dotenv
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, EmailStr, Field
 
+from supabase_client import sb_admin, sb_anon, get_user_from_token
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
-from toner_master_seed import TONER_MASTER, SUPPLIERS_25, CUSTOMERS
-
-
-# ----- Config -----
-MONGO_URL = os.environ['MONGO_URL']
-DB_NAME = os.environ['DB_NAME']
-JWT_SECRET = os.environ['JWT_SECRET']
-JWT_ALGORITHM = "HS256"
-ACCESS_TOKEN_MINUTES = 60 * 24
-
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[DB_NAME]
-
-app = FastAPI(title="TonersCart API")
-api = APIRouter(prefix="/api")
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+load_dotenv(Path(__file__).parent / ".env")
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("tonerscart")
 
-
-# ----- Helpers: normalization -----
-def normalize_model(s: str) -> str:
-    """Lowercase, strip non-alphanumeric. 'HP 88A', 'hp-88a', 'HP88 A' → 'hp88a'."""
-    if not s:
-        return ""
-    return re.sub(r"[^a-z0-9]", "", s.lower())
+app = FastAPI(title="TonersCart API (Supabase)")
+api = APIRouter(prefix="/api")
 
 
-# ----- Models -----
-Role = Literal["customer", "supplier", "admin"]
-SupplierStatus = Literal["pending", "approved", "rejected"]
-OrderStatus = Literal["requested", "accepted", "shipped", "completed", "rejected"]
+# ===== Helpers =================================================================
+
+def normalize(s: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
 
-class RegisterRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=6)
-    name: str
-    role: Literal["customer", "supplier"]
-    company: Optional[str] = None
-    city: Optional[str] = None
-    phone: Optional[str] = None
+def get_token(request: Request) -> Optional[str]:
+    auth = request.headers.get("Authorization") or request.headers.get("authorization")
+    if not auth or not auth.lower().startswith("bearer "):
+        return None
+    return auth.split(" ", 1)[1].strip()
 
 
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-
-
-class ProductCreate(BaseModel):
-    master_id: Optional[str] = None  # preferred: chosen from TonerMaster
-    model_number: str
-    brand: str
-    title: Optional[str] = None
-    description: Optional[str] = ""
-    price: float
-    stock: int
-    city: str
-    color: Optional[str] = "Black"
-    toner_type: Optional[str] = "Original"
-    compatible_printers: Optional[str] = ""
-    page_yield: Optional[int] = None
-
-
-class ProductUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    price: Optional[float] = None
-    stock: Optional[int] = None
-    city: Optional[str] = None
-    color: Optional[str] = None
-    toner_type: Optional[str] = None
-    compatible_printers: Optional[str] = None
-
-
-class OrderCreate(BaseModel):
-    product_id: str
-    quantity: int = Field(gt=0)
-    notes: Optional[str] = ""
-    delivery_address: str
-    contact_phone: str
-
-
-class OrderStatusUpdate(BaseModel):
-    status: Literal["accepted", "shipped", "completed", "rejected"]
-    tracking_number: Optional[str] = None
-
-
-# ----- Helpers: auth -----
-def hash_password(pw: str) -> str:
-    return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-
-def verify_password(pw: str, hashed: str) -> bool:
-    try:
-        return bcrypt.checkpw(pw.encode("utf-8"), hashed.encode("utf-8"))
-    except Exception:
-        return False
-
-
-def create_access_token(user_id: str, email: str, role: str) -> str:
-    payload = {
-        "sub": user_id, "email": email, "role": role,
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_MINUTES),
-        "type": "access",
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
-
-def user_to_public(u: dict) -> dict:
-    return {
-        "id": u["id"], "email": u["email"], "name": u["name"], "role": u["role"],
-        "company": u.get("company"), "city": u.get("city"), "phone": u.get("phone"),
-        "supplier_status": u.get("supplier_status"),
-        "created_at": u["created_at"] if isinstance(u["created_at"], datetime) else datetime.fromisoformat(u["created_at"]),
-    }
-
-
-async def get_current_user(request: Request) -> dict:
-    token = request.cookies.get("access_token")
-    if not token:
-        auth = request.headers.get("Authorization", "")
-        if auth.startswith("Bearer "):
-            token = auth[7:]
-    if not token:
+def require_user(request: Request) -> dict:
+    """Returns {"id", "email", "role", ...} from public.users for authenticated requests."""
+    token = get_token(request)
+    uid, profile = get_user_from_token(token) if token else (None, None)
+    if not uid or not profile:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
+    return profile
 
 
 def require_role(*roles: str):
-    async def dep(user: dict = Depends(get_current_user)) -> dict:
-        if user["role"] not in roles:
+    def dep(request: Request):
+        u = require_user(request)
+        if u.get("role") not in roles:
             raise HTTPException(status_code=403, detail="Forbidden")
-        if user["role"] == "supplier" and user.get("supplier_status") != "approved":
-            raise HTTPException(status_code=403, detail="Supplier account not approved yet")
-        return user
+        return u
     return dep
 
 
-def set_auth_cookie(response: Response, token: str):
-    response.set_cookie(key="access_token", value=token, httponly=True, secure=False,
-                        samesite="lax", max_age=ACCESS_TOKEN_MINUTES * 60, path="/")
+# ===== Models ==================================================================
 
-
-# ===== Auth =====
-@api.post("/auth/register")
-async def register(payload: RegisterRequest, response: Response):
-    email = payload.email.lower()
-    if await db.users.find_one({"email": email}):
-        raise HTTPException(status_code=400, detail="Email already registered")
-    user_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc)
-    doc = {
-        "id": user_id, "email": email, "name": payload.name, "role": payload.role,
-        "company": payload.company, "city": payload.city, "phone": payload.phone,
-        "password_hash": hash_password(payload.password),
-        "supplier_status": "pending" if payload.role == "supplier" else None,
-        "created_at": now.isoformat(),
-    }
-    await db.users.insert_one(doc.copy())
-    token = create_access_token(user_id, email, payload.role)
-    set_auth_cookie(response, token)
-    return {"user": user_to_public(doc), "token": token}
-
-
-@api.post("/auth/login")
-async def login(payload: LoginRequest, response: Response):
-    email = payload.email.lower()
-    user = await db.users.find_one({"email": email})
-    if not user or not verify_password(payload.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    token = create_access_token(user["id"], user["email"], user["role"])
-    set_auth_cookie(response, token)
-    return {"user": user_to_public(user), "token": token}
-
-
-@api.post("/auth/logout")
-async def logout(response: Response):
-    response.delete_cookie("access_token", path="/")
-    return {"ok": True}
-
-
-@api.get("/auth/me")
-async def me(user: dict = Depends(get_current_user)):
-    return user_to_public(user)
-
-
-# ===== TonerMaster =====
-@api.get("/toner-master")
-async def list_toner_master(q: Optional[str] = None, brand: Optional[str] = None, limit: int = 50):
-    """Smart, typo-tolerant search. Tries:
-       1. exact normalized prefix match
-       2. normalized substring match (handles 'HP88A', '88-A', 'hp 88 a' all → '88a')
-    """
-    query: dict = {}
-    if brand and brand != "all":
-        query["brand"] = brand
-    if q:
-        nq = normalize_model(q)
-        if nq:
-            query["$or"] = [
-                {"search_norm": {"$regex": nq, "$options": "i"}},
-                {"normalized": {"$regex": nq, "$options": "i"}},
-                {"model_number": {"$regex": re.escape(q), "$options": "i"}},
-                {"printer_compatibility": {"$regex": re.escape(q), "$options": "i"}},
-            ]
-    cursor = db.toner_master.find(query, {"_id": 0}).limit(limit)
-    return await cursor.to_list(length=limit)
-
-
-@api.get("/toner-master/brands")
-async def toner_master_brands():
-    return sorted(await db.toner_master.distinct("brand"))
-
-
-@api.get("/toner-master/{master_id}")
-async def get_toner_master(master_id: str):
-    item = await db.toner_master.find_one({"id": master_id}, {"_id": 0})
-    if not item:
-        raise HTTPException(404, "Toner not found")
-    return item
-
-
-# ===== Public products =====
-@api.get("/products/search")
-async def search_products(q: Optional[str] = None, brand: Optional[str] = None,
-                          city: Optional[str] = None, limit: int = 200):
-    query: dict = {}
-    if q:
-        nq = normalize_model(q)
-        if nq:
-            query["$or"] = [
-                {"search_norm": {"$regex": nq, "$options": "i"}},
-                {"model_normalized": {"$regex": nq, "$options": "i"}},
-                {"model_number": {"$regex": re.escape(q), "$options": "i"}},
-                {"title": {"$regex": re.escape(q), "$options": "i"}},
-                {"compatible_printers": {"$regex": re.escape(q), "$options": "i"}},
-            ]
-    if brand and brand != "all":
-        query["brand"] = brand
-    if city and city != "all":
-        query["city"] = city
-    cursor = db.products.find(query, {"_id": 0}).limit(limit)
-    items = await cursor.to_list(length=limit)
-    return items
-
-
-@api.get("/products/facets")
-async def product_facets():
-    brands = await db.products.distinct("brand")
-    cities = await db.products.distinct("city")
-    models = await db.products.distinct("model_number")
-    return {"brands": sorted(brands), "cities": sorted(cities), "models": sorted(models)}
-
-
-@api.get("/products/grouped")
-async def grouped_products(q: Optional[str] = None, brand: Optional[str] = None,
-                           city: Optional[str] = None, toner_type: Optional[str] = None):
-    items = await search_products(q=q, brand=brand, city=city, limit=1000)
-    if toner_type and toner_type != "all":
-        items = [i for i in items if i.get("toner_type") == toner_type]
-    groups: dict = {}
-    for it in items:
-        key = it["model_number"]
-        groups.setdefault(key, {
-            "model_number": key, "brand": it["brand"], "title": it.get("title", key),
-            "color": it.get("color", "Black"),
-            "compatible_printers": it.get("compatible_printers", ""),
-            "page_yield": it.get("page_yield"),
-            "listings": [],
-        })
-        groups[key]["listings"].append(it)
-    result = []
-    for g in groups.values():
-        g["listings"].sort(key=lambda x: x["price"])
-        g["min_price"] = g["listings"][0]["price"] if g["listings"] else 0
-        g["max_price"] = g["listings"][-1]["price"] if g["listings"] else 0
-        g["supplier_count"] = len(g["listings"])
-        g["cities"] = sorted({li["city"] for li in g["listings"]})
-        result.append(g)
-    result.sort(key=lambda x: x["model_number"])
-    return result
-
-
-@api.get("/products/{product_id}")
-async def get_product(product_id: str):
-    p = await db.products.find_one({"id": product_id}, {"_id": 0})
-    if not p:
-        raise HTTPException(404, "Product not found")
-    return p
-
-
-# ===== Supplier =====
-@api.post("/supplier/products")
-async def create_product(payload: ProductCreate, user: dict = Depends(require_role("supplier"))):
-    master = None
-    if payload.master_id:
-        master = await db.toner_master.find_one({"id": payload.master_id}, {"_id": 0})
-    pid = str(uuid.uuid4())
-    model_number = (master["model_number"] if master else payload.model_number).strip()
-    brand = (master["brand"] if master else payload.brand).strip()
-    title = payload.title or (master["title"] if master else f"{brand} {model_number} Toner")
-    color = (master["color"] if master else payload.color) or "Black"
-    toner_type = payload.toner_type or (master["toner_type"] if master else "Original")
-    printers = payload.compatible_printers or (master["printer_compatibility"] if master else "")
-    page_yield = payload.page_yield or (master.get("page_yield") if master else None)
-
-    doc = {
-        "id": pid,
-        "supplier_id": user["id"],
-        "supplier_name": user["name"],
-        "supplier_company": user.get("company"),
-        "master_id": payload.master_id,
-        "model_number": model_number,
-        "model_normalized": normalize_model(model_number),
-        "search_norm": normalize_model(f"{brand} {model_number} {color}"),
-        "brand": brand,
-        "title": title,
-        "description": payload.description or "",
-        "price": float(payload.price),
-        "stock": int(payload.stock),
-        "city": payload.city.strip(),
-        "color": color,
-        "toner_type": toner_type,
-        "compatible_printers": printers,
-        "page_yield": page_yield,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.products.insert_one(doc.copy())
-    doc.pop("_id", None)
-    return doc
-
-
-@api.get("/supplier/products")
-async def list_supplier_products(user: dict = Depends(require_role("supplier"))):
-    return await db.products.find({"supplier_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
-
-
-@api.put("/supplier/products/{product_id}")
-async def update_product(product_id: str, payload: ProductUpdate, user: dict = Depends(require_role("supplier"))):
-    p = await db.products.find_one({"id": product_id})
-    if not p or p["supplier_id"] != user["id"]:
-        raise HTTPException(404, "Product not found")
-    update = {k: v for k, v in payload.model_dump().items() if v is not None}
-    if update:
-        await db.products.update_one({"id": product_id}, {"$set": update})
-    return await db.products.find_one({"id": product_id}, {"_id": 0})
-
-
-@api.delete("/supplier/products/{product_id}")
-async def delete_product(product_id: str, user: dict = Depends(require_role("supplier"))):
-    p = await db.products.find_one({"id": product_id})
-    if not p or p["supplier_id"] != user["id"]:
-        raise HTTPException(404, "Product not found")
-    await db.products.delete_one({"id": product_id})
-    return {"ok": True}
-
-
-# ===== Orders =====
-@api.post("/orders")
-async def create_order(payload: OrderCreate, user: dict = Depends(get_current_user)):
-    if user["role"] != "customer":
-        raise HTTPException(403, "Only customers can place order requests")
-    p = await db.products.find_one({"id": payload.product_id}, {"_id": 0})
-    if not p:
-        raise HTTPException(404, "Product not found")
-    if payload.quantity > p["stock"]:
-        raise HTTPException(400, f"Requested quantity exceeds stock ({p['stock']} available)")
-    oid = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
-    doc = {
-        "id": oid,
-        "customer_id": user["id"], "customer_name": user["name"], "customer_email": user["email"],
-        "supplier_id": p["supplier_id"], "supplier_name": p["supplier_name"], "supplier_company": p.get("supplier_company"),
-        "product_id": p["id"], "product_title": p.get("title", p["model_number"]),
-        "model_number": p["model_number"], "brand": p["brand"],
-        "unit_price": p["price"], "quantity": payload.quantity,
-        "total": round(p["price"] * payload.quantity, 2),
-        "notes": payload.notes or "",
-        "delivery_address": payload.delivery_address, "contact_phone": payload.contact_phone,
-        "status": "requested", "tracking_number": None,
-        "created_at": now, "updated_at": now,
-    }
-    await db.orders.insert_one(doc.copy())
-    doc.pop("_id", None)
-    return doc
-
-
-@api.get("/orders/mine")
-async def my_orders(user: dict = Depends(get_current_user)):
-    if user["role"] == "customer":
-        q = {"customer_id": user["id"]}
-    elif user["role"] == "supplier":
-        q = {"supplier_id": user["id"]}
-    else:
-        q = {}
-    return await db.orders.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
-
-
-@api.put("/orders/{order_id}/status")
-async def update_order_status(order_id: str, payload: OrderStatusUpdate, user: dict = Depends(get_current_user)):
-    if user["role"] not in ("supplier", "admin"):
-        raise HTTPException(403, "Forbidden")
-    order = await db.orders.find_one({"id": order_id})
-    if not order:
-        raise HTTPException(404, "Order not found")
-    if user["role"] == "supplier" and order["supplier_id"] != user["id"]:
-        raise HTTPException(403, "Not your order")
-    update = {"status": payload.status, "updated_at": datetime.now(timezone.utc).isoformat()}
-    if payload.tracking_number:
-        update["tracking_number"] = payload.tracking_number
-    await db.orders.update_one({"id": order_id}, {"$set": update})
-    return await db.orders.find_one({"id": order_id}, {"_id": 0})
-
-
-# ===== Admin =====
-@api.get("/admin/users")
-async def admin_users(user: dict = Depends(require_role("admin"))):
-    return await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(2000)
-
-
-@api.get("/admin/suppliers/pending")
-async def admin_pending_suppliers(user: dict = Depends(require_role("admin"))):
-    return await db.users.find({"role": "supplier", "supplier_status": "pending"}, {"_id": 0, "password_hash": 0}).to_list(500)
-
-
-@api.post("/admin/suppliers/{supplier_id}/approve")
-async def admin_approve(supplier_id: str, user: dict = Depends(require_role("admin"))):
-    res = await db.users.update_one({"id": supplier_id, "role": "supplier"}, {"$set": {"supplier_status": "approved"}})
-    if res.matched_count == 0:
-        raise HTTPException(404, "Supplier not found")
-    return {"ok": True}
-
-
-@api.post("/admin/suppliers/{supplier_id}/reject")
-async def admin_reject(supplier_id: str, user: dict = Depends(require_role("admin"))):
-    res = await db.users.update_one({"id": supplier_id, "role": "supplier"}, {"$set": {"supplier_status": "rejected"}})
-    if res.matched_count == 0:
-        raise HTTPException(404, "Supplier not found")
-    return {"ok": True}
-
-
-@api.delete("/admin/users/{user_id}")
-async def admin_delete_user(user_id: str, user: dict = Depends(require_role("admin"))):
-    if user_id == user["id"]:
-        raise HTTPException(400, "Cannot delete yourself")
-    target = await db.users.find_one({"id": user_id})
-    if not target:
-        raise HTTPException(404, "User not found")
-    if target.get("role") == "admin":
-        raise HTTPException(400, "Cannot delete admin")
-    await db.users.delete_one({"id": user_id})
-    if target.get("role") == "supplier":
-        await db.products.delete_many({"supplier_id": user_id})
-    return {"ok": True}
-
-
-@api.get("/admin/products")
-async def admin_products(user: dict = Depends(require_role("admin"))):
-    return await db.products.find({}, {"_id": 0}).sort("created_at", -1).to_list(5000)
-
-
-@api.get("/admin/orders")
-async def admin_orders(user: dict = Depends(require_role("admin"))):
-    return await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(5000)
-
-
-@api.get("/admin/stats")
-async def admin_stats(user: dict = Depends(require_role("admin"))):
-    return {
-        "users": await db.users.count_documents({}),
-        "customers": await db.users.count_documents({"role": "customer"}),
-        "suppliers_total": await db.users.count_documents({"role": "supplier"}),
-        "suppliers_pending": await db.users.count_documents({"role": "supplier", "supplier_status": "pending"}),
-        "products": await db.products.count_documents({}),
-        "orders": await db.orders.count_documents({}),
-        "toner_master": await db.toner_master.count_documents({}),
-    }
-
-
-@api.get("/")
-async def root():
-    return {"service": "TonersCart API", "ok": True}
-
-
-# ===== Supplier application (rich form → email + DB) =====
-SUPPLIER_INBOX = "support@digitaledgeinida.com"
-
-
-class SupplierApplication(BaseModel):
+class SignupCustomer(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6)
     name: str
-    company: str
-    city: str
+    phone: Optional[str] = ""
+    city: Optional[str] = ""
+
+
+class SignupSupplier(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=6)
+    business_name: str
+    contact_person: str
     phone: str
+    city: str
     gst_number: Optional[str] = ""
-    business_address: Optional[str] = ""
-    years_in_business: Optional[int] = 0
-    brands_carried: Optional[List[str]] = []
-    customer_base_size: Optional[str] = ""
-    areas_supplied: Optional[List[str]] = []
-    monthly_volume: Optional[str] = ""
-    website: Optional[str] = ""
+    annual_turnover: Optional[str] = ""
+    business_address: str
+
+
+class ListingCreate(BaseModel):
+    toner_id: str
+    price: float = Field(ge=0)
+    stock: int = Field(ge=0)
+    toner_type: str  # "Original" | "Compatible"
+    image_url: Optional[str] = ""
+
+
+class ListingUpdate(BaseModel):
+    price: Optional[float] = None
+    stock: Optional[int] = None
+    toner_type: Optional[str] = None
+    image_url: Optional[str] = None
+
+
+class OrderCreate(BaseModel):
+    listing_id: str
+    qty: int = Field(gt=0)
+    customer_name: str
+    customer_phone: str
+    delivery_address: str
     notes: Optional[str] = ""
 
 
-@api.post("/auth/supplier-apply")
-async def supplier_apply(payload: SupplierApplication, response: Response):
-    """Rich supplier signup. Creates a pending supplier user + emails the
-    application to support@digitaledgeinida.com (if SMTP/Resend configured).
-    Currently logs the email payload until email keys are provided."""
-    email = payload.email.lower()
-    if await db.users.find_one({"email": email}):
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    user_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
-    application = {
-        "id": str(uuid.uuid4()),
-        "user_id": user_id,
-        "submitted_at": now,
-        "status": "pending",
-        "destination": SUPPLIER_INBOX,
-        **payload.model_dump(exclude={"password"}),
-    }
-    await db.supplier_applications.insert_one(application.copy())
-
-    user_doc = {
-        "id": user_id, "email": email, "name": payload.name, "role": "supplier",
-        "company": payload.company, "city": payload.city, "phone": payload.phone,
-        "password_hash": hash_password(payload.password),
-        "supplier_status": "pending",
-        "application_id": application["id"],
-        "created_at": now,
-    }
-    await db.users.insert_one(user_doc.copy())
-
-    # Build email body for record (logs + DB) — actual SMTP send happens
-    # only when SMTP_* env vars are configured.
-    body = f"""
-NEW TONERSCART SUPPLIER APPLICATION
-
-Submitted: {now}
-Status: pending review
-
-Contact:
-  Name:     {payload.name}
-  Email:    {payload.email}
-  Phone:    {payload.phone}
-  Website:  {payload.website or '—'}
-
-Business:
-  Company:               {payload.company}
-  City:                  {payload.city}
-  GST number:            {payload.gst_number or '—'}
-  Address:               {payload.business_address or '—'}
-  Years in business:     {payload.years_in_business or '—'}
-
-Operations:
-  Brands carried:        {', '.join(payload.brands_carried or []) or '—'}
-  Areas supplied:        {', '.join(payload.areas_supplied or []) or '—'}
-  Customer base size:    {payload.customer_base_size or '—'}
-  Monthly toner volume:  {payload.monthly_volume or '—'}
-
-Notes:
-  {payload.notes or '—'}
-
-— Approve at: TonersCart admin console
-""".strip()
-
-    sent = False
-    smtp_host = os.environ.get("SMTP_HOST")
-    if smtp_host:
-        try:
-            import smtplib
-            from email.message import EmailMessage
-            msg = EmailMessage()
-            msg["Subject"] = f"[TonersCart] New supplier application — {payload.company}"
-            msg["From"] = os.environ.get("SMTP_FROM", "noreply@tonerscart.in")
-            msg["To"] = SUPPLIER_INBOX
-            msg["Reply-To"] = payload.email
-            msg.set_content(body)
-            with smtplib.SMTP(smtp_host, int(os.environ.get("SMTP_PORT", "587"))) as s:
-                s.starttls()
-                user = os.environ.get("SMTP_USER"); pw = os.environ.get("SMTP_PASSWORD")
-                if user and pw: s.login(user, pw)
-                s.send_message(msg)
-            sent = True
-        except Exception as e:
-            logger.exception("SMTP send failed: %s", e)
-    if not sent:
-        logger.info("Supplier application email queued (SMTP not configured) →\n%s", body)
-        await db.supplier_applications.update_one({"id": application["id"]}, {"$set": {"email_sent": False, "email_body": body}})
-    else:
-        await db.supplier_applications.update_one({"id": application["id"]}, {"$set": {"email_sent": True}})
-
-    token = create_access_token(user_id, email, "supplier")
-    set_auth_cookie(response, token)
-    return {
-        "user": user_to_public(user_doc),
-        "token": token,
-        "application_id": application["id"],
-        "email_sent": sent,
-        "destination": SUPPLIER_INBOX,
-    }
+class OrderStatusUpdate(BaseModel):
+    status: str
+    tracking_number: Optional[str] = None
 
 
-@api.get("/admin/supplier-applications")
-async def admin_supplier_applications(user: dict = Depends(require_role("admin"))):
-    return await db.supplier_applications.find({}, {"_id": 0}).sort("submitted_at", -1).to_list(500)
+class RejectPayload(BaseModel):
+    reason: Optional[str] = ""
 
 
-# ===== Emergent Google Auth =====
-class GoogleSessionRequest(BaseModel):
-    session_id: str
+# ===== Auth / Profile ==========================================================
 
-
-@api.post("/auth/google-session")
-async def google_session(payload: GoogleSessionRequest, response: Response):
-    """Exchange Emergent Google auth session_id for our JWT token."""
+@api.post("/auth/signup-customer")
+def signup_customer(payload: SignupCustomer):
+    """Customer signup — creates Supabase Auth user + public.users row."""
     try:
-        async with httpx.AsyncClient(timeout=10.0) as http:
-            r = await http.get(
-                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-                headers={"X-Session-ID": payload.session_id},
-            )
-            if r.status_code != 200:
-                raise HTTPException(status_code=401, detail="Invalid Google session")
-            data = r.json()
-    except httpx.HTTPError as e:
-        logger.exception("Emergent auth fetch failed")
-        raise HTTPException(status_code=502, detail="Auth provider unreachable") from e
+        created = sb_admin.auth.admin.create_user({
+            "email": payload.email,
+            "password": payload.password,
+            "email_confirm": True,
+            "user_metadata": {"name": payload.name, "role": "customer"},
+        })
+    except Exception as e:
+        msg = str(e).lower()
+        if "already" in msg or "registered" in msg or "exists" in msg:
+            raise HTTPException(400, "Email already registered") from e
+        raise HTTPException(400, str(e)) from e
 
-    email = (data.get("email") or "").lower()
-    name = data.get("name") or email.split("@")[0]
-    picture = data.get("picture")
-    if not email:
-        raise HTTPException(status_code=400, detail="Email missing from Google session")
+    uid = created.user.id
+    sb_admin.table("users").upsert({
+        "id": uid,
+        "email": payload.email,
+        "name": payload.name,
+        "role": "customer",
+        "phone": payload.phone or None,
+        "city": payload.city or None,
+    }, on_conflict="id").execute()
 
-    user = await db.users.find_one({"email": email})
-    if not user:
-        user_id = str(uuid.uuid4())
-        doc = {
-            "id": user_id, "email": email, "name": name, "role": "customer",
-            "company": None, "city": "Bangalore", "phone": None,
-            "password_hash": "google-oauth",
-            "supplier_status": None,
-            "picture": picture,
-            "auth_provider": "google",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        await db.users.insert_one(doc.copy())
-        user = doc
+    return {"ok": True, "user_id": uid}
+
+
+@api.post("/auth/signup-supplier")
+def signup_supplier(payload: SignupSupplier):
+    """Supplier signup — creates auth user, profile (role=supplier), AND a
+    suppliers_pending row. The user can sign in but listings are blocked
+    until an admin moves their pending row into the suppliers table."""
+    try:
+        created = sb_admin.auth.admin.create_user({
+            "email": payload.email,
+            "password": payload.password,
+            "email_confirm": True,
+            "user_metadata": {"name": payload.contact_person, "role": "supplier"},
+        })
+    except Exception as e:
+        msg = str(e).lower()
+        if "already" in msg or "registered" in msg or "exists" in msg:
+            raise HTTPException(400, "Email already registered") from e
+        raise HTTPException(400, str(e)) from e
+
+    uid = created.user.id
+    sb_admin.table("users").upsert({
+        "id": uid,
+        "email": payload.email,
+        "name": payload.contact_person,
+        "role": "supplier",
+        "phone": payload.phone,
+        "company": payload.business_name,
+        "city": payload.city,
+    }, on_conflict="id").execute()
+
+    sb_admin.table("suppliers_pending").upsert({
+        "user_id": uid,
+        "business_name": payload.business_name,
+        "contact_person": payload.contact_person,
+        "phone": payload.phone,
+        "email": payload.email,
+        "city": payload.city,
+        "gst_number": payload.gst_number or None,
+        "annual_turnover": payload.annual_turnover or None,
+        "business_address": payload.business_address,
+        "status": "pending",
+    }, on_conflict="user_id").execute()
+
+    return {"ok": True, "user_id": uid, "status": "pending"}
+
+
+@api.get("/auth/me")
+def me(user: dict = Depends(require_user)):
+    """Returns the user profile + (for suppliers) their supplier status."""
+    out = dict(user)
+    if user.get("role") == "supplier":
+        # Approved?
+        s = sb_admin.table("suppliers").select("id,business_name,city,approved_at").eq(
+            "user_id", user["id"]
+        ).maybe_single().execute()
+        if s and s.data:
+            out["supplier_status"] = "approved"
+            out["supplier"] = s.data
+        else:
+            p = sb_admin.table("suppliers_pending").select(
+                "id,business_name,status,rejection_reason,submitted_at"
+            ).eq("user_id", user["id"]).maybe_single().execute()
+            out["supplier_status"] = (p.data["status"] if p and p.data else "pending")
+            out["application"] = p.data if p else None
+    return out
+
+
+# ===== Toner master ============================================================
+
+@api.get("/toner-master")
+def toner_master(q: Optional[str] = None, brand: Optional[str] = None, limit: int = 100):
+    qry = sb_admin.table("toner_master").select("*").order("brand").order("model_number").limit(limit)
+    if brand and brand != "all":
+        qry = qry.eq("brand", brand)
+    if q:
+        qry = qry.ilike("search_norm", f"%{normalize(q)}%")
+    return qry.execute().data or []
+
+
+@api.get("/toner-master/brands")
+def toner_master_brands():
+    rows = sb_admin.table("toner_master").select("brand").execute().data or []
+    return sorted({r["brand"] for r in rows})
+
+
+# ===== Listings (read for everyone, write for approved suppliers) =============
+
+@api.get("/listings/search")
+def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
+                    city: Optional[str] = None, toner_type: Optional[str] = None,
+                    limit: int = 200):
+    qry = sb_admin.table("listings").select(
+        "*,suppliers!inner(business_name,city)"
+    ).order("price").limit(limit)
+    if q:
+        qry = qry.ilike("search_norm", f"%{normalize(q)}%")
+    if brand and brand != "all":
+        qry = qry.eq("brand", brand)
+    if city and city != "all":
+        qry = qry.eq("city", city)
+    if toner_type and toner_type != "all":
+        qry = qry.eq("toner_type", toner_type)
+    rows = qry.execute().data or []
+    # Flatten
+    for r in rows:
+        s = r.pop("suppliers", None) or {}
+        r["supplier_name"] = s.get("business_name")
+        r["supplier_city"] = s.get("city")
+    return rows
+
+
+@api.get("/listings/facets")
+def listing_facets():
+    rows = sb_admin.table("listings").select("brand,city").execute().data or []
+    return {
+        "brands": sorted({r["brand"] for r in rows if r.get("brand")}),
+        "cities": sorted({r["city"] for r in rows if r.get("city")}),
+        "toner_types": ["Original", "Compatible"],
+    }
+
+
+@api.get("/listings/grouped")
+def listings_grouped(city: Optional[str] = None, limit: int = 12):
+    """Group listings by toner model — used by Landing 'Top in <city>' grid."""
+    qry = sb_admin.table("listings").select("brand,model_number,color,price,city")
+    if city and city != "all":
+        qry = qry.eq("city", city)
+    rows = qry.execute().data or []
+    grouped = {}
+    for r in rows:
+        key = r["model_number"]
+        g = grouped.setdefault(key, {
+            "model_number": key,
+            "brand": r["brand"],
+            "color": r.get("color") or "Black",
+            "min_price": r["price"],
+            "supplier_count": 0,
+            "cities": set(),
+        })
+        g["min_price"] = min(g["min_price"], r["price"])
+        g["supplier_count"] += 1
+        g["cities"].add(r.get("city") or "")
+    out = []
+    for g in grouped.values():
+        g["cities"] = sorted([c for c in g["cities"] if c])
+        out.append(g)
+    out.sort(key=lambda x: x["supplier_count"], reverse=True)
+    return out[:limit]
+
+
+# ===== Supplier listings =======================================================
+
+def _approved_supplier(user: dict) -> dict:
+    """Returns the supplier row for this user; 403 if not approved."""
+    s = sb_admin.table("suppliers").select("*").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        raise HTTPException(403, "Supplier not approved yet")
+    return s.data
+
+
+@api.get("/supplier/listings")
+def supplier_listings(user: dict = Depends(require_role("supplier"))):
+    s = _approved_supplier(user)
+    rows = sb_admin.table("listings").select("*").eq("supplier_id", s["id"]).order(
+        "created_at", desc=True
+    ).execute().data or []
+    return rows
+
+
+@api.post("/supplier/listings")
+def create_listing(payload: ListingCreate, user: dict = Depends(require_role("supplier"))):
+    s = _approved_supplier(user)
+    if payload.toner_type not in ("Original", "Compatible"):
+        raise HTTPException(400, "toner_type must be Original or Compatible")
+    tm = sb_admin.table("toner_master").select("*").eq("id", payload.toner_id).maybe_single().execute()
+    if not tm or not tm.data:
+        raise HTTPException(400, "Invalid toner_id")
+    t = tm.data
+    row = {
+        "supplier_id": s["id"],
+        "toner_id": t["id"],
+        "brand": t["brand"],
+        "model_number": t["model_number"],
+        "search_norm": t["search_norm"],
+        "color": t.get("color") or "Black",
+        "toner_type": payload.toner_type,
+        "price": payload.price,
+        "stock": payload.stock,
+        "image_url": payload.image_url or None,
+        "city": s["city"],
+    }
+    res = sb_admin.table("listings").insert(row).execute()
+    return res.data[0] if res.data else row
+
+
+@api.put("/supplier/listings/{listing_id}")
+def update_listing(listing_id: str, payload: ListingUpdate, user: dict = Depends(require_role("supplier"))):
+    s = _approved_supplier(user)
+    existing = sb_admin.table("listings").select("supplier_id").eq("id", listing_id).maybe_single().execute()
+    if not existing or not existing.data or existing.data["supplier_id"] != s["id"]:
+        raise HTTPException(404, "Listing not found")
+    upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
+    if "toner_type" in upd and upd["toner_type"] not in ("Original", "Compatible"):
+        raise HTTPException(400, "toner_type must be Original or Compatible")
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    sb_admin.table("listings").update(upd).eq("id", listing_id).execute()
+    return {"ok": True}
+
+
+@api.delete("/supplier/listings/{listing_id}")
+def delete_listing(listing_id: str, user: dict = Depends(require_role("supplier"))):
+    s = _approved_supplier(user)
+    sb_admin.table("listings").delete().eq("id", listing_id).eq("supplier_id", s["id"]).execute()
+    return {"ok": True}
+
+
+# ===== Orders ==================================================================
+
+@api.post("/orders")
+def create_order(payload: OrderCreate, user: dict = Depends(require_user)):
+    if user["role"] != "customer":
+        raise HTTPException(403, "Only customers can place orders")
+    lst = sb_admin.table("listings").select("*").eq("id", payload.listing_id).maybe_single().execute()
+    if not lst or not lst.data:
+        raise HTTPException(404, "Listing not found")
+    L = lst.data
+    if payload.qty > (L.get("stock") or 0):
+        raise HTTPException(400, "Insufficient stock")
+    total = float(L["price"]) * payload.qty
+    row = {
+        "customer_id": user["id"],
+        "supplier_id": L["supplier_id"],
+        "listing_id": L["id"],
+        "qty": payload.qty,
+        "unit_price": L["price"],
+        "total": total,
+        "customer_name": payload.customer_name,
+        "customer_phone": payload.customer_phone,
+        "delivery_address": payload.delivery_address,
+        "notes": payload.notes or None,
+        "status": "requested",
+    }
+    res = sb_admin.table("orders").insert(row).execute()
+    # Decrement stock (best effort)
+    sb_admin.table("listings").update({"stock": L["stock"] - payload.qty}).eq("id", L["id"]).execute()
+    return res.data[0] if res.data else row
+
+
+@api.get("/orders/mine")
+def my_orders(user: dict = Depends(require_user)):
+    if user["role"] == "customer":
+        rows = sb_admin.table("orders").select("*,listings(model_number,brand,toner_type,image_url),suppliers(business_name,city)").eq("customer_id", user["id"]).order("created_at", desc=True).execute().data or []
+    elif user["role"] == "supplier":
+        s = _approved_supplier(user)
+        rows = sb_admin.table("orders").select("*,listings(model_number,brand,toner_type,image_url)").eq("supplier_id", s["id"]).order("created_at", desc=True).execute().data or []
     else:
-        if picture and not user.get("picture"):
-            await db.users.update_one({"email": email}, {"$set": {"picture": picture}})
-            user["picture"] = picture
-
-    token = create_access_token(user["id"], user["email"], user["role"])
-    set_auth_cookie(response, token)
-    return {"user": user_to_public(user), "token": token}
+        rows = sb_admin.table("orders").select("*").order("created_at", desc=True).limit(500).execute().data or []
+    return rows
 
 
-# ===== AI Chat (Claude Sonnet 4.5 via Emergent LLM key) =====
+@api.put("/orders/{order_id}/status")
+def update_order_status(order_id: str, payload: OrderStatusUpdate, user: dict = Depends(require_user)):
+    allowed = {"requested", "accepted", "shipped", "delivered", "rejected", "cancelled"}
+    if payload.status not in allowed:
+        raise HTTPException(400, "Invalid status")
+    o = sb_admin.table("orders").select("*").eq("id", order_id).maybe_single().execute()
+    if not o or not o.data:
+        raise HTTPException(404, "Order not found")
+    O_row = o.data
+    if user["role"] == "customer":
+        if O_row["customer_id"] != user["id"] or payload.status != "cancelled":
+            raise HTTPException(403, "Customers can only cancel their own orders")
+    elif user["role"] == "supplier":
+        s = _approved_supplier(user)
+        if O_row["supplier_id"] != s["id"]:
+            raise HTTPException(403, "Not your order")
+    upd = {"status": payload.status, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if payload.tracking_number:
+        upd["tracking_number"] = payload.tracking_number
+    sb_admin.table("orders").update(upd).eq("id", order_id).execute()
+    return {"ok": True}
+
+
+# ===== Admin approval ==========================================================
+
+@api.get("/admin/suppliers/pending")
+def admin_pending(user: dict = Depends(require_role("admin"))):
+    rows = sb_admin.table("suppliers_pending").select("*").eq("status", "pending").order("submitted_at", desc=True).execute().data or []
+    return rows
+
+
+@api.get("/admin/suppliers")
+def admin_suppliers(user: dict = Depends(require_role("admin"))):
+    return sb_admin.table("suppliers").select("*").order("approved_at", desc=True).execute().data or []
+
+
+@api.post("/admin/suppliers/{pending_id}/approve")
+def admin_approve(pending_id: str, user: dict = Depends(require_role("admin"))):
+    p = sb_admin.table("suppliers_pending").select("*").eq("id", pending_id).maybe_single().execute()
+    if not p or not p.data:
+        raise HTTPException(404, "Pending application not found")
+    P = p.data
+    if P["status"] != "pending":
+        raise HTTPException(400, f"Already {P['status']}")
+    # Insert into suppliers (idempotent on user_id)
+    sb_admin.table("suppliers").upsert({
+        "user_id": P["user_id"],
+        "business_name": P["business_name"],
+        "contact_person": P["contact_person"],
+        "phone": P["phone"],
+        "email": P["email"],
+        "city": P["city"],
+        "gst_number": P.get("gst_number"),
+        "annual_turnover": P.get("annual_turnover"),
+        "business_address": P["business_address"],
+        "approved_by": user["id"],
+        "approved_at": datetime.now(timezone.utc).isoformat(),
+    }, on_conflict="user_id").execute()
+    sb_admin.table("suppliers_pending").update({
+        "status": "approved",
+        "reviewed_by": user["id"],
+        "reviewed_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", pending_id).execute()
+    return {"ok": True}
+
+
+@api.post("/admin/suppliers/{pending_id}/reject")
+def admin_reject(pending_id: str, payload: RejectPayload, user: dict = Depends(require_role("admin"))):
+    p = sb_admin.table("suppliers_pending").select("status").eq("id", pending_id).maybe_single().execute()
+    if not p or not p.data:
+        raise HTTPException(404, "Pending application not found")
+    if p.data["status"] != "pending":
+        raise HTTPException(400, f"Already {p.data['status']}")
+    sb_admin.table("suppliers_pending").update({
+        "status": "rejected",
+        "rejection_reason": payload.reason or "Not approved",
+        "reviewed_by": user["id"],
+        "reviewed_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", pending_id).execute()
+    return {"ok": True}
+
+
+@api.get("/admin/stats")
+def admin_stats(user: dict = Depends(require_role("admin"))):
+    def cnt(table, **filters):
+        q = sb_admin.table(table).select("id", count="exact")
+        for k, v in filters.items():
+            q = q.eq(k, v)
+        return q.execute().count or 0
+    return {
+        "toner_master": cnt("toner_master"),
+        "suppliers_pending": cnt("suppliers_pending", status="pending"),
+        "suppliers_approved": cnt("suppliers"),
+        "listings": cnt("listings"),
+        "orders": cnt("orders"),
+    }
+
+
+# ===== AI Chat (TonerBot) ======================================================
+
 class ChatMessage(BaseModel):
-    role: Literal["user", "assistant"]
+    role: str
     content: str
 
 
@@ -707,7 +520,7 @@ class ChatRequest(BaseModel):
 
 CHAT_SYSTEM = (
     "You are TonerBot, a concise expert assistant for TonersCart — India's B2B printer-toner marketplace. "
-    "You help buyers identify the right toner cartridge for their printer, explain Original vs Compatible vs Refilled, "
+    "You help buyers identify the right toner cartridge for their printer, explain Original vs Compatible, "
     "estimate page yield expectations, recommend trusted brands (HP, Canon, Brother, Samsung, Ricoh, Epson, Xerox, Kyocera), "
     "and answer bulk-purchase / sourcing questions in the Indian B2B context. "
     "Keep replies short (under 120 words) and practical. When you suggest a toner, mention the model number "
@@ -719,31 +532,33 @@ CHAT_SYSTEM = (
 @api.post("/chat")
 async def chat(payload: ChatRequest):
     if not payload.messages:
-        raise HTTPException(status_code=400, detail="messages required")
+        raise HTTPException(400, "messages required")
     api_key = os.environ.get("EMERGENT_LLM_KEY")
     if not api_key:
-        raise HTTPException(status_code=500, detail="LLM key not configured")
+        raise HTTPException(500, "LLM key not configured")
     session_id = payload.session_id or str(uuid.uuid4())
     try:
         chat_client = LlmChat(
-            api_key=api_key,
-            session_id=session_id,
-            system_message=CHAT_SYSTEM,
+            api_key=api_key, session_id=session_id, system_message=CHAT_SYSTEM,
         ).with_model("anthropic", "claude-sonnet-4-5-20250929")
         latest = payload.messages[-1]
         if latest.role != "user":
-            raise HTTPException(status_code=400, detail="last message must be from user")
+            raise HTTPException(400, "last message must be from user")
         reply = await chat_client.send_message(UserMessage(text=latest.content))
         return {"reply": str(reply), "session_id": session_id}
     except HTTPException:
         raise
     except Exception as e:
         logger.exception("LLM call failed")
-        raise HTTPException(status_code=502, detail=f"Chat unavailable: {e}") from e
+        raise HTTPException(502, f"Chat unavailable: {e}") from e
+
+
+@api.get("/")
+def root():
+    return {"service": "TonersCart API (Supabase)", "ok": True}
 
 
 app.include_router(api)
-
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -751,195 +566,3 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# ===== Seed =====
-async def seed_toner_master():
-    if await db.toner_master.count_documents({}) > 0:
-        return
-    docs = []
-    for brand, model, printers, ttype, color, page_yield in TONER_MASTER:
-        title = f"{brand} {model} {ttype} {color} Toner"
-        docs.append({
-            "id": str(uuid.uuid4()),
-            "brand": brand,
-            "model_number": model,
-            "normalized": normalize_model(model),
-            "search_norm": normalize_model(f"{brand} {model} {color} {ttype}"),
-            "title": title,
-            "printer_compatibility": printers,
-            "toner_type": ttype,
-            "color": color,
-            "page_yield": page_yield,
-        })
-    if docs:
-        await db.toner_master.insert_many(docs)
-    logger.info("Seeded %d TonerMaster entries", len(docs))
-
-
-async def seed_admin():
-    admin_email = os.environ.get("ADMIN_EMAIL", "admin@tonerscart.in").lower()
-    admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
-    existing = await db.users.find_one({"email": admin_email})
-    if not existing:
-        await db.users.insert_one({
-            "id": str(uuid.uuid4()),
-            "email": admin_email, "name": "Platform Admin", "role": "admin",
-            "company": "TonersCart", "city": "Delhi", "phone": None,
-            "password_hash": hash_password(admin_password),
-            "supplier_status": None,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-        logger.info("Seeded admin %s", admin_email)
-    elif not verify_password(admin_password, existing["password_hash"]):
-        await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
-
-
-async def seed_users_and_products():
-    if await db.products.count_documents({}) > 0:
-        return
-
-    # 25 approved suppliers
-    supplier_records = []
-    for email, name, company, city, phone in SUPPLIERS_25:
-        existing = await db.users.find_one({"email": email})
-        if existing:
-            supplier_records.append(existing)
-            continue
-        sid = str(uuid.uuid4())
-        doc = {
-            "id": sid, "email": email, "name": name, "role": "supplier",
-            "company": company, "city": city, "phone": phone,
-            "password_hash": hash_password("Supplier@123"),
-            "supplier_status": "approved",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        await db.users.insert_one(doc.copy())
-        supplier_records.append(doc)
-
-    # Customers
-    customer_records = []
-    for email, name, company, city, phone in CUSTOMERS:
-        existing = await db.users.find_one({"email": email})
-        if existing:
-            customer_records.append(existing)
-            continue
-        cid = str(uuid.uuid4())
-        doc = {
-            "id": cid, "email": email, "name": name, "role": "customer",
-            "company": company, "city": city, "phone": phone,
-            "password_hash": hash_password("Customer@123"),
-            "supplier_status": None,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        await db.users.insert_one(doc.copy())
-        customer_records.append(doc)
-
-    # 1 pending supplier (for admin approval testing)
-    if not await db.users.find_one({"email": "pending.supplier@tonerscart.in"}):
-        await db.users.insert_one({
-            "id": str(uuid.uuid4()),
-            "email": "pending.supplier@tonerscart.in",
-            "name": "Suresh Kumar", "role": "supplier",
-            "company": "Kumar Toner Traders", "city": "Hyderabad",
-            "phone": "+91-9876543210",
-            "password_hash": hash_password("Supplier@123"),
-            "supplier_status": "pending",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-
-    # Products: each TonerMaster entry → 2-5 supplier listings with varied price & stock
-    rng = random.Random(2026)
-    masters = await db.toner_master.find({}, {"_id": 0}).to_list(5000)
-
-    base_price_band = {
-        "Original": (1800, 9500),
-        "Compatible": (700, 4200),
-        "Refilled": (450, 2200),
-    }
-
-    product_docs = []
-    for m in masters:
-        lo, hi = base_price_band.get(m["toner_type"], (1500, 6500))
-        base = rng.randint(lo, hi)
-        n_sup = rng.randint(2, 5)
-        for sup in rng.sample(supplier_records, k=min(n_sup, len(supplier_records))):
-            price = base + rng.randint(-int(base * 0.12), int(base * 0.18))
-            price = max(price, 200)
-            product_docs.append({
-                "id": str(uuid.uuid4()),
-                "supplier_id": sup["id"],
-                "supplier_name": sup["name"],
-                "supplier_company": sup.get("company"),
-                "master_id": m["id"],
-                "model_number": m["model_number"],
-                "model_normalized": m["normalized"],
-                "search_norm": normalize_model(f'{m["brand"]} {m["model_number"]} {m["color"]}'),
-                "brand": m["brand"],
-                "title": f'{m["brand"]} {m["model_number"]} {m["toner_type"]} {m["color"]} Toner',
-                "description": f'{m["toner_type"]} {m["brand"]} {m["model_number"]} cartridge. Page yield ~{m["page_yield"]} pages. Bulk pricing available.',
-                "price": float(price),
-                "stock": rng.randint(5, 180),
-                "city": sup.get("city"),
-                "color": m["color"],
-                "toner_type": m["toner_type"],
-                "compatible_printers": m["printer_compatibility"],
-                "page_yield": m["page_yield"],
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
-    if product_docs:
-        await db.products.insert_many(product_docs)
-    logger.info("Seeded %d product listings across %d suppliers", len(product_docs), len(supplier_records))
-
-    # Demo orders
-    if customer_records and product_docs:
-        for _ in range(8):
-            cust = rng.choice(customer_records)
-            prod = rng.choice(product_docs)
-            qty = rng.randint(2, 12)
-            status = rng.choice(["requested", "accepted", "shipped", "completed"])
-            tracking = f"TC{rng.randint(100000, 999999)}IN" if status in ("shipped", "completed") else None
-            now = datetime.now(timezone.utc).isoformat()
-            await db.orders.insert_one({
-                "id": str(uuid.uuid4()),
-                "customer_id": cust["id"], "customer_name": cust["name"], "customer_email": cust["email"],
-                "supplier_id": prod["supplier_id"], "supplier_name": prod["supplier_name"], "supplier_company": prod["supplier_company"],
-                "product_id": prod["id"], "product_title": prod["title"],
-                "model_number": prod["model_number"], "brand": prod["brand"],
-                "unit_price": prod["price"], "quantity": qty,
-                "total": round(prod["price"] * qty, 2),
-                "notes": "Demo seed order",
-                "delivery_address": f'{cust["company"]}, {cust["city"]}',
-                "contact_phone": cust["phone"],
-                "status": status, "tracking_number": tracking,
-                "created_at": now, "updated_at": now,
-            })
-
-
-async def setup_indexes():
-    await db.users.create_index("email", unique=True)
-    await db.users.create_index("role")
-    await db.products.create_index("model_normalized")
-    await db.products.create_index("brand")
-    await db.products.create_index("city")
-    await db.products.create_index("supplier_id")
-    await db.orders.create_index("customer_id")
-    await db.orders.create_index("supplier_id")
-    await db.toner_master.create_index([("normalized", 1)])
-    await db.toner_master.create_index("brand")
-
-
-@app.on_event("startup")
-async def on_startup():
-    try:
-        await setup_indexes()
-        await seed_toner_master()
-        await seed_admin()
-        await seed_users_and_products()
-    except Exception as e:
-        logger.exception("Seed failed: %s", e)
-
-
-@app.on_event("shutdown")
-async def on_shutdown():
-    client.close()

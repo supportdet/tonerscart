@@ -1,49 +1,83 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { Textarea } from "../components/ui/textarea";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, Search, Hourglass, CheckCircle2, XCircle } from "lucide-react";
+import { supabase, PRODUCT_BUCKET } from "../lib/supabase";
+import TonerCartridge from "../components/TonerCartridge";
 
-const STATUS_LABEL = {
-    requested: { label: "Requested", cls: "tc-badge-yellow" },
-    accepted: { label: "Accepted", cls: "tc-badge-cyan" },
-    shipped: { label: "Shipped", cls: "tc-badge-magenta" },
-    completed: { label: "Completed", cls: "tc-badge-green" },
-    rejected: { label: "Rejected", cls: "tc-badge-red" },
+const ORDER_STATUS = {
+    requested: "Requested",
+    accepted: "Accepted",
+    shipped: "Shipped",
+    delivered: "Delivered",
+    rejected: "Rejected",
+    cancelled: "Cancelled",
 };
 
-const EMPTY = { master_id: "", model_number: "", brand: "", title: "", description: "", price: "", stock: "", city: "", color: "Black", toner_type: "Original", compatible_printers: "" };
+function PendingScreen({ application }) {
+    const status = application?.status || "pending";
+    const isRejected = status === "rejected";
+    return (
+        <div className="tc-container py-12 max-w-2xl" data-testid="supplier-pending">
+            <div className="tc-card-flat p-8 sm:p-10 text-center">
+                <div className={`mx-auto w-14 h-14 rounded-full grid place-items-center ${isRejected ? "bg-red-50" : "bg-amber-50"}`}>
+                    {isRejected ? <XCircle className="text-red-600" size={28} /> : <Hourglass className="text-amber-600" size={26} />}
+                </div>
+                <h1 className="mt-5 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(22px, 2.6vw, 32px)", fontWeight: 300, letterSpacing: "-0.015em" }}>
+                    {isRejected ? "Application not approved" : "Application under review"}
+                </h1>
+                <p className="text-[14px] text-[#6E6E73] mt-3 max-w-md mx-auto">
+                    {isRejected
+                        ? application?.rejection_reason || "Your supplier application was not approved this time. Please contact support@digitaledgeinida.com if you'd like to discuss."
+                        : "Thanks for applying! Our admin team is reviewing your business details. You'll be able to add product listings as soon as you're approved."}
+                </p>
+                {application?.business_name && (
+                    <div className="mt-6 inline-flex items-center gap-2 text-[12px] text-[#6E6E73] border border-black/[0.08] rounded-full px-3 py-1.5">
+                        Application: <span className="font-mono font-semibold text-[#0A0A0B]">{application.business_name}</span>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
 
 export default function SupplierDashboard() {
-    const { user } = useAuth();
-    const [products, setProducts] = useState([]);
-    const [orders, setOrders] = useState([]);
-    const [editing, setEditing] = useState(null);
-    const [form, setForm] = useState(EMPTY);
-    const [trackingFor, setTrackingFor] = useState(null);
-    const [tracking, setTracking] = useState("");
+    const { user, refresh } = useAuth();
+    const isApproved = user?.supplier_status === "approved";
 
-    // TonerMaster picker
+    const [listings, setListings] = useState([]);
+    const [orders, setOrders] = useState([]);
+    const [open, setOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    // Toner picker
     const [masterQ, setMasterQ] = useState("");
     const [masterResults, setMasterResults] = useState([]);
-    const [masterPicked, setMasterPicked] = useState(null);
+    const [tonerPicked, setTonerPicked] = useState(null);
 
-    const isApproved = user.supplier_status === "approved";
+    // Form
+    const [price, setPrice] = useState("");
+    const [stock, setStock] = useState("");
+    const [tonerType, setTonerType] = useState("Original");
+    const [imageFile, setImageFile] = useState(null);
+    const [imagePreview, setImagePreview] = useState("");
 
     const load = async () => {
         if (!isApproved) return;
         try {
-            const [p, o] = await Promise.all([api.get("/supplier/products"), api.get("/orders/mine")]);
-            setProducts(p.data); setOrders(o.data);
+            const [l, o] = await Promise.all([
+                api.get("/supplier/listings"),
+                api.get("/orders/mine"),
+            ]);
+            setListings(l.data); setOrders(o.data);
         } catch (e) { toast.error(formatApiError(e)); }
     };
-    useEffect(() => { load(); }, [isApproved]);
+    useEffect(() => { load(); /* eslint-disable-next-line */ }, [isApproved]);
 
     useEffect(() => {
         const t = setTimeout(async () => {
@@ -54,260 +88,281 @@ export default function SupplierDashboard() {
         return () => clearTimeout(t);
     }, [masterQ]);
 
-    const openNew = () => { setEditing("new"); setForm({ ...EMPTY, city: user.city || "" }); setMasterPicked(null); setMasterQ(""); setMasterResults([]); };
-    const openEdit = (p) => {
-        setEditing(p.id);
-        setForm({ ...EMPTY, ...p, price: String(p.price), stock: String(p.stock) });
-        setMasterPicked(p.master_id ? { id: p.master_id, brand: p.brand, model_number: p.model_number, color: p.color, toner_type: p.toner_type, printer_compatibility: p.compatible_printers } : null);
+    const reset = () => {
+        setMasterQ(""); setMasterResults([]); setTonerPicked(null);
+        setPrice(""); setStock(""); setTonerType("Original");
+        setImageFile(null); setImagePreview("");
     };
-    const closeForm = () => setEditing(null);
+    const openDialog = () => { reset(); setOpen(true); };
 
-    const handle = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-
-    const pickMaster = (m) => {
-        setMasterPicked(m);
-        setMasterQ(""); setMasterResults([]);
-        setForm((f) => ({
-            ...f,
-            master_id: m.id,
-            brand: m.brand,
-            model_number: m.model_number,
-            title: `${m.brand} ${m.model_number} ${m.toner_type} ${m.color} Toner`,
-            color: m.color,
-            toner_type: m.toner_type,
-            compatible_printers: m.printer_compatibility,
-        }));
+    const onPickFile = (e) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        if (f.size > 5 * 1024 * 1024) { toast.error("Image must be under 5 MB"); return; }
+        setImageFile(f);
+        setImagePreview(URL.createObjectURL(f));
     };
 
-    const save = async () => {
-        if (!form.model_number || !form.brand || !form.price || !form.stock || !form.city) {
-            toast.error("Model, brand, price, stock and city are required");
-            return;
-        }
+    const submit = async (e) => {
+        e.preventDefault();
+        if (!tonerPicked) { toast.error("Please select a toner from the catalog"); return; }
+        if (!price || !stock) { toast.error("Price and stock are required"); return; }
+        setSaving(true);
         try {
-            const payload = { ...form, price: Number(form.price), stock: Number(form.stock) };
-            if (editing === "new") {
-                await api.post("/supplier/products", payload);
-                toast.success("Product listed — now searchable across the marketplace");
-            } else {
-                await api.put(`/supplier/products/${editing}`, payload);
-                toast.success("Product updated");
+            // Upload image to Supabase Storage if provided
+            let imageUrl = "";
+            if (imageFile) {
+                const ext = imageFile.name.split(".").pop() || "jpg";
+                const path = `${user.id}/${Date.now()}.${ext}`;
+                const { error } = await supabase.storage.from(PRODUCT_BUCKET).upload(path, imageFile, { upsert: false });
+                if (error) throw new Error(error.message);
+                const { data: pub } = supabase.storage.from(PRODUCT_BUCKET).getPublicUrl(path);
+                imageUrl = pub.publicUrl;
             }
-            closeForm(); load();
-        } catch (e) { toast.error(formatApiError(e)); }
+            await api.post("/supplier/listings", {
+                toner_id: tonerPicked.id,
+                price: parseFloat(price),
+                stock: parseInt(stock, 10),
+                toner_type: tonerType,
+                image_url: imageUrl,
+            });
+            toast.success("Listing added");
+            setOpen(false);
+            reset();
+            load();
+        } catch (err) {
+            toast.error(formatApiError(err));
+        } finally {
+            setSaving(false);
+        }
     };
 
-    const remove = async (id) => {
-        if (!window.confirm("Delete this product listing?")) return;
-        try { await api.delete(`/supplier/products/${id}`); toast.success("Deleted"); load(); }
+    const removeListing = async (id) => {
+        if (!window.confirm("Remove this listing?")) return;
+        try { await api.delete(`/supplier/listings/${id}`); toast.success("Removed"); load(); }
         catch (e) { toast.error(formatApiError(e)); }
     };
 
-    const updateStatus = async (orderId, status, trk) => {
+    const updateOrder = async (id, status, tracking_number) => {
         try {
-            await api.put(`/orders/${orderId}/status`, { status, tracking_number: trk });
-            toast.success(`Order marked ${status}`);
-            setTrackingFor(null); setTracking(""); load();
+            await api.put(`/orders/${id}/status`, { status, tracking_number });
+            toast.success(`Order ${status}`);
+            load();
         } catch (e) { toast.error(formatApiError(e)); }
     };
 
+    const stats = useMemo(() => ({
+        listings: listings.length,
+        active: listings.filter((l) => l.stock > 0).length,
+        orders: orders.length,
+        pending: orders.filter((o) => o.status === "requested").length,
+    }), [listings, orders]);
+
     if (!isApproved) {
-        return (
-            <div className="tc-container py-16 max-w-2xl" data-testid="supplier-pending-banner">
-                <div className="tc-card p-8 border-[#F7C600] bg-[#FFF8D6]">
-                    <div className="tc-eyebrow text-amber-800"><span className="tc-strip mr-2 align-middle" />Supplier review</div>
-                    <h1 className="text-2xl font-bold text-[#0E0F12] mt-2">Your account is awaiting approval</h1>
-                    <p className="text-amber-900/80 mt-2 text-sm">
-                        Our admin team is reviewing your business details. Once approved, you&apos;ll be able to list toner products and start receiving order requests from buyers across India.
-                    </p>
-                    <div className="mt-4 text-xs font-mono text-amber-900/70">Status: {user.supplier_status || "pending"}</div>
-                </div>
-            </div>
-        );
+        return <PendingScreen application={user?.application} />;
     }
 
     return (
-        <div className="tc-container py-10" data-testid="supplier-dashboard">
-            <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="tc-container py-8 sm:py-10" data-testid="supplier-dashboard">
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
                 <div>
-                    <div className="tc-eyebrow"><span className="tc-strip mr-2 align-middle" />Supplier dashboard</div>
-                    <h1 className="text-3xl font-bold text-[#0E0F12] mt-1">{user.company || user.name}</h1>
-                    <div className="text-slate-600 text-sm mt-1">{user.city} · supplier account · approved</div>
+                    <div className="tc-eyebrow inline-flex items-center gap-2"><CheckCircle2 size={12} className="text-emerald-600" /> Approved supplier</div>
+                    <h1 className="mt-2 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(26px, 3.2vw, 40px)", fontWeight: 300, letterSpacing: "-0.02em", lineHeight: 1.12 }}>
+                        {user?.supplier?.business_name || user?.company || "Supplier dashboard"}
+                    </h1>
+                    <p className="text-[14px] text-[#6E6E73] mt-1">{user?.supplier?.city || user?.city}</p>
                 </div>
-                <Button className="btn-cta" onClick={openNew} data-testid="supplier-add-product-btn"><Plus size={16} className="mr-1" /> Add product</Button>
+                <Button className="btn-cta inline-flex items-center gap-2" onClick={openDialog} data-testid="add-listing-btn">
+                    <Plus size={16} /> Add product
+                </Button>
             </div>
 
-            <div className="grid sm:grid-cols-4 gap-4 mt-8">
+            {/* Stats */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
                 {[
-                    { k: "Listings", v: products.length, c: "#00B7C7" },
-                    { k: "Total stock", v: products.reduce((a, p) => a + p.stock, 0), c: "#E6007E" },
-                    { k: "Orders", v: orders.length, c: "#F7C600" },
-                    { k: "Pending action", v: orders.filter(o => o.status === "requested").length, c: "#0E0F12" },
+                    { k: "Listings", v: stats.listings },
+                    { k: "Active", v: stats.active },
+                    { k: "Orders", v: stats.orders },
+                    { k: "Pending", v: stats.pending },
                 ].map((s) => (
-                    <div key={s.k} className="tc-card p-5">
-                        <div className="flex items-center gap-2"><span className="w-1.5 h-4" style={{ background: s.c }} /><div className="tc-eyebrow">{s.k}</div></div>
-                        <div className="font-mono text-3xl font-bold text-[#0E0F12] mt-1">{s.v}</div>
+                    <div key={s.k} className="tc-card-flat p-4">
+                        <div className="font-mono text-2xl font-semibold text-[#0A0A0B]">{s.v}</div>
+                        <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73] mt-1">{s.k}</div>
                     </div>
                 ))}
             </div>
 
-            <Tabs defaultValue="orders" className="mt-10">
-                <TabsList data-testid="supplier-tabs">
-                    <TabsTrigger value="orders" data-testid="supplier-tab-orders">Orders ({orders.length})</TabsTrigger>
-                    <TabsTrigger value="products" data-testid="supplier-tab-products">Products ({products.length})</TabsTrigger>
-                </TabsList>
+            {/* Listings */}
+            <h2 className="text-[#0A0A0B] mb-4" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your products</h2>
+            {listings.length === 0 ? (
+                <div className="tc-card-flat p-8 text-center text-[#6E6E73]">
+                    No listings yet. Tap <span className="font-semibold text-[#0A0A0B]">Add product</span> to publish your first toner.
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {listings.map((l) => {
+                        const typeStyle = l.toner_type === "Original"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-blue-50 text-blue-700 border-blue-200";
+                        return (
+                            <div key={l.id} className="tc-product-card" data-testid={`supplier-listing-${l.id}`}>
+                                <div className="tc-product-img">
+                                    <span className="tc-product-img-label">{l.brand}</span>
+                                    {l.image_url ? (
+                                        <img src={l.image_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                                    ) : (
+                                        <TonerCartridge color={l.color || "Black"} brand={l.brand} model={l.model_number} type={l.toner_type} />
+                                    )}
+                                </div>
+                                <div className="p-4 flex flex-col gap-2 flex-1">
+                                    <div className="flex items-center justify-between">
+                                        <div className="font-mono text-[16px] font-semibold text-[#0A0A0B]">{l.model_number}</div>
+                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-md border uppercase tracking-[0.08em] ${typeStyle}`}>{l.toner_type}</span>
+                                    </div>
+                                    <div className="text-[12px] text-[#6E6E73]">{l.brand} · {l.color}</div>
+                                    <div className="mt-1 flex items-center justify-between">
+                                        <div className="font-mono text-[18px] font-semibold text-[#0A0A0B]">₹{Number(l.price).toLocaleString("en-IN")}</div>
+                                        <div className="text-[12px] text-[#6E6E73]">Stock: <span className="font-mono font-semibold text-[#0A0A0B]">{l.stock}</span></div>
+                                    </div>
+                                    <button onClick={() => removeListing(l.id)} className="mt-2 text-[12px] text-red-600 hover:text-red-700 inline-flex items-center gap-1 self-start" data-testid={`remove-${l.id}`}>
+                                        <Trash2 size={12} /> Remove
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
 
-                <TabsContent value="orders">
-                    <div className="tc-card-flat overflow-x-auto">
-                        <table className="tc-table">
-                            <thead><tr><th>Order</th><th>Customer</th><th>Toner</th><th>Qty</th><th>Total</th><th>Status</th><th>Action</th></tr></thead>
+            {/* Orders */}
+            {orders.length > 0 && (
+                <>
+                    <h2 className="text-[#0A0A0B] mt-12 mb-4" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Recent orders</h2>
+                    <div className="tc-card-flat p-0 overflow-x-auto">
+                        <table className="w-full text-[13px]">
+                            <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">
+                                <tr><th className="text-left p-3">Toner</th><th className="text-left p-3">Customer</th><th className="text-left p-3">Qty</th><th className="text-left p-3">Total</th><th className="text-left p-3">Status</th><th className="text-left p-3">Action</th></tr>
+                            </thead>
                             <tbody>
                                 {orders.map((o) => (
-                                    <tr key={o.id} data-testid={`supplier-order-row-${o.id}`}>
-                                        <td className="font-mono text-xs text-slate-500">{o.id.slice(0, 8)}</td>
-                                        <td>
-                                            <div className="font-semibold text-[#0E0F12]">{o.customer_name}</div>
-                                            <div className="text-xs text-slate-500">{o.customer_email}</div>
-                                            <div className="text-xs text-slate-500">{o.contact_phone}</div>
-                                        </td>
-                                        <td>
-                                            <div className="font-semibold font-mono">{o.model_number}</div>
-                                            <div className="text-xs text-slate-500">{o.brand}</div>
-                                        </td>
-                                        <td className="font-mono">{o.quantity}</td>
-                                        <td className="font-mono font-semibold">₹{o.total.toLocaleString('en-IN')}</td>
-                                        <td><span className={`tc-badge ${STATUS_LABEL[o.status].cls}`}>{STATUS_LABEL[o.status].label}</span></td>
-                                        <td>
-                                            <div className="flex gap-2 flex-wrap">
-                                                {o.status === "requested" && (<>
-                                                    <Button size="sm" className="btn-primary text-white" onClick={() => updateStatus(o.id, "accepted")} data-testid={`accept-${o.id}`}>Accept</Button>
-                                                    <Button size="sm" variant="outline" onClick={() => updateStatus(o.id, "rejected")} data-testid={`reject-${o.id}`}>Reject</Button>
-                                                </>)}
-                                                {o.status === "accepted" && (
-                                                    <Button size="sm" className="btn-cta" onClick={() => { setTrackingFor(o.id); setTracking(""); }} data-testid={`ship-${o.id}`}>Mark Shipped</Button>
-                                                )}
-                                                {o.status === "shipped" && (
-                                                    <Button size="sm" className="btn-primary text-white" onClick={() => updateStatus(o.id, "completed")} data-testid={`complete-${o.id}`}>Mark Completed</Button>
-                                                )}
-                                                {o.tracking_number && <span className="text-xs font-mono text-slate-500 self-center">#{o.tracking_number}</span>}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {orders.length === 0 && <tr><td colSpan={7} className="p-12 text-center text-slate-500">No orders yet.</td></tr>}
-                            </tbody>
-                        </table>
-                    </div>
-                </TabsContent>
-
-                <TabsContent value="products">
-                    <div className="tc-card-flat overflow-x-auto">
-                        <table className="tc-table">
-                            <thead><tr><th>Model</th><th>Brand</th><th>Type</th><th>Price</th><th>Stock</th><th>City</th><th></th></tr></thead>
-                            <tbody>
-                                {products.map((p) => (
-                                    <tr key={p.id} data-testid={`supplier-product-row-${p.id}`}>
-                                        <td><div className="font-semibold font-mono text-[#0E0F12]">{p.model_number}</div><div className="text-xs text-slate-500">{p.title}</div></td>
-                                        <td>{p.brand}</td>
-                                        <td><span className="tc-badge tc-badge-gray">{p.toner_type || "Original"}</span></td>
-                                        <td className="font-mono font-semibold">₹{p.price.toLocaleString('en-IN')}</td>
-                                        <td className="font-mono">{p.stock}</td>
-                                        <td>{p.city}</td>
-                                        <td>
-                                            <div className="flex gap-1 justify-end">
-                                                <Button size="icon" variant="ghost" onClick={() => openEdit(p)} data-testid={`edit-product-${p.id}`}><Pencil size={14} /></Button>
-                                                <Button size="icon" variant="ghost" onClick={() => remove(p.id)} data-testid={`delete-product-${p.id}`}><Trash2 size={14} /></Button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {products.length === 0 && <tr><td colSpan={7} className="p-12 text-center text-slate-500">No products listed yet. Click &ldquo;Add product&rdquo; to begin.</td></tr>}
-                            </tbody>
-                        </table>
-                    </div>
-                </TabsContent>
-            </Tabs>
-
-            {/* Product form */}
-            <Dialog open={!!editing} onOpenChange={(o) => !o && closeForm()}>
-                <DialogContent className="max-w-2xl" data-testid="product-form-dialog">
-                    <DialogHeader><DialogTitle className="text-[#0E0F12]">{editing === "new" ? "Add product to TonersCart catalog" : "Edit product"}</DialogTitle></DialogHeader>
-
-                    {/* Step 1: Pick from TonerMaster */}
-                    {editing === "new" && (
-                        <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                            <div className="tc-eyebrow mb-2">Step 1 — pick toner from master catalog</div>
-                            {masterPicked ? (
-                                <div className="flex items-center justify-between bg-white border border-slate-200 rounded-md p-3">
-                                    <div>
-                                        <div className="text-sm font-semibold text-[#0E0F12]"><span className="font-mono">{masterPicked.brand} {masterPicked.model_number}</span> · {masterPicked.toner_type} · {masterPicked.color}</div>
-                                        <div className="text-xs text-slate-500">{masterPicked.printer_compatibility}</div>
-                                    </div>
-                                    <Button variant="outline" size="sm" onClick={() => setMasterPicked(null)} data-testid="master-clear-btn">Change</Button>
-                                </div>
-                            ) : (
-                                <div className="relative">
-                                    <div className="flex items-center gap-2 px-3 h-10 bg-white border border-slate-200 rounded-md">
-                                        <Search size={14} className="text-slate-400" />
-                                        <input
-                                            value={masterQ}
-                                            onChange={(e) => setMasterQ(e.target.value)}
-                                            placeholder="Search 174 toner models — HP 88A, TN-2365, MLT-D101S, Canon 925…"
-                                            className="flex-1 bg-transparent border-0 outline-none text-sm"
-                                            data-testid="master-search-input"
-                                        />
-                                    </div>
-                                    {masterResults.length > 0 && (
-                                        <div className="tc-suggest" data-testid="master-suggest-dropdown">
-                                            {masterResults.map((m) => (
-                                                <div key={m.id} className="tc-suggest-item" onClick={() => pickMaster(m)} data-testid={`master-pick-${m.id}`}>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="text-sm font-semibold text-[#0E0F12] truncate"><span className="font-mono">{m.brand} {m.model_number}</span> · {m.toner_type} · {m.color}</div>
-                                                        <div className="text-xs text-slate-500 truncate">{m.printer_compatibility}</div>
-                                                    </div>
+                                    <tr key={o.id} className="border-t border-black/[0.05]">
+                                        <td className="p-3 font-mono">{o.listings?.model_number || "—"}</td>
+                                        <td className="p-3">{o.customer_name}<div className="text-[11px] text-[#86868B]">{o.customer_phone}</div></td>
+                                        <td className="p-3 font-mono">{o.qty}</td>
+                                        <td className="p-3 font-mono">₹{Number(o.total).toLocaleString("en-IN")}</td>
+                                        <td className="p-3 text-[11px] uppercase font-semibold tracking-[0.1em] text-[#0A0A0B]">{ORDER_STATUS[o.status]}</td>
+                                        <td className="p-3">
+                                            {o.status === "requested" && (
+                                                <div className="flex gap-1">
+                                                    <button onClick={() => updateOrder(o.id, "accepted")} className="text-[11px] px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Accept</button>
+                                                    <button onClick={() => updateOrder(o.id, "rejected")} className="text-[11px] px-2 py-1 rounded bg-red-50 text-red-700 border border-red-200">Reject</button>
                                                 </div>
-                                            ))}
+                                            )}
+                                            {o.status === "accepted" && (
+                                                <button onClick={() => {
+                                                    const t = window.prompt("Tracking number:");
+                                                    if (t) updateOrder(o.id, "shipped", t);
+                                                }} className="text-[11px] px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200">Mark shipped</button>
+                                            )}
+                                            {o.status === "shipped" && (
+                                                <button onClick={() => updateOrder(o.id, "delivered")} className="text-[11px] px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Mark delivered</button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
+            )}
+
+            {/* Add listing dialog */}
+            <Dialog open={open} onOpenChange={setOpen}>
+                <DialogContent className="max-w-lg" data-testid="add-listing-dialog">
+                    <DialogHeader>
+                        <DialogTitle>Add product</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={submit} className="space-y-4">
+                        {/* Toner picker */}
+                        <div>
+                            <Label>Toner model<span className="text-red-500"> *</span></Label>
+                            <div className="relative">
+                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B]" />
+                                <Input
+                                    value={tonerPicked ? `${tonerPicked.brand} ${tonerPicked.model_number}` : masterQ}
+                                    onChange={(e) => { setTonerPicked(null); setMasterQ(e.target.value); }}
+                                    placeholder="Search HP 88A, Canon 925…"
+                                    className="pl-8"
+                                    data-testid="listing-toner-search"
+                                />
+                                {!tonerPicked && masterResults.length > 0 && (
+                                    <div className="absolute z-10 mt-1 w-full bg-white border border-black/[0.08] rounded-lg shadow-xl max-h-56 overflow-auto">
+                                        {masterResults.map((m) => (
+                                            <button type="button" key={m.id}
+                                                onClick={() => { setTonerPicked(m); setMasterResults([]); }}
+                                                className="block w-full text-left px-3 py-2 hover:bg-black/[0.04] text-[13px]"
+                                                data-testid={`toner-option-${m.brand}-${m.model_number}`}>
+                                                <span className="font-mono font-semibold">{m.brand} {m.model_number}</span>
+                                                <span className="text-[11px] text-[#6E6E73] ml-2">{m.color}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            {tonerPicked && (
+                                <div className="text-[11px] text-[#6E6E73] mt-1">
+                                    {tonerPicked.printer_compatibility || "—"}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <Label>Price (₹)<span className="text-red-500"> *</span></Label>
+                                <Input type="number" min="0" step="1" value={price} onChange={(e) => setPrice(e.target.value)} required data-testid="listing-price-input" />
+                            </div>
+                            <div>
+                                <Label>Stock<span className="text-red-500"> *</span></Label>
+                                <Input type="number" min="0" step="1" value={stock} onChange={(e) => setStock(e.target.value)} required data-testid="listing-stock-input" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <Label>Toner type<span className="text-red-500"> *</span></Label>
+                            <div className="grid grid-cols-2 gap-2 mt-1">
+                                {["Original", "Compatible"].map((t) => (
+                                    <button type="button" key={t} onClick={() => setTonerType(t)}
+                                        className={`px-3 py-2.5 rounded-lg border text-[13px] font-semibold transition ${tonerType === t ? "bg-[#0A0A0B] text-white border-[#0A0A0B]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#86868B]"}`}
+                                        data-testid={`listing-type-${t}`}>
+                                        {t}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div>
+                            <Label>Product image (optional)</Label>
+                            <label className="block mt-1 cursor-pointer">
+                                <input type="file" accept="image/*" onChange={onPickFile} className="hidden" data-testid="listing-image-input" />
+                                <div className="border-2 border-dashed border-[#D2D2D7] rounded-lg px-4 py-6 text-center hover:border-[#86868B] transition">
+                                    {imagePreview ? (
+                                        <img src={imagePreview} alt="preview" className="max-h-32 mx-auto rounded" />
+                                    ) : (
+                                        <div className="text-[#6E6E73] text-[13px] flex items-center justify-center gap-2">
+                                            <ImageIcon size={16} /> Click to upload (max 5 MB)
                                         </div>
                                     )}
                                 </div>
-                            )}
-                            <div className="text-[11px] text-slate-500 mt-2">Selecting from the master catalog ensures buyers find your listing across all model-number variants (HP88A, hp 88a, 88-A, etc.)</div>
+                            </label>
                         </div>
-                    )}
 
-                    {/* Step 2: pricing & stock */}
-                    <div className="grid grid-cols-2 gap-4">
-                        {(editing !== "new" || !masterPicked) && (
-                            <>
-                                <div><Label>Model number</Label><Input value={form.model_number} onChange={handle("model_number")} placeholder="HP 88A" data-testid="product-model-input" disabled={!!masterPicked} /></div>
-                                <div><Label>Brand</Label><Input value={form.brand} onChange={handle("brand")} placeholder="HP" data-testid="product-brand-input" disabled={!!masterPicked} /></div>
-                            </>
-                        )}
-                        <div><Label>Price (₹)</Label><Input type="number" value={form.price} onChange={handle("price")} data-testid="product-price-input" /></div>
-                        <div><Label>Stock units</Label><Input type="number" value={form.stock} onChange={handle("stock")} data-testid="product-stock-input" /></div>
-                        <div><Label>City</Label><Input value={form.city} onChange={handle("city")} data-testid="product-city-input" /></div>
-                        <div><Label>Toner type</Label><Input value={form.toner_type} onChange={handle("toner_type")} disabled={!!masterPicked} data-testid="product-type-input" /></div>
-                        <div className="col-span-2"><Label>Title (auto-generated, can edit)</Label><Input value={form.title} onChange={handle("title")} data-testid="product-title-input" /></div>
-                        <div className="col-span-2"><Label>Notes / description</Label><Textarea rows={2} value={form.description} onChange={handle("description")} data-testid="product-description-input" /></div>
-                    </div>
-
-                    <DialogFooter>
-                        <Button variant="outline" onClick={closeForm} data-testid="product-cancel-btn">Cancel</Button>
-                        <Button className="btn-primary text-white" onClick={save} data-testid="product-save-btn">{editing === "new" ? "Publish listing" : "Save changes"}</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Tracking dialog */}
-            <Dialog open={!!trackingFor} onOpenChange={(o) => !o && setTrackingFor(null)}>
-                <DialogContent data-testid="tracking-dialog">
-                    <DialogHeader><DialogTitle className="text-[#0E0F12]">Mark as Shipped</DialogTitle></DialogHeader>
-                    <Label>Tracking / consignment number</Label>
-                    <Input value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="e.g. BLR123456789" data-testid="tracking-input" />
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setTrackingFor(null)}>Cancel</Button>
-                        <Button className="btn-cta" onClick={() => updateStatus(trackingFor, "shipped", tracking)} disabled={!tracking.trim()} data-testid="tracking-confirm-btn">Confirm shipped</Button>
-                    </DialogFooter>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
+                            <Button type="submit" className="btn-cta" disabled={saving} data-testid="listing-save-btn">
+                                {saving ? "Publishing…" : "Publish listing"}
+                            </Button>
+                        </DialogFooter>
+                    </form>
                 </DialogContent>
             </Dialog>
         </div>

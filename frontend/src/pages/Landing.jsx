@@ -19,17 +19,17 @@ export default function Landing() {
     const rootRef = useReveal([grouped.length, city]);
 
     useEffect(() => {
-        api.get("/products/facets").then((r) => setFacets(r.data)).catch(() => {});
+        api.get("/listings/facets").then((r) => setFacets({ ...r.data, models: [] })).catch(() => {});
     }, []);
 
     useEffect(() => {
         const params = {};
         if (city) params.city = city;
-        api.get("/products/grouped", { params })
+        api.get("/listings/grouped", { params })
             .then(async (r) => {
                 let items = r.data;
                 if (items.length === 0) {
-                    const all = await api.get("/products/grouped");
+                    const all = await api.get("/listings/grouped");
                     items = all.data;
                 }
                 setGrouped(items.slice(0, 8));

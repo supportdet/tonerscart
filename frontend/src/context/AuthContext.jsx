@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { supabase } from "../lib/supabase";
 import api, { formatApiError } from "../lib/api";
 
 const AuthContext = createContext(null);
@@ -9,6 +10,11 @@ export const AuthProvider = ({ children }) => {
 
     const refresh = useCallback(async () => {
         try {
+            const { data: sess } = await supabase.auth.getSession();
+            if (!sess?.session) {
+                setUser(null);
+                return;
+            }
             const { data } = await api.get("/auth/me");
             setUser(data);
         } catch (e) {
@@ -20,30 +26,35 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         refresh();
+        const { data: listener } = supabase.auth.onAuthStateChange((_event, _session) => {
+            refresh();
+        });
+        return () => { listener?.subscription?.unsubscribe?.(); };
     }, [refresh]);
 
     const login = async (email, password) => {
-        const { data } = await api.post("/auth/login", { email, password });
-        if (data?.token) localStorage.setItem("tc_token", data.token);
-        setUser(data.user);
-        return data.user;
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw new Error(error.message);
+        await refresh();
     };
 
-    const register = async (payload) => {
-        const { data } = await api.post("/auth/register", payload);
-        if (data?.token) localStorage.setItem("tc_token", data.token);
-        setUser(data.user);
-        return data.user;
+    const signupCustomer = async (payload) => {
+        await api.post("/auth/signup-customer", payload);
+        await login(payload.email, payload.password);
+    };
+
+    const signupSupplier = async (payload) => {
+        await api.post("/auth/signup-supplier", payload);
+        await login(payload.email, payload.password);
     };
 
     const logout = async () => {
-        try { await api.post("/auth/logout"); } catch (_) {}
-        localStorage.removeItem("tc_token");
+        await supabase.auth.signOut();
         setUser(null);
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, register, logout, refresh, formatApiError }}>
+        <AuthContext.Provider value={{ user, loading, login, signupCustomer, signupSupplier, logout, refresh, formatApiError }}>
             {children}
         </AuthContext.Provider>
     );
