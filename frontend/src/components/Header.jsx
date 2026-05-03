@@ -73,7 +73,7 @@ export default function Header() {
 
                 {/* Desktop right cluster */}
                 <div className="hidden md:flex items-center gap-2">
-                    {!isSeller && !isAdmin && (
+                    {!isAdmin && (
                         <button onClick={() => navigate("/cart")} className="relative w-10 h-10 grid place-items-center rounded-md hover:bg-black/[0.04] text-[#1D1D1F]" aria-label="Cart" data-testid="header-cart-btn">
                             <ShoppingCart size={17} />
                             {cartCount > 0 && (
@@ -122,7 +122,7 @@ export default function Header() {
 
                 {/* Mobile cluster */}
                 <div className="md:hidden flex items-center gap-1">
-                    {!isSeller && !isAdmin && (
+                    {!isAdmin && (
                         <button onClick={() => navigate("/cart")} className="relative w-10 h-10 grid place-items-center rounded-md hover:bg-black/[0.04]" aria-label="Cart" data-testid="header-cart-btn-mobile">
                             <ShoppingCart size={17} />
                             {cartCount > 0 && (

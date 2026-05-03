@@ -630,8 +630,8 @@ def delete_listing(listing_id: str, user: dict = Depends(require_role("supplier"
 
 @api.post("/orders")
 def create_order(payload: OrderCreate, user: dict = Depends(require_user)):
-    if user["role"] != "customer":
-        raise HTTPException(403, "Only customers can place orders")
+    if user["role"] not in ("customer", "supplier"):
+        raise HTTPException(403, "Only signed-in buyers and sellers can place orders")
     lst = sb_admin.table("listings").select("*").eq("id", payload.listing_id).maybe_single().execute()
     if not lst or not lst.data:
         raise HTTPException(404, "Listing not found")

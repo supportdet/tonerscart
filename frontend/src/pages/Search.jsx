@@ -192,8 +192,8 @@ export default function SearchPage() {
     );
 
     const onBuy = (p, qty) => {
-        if (user && user.role && user.role !== "customer") {
-            toast.error("Sign in with a buyer account to place order requests");
+        if (user && user.role === "admin") {
+            toast.error("Admins cannot place buyer orders");
             return;
         }
         setOrderQty(qty); setOrderProduct(p);

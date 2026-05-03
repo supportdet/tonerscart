@@ -128,6 +128,24 @@ Files: `frontend/src/pages/Search.jsx`, `frontend/src/pages/Checkout.jsx`, `fron
 
 Files touched: `backend/server.py`, `frontend/src/App.js`, `frontend/src/pages/Register.jsx`, `frontend/src/pages/Login.jsx`, `frontend/src/pages/Sell.jsx` (new), `frontend/src/pages/OAuthCallback.jsx`, `frontend/src/components/Header.jsx`, `frontend/src/components/SellerApplicationForm.jsx` (new), `frontend/src/context/AuthContext.jsx`, `frontend/src/pages/SupplierDashboard.jsx` (anchor IDs).
 
+### 2026-05-04 — Sellers can buy + form polish ✅
+- **Sellers can also browse/buy** — `users.role==='supplier'` is now allowed to place orders. Backend `POST /api/orders` accepts both `customer` and `supplier` roles. Header shows the cart icon for everyone except admins. `Search.onBuy` only blocks admins now.
+- **Compact OrderRequestDialog** — width capped at `max-w-md`, content area `max-h-[60vh] overflow-y-auto` so even on 768px-tall viewports the modal never overflows. Quantity stepper + sticky footer with estimated total. Inline guest "Quick sign-in" sits inside the scroll area.
+- **Indian validation on Seller application:**
+  - Phone: `/^(?:\+?91[-\s]?)?[6-9]\d{9}$/` with inline error message.
+  - State: dropdown of all 28 states + 8 UTs (mandatory).
+  - Primary city: dropdown of `KNOWN_CITIES` (mandatory).
+  - Pincode: 6 digits, first digit 1-9 (mandatory).
+  - GSTIN: 15-character regex `^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$` (mandatory, auto-uppercased).
+  - PAN: `^[A-Z]{5}[0-9]{4}[A-Z]$` (mandatory, auto-uppercased).
+  - Years in business, annual turnover, business address — all mandatory.
+  - Cities served must include at least one city.
+  - Compatible-brands list mandatory if Compatible seller type selected.
+- **Documents are all mandatory** — GST, PAN, Bank proof, Address proof always; Brand Authorization for Original; Shop photo for Refilled. Submit button is disabled until every required doc slot has a file. Updated UI labels with "*" markers and "Required" hints.
+- **Listing creation requires an image** — `SupplierDashboard` listing form blocks publish unless an image is uploaded. Drop-zone goes emerald on selection.
+
+Files: `backend/server.py`, `frontend/src/components/Header.jsx`, `frontend/src/components/OrderRequestDialog.jsx`, `frontend/src/components/SellerApplicationForm.jsx`, `frontend/src/pages/Search.jsx`, `frontend/src/pages/SupplierDashboard.jsx`.
+
 ## Files of reference
 - `/app/backend/server.py` — All API endpoints
 - `/app/backend/supabase_client.py` — Service-role + anon clients

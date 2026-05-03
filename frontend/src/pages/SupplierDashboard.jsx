@@ -101,18 +101,16 @@ export default function SupplierDashboard() {
         if (!brand) { toast.error("Please select a brand"); return; }
         if (!modelNumber.trim()) { toast.error("Please enter a model number"); return; }
         if (!price || !stock) { toast.error("Price and stock are required"); return; }
+        if (!imageFile) { toast.error("A product image is required"); return; }
         setSaving(true);
         try {
-            // Upload image to Supabase Storage if provided
-            let imageUrl = "";
-            if (imageFile) {
-                const ext = imageFile.name.split(".").pop() || "jpg";
-                const path = `${user.id}/${Date.now()}.${ext}`;
-                const { error } = await supabase.storage.from(PRODUCT_BUCKET).upload(path, imageFile, { upsert: false });
-                if (error) throw new Error(error.message);
-                const { data: pub } = supabase.storage.from(PRODUCT_BUCKET).getPublicUrl(path);
-                imageUrl = pub.publicUrl;
-            }
+            // Upload image to Supabase Storage (mandatory)
+            const ext = imageFile.name.split(".").pop() || "jpg";
+            const path = `${user.id}/${Date.now()}.${ext}`;
+            const { error } = await supabase.storage.from(PRODUCT_BUCKET).upload(path, imageFile, { upsert: false });
+            if (error) throw new Error(error.message);
+            const { data: pub } = supabase.storage.from(PRODUCT_BUCKET).getPublicUrl(path);
+            const imageUrl = pub.publicUrl;
             await api.post("/supplier/listings", {
                 brand,
                 model_number: modelNumber.trim(),
@@ -350,15 +348,15 @@ export default function SupplierDashboard() {
                         </div>
 
                         <div>
-                            <Label>Product image (optional)</Label>
+                            <Label>Product image<span className="text-red-500"> *</span></Label>
                             <label className="block mt-1 cursor-pointer">
                                 <input type="file" accept="image/*" onChange={onPickFile} className="hidden" data-testid="listing-image-input" />
-                                <div className="border-2 border-dashed border-[#D2D2D7] rounded-lg px-4 py-6 text-center hover:border-[#86868B] transition">
+                                <div className={`border-2 border-dashed rounded-lg px-4 py-6 text-center transition ${imagePreview ? "border-emerald-300 bg-emerald-50" : "border-[#D2D2D7] hover:border-[#86868B]"}`}>
                                     {imagePreview ? (
                                         <img src={imagePreview} alt="preview" className="max-h-32 mx-auto rounded" />
                                     ) : (
                                         <div className="text-[#6E6E73] text-[13px] flex items-center justify-center gap-2">
-                                            <ImageIcon size={16} /> Click to upload (max 5 MB)
+                                            <ImageIcon size={16} /> Click to upload (required, max 5 MB)
                                         </div>
                                     )}
                                 </div>
