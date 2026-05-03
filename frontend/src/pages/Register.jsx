@@ -240,7 +240,7 @@ export default function Register() {
             {/* ============================ CUSTOMER ============================ */}
             {role === "customer" ? (
                 <div className="mt-5 sm:mt-6">
-                    <div className="tc-card-flat p-4 sm:p-6">
+                    <div className="bg-white border border-black/[0.06] rounded-2xl shadow-2xl p-4 sm:p-6 text-[#0A0A0B]">
                         <button onClick={onGoogle} type="button" className="mb-4 w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-full border border-[#D2D2D7] bg-white hover:bg-black/[0.03] text-[#0A0A0B] font-semibold text-[13.5px]" data-testid="register-google-btn">
                             <GoogleIcon /> Continue with Google
                         </button>
@@ -273,7 +273,7 @@ export default function Register() {
                             if (canNext()) setStep((st) => Math.min(4, st + 1));
                         }
                     }}
-                    className="mt-5 sm:mt-6 tc-card-flat p-5 sm:p-7" data-testid="supplier-multi-step">
+                    className="mt-5 sm:mt-6 bg-white border border-black/[0.06] rounded-2xl shadow-2xl p-5 sm:p-7 text-[#0A0A0B]" data-testid="supplier-multi-step">
                     <div className="flex items-center justify-between mb-5">
                         <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73]">
                             Step {step} of 4 — {step === 1 ? "Basics" : step === 2 ? "Business" : step === 3 ? "Seller types" : "Documents"}

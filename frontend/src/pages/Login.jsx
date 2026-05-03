@@ -75,7 +75,7 @@ export default function Login() {
 
                     {/* Right: card */}
                     <div className="lg:col-span-6 max-w-md w-full ml-auto">
-                        <div className="bg-white border border-black/[0.06] rounded-2xl shadow-2xl p-6 sm:p-8">
+                        <div className="bg-white border border-black/[0.06] rounded-2xl shadow-2xl p-6 sm:p-8 text-[#0A0A0B]">
                             <h2 className="text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "26px", fontWeight: 300, letterSpacing: "-0.02em" }}>
                                 Welcome back
                             </h2>

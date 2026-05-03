@@ -34,7 +34,7 @@ export default function Cart() {
                                 const p = it.product;
                                 const tone = p.toner_type === "Original" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : p.toner_type === "Compatible" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-amber-50 text-amber-700 border-amber-200";
                                 return (
-                                    <div key={it.id} className="bg-white border border-black/[0.06] rounded-2xl p-4 flex gap-4 items-start" data-testid={`cart-row-${it.id}`}>
+                                    <div key={it.id} className="bg-white border border-black/[0.06] rounded-2xl p-4 flex gap-4 items-start text-[#0A0A0B]" data-testid={`cart-row-${it.id}`}>
                                         <div className="w-24 h-20 rounded-xl bg-[#F2F3F5] grid place-items-center overflow-hidden shrink-0">
                                             {p.image_url ? (
                                                 <img src={p.image_url} alt="" className="w-full h-full object-cover" />
@@ -70,7 +70,7 @@ export default function Cart() {
                         </div>
 
                         <aside className="lg:col-span-4 self-start lg:sticky lg:top-24">
-                            <div className="bg-white border border-black/[0.06] rounded-2xl p-5">
+                            <div className="bg-white border border-black/[0.06] rounded-2xl p-5 text-[#0A0A0B]">
                                 <div className="flex items-center gap-2 mb-3">
                                     <ShoppingBag size={14} className="text-[#0A0A0B]" />
                                     <span className="text-[12px] font-semibold text-[#0A0A0B] tracking-tight" style={{ fontFamily: "'Montserrat', sans-serif" }}>Order summary</span>

@@ -72,7 +72,7 @@ export default function Checkout() {
                     Suppliers receive your request and confirm pricing and delivery directly with you. No payment is taken online.
                 </p>
 
-                <div className="grid lg:grid-cols-12 gap-6 mt-8">
+                <div className="grid lg:grid-cols-12 gap-6 mt-8 text-[#0A0A0B]">
                     <form onSubmit={submit} className="lg:col-span-7 bg-white border border-black/[0.06] rounded-2xl p-5 sm:p-7 space-y-4">
                         <div className="text-[12px] font-semibold uppercase tracking-wider text-[#0A0A0B]">Buyer details</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
