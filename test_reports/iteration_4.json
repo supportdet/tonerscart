@@ -1,0 +1,41 @@
+{
+  "summary": "TonersCart v2 backend testing complete. 46/46 pytest tests passed (36 regression from iteration_3 + 10 new v2 tests covering Refilled toner_type re-enabled, extended supplier signup payload (state/pincode/cities_served/pan_number/years_in_business/seller_types/compatible_brands/testing_before_delivery), POST /api/auth/supplier-documents auth-gated patch, GET /api/admin/suppliers/{id}/documents (signed URLs + ai_check structure), approve copying new fields to suppliers table, reject with rejection_reason, and Refilled-bad → 400). No regressions. Email send (Resend) and AI doc check are best-effort and do not throw on no-op/empty docs.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/supplier-documents", "issue": "Endpoint signature requires require_user; any authenticated user can patch ONLY their own user_id row (server uses user['id']) — that's safe. No explicit role check, so a customer or admin could call it but it would only update their own pending row (which they wouldn't have). Acceptable."},
+      {"endpoint": "GET /api/auth/me (supplier no row)", "issue": "Carried from iteration_3 — returns supplier_status='pending' even with no suppliers_pending row. No UX impact since signup always creates the row."},
+      {"endpoint": "POST /api/orders", "issue": "Carried from iteration_3 — non-atomic stock decrement (read-then-write); risk of oversell under concurrency."},
+      {"endpoint": "POST /api/admin/suppliers/{id}/approve", "issue": "Email send to support@tonerscart.com is best-effort (try/except, logged). Resend is configured but in test mode emails may not deliver — verified endpoint returns 200 without exceptions, per spec."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_supabase_backend.py",
+    "/app/test_reports/pytest/iteration_4.xml"
+  ],
+  "action_items": [
+    "Optional: tighten supplier-documents auth so only role=supplier can call it (purely defensive — current behavior is functionally safe).",
+    "Carry-over from iteration_3: atomic stock decrement on POST /api/orders.",
+    "Carry-over from iteration_3: distinguish 'not_applied' vs 'pending' supplier_status."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now ~709 lines (up from ~560). Strongly consider splitting into routers: auth.py, listings.py, orders.py, admin.py, chat.py — file size threshold (>700) is hit.",
+    "supplier-documents PATCH stores raw paths trusted from client (e.g. '<uid>/gst.pdf') without verifying the path prefix matches user['id']. A malicious supplier could write a path pointing to another user's storage prefix. Recommend asserting path.startswith(f\"{user['id']}/\") for each non-empty doc field.",
+    "_run_ai_check is awaited inside signup endpoint (not actually fire-and-forget despite the comment) — adds latency to signup. Wrap in asyncio.create_task or background_tasks.add_task to make it truly non-blocking.",
+    "DOC_FIELDS list duplicated between server.py and SupplierDocPaths model — single source of truth would help.",
+    "approve copies new fields but does not copy doc_* paths to suppliers table — if business needs to retain references post-approval, consider copying or keeping a join.",
+    "CORS still allow_origins=['*'] with allow_credentials=True (browsers reject combo).",
+    "No pagination on list endpoints (carry-over)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_supabase_backend.py (added TestV2SupplierOnboarding class with 9 new tests + updated facets/refilled tests)"
+  ],
+  "success_rate": {"backend": "100% (46/46)", "frontend": "not tested (backend-only request)"},
+  "test_credentials": "Admin: admin@tonerscart.in / Admin@123. Approved supplier: supplier1@test.com / Test@123. Fresh per-run accounts with UUID-suffixed emails on @tonerscarttest.com.",
+  "seed_data_creation": "Each run creates ~5 fresh accounts: 1 customer, 1 supplier (approved), 1 supplier (rejected), 1 unapproved-pending supplier (for 403 listing check), 1 v2-extended supplier (approved with all new fields), 1 v2-empty supplier (rejected with reason). Plus 2 listings on HP 88A (Original + Refilled) and 2 orders. Cleanup not strictly required (UUID-suffixed) but can be bulk-removed via Supabase dashboard.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Pytest suite at /app/backend/tests/test_supabase_backend.py is idempotent and now covers all v2 onboarding fields. Refilled is now an accepted toner_type (test_refilled_accepted asserts 200, test_invalid_toner_type_rejected uses 'Refilled-bad' for the 400 case). v2 supplier docs flow uses fake storage paths (no actual file upload) — endpoint persists paths without validating bucket existence; AI check is no-op when signed URLs cannot be created. supplier1@test.com is reused as the existing approved supplier; do not delete from Supabase. Email sends are best-effort; Resend test mode may not deliver but endpoints don't 500.",
+  "rca of the issue": "N/A — all v2 endpoints behave per spec."
+}

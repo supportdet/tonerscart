@@ -8,6 +8,7 @@ import Header from "./components/Header";
 import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AIChatWidget from "./components/AIChatWidget";
+import RoleChooserPopup from "./components/RoleChooserPopup";
 import Landing from "./pages/Landing";
 import SearchPage from "./pages/Search";
 import Login from "./pages/Login";
@@ -35,6 +36,7 @@ function App() {
                             </Routes>
                         </main>
                         <Footer />
+                        <RoleChooserPopup />
                         <AIChatWidget />
                         <Toaster richColors position="top-right" />
                     </AuthProvider>

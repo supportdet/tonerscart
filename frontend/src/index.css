@@ -222,26 +222,38 @@
 }
 
 /* ==========================================================
-   SEARCH BAR — premium spotlight (light surface)
+   SEARCH BAR — glassmorphism (premium spotlight)
    ========================================================== */
 .tc-search-shell {
     position: relative;
-    background: rgba(255,255,255,0.92);
-    backdrop-filter: blur(22px) saturate(180%);
-    -webkit-backdrop-filter: blur(22px) saturate(180%);
-    border: 1px solid rgba(255,255,255,0.7);
+    background: rgba(255,255,255,0.16);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    border: 1px solid rgba(255,255,255,0.22);
     border-radius: 22px;
     padding: 8px;
     box-shadow:
-        0 1px 0 rgba(255,255,255,0.6) inset,
-        0 30px 80px -40px rgba(10,10,11,0.5),
-        0 12px 32px -16px rgba(10,10,11,0.20);
+        0 1px 0 rgba(255,255,255,0.35) inset,
+        0 30px 80px -40px rgba(10,10,11,0.6),
+        0 12px 32px -16px rgba(10,10,11,0.30);
     display: grid;
     grid-template-columns: 1fr auto;
     gap: 8px;
     align-items: stretch;
     transition: box-shadow 250ms ease, border-color 250ms ease, transform 250ms ease;
 }
+/* Light surfaces (e.g. /search page) — solid white */
+.tc-search-shell.tc-search-light {
+    background: rgba(255,255,255,0.96);
+    border-color: rgba(0,0,0,0.06);
+    box-shadow:
+        0 1px 0 rgba(255,255,255,0.6) inset,
+        0 18px 40px -22px rgba(10,10,11,0.18),
+        0 6px 16px -8px rgba(10,10,11,0.10);
+}
+/* Light surfaces text colour */
+.tc-search-shell.tc-search-light .tc-search-input,
+.tc-search-shell.tc-search-light .tc-search-input::placeholder { color: #0A0A0B; }
 .tc-search-shell:focus-within {
     border-color: rgba(0,183,199,0.55);
     box-shadow:
@@ -258,7 +270,7 @@
 .tc-search-input {
     flex: 1; width: 100%;
     background: transparent !important;
-    color: #0A0A0B !important;
+    color: #FFFFFF !important;
     border: none !important; outline: none !important; box-shadow: none !important;
     font-size: 15px; font-weight: 500; letter-spacing: -0.015em;
     padding: 12px 8px;
@@ -268,7 +280,7 @@
 @media (min-width: 640px) {
     .tc-search-input { font-size: 17px; padding: 14px 8px; }
 }
-.tc-search-input::placeholder { color: #86868B !important; font-weight: 400; opacity: 1; }
+.tc-search-input::placeholder { color: rgba(255,255,255,0.6) !important; font-weight: 400; opacity: 1; }
 
 .tc-search-pill {
     background: var(--tc-bg-2); border: 1px solid var(--tc-border);

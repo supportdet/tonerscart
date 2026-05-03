@@ -22,7 +22,9 @@ const SidebarItem = ({ active, onClick, children, testid }) => (
 function ProductCard({ p, qty, setQty, onBuy, onCart }) {
     const typeStyle = p.toner_type === "Original"
         ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-        : "bg-blue-50 text-blue-700 border-blue-200";
+        : p.toner_type === "Compatible"
+        ? "bg-blue-50 text-blue-700 border-blue-200"
+        : "bg-amber-50 text-amber-700 border-amber-200";
     return (
         <div className="tc-product-card" data-testid={`product-card-${p.id}`}>
             <div className="tc-product-img">
@@ -179,7 +181,7 @@ export default function SearchPage() {
                     <span className="text-[12px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Toner type</span>
                 </div>
                 <div className="space-y-0.5">
-                    {["all", "Original", "Compatible"].map((t) => (
+                    {["all", "Original", "Compatible", "Refilled"].map((t) => (
                         <SidebarItem key={t} active={tonerType === t} onClick={() => setFilter("toner_type", t)} testid={`filter-type-${t}`}>{t === "all" ? "All types" : t}</SidebarItem>
                     ))}
                 </div>
@@ -202,7 +204,7 @@ export default function SearchPage() {
 
     return (
         <div className="tc-container py-6 sm:py-10" ref={rootRef} data-testid="search-page">
-            <div className="tc-search-shell" data-testid="search-bar">
+            <div className="tc-search-shell tc-search-light" data-testid="search-bar">
                 <TonerSearchInput value={q} onChange={setQ} onSubmit={apply} testId="search-input" />
                 <button onClick={() => apply()} className="tc-search-go" data-testid="search-apply-btn">Search</button>
             </div>

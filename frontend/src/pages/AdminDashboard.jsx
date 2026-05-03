@@ -48,6 +48,20 @@ export default function AdminDashboard() {
         } catch (e) { toast.error(formatApiError(e)); }
     };
 
+    const [docs, setDocs] = useState({ urls: {}, ai: {} });
+    const [docsLoading, setDocsLoading] = useState(false);
+
+    const openReview = async (p) => {
+        setReviewing(p);
+        setDocs({ urls: {}, ai: {} });
+        setDocsLoading(true);
+        try {
+            const r = await api.get(`/admin/suppliers/${p.id}/documents`);
+            setDocs({ urls: r.data.documents || {}, ai: r.data.ai_check || {} });
+        } catch (e) { /* non-fatal */ }
+        finally { setDocsLoading(false); }
+    };
+
     const StatCards = useMemo(() => [
         { k: "Pending review", v: stats?.suppliers_pending ?? "—", color: "text-amber-600" },
         { k: "Approved suppliers", v: stats?.suppliers_approved ?? "—", color: "text-emerald-600" },
@@ -109,7 +123,7 @@ export default function AdminDashboard() {
                                         <div><span className="text-[#86868B]">Turnover:</span> {p.annual_turnover || "—"}</div>
                                     </div>
                                     <div className="mt-4 flex items-center gap-2">
-                                        <Button onClick={() => setReviewing(p)} variant="outline" className="text-[12.5px]" data-testid={`view-${p.id}`}>View details</Button>
+                                        <Button onClick={() => openReview(p)} variant="outline" className="text-[12.5px]" data-testid={`view-${p.id}`}>View details</Button>
                                         <Button onClick={() => approve(p.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[12.5px]" data-testid={`approve-${p.id}`}>
                                             <CheckCircle2 size={14} className="mr-1" /> Approve
                                         </Button>
@@ -157,23 +171,99 @@ export default function AdminDashboard() {
 
             {/* Review dialog */}
             <Dialog open={!!reviewing} onOpenChange={(o) => !o && setReviewing(null)}>
-                <DialogContent className="max-w-lg" data-testid="review-dialog">
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto" data-testid="review-dialog">
                     {reviewing && (
                         <>
                             <DialogHeader>
                                 <DialogTitle>{reviewing.business_name}</DialogTitle>
                             </DialogHeader>
-                            <div className="space-y-3 text-[13.5px]">
-                                <Detail icon={Building2} label="Business name" value={reviewing.business_name} />
-                                <Detail icon={Mail} label="Email" value={reviewing.email} />
-                                <Detail icon={Phone} label="Phone" value={reviewing.phone} mono />
-                                <Detail icon={MapPin} label="City" value={reviewing.city} />
-                                <Detail icon={FileText} label="GST number" value={reviewing.gst_number || "—"} mono />
-                                <Detail icon={IndianRupee} label="Annual turnover" value={reviewing.annual_turnover || "—"} />
+                            <div className="space-y-4 text-[13.5px]">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <Detail icon={Building2} label="Business name" value={reviewing.business_name} />
+                                    <Detail icon={Mail} label="Email" value={reviewing.email} />
+                                    <Detail icon={Phone} label="Phone" value={reviewing.phone} mono />
+                                    <Detail icon={MapPin} label="City / state" value={`${reviewing.city || "—"}${reviewing.state ? ", " + reviewing.state : ""}${reviewing.pincode ? " · " + reviewing.pincode : ""}`} />
+                                    <Detail icon={FileText} label="GST" value={reviewing.gst_number || "—"} mono />
+                                    <Detail icon={FileText} label="PAN" value={reviewing.pan_number || "—"} mono />
+                                    <Detail icon={IndianRupee} label="Annual turnover" value={reviewing.annual_turnover || "—"} />
+                                    <Detail icon={Building2} label="Years in business" value={reviewing.years_in_business ?? "—"} />
+                                </div>
+
+                                {(reviewing.seller_types || []).length > 0 && (
+                                    <div>
+                                        <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-[#86868B]">Seller types</div>
+                                        <div className="mt-1 flex flex-wrap gap-1.5">
+                                            {(reviewing.seller_types || []).map((t) => (
+                                                <span key={t} className="px-2 py-0.5 rounded-full bg-[#0A0A0B] text-white text-[11px]">{t}</span>
+                                            ))}
+                                            {reviewing.testing_before_delivery && <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] border border-emerald-200">Tests refilled</span>}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {(reviewing.compatible_brands || []).length > 0 && (
+                                    <div>
+                                        <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-[#86868B]">Compatible brands</div>
+                                        <div className="mt-1 flex flex-wrap gap-1.5">
+                                            {(reviewing.compatible_brands || []).map((b) => (
+                                                <span key={b} className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[11px] border border-blue-200">{b}</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {(reviewing.cities_served || []).length > 0 && (
+                                    <div>
+                                        <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-[#86868B]">Cities served</div>
+                                        <div className="mt-1 flex flex-wrap gap-1.5">
+                                            {(reviewing.cities_served || []).map((c) => (
+                                                <span key={c} className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px]">{c}</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div>
                                     <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-[#86868B]">Business address</div>
                                     <div className="mt-1 whitespace-pre-line">{reviewing.business_address}</div>
                                 </div>
+
+                                {/* Documents */}
+                                <div>
+                                    <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-[#86868B] mb-2">Documents (signed links, 5 min)</div>
+                                    {docsLoading ? (
+                                        <div className="text-[12px] text-[#6E6E73]">Loading documents…</div>
+                                    ) : Object.keys(docs.urls || {}).length === 0 ? (
+                                        <div className="text-[12px] text-[#6E6E73]">No documents uploaded.</div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {Object.entries(docs.urls).map(([field, url]) => {
+                                                const ai = (docs.ai && docs.ai[field]) || null;
+                                                const label = field.replace(/^doc_/, "").replace(/_/g, " ");
+                                                const aiBadge = ai
+                                                    ? (ai.clear === true
+                                                        ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">AI: clear</span>
+                                                        : ai.clear === false
+                                                            ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">AI: unclear</span>
+                                                            : <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">AI: skipped</span>)
+                                                    : null;
+                                                return (
+                                                    <div key={field} className="border border-black/[0.08] rounded-lg p-2.5 flex flex-col gap-1.5" data-testid={`doc-${field}`}>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <span className="text-[12.5px] font-semibold capitalize">{label}</span>
+                                                            {aiBadge}
+                                                        </div>
+                                                        {ai?.notes && <div className="text-[11px] text-[#6E6E73] italic">{ai.notes}</div>}
+                                                        <a href={url} target="_blank" rel="noreferrer" className="text-[12.5px] text-[#00B7C7] font-semibold hover:underline inline-flex items-center gap-1" data-testid={`view-doc-${field}`}>
+                                                            <FileText size={12} /> View document
+                                                        </a>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
                                 <div className="text-[11px] text-[#86868B]">Contact person: <span className="text-[#0A0A0B] font-semibold">{reviewing.contact_person}</span></div>
                             </div>
                             <DialogFooter>

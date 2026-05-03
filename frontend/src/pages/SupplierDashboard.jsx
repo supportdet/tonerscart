@@ -203,7 +203,9 @@ export default function SupplierDashboard() {
                     {listings.map((l) => {
                         const typeStyle = l.toner_type === "Original"
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : "bg-blue-50 text-blue-700 border-blue-200";
+                            : l.toner_type === "Compatible"
+                            ? "bg-blue-50 text-blue-700 border-blue-200"
+                            : "bg-amber-50 text-amber-700 border-amber-200";
                         return (
                             <div key={l.id} className="tc-product-card" data-testid={`supplier-listing-${l.id}`}>
                                 <div className="tc-product-img">
@@ -329,8 +331,8 @@ export default function SupplierDashboard() {
 
                         <div>
                             <Label>Toner type<span className="text-red-500"> *</span></Label>
-                            <div className="grid grid-cols-2 gap-2 mt-1">
-                                {["Original", "Compatible"].map((t) => (
+                            <div className="grid grid-cols-3 gap-2 mt-1">
+                                {["Original", "Compatible", "Refilled"].map((t) => (
                                     <button type="button" key={t} onClick={() => setTonerType(t)}
                                         className={`px-3 py-2.5 rounded-lg border text-[13px] font-semibold transition ${tonerType === t ? "bg-[#0A0A0B] text-white border-[#0A0A0B]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#86868B]"}`}
                                         data-testid={`listing-type-${t}`}>

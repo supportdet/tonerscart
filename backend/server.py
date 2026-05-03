@@ -22,6 +22,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
 
 from supabase_client import sb_admin, sb_anon, get_user_from_token
+from email_service import (
+    email_application_received,
+    email_application_approved,
+    email_application_rejected,
+)
+from ai_check import check_documents
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 load_dotenv(Path(__file__).parent / ".env")
@@ -63,6 +69,48 @@ def require_role(*roles: str):
     return dep
 
 
+SIGNED_URL_TTL = 60  # seconds — admin viewing supplier KYC docs
+
+DOC_FIELDS = [
+    "doc_brand_authorization",
+    "doc_shop_photo",
+    "doc_gst",
+    "doc_pan",
+    "doc_bank_proof",
+    "doc_address_proof",
+]
+
+
+def _signed_doc_urls(application: dict, ttl: int = SIGNED_URL_TTL) -> dict:
+    """Build a {field: signed_url} map for whichever doc paths exist in the
+    application. Returns empty dict on failure (never raises)."""
+    out = {}
+    for f in DOC_FIELDS:
+        path = application.get(f)
+        if not path:
+            continue
+        try:
+            res = sb_admin.storage.from_("supplier-documents").create_signed_url(path, ttl)
+            url = res.get("signedURL") or res.get("signed_url") or res.get("signedUrl")
+            if url:
+                out[f] = url
+        except Exception as e:
+            logger.warning("sign url failed for %s: %s", path, e)
+    return out
+
+
+async def _run_ai_check(user_id: str, application: dict):
+    """Best-effort AI document clarity check. Writes into suppliers_pending.ai_check."""
+    docs = {f: application.get(f) for f in DOC_FIELDS if application.get(f)}
+    if not docs:
+        return
+    signed = _signed_doc_urls(application, ttl=120)
+    if not signed:
+        return
+    results = await check_documents(signed)
+    sb_admin.table("suppliers_pending").update({"ai_check": results}).eq("user_id", user_id).execute()
+
+
 # ===== Models ==================================================================
 
 class SignupCustomer(BaseModel):
@@ -80,16 +128,31 @@ class SignupSupplier(BaseModel):
     contact_person: str
     phone: str
     city: str
+    state: Optional[str] = ""
+    pincode: Optional[str] = ""
+    cities_served: List[str] = Field(default_factory=list)
     gst_number: Optional[str] = ""
+    pan_number: Optional[str] = ""
     annual_turnover: Optional[str] = ""
+    years_in_business: Optional[int] = None
     business_address: str
+    seller_types: List[str] = Field(default_factory=list)        # ["Original","Compatible","Refilled"]
+    compatible_brands: List[str] = Field(default_factory=list)
+    testing_before_delivery: bool = False
+    # Storage paths inside supplier-documents bucket (relative paths)
+    doc_brand_authorization: Optional[str] = ""
+    doc_shop_photo: Optional[str] = ""
+    doc_gst: Optional[str] = ""
+    doc_pan: Optional[str] = ""
+    doc_bank_proof: Optional[str] = ""
+    doc_address_proof: Optional[str] = ""
 
 
 class ListingCreate(BaseModel):
     toner_id: str
     price: float = Field(ge=0)
     stock: int = Field(ge=0)
-    toner_type: str  # "Original" | "Compatible"
+    toner_type: str  # "Original" | "Compatible" | "Refilled"
     image_url: Optional[str] = ""
 
 
@@ -150,7 +213,7 @@ def signup_customer(payload: SignupCustomer):
 
 
 @api.post("/auth/signup-supplier")
-def signup_supplier(payload: SignupSupplier):
+async def signup_supplier(payload: SignupSupplier):
     """Supplier signup — creates auth user, profile (role=supplier), AND a
     suppliers_pending row. The user can sign in but listings are blocked
     until an admin moves their pending row into the suppliers table."""
@@ -178,20 +241,72 @@ def signup_supplier(payload: SignupSupplier):
         "city": payload.city,
     }, on_conflict="id").execute()
 
-    sb_admin.table("suppliers_pending").upsert({
+    application = {
         "user_id": uid,
         "business_name": payload.business_name,
         "contact_person": payload.contact_person,
         "phone": payload.phone,
         "email": payload.email,
         "city": payload.city,
+        "state": payload.state or None,
+        "pincode": payload.pincode or None,
+        "cities_served": payload.cities_served or [],
         "gst_number": payload.gst_number or None,
+        "pan_number": payload.pan_number or None,
         "annual_turnover": payload.annual_turnover or None,
+        "years_in_business": payload.years_in_business,
         "business_address": payload.business_address,
+        "seller_types": payload.seller_types or [],
+        "compatible_brands": payload.compatible_brands or [],
+        "testing_before_delivery": payload.testing_before_delivery,
+        "doc_brand_authorization": payload.doc_brand_authorization or None,
+        "doc_shop_photo": payload.doc_shop_photo or None,
+        "doc_gst": payload.doc_gst or None,
+        "doc_pan": payload.doc_pan or None,
+        "doc_bank_proof": payload.doc_bank_proof or None,
+        "doc_address_proof": payload.doc_address_proof or None,
         "status": "pending",
-    }, on_conflict="user_id").execute()
+    }
+    sb_admin.table("suppliers_pending").upsert(application, on_conflict="user_id").execute()
+
+    # Fire-and-forget AI document check (best effort) + email notifications
+    try:
+        await _run_ai_check(uid, application)
+    except Exception as e:
+        logger.warning("AI check skipped: %s", e)
+
+    try:
+        await email_application_received(application)
+    except Exception as e:
+        logger.warning("application email skipped: %s", e)
 
     return {"ok": True, "user_id": uid, "status": "pending"}
+
+
+class SupplierDocPaths(BaseModel):
+    doc_brand_authorization: Optional[str] = None
+    doc_shop_photo: Optional[str] = None
+    doc_gst: Optional[str] = None
+    doc_pan: Optional[str] = None
+    doc_bank_proof: Optional[str] = None
+    doc_address_proof: Optional[str] = None
+
+
+@api.post("/auth/supplier-documents")
+async def supplier_documents_patch(payload: SupplierDocPaths, user: dict = Depends(require_user)):
+    """Called by the supplier client after files are uploaded to
+    supplier-documents/<uid>/... — saves paths and re-runs the AI check."""
+    upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v}
+    if not upd:
+        return {"ok": True}
+    sb_admin.table("suppliers_pending").update(upd).eq("user_id", user["id"]).execute()
+    p = sb_admin.table("suppliers_pending").select("*").eq("user_id", user["id"]).maybe_single().execute()
+    if p and p.data:
+        try:
+            await _run_ai_check(user["id"], p.data)
+        except Exception as e:
+            logger.warning("AI check skipped: %s", e)
+    return {"ok": True}
 
 
 @api.get("/auth/me")
@@ -265,7 +380,7 @@ def listing_facets():
     return {
         "brands": sorted({r["brand"] for r in rows if r.get("brand")}),
         "cities": sorted({r["city"] for r in rows if r.get("city")}),
-        "toner_types": ["Original", "Compatible"],
+        "toner_types": ["Original", "Compatible", "Refilled"],
     }
 
 
@@ -320,8 +435,8 @@ def supplier_listings(user: dict = Depends(require_role("supplier"))):
 @api.post("/supplier/listings")
 def create_listing(payload: ListingCreate, user: dict = Depends(require_role("supplier"))):
     s = _approved_supplier(user)
-    if payload.toner_type not in ("Original", "Compatible"):
-        raise HTTPException(400, "toner_type must be Original or Compatible")
+    if payload.toner_type not in ("Original", "Compatible", "Refilled"):
+        raise HTTPException(400, "toner_type must be Original, Compatible or Refilled")
     tm = sb_admin.table("toner_master").select("*").eq("id", payload.toner_id).maybe_single().execute()
     if not tm or not tm.data:
         raise HTTPException(400, "Invalid toner_id")
@@ -350,8 +465,8 @@ def update_listing(listing_id: str, payload: ListingUpdate, user: dict = Depends
     if not existing or not existing.data or existing.data["supplier_id"] != s["id"]:
         raise HTTPException(404, "Listing not found")
     upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
-    if "toner_type" in upd and upd["toner_type"] not in ("Original", "Compatible"):
-        raise HTTPException(400, "toner_type must be Original or Compatible")
+    if "toner_type" in upd and upd["toner_type"] not in ("Original", "Compatible", "Refilled"):
+        raise HTTPException(400, "toner_type must be Original, Compatible or Refilled")
     upd["updated_at"] = datetime.now(timezone.utc).isoformat()
     sb_admin.table("listings").update(upd).eq("id", listing_id).execute()
     return {"ok": True}
@@ -445,14 +560,13 @@ def admin_suppliers(user: dict = Depends(require_role("admin"))):
 
 
 @api.post("/admin/suppliers/{pending_id}/approve")
-def admin_approve(pending_id: str, user: dict = Depends(require_role("admin"))):
+async def admin_approve(pending_id: str, user: dict = Depends(require_role("admin"))):
     p = sb_admin.table("suppliers_pending").select("*").eq("id", pending_id).maybe_single().execute()
     if not p or not p.data:
         raise HTTPException(404, "Pending application not found")
     P = p.data
     if P["status"] != "pending":
         raise HTTPException(400, f"Already {P['status']}")
-    # Insert into suppliers (idempotent on user_id)
     sb_admin.table("suppliers").upsert({
         "user_id": P["user_id"],
         "business_name": P["business_name"],
@@ -460,9 +574,17 @@ def admin_approve(pending_id: str, user: dict = Depends(require_role("admin"))):
         "phone": P["phone"],
         "email": P["email"],
         "city": P["city"],
+        "state": P.get("state"),
+        "pincode": P.get("pincode"),
+        "cities_served": P.get("cities_served") or [],
         "gst_number": P.get("gst_number"),
+        "pan_number": P.get("pan_number"),
         "annual_turnover": P.get("annual_turnover"),
+        "years_in_business": P.get("years_in_business"),
         "business_address": P["business_address"],
+        "seller_types": P.get("seller_types") or [],
+        "compatible_brands": P.get("compatible_brands") or [],
+        "testing_before_delivery": P.get("testing_before_delivery") or False,
         "approved_by": user["id"],
         "approved_at": datetime.now(timezone.utc).isoformat(),
     }, on_conflict="user_id").execute()
@@ -471,23 +593,41 @@ def admin_approve(pending_id: str, user: dict = Depends(require_role("admin"))):
         "reviewed_by": user["id"],
         "reviewed_at": datetime.now(timezone.utc).isoformat(),
     }).eq("id", pending_id).execute()
+    try:
+        await email_application_approved(P)
+    except Exception as e:
+        logger.warning("approval email failed: %s", e)
     return {"ok": True}
 
 
 @api.post("/admin/suppliers/{pending_id}/reject")
-def admin_reject(pending_id: str, payload: RejectPayload, user: dict = Depends(require_role("admin"))):
-    p = sb_admin.table("suppliers_pending").select("status").eq("id", pending_id).maybe_single().execute()
+async def admin_reject(pending_id: str, payload: RejectPayload, user: dict = Depends(require_role("admin"))):
+    p = sb_admin.table("suppliers_pending").select("*").eq("id", pending_id).maybe_single().execute()
     if not p or not p.data:
         raise HTTPException(404, "Pending application not found")
     if p.data["status"] != "pending":
         raise HTTPException(400, f"Already {p.data['status']}")
+    reason = payload.reason or "Not approved"
     sb_admin.table("suppliers_pending").update({
         "status": "rejected",
-        "rejection_reason": payload.reason or "Not approved",
+        "rejection_reason": reason,
         "reviewed_by": user["id"],
         "reviewed_at": datetime.now(timezone.utc).isoformat(),
     }).eq("id", pending_id).execute()
+    try:
+        await email_application_rejected(p.data, reason)
+    except Exception as e:
+        logger.warning("rejection email failed: %s", e)
     return {"ok": True}
+
+
+@api.get("/admin/suppliers/{pending_id}/documents")
+def admin_documents(pending_id: str, user: dict = Depends(require_role("admin"))):
+    """Returns short-lived signed URLs for each uploaded supplier document."""
+    p = sb_admin.table("suppliers_pending").select("*").eq("id", pending_id).maybe_single().execute()
+    if not p or not p.data:
+        raise HTTPException(404, "Pending application not found")
+    return {"documents": _signed_doc_urls(p.data, ttl=300), "ai_check": p.data.get("ai_check") or {}}
 
 
 @api.get("/admin/stats")

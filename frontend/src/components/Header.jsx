@@ -22,7 +22,6 @@ export default function Header() {
     const [mobileOpen, setMobileOpen] = useState(false);
 
     const dashboardPath =
-        user?.role === "admin" ? "/admin" :
         user?.role === "supplier" ? "/supplier" :
         user?.role === "customer" ? "/customer" : null;
 
@@ -47,7 +46,6 @@ export default function Header() {
                     <NavLink to="/register?role=supplier" className={navLink} data-testid="nav-sell">Sell</NavLink>
                     {user?.role === "supplier" && <NavLink to="/supplier" className={navLink} data-testid="nav-supplier">Seller</NavLink>}
                     {user?.role === "customer" && <NavLink to="/customer" className={navLink} data-testid="nav-customer">Orders</NavLink>}
-                    {user?.role === "admin" && <NavLink to="/admin" className={navLink} data-testid="nav-admin">Admin</NavLink>}
                 </nav>
 
                 {/* Desktop right cluster */}
@@ -124,7 +122,6 @@ export default function Header() {
                         <NavLink to="/register?role=supplier" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-sell">Sell on TonersCart</NavLink>
                         {user?.role === "supplier" && <NavLink to="/supplier" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-supplier">Seller dashboard</NavLink>}
                         {user?.role === "customer" && <NavLink to="/customer" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-customer">My orders</NavLink>}
-                        {user?.role === "admin" && <NavLink to="/admin" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-admin">Admin</NavLink>}
 
                         <div className="pt-2 mt-2 border-t border-black/[0.06]">
                             {!user ? (

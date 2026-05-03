@@ -237,11 +237,22 @@ class TestSupplierListings:
         state["listing_id"] = lst["id"]
         state["listing_stock"] = lst["stock"]
 
-    def test_refilled_rejected(self):
+    def test_refilled_accepted(self):
+        # v2: Refilled is now an accepted toner_type
+        tok = state["sup_approve_token"]
+        r = requests.post(f"{API}/supplier/listings", headers=H(tok),
+                          json={"toner_id": state["toner_id"], "price": 1499,
+                                "stock": 3, "toner_type": "Refilled"}, timeout=20)
+        assert r.status_code == 200, r.text
+        lst = r.json()
+        assert lst.get("toner_type") == "Refilled"
+        state["refilled_listing_id"] = lst.get("id")
+
+    def test_invalid_toner_type_rejected(self):
         tok = state["sup_approve_token"]
         r = requests.post(f"{API}/supplier/listings", headers=H(tok),
                           json={"toner_id": state["toner_id"], "price": 999,
-                                "stock": 1, "toner_type": "Refilled"}, timeout=20)
+                                "stock": 1, "toner_type": "Refilled-bad"}, timeout=20)
         assert r.status_code == 400
 
     def test_supplier_role_forbidden_for_customer(self):
@@ -274,7 +285,8 @@ class TestPublicListings:
         r = requests.get(f"{API}/listings/facets", timeout=20)
         assert r.status_code == 200
         f = r.json()
-        assert f.get("toner_types") == ["Original", "Compatible"]
+        # v2: Refilled is back in toner_types
+        assert f.get("toner_types") == ["Original", "Compatible", "Refilled"]
         assert isinstance(f.get("brands"), list)
         assert isinstance(f.get("cities"), list)
 
@@ -416,3 +428,167 @@ class TestAuthEnforcement:
         r = requests.get(f"{API}/supplier/listings",
                          headers=H(state["customer_token"]), timeout=15)
         assert r.status_code == 403
+
+
+# ===== v2: Extended supplier onboarding ======================================
+NEW_SUPPLIER_V2 = (f"test.supv2.{RUN}@tonerscarttest.com", "Test@12345")
+NEW_SUPPLIER_V2_EMPTY = (f"test.supv2e.{RUN}@tonerscarttest.com", "Test@12345")
+
+
+class TestV2SupplierOnboarding:
+    def test_signup_supplier_extended_payload(self):
+        payload = {
+            "email": NEW_SUPPLIER_V2[0], "password": NEW_SUPPLIER_V2[1],
+            "business_name": "TEST V2 Biz", "contact_person": "V2 Person",
+            "phone": "9000000022", "city": "Bangalore",
+            "state": "Karnataka", "pincode": "560001",
+            "cities_served": ["Bangalore", "Mysore"],
+            "gst_number": "29ABCDE1234F1Z5",
+            "pan_number": "ABCDE1234F",
+            "annual_turnover": "50L-1Cr",
+            "years_in_business": 5,
+            "business_address": "789 V2 Lane, Bangalore",
+            "seller_types": ["Original", "Compatible", "Refilled"],
+            "compatible_brands": ["HP", "Canon", "Brother"],
+            "testing_before_delivery": True,
+            "doc_brand_authorization": "",
+            "doc_shop_photo": "",
+            "doc_gst": "",
+            "doc_pan": "",
+            "doc_bank_proof": "",
+            "doc_address_proof": "",
+        }
+        r = requests.post(f"{API}/auth/signup-supplier", json=payload, timeout=30)
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d.get("ok") is True and d.get("status") == "pending"
+        state["v2_user_id"] = d["user_id"]
+
+    def test_v2_admin_pending_has_new_fields(self):
+        tok = state.get("admin_token") or sb_login(ADMIN_EMAIL, ADMIN_PASSWORD)
+        state["admin_token"] = tok
+        rows = requests.get(f"{API}/admin/suppliers/pending", headers=H(tok), timeout=15).json()
+        by_user = {r["user_id"]: r for r in rows}
+        assert state["v2_user_id"] in by_user
+        p = by_user[state["v2_user_id"]]
+        # New fields persisted
+        assert p.get("state") == "Karnataka"
+        assert p.get("pincode") == "560001"
+        assert p.get("pan_number") == "ABCDE1234F"
+        assert p.get("years_in_business") == 5
+        assert sorted(p.get("cities_served") or []) == ["Bangalore", "Mysore"]
+        assert sorted(p.get("seller_types") or []) == ["Compatible", "Original", "Refilled"]
+        assert sorted(p.get("compatible_brands") or []) == ["Brother", "Canon", "HP"]
+        assert p.get("testing_before_delivery") is True
+        state["v2_pending_id"] = p["id"]
+
+    def test_signup_supplier_empty_seller_types(self):
+        # Validation is on frontend — backend should accept empty arrays
+        r = requests.post(f"{API}/auth/signup-supplier", json={
+            "email": NEW_SUPPLIER_V2_EMPTY[0], "password": NEW_SUPPLIER_V2_EMPTY[1],
+            "business_name": "TEST V2 Empty", "contact_person": "Empty",
+            "phone": "9000000023", "city": "Pune",
+            "state": "", "pincode": "",
+            "cities_served": [],
+            "gst_number": "", "pan_number": "",
+            "annual_turnover": "", "years_in_business": None,
+            "business_address": "addr",
+            "seller_types": [],
+            "compatible_brands": [],
+            "testing_before_delivery": False,
+        }, timeout=30)
+        assert r.status_code == 200, r.text
+        state["v2_empty_user_id"] = r.json()["user_id"]
+
+    def test_supplier_documents_patch(self):
+        # Sign in as the v2 supplier and patch doc paths
+        tok = sb_login(NEW_SUPPLIER_V2[0], NEW_SUPPLIER_V2[1])
+        assert tok
+        state["v2_token"] = tok
+        uid = state["v2_user_id"]
+        path = f"{uid}/gst.pdf"
+        r = requests.post(f"{API}/auth/supplier-documents",
+                          headers=H(tok), json={"doc_gst": path}, timeout=30)
+        assert r.status_code == 200, r.text
+        assert r.json().get("ok") is True
+
+        # Verify it got persisted
+        admin_tok = state["admin_token"]
+        rows = requests.get(f"{API}/admin/suppliers/pending",
+                            headers=H(admin_tok), timeout=15).json()
+        by_user = {row["user_id"]: row for row in rows}
+        assert by_user[uid].get("doc_gst") == path
+
+    def test_supplier_documents_requires_auth(self):
+        r = requests.post(f"{API}/auth/supplier-documents",
+                          json={"doc_gst": "x/y.pdf"}, timeout=15)
+        assert r.status_code == 401
+
+    def test_admin_documents_endpoint(self):
+        tok = state["admin_token"]
+        pid = state["v2_pending_id"]
+        r = requests.get(f"{API}/admin/suppliers/{pid}/documents",
+                         headers=H(tok), timeout=20)
+        assert r.status_code == 200, r.text
+        d = r.json()
+        # Structure: {documents: {...}, ai_check: {...}}
+        assert "documents" in d and isinstance(d["documents"], dict)
+        assert "ai_check" in d and isinstance(d["ai_check"], dict)
+
+    def test_admin_documents_for_empty_app(self):
+        # Verify empty docs case still returns 200 with empty dict
+        tok = state["admin_token"]
+        # find pending id for the empty signup
+        rows = requests.get(f"{API}/admin/suppliers/pending",
+                            headers=H(tok), timeout=15).json()
+        by_user = {r["user_id"]: r for r in rows}
+        pid = by_user[state["v2_empty_user_id"]]["id"]
+        r = requests.get(f"{API}/admin/suppliers/{pid}/documents",
+                         headers=H(tok), timeout=15)
+        assert r.status_code == 200
+        d = r.json()
+        assert d.get("documents") == {}
+
+    def test_approve_v2_copies_new_fields(self):
+        tok = state["admin_token"]
+        pid = state["v2_pending_id"]
+        r = requests.post(f"{API}/admin/suppliers/{pid}/approve",
+                          headers=H(tok), timeout=30)
+        assert r.status_code == 200, r.text
+
+        # Verify suppliers row has new fields
+        v2_tok = state["v2_token"]
+        me = requests.get(f"{API}/auth/me", headers=H(v2_tok), timeout=15).json()
+        assert me.get("supplier_status") == "approved"
+        # auth/me only returns id,business_name,city,approved_at — we'll rely on
+        # admin/suppliers list to verify the rest
+        admin_rows = requests.get(f"{API}/admin/suppliers",
+                                  headers=H(tok), timeout=15).json()
+        sup = next((s for s in admin_rows if s.get("user_id") == state["v2_user_id"]), None)
+        assert sup, "approved supplier not found in /admin/suppliers"
+        assert sup.get("state") == "Karnataka"
+        assert sup.get("pincode") == "560001"
+        assert sup.get("pan_number") == "ABCDE1234F"
+        assert sup.get("years_in_business") == 5
+        assert sorted(sup.get("cities_served") or []) == ["Bangalore", "Mysore"]
+        assert sorted(sup.get("seller_types") or []) == ["Compatible", "Original", "Refilled"]
+        assert sorted(sup.get("compatible_brands") or []) == ["Brother", "Canon", "HP"]
+        assert sup.get("testing_before_delivery") is True
+
+    def test_reject_v2_empty_with_reason(self):
+        tok = state["admin_token"]
+        rows = requests.get(f"{API}/admin/suppliers/pending",
+                            headers=H(tok), timeout=15).json()
+        by_user = {r["user_id"]: r for r in rows}
+        pid = by_user[state["v2_empty_user_id"]]["id"]
+        reason = "Missing seller types and KYC"
+        r = requests.post(f"{API}/admin/suppliers/{pid}/reject",
+                          headers=H(tok), json={"reason": reason}, timeout=20)
+        assert r.status_code == 200, r.text
+
+        # Verify the rejection persisted via supplier's /auth/me
+        sup_tok = sb_login(NEW_SUPPLIER_V2_EMPTY[0], NEW_SUPPLIER_V2_EMPTY[1])
+        me = requests.get(f"{API}/auth/me", headers=H(sup_tok), timeout=15).json()
+        assert me.get("supplier_status") == "rejected"
+        app = me.get("application") or {}
+        assert app.get("rejection_reason") == reason
