@@ -1,81 +1,81 @@
-# TonersCart — Product Requirements Document
+# TonersCart — Product Requirements (Supabase edition)
 
-## Original problem statement
-Build a full-stack B2B marketplace web application called TonersCart for India where customers can search and order printer toners from multiple suppliers. Marketplace (like IndiaMART but only for toners). 3 roles: Customer, Supplier (admin-approved), Admin. Core: search by toner model, multi-supplier listings, order request system (no payment), status tracking, role-based dashboards.
+## Vision
+B2B marketplace for printer toners in India. Buyers search by toner model,
+compare verified suppliers (city, price, Original/Compatible), and send
+order requests. No payments — direct trade.
 
-## Architecture
-- **Backend**: FastAPI + Motor (async MongoDB) on `:8001`, all routes under `/api`
-- **Frontend**: React 19 + Tailwind + Shadcn UI + react-router 7 on `:3000`
-- **Auth**: JWT (PyJWT) + bcrypt, supports Bearer header + httpOnly cookie
-- **DB**: `tonerscart_db` with collections — `users`, `toner_master`, `products`, `orders`
+## Roles
+1. **Customer** — searches catalog, places order requests, tracks orders.
+2. **Supplier** — must be **admin-approved** before listing. Picks toner from
+   the catalog, sets price/stock/Original-or-Compatible/image, manages orders.
+3. **Admin** — approves/rejects supplier applications, sees all stats.
 
-## User personas
-- **Customer / Buyer**: Procurement managers, IT admins, resellers needing bulk toners
-- **Supplier**: Toner distributors / dealers across Indian cities
-- **Admin**: Platform operator approving suppliers, monitoring marketplace
+## Architecture (post-Supabase migration, 2026-05-03)
+- **Auth:** Supabase Auth (email + password). Tokens are validated server-side
+  via the Supabase Python SDK.
+- **Database:** Supabase Postgres. Six tables (`users`, `toner_master`,
+  `suppliers_pending`, `suppliers`, `listings`, `orders`) with RLS enabled.
+- **Storage:** Supabase Storage `product-images` bucket — public read, authenticated write.
+- **Backend:** FastAPI (`/app/backend/server.py`) — thin layer that uses the
+  service-role client for protected ops. AI chat (Claude Sonnet 4.5) endpoint stays.
+- **Frontend:** React + Tailwind, mobile-first responsive. Uses `@supabase/supabase-js`
+  for auth + storage uploads, axios with Bearer token for backend calls.
 
-## Core requirements (static)
-- Search by toner model with brand + city filters
-- Multi-supplier listings grouped by toner model (price comparison)
-- Order request workflow (no payment): requested → accepted → shipped (tracking) → completed
-- Supplier signup with admin approval
-- Role-based protected routes/dashboards
-- TonerMaster catalog so suppliers select from a canonical list (no free-text typo issues)
+## Core flows
+1. **Customer signup** → `/api/auth/signup-customer` → instant login.
+2. **Supplier signup** → `/api/auth/signup-supplier` (collects: business_name,
+   contact_person, phone, email, city, gst_number, annual_turnover,
+   business_address) → creates auth user + `suppliers_pending` row (status=pending) → user
+   can sign in but `/supplier` shows "Application under review".
+3. **Admin approval** → `/admin` shows pending applications → click Approve →
+   row moved to `suppliers` table → supplier can now create listings.
+4. **Supplier creates listing** → picks toner from catalog, enters price/stock,
+   chooses **Original** or **Compatible**, optionally uploads image → image
+   goes to `product-images/<user_id>/<ts>.<ext>` → public URL stored in `listings.image_url`.
+5. **Buyer searches** → `/api/listings/search?q=...` returns rows with
+   supplier_name, supplier_city, toner_type — UI shows colour-coded
+   ORIGINAL (green) / COMPATIBLE (blue) badge.
+6. **Order request** → customer sends; supplier accepts → ships (tracking) → delivers.
 
 ## What's been implemented
-### 2026-05-02 — MVP build (initial)
-- JWT auth, 3 roles (customer/supplier/admin), seeded admin
-- TonerMaster catalog: **174 entries** across HP, Canon, Brother, Samsung, Ricoh, Epson, Xerox, Kyocera (Original/Compatible/Refilled variants)
-- 25 approved suppliers across major Indian cities (Delhi, Mumbai, Bangalore, Chennai, Hyderabad, Pune, Kolkata, Ahmedabad, Jaipur, Lucknow, Chandigarh, Surat, Indore, Nagpur, Coimbatore, Kochi, Bhopal, Noida, Gurgaon, Faridabad, Vadodara, Ludhiana, Visakhapatnam, Thane, Patna)
-- 1 pending supplier (for admin approval testing)
-- 3 demo customers + 8 demo orders
-- 615 product listings (each TonerMaster mapped to 2–5 suppliers with varied price/stock)
-- Smart search with normalization (`HP88A` = `hp 88 a` = `88-A` = `88a`) using `model_normalized` + `search_norm` fields
-- TonerMaster autocomplete dropdown on landing hero, search page, and supplier Add-Product dialog
-- Sidebar filters on Search page: brand, city, toner type
-- Order request dialog with quantity/address/phone/notes
-- Supplier dashboard: TonerMaster-driven product creation, order pipeline (accept/ship+tracking/complete)
-- Admin dashboard: pending approvals, all users, all products, all orders, platform stats
-- CMYK-themed UI (charcoal #0E0F12 base, cyan #00B7C7, magenta #E6007E, yellow #F7C600 CTAs)
-- Tested: 35/35 backend tests pass; all critical frontend flows verified by testing agent
+### 2026-05-02 — MongoDB MVP (deprecated)
+Removed in favour of Supabase architecture.
 
-### 2026-05-02 — UI polish + mobile-first responsive
-- Removed glassmorphism nav, reverted to clean white sticky header
-- Realistic toner cartridge SVG (light gray plastic body, brand-coloured label band, drum roller, drop shadow) replacing dark blocks
-- Thin Montserrat headline (weight 300) across hero, top-models, register
-- Hero search bar widened, top-aligned, "All brands" select removed (user request)
-- Removed 3-second login popup (user request)
-- **Mobile-first responsive overhaul**:
-  - Hamburger drawer menu with city pills, Browse/Sell/Sign-in
-  - Hero stacks animation-on-top, text below on mobile (order-1/order-2)
-  - Stats grid: 2-col mobile → 4-col desktop
-  - Top-models grid: 2-col mobile → 4-col desktop
-  - Search page: mobile shows "Filters" button + bottom-sheet drawer; desktop shows sticky sidebar
-  - Product cards: 1-col mobile → 2-col tablet → 3-col desktop
-  - AI chat panel goes full-width on mobile, floating on desktop
-  - Search input + button: stacked on <640px, inline on ≥640px
-  - Register form: 1-col mobile → 2-col tablet+
-- Supplier registration form expanded with brands, GST, business address, areas supplied, customer base, monthly volume, notes
-- Supplier-apply endpoint (`/api/auth/supplier-apply`) writes to `supplier_applications` and emails `support@digitaledgeinida.com` (SMTP path; Resend integration pending API key)
+### 2026-05-03 — Supabase migration ✅ (36/36 backend tests pass)
+- Schema applied to project `mlvtaozdosufrhzhvgdg.supabase.co`
+- 152 toner_master rows seeded (Original + Compatible only, Refilled removed)
+- Admin user provisioned (admin@tonerscart.in / Admin@123)
+- Replaced JWT custom auth with Supabase Auth
+- New backend endpoints: signup-customer, signup-supplier, /auth/me, /listings/search,
+  /listings/grouped, /listings/facets, /supplier/listings (CRUD), /orders, /orders/{id}/status,
+  /admin/suppliers/pending, /admin/suppliers/{id}/approve|reject, /admin/stats, /toner-master,
+  /chat
+- Pending-approval gating: unapproved suppliers see a "Pending review" screen and cannot create listings (403)
+- Admin Console: pending applications card list with full details + approve/reject dialog,
+  approved suppliers table, stats grid
+- Supplier Dashboard: stats, listings grid (with Original/Compatible badge),
+  Add product dialog (toner picker → price → stock → toner type → image upload to Supabase Storage),
+  recent orders pipeline (accept/reject/ship-with-tracking/deliver)
+- Customer Dashboard: order summary stats + table with joined supplier info
+- Search/Landing: Original/Compatible badge prominently displayed; supplier+city shown on every card
+- Mobile-first responsive: hamburger drawer, bottom-sheet filters, single-column cards on phones
 
-## Prioritized backlog
-### P1 (next phase)
-- Add pagination on /api/admin/* and /api/orders/mine
-- Image uploads for products (object storage)
-- Email notifications on order status changes (Resend or SMTP)
-- Saved searches / saved suppliers for buyers
-- Supplier ratings & buyer reviews
+## Next / Backlog
+- **Resend email** for supplier approval/rejection notifications + order updates (waiting on RESEND_API_KEY)
+- Bulk CSV upload for supplier products
+- Supplier ratings / reviews
+- Order export to CSV / GST invoice helper
+- Twilio OTP phone login (currently email/password only)
 
-### P2 (nice-to-have)
-- Bulk CSV import for supplier products
-- Multi-currency / GST invoice helper
-- Buyer-side "request quote across all suppliers" for a model
-- Admin: cleanup endpoint for TEST_ accounts left from QA runs
-- Better fuzzy search (Levenshtein) for misspelled brand names
-
-## Test credentials
-See `/app/memory/test_credentials.md`
-
-## Key files
-- Backend: `/app/backend/server.py`, `/app/backend/toner_master_seed.py`
-- Frontend: `/app/frontend/src/{App.js, pages/*, components/*, context/AuthContext.jsx, lib/api.js, index.css}`
+## Files of reference
+- `/app/backend/server.py` — All API endpoints
+- `/app/backend/supabase_client.py` — Service-role + anon clients
+- `/app/backend/supabase_schema.sql` — Tables, RLS, storage bucket
+- `/app/backend/seed_supabase.py` — Admin + toner_master seeder
+- `/app/frontend/src/lib/supabase.js` — Browser supabase client
+- `/app/frontend/src/lib/api.js` — Axios with Bearer token interceptor
+- `/app/frontend/src/context/AuthContext.jsx` — Supabase auth state
+- `/app/frontend/src/pages/Register.jsx` — Customer + supplier signup with new fields
+- `/app/frontend/src/pages/SupplierDashboard.jsx` — Listings + image upload + orders
+- `/app/frontend/src/pages/AdminDashboard.jsx` — Approval queue
