@@ -83,14 +83,14 @@ export default function Printers() {
             const usp = new URLSearchParams(params);
             if (q.trim()) usp.set("q", q.trim()); else usp.delete("q");
             if (condition) usp.set("condition", condition); else usp.delete("condition");
-            if (city && !usp.get("city")) usp.set("city", city);
+            // City is opt-in — only applied when explicitly present in URL params (e.g. coming from the guided finder).
             const { data } = await api.get(`/printers?${usp.toString()}`);
             setListings(data || []);
         } catch (err) { toast.error(formatApiError(err)); }
         finally { setLoading(false); }
     };
 
-    useEffect(() => { load(); /* eslint-disable-next-line */ }, [params, condition, city]);
+    useEffect(() => { load(); /* eslint-disable-next-line */ }, [params, condition]);
 
     const removeChip = (k) => {
         const next = new URLSearchParams(params);

@@ -966,11 +966,24 @@ def list_printers(
     res = qry.order("created_at", desc=True).limit(200).execute()
     rows = res.data or []
     out = []
+    # Treat common India city aliases as equivalent for filtering
+    _CITY_ALIASES = {
+        "bangalore": {"bangalore", "bengaluru"},
+        "bengaluru": {"bangalore", "bengaluru"},
+        "bombay": {"bombay", "mumbai"},
+        "mumbai": {"bombay", "mumbai"},
+        "calcutta": {"calcutta", "kolkata"},
+        "kolkata": {"calcutta", "kolkata"},
+        "madras": {"madras", "chennai"},
+        "chennai": {"madras", "chennai"},
+    }
+    want = (city or "").lower()
+    accepted = _CITY_ALIASES.get(want, {want}) if want else None
     for r in rows:
         sup = r.pop("supplier", None) or {}
         r["supplier_name"] = sup.get("business_name", "")
         r["city"] = sup.get("city", "")
-        if city and r["city"].lower() != city.lower():
+        if accepted is not None and r["city"].lower() not in accepted:
             continue
         out.append(r)
     return out
