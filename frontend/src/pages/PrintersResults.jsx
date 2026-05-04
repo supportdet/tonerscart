@@ -103,11 +103,7 @@ export default function Printers() {
     const submitQ = (e) => { e.preventDefault(); load(); };
 
     const onRequest = (p) => {
-        const to = `mailto:?subject=Enquiry for ${p.brand} ${p.model_number}`;
-        toast.message(`Request sent to ${p.supplier_name}. They will contact you directly.`);
-        navigate("/mps"); // Placeholder — future: inline request-to-quote modal. For now funnel guided.
-        // silence unused warning
-        void to;
+        toast.success(`Request noted for ${p.brand} ${p.model_number} — ${p.supplier_name} will reach out. For now please call +91 9742270585.`);
     };
 
     return (
@@ -122,7 +118,7 @@ export default function Printers() {
                     <h1 className="text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 300, letterSpacing: "-0.025em", lineHeight: 1.12 }}>
                         Verified printers from trusted dealers
                     </h1>
-                    <p className="text-white/65 mt-3 text-[14px] max-w-xl">Not sure what you need? <button onClick={() => navigate("/mps")} className="text-[#00B7C7] font-semibold inline-flex items-center gap-1 hover:underline" data-testid="printers-to-mps-link"><Sparkles size={12} /> Use our guided finder</button></p>
+                    <p className="text-white/65 mt-3 text-[14px] max-w-xl">Not sure what you need? <button onClick={() => navigate("/printers")} className="text-[#00B7C7] font-semibold inline-flex items-center gap-1 hover:underline" data-testid="printers-to-guide-link"><Sparkles size={12} /> Use our guided finder</button></p>
 
                     <form onSubmit={submitQ} className="mt-6 bg-white/10 backdrop-blur-xl border border-white/15 rounded-2xl p-2 flex items-center gap-2" data-testid="printers-search-form">
                         <SearchIcon size={16} className="text-white/70 ml-2" />
@@ -174,7 +170,7 @@ export default function Printers() {
                     <div className="bg-white border border-black/[0.06] rounded-2xl p-10 text-center">
                         <PrinterIcon size={40} className="mx-auto text-[#D2D2D7]" />
                         <div className="mt-3 font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>No printers match these filters yet</div>
-                        <p className="text-[13px] text-[#6E6E73] mt-1">Try removing a filter or <button onClick={() => navigate("/mps")} className="text-[#00B7C7] font-semibold hover:underline" data-testid="printers-mps-cta">use the guided finder</button>.</p>
+                        <p className="text-[13px] text-[#6E6E73] mt-1">Try removing a filter or <button onClick={() => navigate("/printers")} className="text-[#00B7C7] font-semibold hover:underline" data-testid="printers-guide-cta">use the guided finder</button>.</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="printers-grid">

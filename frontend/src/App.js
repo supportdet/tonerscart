@@ -15,8 +15,8 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Sell from "./pages/Sell";
 import MPS from "./pages/MPS";
-import MPSContact from "./pages/MPSContact";
-import Printers from "./pages/Printers";
+import PrintersGuide from "./pages/PrintersGuide";
+import PrintersResults from "./pages/PrintersResults";
 import CustomerDashboard from "./pages/CustomerDashboard";
 import SupplierDashboard from "./pages/SupplierDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -43,8 +43,8 @@ function App() {
                                     <Route path="/checkout" element={<Checkout />} />
                                     <Route path="/sell" element={<Sell />} />
                                     <Route path="/mps" element={<MPS />} />
-                                    <Route path="/mps/contact" element={<MPSContact />} />
-                                    <Route path="/printers" element={<Printers />} />
+                                    <Route path="/printers" element={<PrintersGuide />} />
+                                    <Route path="/printers/results" element={<PrintersResults />} />
                                     <Route path="/customer" element={<ProtectedRoute roles={["customer"]}><CustomerDashboard /></ProtectedRoute>} />
                                     <Route path="/supplier" element={<ProtectedRoute roles={["supplier"]}><SupplierDashboard /></ProtectedRoute>} />
                                     <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
