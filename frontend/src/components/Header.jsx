@@ -45,7 +45,9 @@ export default function Header() {
 
                 {/* Desktop nav */}
                 <nav className="hidden md:flex items-center gap-1">
-                    <NavLink to="/search" className={navLink} data-testid="nav-browse">Browse</NavLink>
+                    <NavLink to="/search" className={navLink} data-testid="nav-browse">Toners</NavLink>
+                    <NavLink to="/printers" className={navLink} data-testid="nav-printers">Printers</NavLink>
+                    <NavLink to="/mps" className={navLink} data-testid="nav-mps">MPS</NavLink>
 
                     {/* Sell — visible for guests, buyers and pending sellers; hidden for approved sellers */}
                     {!isSeller && !isAdmin && (
@@ -157,6 +159,8 @@ export default function Header() {
                         </div>
 
                         <NavLink to="/search" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-browse">Browse toners</NavLink>
+                        <NavLink to="/printers" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-printers">Browse printers</NavLink>
+                        <NavLink to="/mps" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-mps">Managed Print Services</NavLink>
                         {!isSeller && !isAdmin && (
                             <NavLink to="/sell" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-sell">Sell on TonersCart</NavLink>
                         )}

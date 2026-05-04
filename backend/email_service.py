@@ -158,3 +158,31 @@ async def email_application_rejected(application: dict, reason: str):
     <p>If you&apos;d like to appeal or share more documentation, just reply to this email — we&apos;ll be happy to take another look.</p>
     """
     await _send(email_to_applicant, "Update on your TonersCart supplier application", html)
+
+
+
+async def email_mps_inquiry(payload: dict):
+    """Sends an MPS inquiry to the support inbox for follow-up."""
+    name = payload.get("name", "")
+    email = payload.get("email", "")
+    phone = payload.get("phone", "")
+    description = payload.get("description") or ""
+    estimated = payload.get("estimated_printers", "—")
+    sel = payload.get("selections") or {}
+    sel_rows = "".join(
+        f"<tr><td style='padding:4px 12px;color:#86868B;'>{k}</td>"
+        f"<td style='padding:4px 12px;'><strong>{v if not isinstance(v, list) else ', '.join(v)}</strong></td></tr>"
+        for k, v in sel.items() if v
+    )
+    html = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;">New Managed Print Services (MPS) enquiry</h2>
+    <p style="margin:0 0 18px 0;color:#6E6E73;">Estimated fleet: <strong>{estimated}</strong> printers</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <tr><td style='padding:4px 12px;color:#86868B;'>Name</td><td style='padding:4px 12px;'><strong>{name}</strong></td></tr>
+      <tr><td style='padding:4px 12px;color:#86868B;'>Email</td><td style='padding:4px 12px;'><strong>{email}</strong></td></tr>
+      <tr><td style='padding:4px 12px;color:#86868B;'>Phone</td><td style='padding:4px 12px;'><strong>{phone}</strong></td></tr>
+      {sel_rows}
+    </table>
+    {f'<p style="margin-top:18px;"><strong>Requirement:</strong><br/>{description}</p>' if description else ''}
+    """
+    await _send(SUPPORT_INBOX, f"[TonersCart MPS] New enquiry — {name} ({estimated} printers)", html, reply_to=email)

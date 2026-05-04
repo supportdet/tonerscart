@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle } from "lucide-react";
 import { supabase, PRODUCT_BUCKET } from "../lib/supabase";
 import TonerCartridge from "../components/TonerCartridge";
+import PrinterListings from "../components/PrinterListings";
 
 const ORDER_STATUS = {
     requested: "Requested",
@@ -49,6 +50,7 @@ function PendingScreen({ application }) {
 export default function SupplierDashboard() {
     const { user, refresh } = useAuth();
     const isApproved = user?.supplier_status === "approved";
+    const [catalog, setCatalog] = useState("toners"); // 'toners' | 'printers'
 
     const [listings, setListings] = useState([]);
     const [orders, setOrders] = useState([]);
@@ -172,9 +174,11 @@ export default function SupplierDashboard() {
                             </h1>
                             <p className="text-[14px] text-white/65 mt-2">{user?.supplier?.city || user?.city}</p>
                         </div>
-                        <Button className="btn-cta inline-flex items-center gap-2 self-start" onClick={openDialog} data-testid="add-listing-btn">
-                            <Plus size={16} /> Add product
-                        </Button>
+                        {catalog === "toners" && (
+                            <Button className="btn-cta inline-flex items-center gap-2 self-start" onClick={openDialog} data-testid="add-listing-btn">
+                                <Plus size={16} /> Add toner
+                            </Button>
+                        )}
                     </div>
 
                     {/* Stats inside hero */}
@@ -195,8 +199,21 @@ export default function SupplierDashboard() {
             </div>
 
             <div className="tc-container py-8 sm:py-10">
+                {/* Catalog tabs */}
+                <div className="inline-flex items-center rounded-full bg-black/[0.05] p-1 mb-6" data-testid="catalog-tabs">
+                    <button onClick={() => setCatalog("toners")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "toners" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-toners">Toners</button>
+                    <button onClick={() => setCatalog("printers")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "printers" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-printers">Printers</button>
+                </div>
+
+                {catalog === "printers" ? (
+                    <>
+                        <h2 id="printers" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your printers</h2>
+                        <PrinterListings />
+                    </>
+                ) : (
+                <>
                 {/* Listings */}
-                <h2 id="listings" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your products</h2>
+                <h2 id="listings" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your toners</h2>
             {listings.length === 0 ? (
                 <div className="tc-card-flat p-8 text-center text-[#6E6E73]">
                     No listings yet. Tap <span className="font-semibold text-[#0A0A0B]">Add product</span> to publish your first toner.
@@ -280,6 +297,8 @@ export default function SupplierDashboard() {
                     </div>
                 </>
             )}
+                </>
+                )}
 
             {/* Add listing dialog */}
             <Dialog open={open} onOpenChange={setOpen}>

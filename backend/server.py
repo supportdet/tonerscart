@@ -17,7 +17,7 @@ from typing import List, Optional
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
 
@@ -26,6 +26,7 @@ from email_service import (
     email_application_received,
     email_application_approved,
     email_application_rejected,
+    email_mps_inquiry,
 )
 from ai_check import check_documents
 from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -793,6 +794,225 @@ def admin_stats(user: dict = Depends(require_role("admin"))):
         "listings": cnt("listings"),
         "orders": cnt("orders"),
     }
+
+
+# ===== Printers + MPS =========================================================
+
+PRINTER_USAGES = {"home", "corporate", "commercial", "print_shop"}
+PRINTER_CATEGORIES = {"inkjet", "laser", "tank", "thermal", "production", "digital_press", "label_barcode", "ink", "other"}
+PRINTER_CONDITIONS = {"new", "refurbished"}
+PRINTER_COLORS = {"color", "bw", "both"}
+
+
+class PrinterListingCreate(BaseModel):
+    brand: str
+    model_number: str
+    description: Optional[str] = ""
+    image_url: str
+    condition: str = "new"
+    usage_type: str
+    category: str
+    color: str = "color"
+    paper_sizes: List[str] = Field(default_factory=list)
+    functions: List[str] = Field(default_factory=list)
+    connectivity: List[str] = Field(default_factory=list)
+    features: List[str] = Field(default_factory=list)
+    monthly_volume_min: int = 0
+    monthly_volume_max: int = 0
+    price: float
+    stock: int = 1
+
+
+def _supplier_id_for(user: dict) -> str:
+    s = sb_admin.table("suppliers").select("id").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        raise HTTPException(403, "Only approved sellers can manage printers")
+    return s.data["id"]
+
+
+@api.post("/supplier/printer-image")
+async def upload_printer_image(file: UploadFile = File(...), user: dict = Depends(require_user)):
+    """Upload a printer image via the backend (service role) — bypasses storage RLS."""
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved sellers can upload printer images")
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(400, "Only image files are allowed")
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Max 5 MB")
+    ext = (file.filename.split(".")[-1] if file.filename and "." in file.filename else "jpg").lower()
+    path = f"{user['id']}/{uuid.uuid4().hex}.{ext}"
+    try:
+        sb_admin.storage.from_("printer-images").upload(
+            path, content, {"content-type": file.content_type, "upsert": "false"}
+        )
+    except Exception as e:
+        logger.exception("printer image upload failed")
+        raise HTTPException(500, f"Upload failed: {e}") from e
+    public_url = sb_admin.storage.from_("printer-images").get_public_url(path)
+    return {"url": public_url, "path": path}
+
+
+
+
+@api.post("/supplier/printers")
+def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_user)):
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved sellers can list printers")
+    if payload.condition not in PRINTER_CONDITIONS:
+        raise HTTPException(400, "Invalid condition")
+    if payload.usage_type not in PRINTER_USAGES:
+        raise HTTPException(400, "Invalid usage_type")
+    if payload.category not in PRINTER_CATEGORIES:
+        raise HTTPException(400, "Invalid category")
+    if payload.color not in PRINTER_COLORS:
+        raise HTTPException(400, "Invalid color")
+    if payload.price < 0 or payload.stock < 0:
+        raise HTTPException(400, "price and stock must be non-negative")
+    if not payload.image_url:
+        raise HTTPException(400, "Image is required")
+    sid = _supplier_id_for(user)
+    row = {
+        "supplier_id": sid,
+        "brand": payload.brand.strip(),
+        "model_number": payload.model_number.strip(),
+        "description": payload.description or "",
+        "image_url": payload.image_url,
+        "condition": payload.condition,
+        "usage_type": payload.usage_type,
+        "category": payload.category,
+        "color": payload.color,
+        "paper_sizes": payload.paper_sizes or [],
+        "functions": payload.functions or [],
+        "connectivity": payload.connectivity or [],
+        "features": payload.features or [],
+        "monthly_volume_min": int(payload.monthly_volume_min or 0),
+        "monthly_volume_max": int(payload.monthly_volume_max or 0),
+        "price": float(payload.price),
+        "stock": int(payload.stock),
+    }
+    res = sb_admin.table("printer_listings").insert(row).execute()
+    if not res.data:
+        raise HTTPException(500, "Failed to insert printer")
+    return {"id": res.data[0]["id"]}
+
+
+@api.delete("/supplier/printers/{printer_id}")
+def delete_printer(printer_id: str, user: dict = Depends(require_user)):
+    sid = _supplier_id_for(user)
+    sb_admin.table("printer_listings").delete().eq("id", printer_id).eq("supplier_id", sid).execute()
+    return {"ok": True}
+
+
+@api.get("/supplier/printers/mine")
+def my_printers(user: dict = Depends(require_user)):
+    sid = _supplier_id_for(user)
+    res = sb_admin.table("printer_listings").select("*").eq("supplier_id", sid).order("created_at", desc=True).execute()
+    return res.data or []
+
+
+@api.get("/printers")
+def list_printers(
+    usage_type: Optional[str] = None,
+    category: Optional[str] = None,
+    condition: Optional[str] = None,
+    color: Optional[str] = None,
+    paper_size: Optional[str] = None,
+    function_: Optional[str] = None,
+    connectivity: Optional[str] = None,
+    feature: Optional[str] = None,
+    min_volume: Optional[int] = None,
+    max_volume: Optional[int] = None,
+    city: Optional[str] = None,
+    brand: Optional[str] = None,
+    q: Optional[str] = None,
+):
+    """Public browse endpoint with optional filters from the MPS flow."""
+    sel = (
+        "id,brand,model_number,description,image_url,condition,usage_type,category,"
+        "color,paper_sizes,functions,connectivity,features,monthly_volume_min,monthly_volume_max,"
+        "price,stock,supplier:suppliers(business_name,city)"
+    )
+    qry = sb_admin.table("printer_listings").select(sel).gt("stock", 0)
+    if usage_type and usage_type in PRINTER_USAGES:
+        qry = qry.eq("usage_type", usage_type)
+    if category and category in PRINTER_CATEGORIES:
+        qry = qry.eq("category", category)
+    if condition and condition in PRINTER_CONDITIONS:
+        qry = qry.eq("condition", condition)
+    if color and color in PRINTER_COLORS:
+        if color == "color":
+            qry = qry.in_("color", ["color", "both"])
+        elif color == "bw":
+            qry = qry.in_("color", ["bw", "both"])
+        else:
+            qry = qry.eq("color", "both")
+    if paper_size:
+        qry = qry.contains("paper_sizes", [paper_size])
+    if function_:
+        qry = qry.contains("functions", [function_])
+    if connectivity:
+        qry = qry.contains("connectivity", [connectivity])
+    if feature:
+        qry = qry.contains("features", [feature])
+    if min_volume is not None:
+        qry = qry.gte("monthly_volume_max", min_volume)
+    if max_volume is not None:
+        qry = qry.lte("monthly_volume_min", max_volume)
+    if brand:
+        qry = qry.ilike("brand", f"%{brand}%")
+    if q:
+        qry = qry.or_(f"brand.ilike.%{q}%,model_number.ilike.%{q}%,description.ilike.%{q}%")
+    res = qry.order("created_at", desc=True).limit(200).execute()
+    rows = res.data or []
+    out = []
+    for r in rows:
+        sup = r.pop("supplier", None) or {}
+        r["supplier_name"] = sup.get("business_name", "")
+        r["city"] = sup.get("city", "")
+        if city and r["city"].lower() != city.lower():
+            continue
+        out.append(r)
+    return out
+
+
+class MPSInquiry(BaseModel):
+    name: str
+    email: EmailStr
+    phone: str
+    description: Optional[str] = ""
+    estimated_printers: str
+    selections: Optional[dict] = None
+
+
+@api.post("/mps/inquiry")
+async def mps_inquiry(payload: MPSInquiry, request: Request):
+    user_id = None
+    tok = get_token(request)
+    if tok:
+        try:
+            u = get_user_from_token(tok)
+            if u:
+                user_id = u.id
+        except Exception:
+            user_id = None
+    row = {
+        "user_id": user_id,
+        "name": payload.name.strip(),
+        "email": str(payload.email),
+        "phone": payload.phone.strip(),
+        "description": payload.description or "",
+        "estimated_printers": payload.estimated_printers,
+        "selections": payload.selections or {},
+    }
+    sb_admin.table("mps_inquiries").insert(row).execute()
+    try:
+        await email_mps_inquiry(row)
+    except Exception as e:
+        logger.warning("MPS email failed: %s", e)
+    return {"ok": True}
+
+
 
 
 # ===== AI Chat (TonerBot) ======================================================
