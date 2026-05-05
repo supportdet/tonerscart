@@ -97,7 +97,7 @@ class TestOAuthBootstrap:
         call /api/auth/oauth-bootstrap. Must return created=True the first time
         and created=False the second time (idempotency)."""
         from supabase import create_client
-        SERVICE_ROLE = "sb_secret_kstkquXnCBTAAOJIRsxf9g_OKJ2bO-o"
+        SERVICE_ROLE = "dummy_service_role"
         sb = create_client(SUPABASE_URL, SERVICE_ROLE)
         email = f"oauth.boot.{RUN}.{uuid.uuid4().hex[:6]}@tonerscarttest.com"
         password = "Boot@12345"
