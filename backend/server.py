@@ -1054,19 +1054,16 @@ CHAT_SYSTEM = (
 async def chat(payload: ChatRequest):
     if not payload.messages:
         raise HTTPException(400, "messages required")
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get("GOOGLE_API_KEY")
     if not api_key:
         raise HTTPException(500, "LLM key not configured")
     try:
-        client = anthropic.Anthropic(api_key=api_key)
-        messages = [{"role": m.role, "content": m.content} for m in payload.messages]
-        response = client.messages.create(
-            model="claude-sonnet-4-5",
-            max_tokens=300,
-            system=CHAT_SYSTEM,
-            messages=messages,
-        )
-        reply = response.content[0].text
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-2.5-flash-preview-04-17", system_instruction=CHAT_SYSTEM)
+        messages = [{"role": "user" if m.role == "user" else "model", "parts": [m.content]} for m in payload.messages]
+        response = model.generate_content(messages)
+        reply = response.text
         return {"reply": reply, "session_id": payload.session_id or str(uuid.uuid4())}
     except Exception as e:
         logger.exception("LLM call failed")
