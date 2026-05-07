@@ -29,7 +29,6 @@ from email_service import (
     email_mps_inquiry,
 )
 from ai_check import check_documents
-import anthropic
 load_dotenv(Path(__file__).parent / ".env")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("tonerscart")
