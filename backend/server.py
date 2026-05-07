@@ -29,8 +29,7 @@ from email_service import (
     email_mps_inquiry,
 )
 from ai_check import check_documents
-from emergentintegrations.llm.chat import LlmChat, UserMessage
-
+import anthropic
 load_dotenv(Path(__file__).parent / ".env")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("tonerscart")
@@ -1055,21 +1054,20 @@ CHAT_SYSTEM = (
 async def chat(payload: ChatRequest):
     if not payload.messages:
         raise HTTPException(400, "messages required")
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise HTTPException(500, "LLM key not configured")
-    session_id = payload.session_id or str(uuid.uuid4())
     try:
-        chat_client = LlmChat(
-            api_key=api_key, session_id=session_id, system_message=CHAT_SYSTEM,
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-        latest = payload.messages[-1]
-        if latest.role != "user":
-            raise HTTPException(400, "last message must be from user")
-        reply = await chat_client.send_message(UserMessage(text=latest.content))
-        return {"reply": str(reply), "session_id": session_id}
-    except HTTPException:
-        raise
+        client = anthropic.Anthropic(api_key=api_key)
+        messages = [{"role": m.role, "content": m.content} for m in payload.messages]
+        response = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=300,
+            system=CHAT_SYSTEM,
+            messages=messages,
+        )
+        reply = response.content[0].text
+        return {"reply": reply, "session_id": payload.session_id or str(uuid.uuid4())}
     except Exception as e:
         logger.exception("LLM call failed")
         raise HTTPException(502, f"Chat unavailable: {e}") from e
