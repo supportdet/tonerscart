@@ -4,14 +4,22 @@ import { supabase } from "./supabase";
 const BASE = process.env.REACT_APP_BACKEND_URL;
 export const API_BASE = `${BASE}/api`;
 
+// Cache the access token to avoid calling supabase.auth.getSession() on every request
+// (which can deadlock when many requests are in flight back-to-back).
+let cachedToken = null;
+supabase.auth.getSession().then(({ data }) => {
+    cachedToken = data?.session?.access_token || null;
+});
+supabase.auth.onAuthStateChange((_event, session) => {
+    cachedToken = session?.access_token || null;
+});
+
 const api = axios.create({
     baseURL: API_BASE,
 });
 
-api.interceptors.request.use(async (cfg) => {
-    const { data } = await supabase.auth.getSession();
-    const token = data?.session?.access_token;
-    if (token) cfg.headers.Authorization = `Bearer ${token}`;
+api.interceptors.request.use((cfg) => {
+    if (cachedToken) cfg.headers.Authorization = `Bearer ${cachedToken}`;
     return cfg;
 });
 

@@ -95,9 +95,7 @@ export default function PrinterListings() {
             // Upload via backend (service role — bypasses storage RLS)
             const fd = new FormData();
             fd.append("file", imageFile);
-            const { data: up } = await api.post("/supplier/printer-image", fd, {
-                headers: { "Content-Type": "multipart/form-data" },
-            });
+            const { data: up } = await api.post("/supplier/printer-image", fd);
             const image_url = up.url;
             await api.post("/supplier/printers", {
                 brand: f.brand.trim(), model_number: f.model_number.trim(),

@@ -6,7 +6,6 @@ import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
-import { supabase } from "../lib/supabase";
 import { toast } from "sonner";
 import { Upload, CheckCircle2, ChevronLeft, ChevronRight, FileText } from "lucide-react";
 
@@ -20,8 +19,6 @@ const INDIAN_STATES = [
 const TURNOVER = ["< ₹10 Lakh", "₹10 – 50 Lakh", "₹50 Lakh – 2 Cr", "₹2 – 10 Cr", "₹10 Cr+"];
 const SELLER_TYPES = ["Original", "Compatible", "Refilled"];
 const COMMON_BRANDS = ["HP", "Canon", "Brother", "Samsung", "Ricoh", "Epson", "Xerox", "Kyocera"];
-
-const DOC_BUCKET = "supplier-documents";
 
 // Indian format validators
 const PHONE_RE = /^(?:\+?91[-\s]?)?[6-9]\d{9}$/;
@@ -175,9 +172,8 @@ export default function SellerApplicationForm() {
                 doc_bank_proof: "",
                 doc_address_proof: "",
             });
-            const uid = user.id;
 
-            // 2. Upload files (user is already signed in — no separate auth step)
+            // 2. Upload files via backend (service role — bypasses storage RLS for non-supplier users)
             const uploaded = {};
             const docMap = {
                 doc_brand_authorization: docs.brand_authorization,
@@ -189,11 +185,10 @@ export default function SellerApplicationForm() {
             };
             for (const [field, file] of Object.entries(docMap)) {
                 if (!file) continue;
-                const ext = (file.name.split(".").pop() || "bin").toLowerCase();
-                const path = `${uid}/${field}-${Date.now()}.${ext}`;
-                const { error: upErr } = await supabase.storage.from(DOC_BUCKET).upload(path, file, { upsert: false });
-                if (upErr) throw new Error(upErr.message || "Upload failed");
-                uploaded[field] = path;
+                const fd = new FormData();
+                fd.append("file", file);
+                const { data: up } = await api.post(`/auth/supplier-document-upload?field=${field}`, fd);
+                uploaded[field] = up.path;
             }
 
             if (Object.keys(uploaded).length > 0) {

@@ -10,15 +10,11 @@ export const AuthProvider = ({ children }) => {
 
     const refresh = useCallback(async () => {
         try {
-            const { data: sess } = await supabase.auth.getSession();
-            if (!sess?.session) {
-                setUser(null);
-                return;
-            }
             const { data } = await api.get("/auth/me");
             setUser(data);
-        } catch {
-            setUser(null);
+        } catch (err) {
+            if (err?.response?.status === 401) setUser(null);
+            // else: keep previous user state — transient errors shouldn't blank the UI
         } finally {
             setLoading(false);
         }

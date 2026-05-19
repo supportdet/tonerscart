@@ -11,6 +11,7 @@ a thin /api layer that:
 import os
 import re
 import uuid
+import asyncio
 import logging
 from pathlib import Path
 from typing import List, Optional
@@ -392,10 +393,12 @@ async def apply_seller(payload: SellerApplication, user: dict = Depends(require_
     }
     sb_admin.table("suppliers_pending").upsert(application, on_conflict="user_id").execute()
 
-    try:
-        await _run_ai_check(user["id"], application)
-    except Exception as e:
-        logger.warning("AI check skipped: %s", e)
+    async def _bg_ai():
+        try:
+            await _run_ai_check(user["id"], application)
+        except Exception as e:
+            logger.warning("background AI check (apply) skipped: %s", e)
+    asyncio.create_task(_bg_ai())
 
     try:
         await email_application_received(application)
@@ -408,18 +411,53 @@ async def apply_seller(payload: SellerApplication, user: dict = Depends(require_
 @api.post("/auth/supplier-documents")
 async def supplier_documents_patch(payload: SupplierDocPaths, user: dict = Depends(require_user)):
     """Called by the supplier client after files are uploaded to
-    supplier-documents/<uid>/... — saves paths and re-runs the AI check."""
+    supplier-documents/<uid>/... — saves paths and queues the AI check in the background
+    so the client gets an immediate response."""
     upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v}
     if not upd:
         return {"ok": True}
     sb_admin.table("suppliers_pending").update(upd).eq("user_id", user["id"]).execute()
     p = sb_admin.table("suppliers_pending").select("*").eq("user_id", user["id"]).maybe_single().execute()
     if p and p.data:
-        try:
-            await _run_ai_check(user["id"], p.data)
-        except Exception as e:
-            logger.warning("AI check skipped: %s", e)
+        async def _bg_ai():
+            try:
+                await _run_ai_check(user["id"], p.data)
+            except Exception as e:
+                logger.warning("background AI check skipped: %s", e)
+        asyncio.create_task(_bg_ai())
     return {"ok": True}
+
+
+@api.post("/auth/supplier-document-upload")
+async def supplier_document_upload(
+    field: str,
+    file: UploadFile = File(...),
+    user: dict = Depends(require_user),
+):
+    """Upload one supplier KYC document via the backend (service role) —
+    bypasses storage RLS so an applicant (still role=customer) can submit.
+    Returns the storage path which the client then sends to /auth/supplier-documents."""
+    allowed = {
+        "doc_brand_authorization", "doc_shop_photo", "doc_gst",
+        "doc_pan", "doc_bank_proof", "doc_address_proof",
+    }
+    if field not in allowed:
+        raise HTTPException(400, "Invalid document field")
+    if not file.content_type or not (file.content_type.startswith("image/") or file.content_type == "application/pdf"):
+        raise HTTPException(400, "Only images and PDF are allowed")
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Max 5 MB")
+    ext = (file.filename.split(".")[-1] if file.filename and "." in file.filename else "bin").lower()
+    path = f"{user['id']}/{field}-{uuid.uuid4().hex}.{ext}"
+    try:
+        sb_admin.storage.from_("supplier-documents").upload(
+            path, content, {"content-type": file.content_type, "upsert": "false"}
+        )
+    except Exception as e:
+        logger.exception("supplier doc upload failed")
+        raise HTTPException(500, f"Upload failed: {e}") from e
+    return {"path": path, "field": field}
 
 
 @api.get("/auth/me")
