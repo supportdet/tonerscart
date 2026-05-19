@@ -68,7 +68,7 @@ export default function PrinterListings() {
         setLoading(true);
         try {
             const { data } = await api.get("/supplier/printers/mine");
-            setItems(data || []);
+            setItems(Array.isArray(data) ? data : []);
         } catch (err) { toast.error(formatApiError(err)); }
         finally { setLoading(false); }
     };

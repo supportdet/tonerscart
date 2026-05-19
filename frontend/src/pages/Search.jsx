@@ -95,7 +95,11 @@ export default function SearchPage() {
     const { items: cartItems, addItem } = useCart();
     const rootRef = useReveal([products.length]);
 
-    useEffect(() => { api.get("/listings/facets").then((r) => setFacets(r.data)).catch(() => {}); }, []);
+    useEffect(() => {
+        api.get("/listings/facets")
+            .then((r) => setFacets(r.data || {}))
+            .catch(() => setFacets({}));
+    }, []);
 
     useEffect(() => {
         const fetch = async () => {
@@ -107,9 +111,11 @@ export default function SearchPage() {
             if (params.get("toner_type") && params.get("toner_type") !== "all") qp.toner_type = params.get("toner_type");
             try {
                 const r = await api.get("/listings/search", { params: { ...qp, limit: 500 } });
-                let items = r.data;
-                items.sort((a, b) => a.price - b.price);
+                const items = Array.isArray(r.data) ? [...r.data] : [];
+                items.sort((a, b) => (a?.price ?? 0) - (b?.price ?? 0));
                 setProducts(items);
+            } catch {
+                setProducts([]);
             } finally { setLoading(false); }
         };
         fetch();
@@ -162,7 +168,7 @@ export default function SearchPage() {
                 </div>
                 <div className="space-y-0.5">
                     <SidebarItem active={brand === "all"} onClick={() => setFilter("brand", "all")} testid="filter-brand-all">All brands</SidebarItem>
-                    {facets.brands.map((b) => (<SidebarItem key={b} active={brand === b} onClick={() => setFilter("brand", b)} testid={`filter-brand-${b}`}>{b}</SidebarItem>))}
+                    {(facets?.brands || []).map((b) => (<SidebarItem key={b} active={brand === b} onClick={() => setFilter("brand", b)} testid={`filter-brand-${b}`}>{b}</SidebarItem>))}
                 </div>
             </div>
 

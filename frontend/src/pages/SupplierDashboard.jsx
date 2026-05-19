@@ -78,7 +78,9 @@ export default function SupplierDashboard() {
                 api.get("/orders/mine"),
                 api.get("/toner-master/brands"),
             ]);
-            setListings(l.data); setOrders(o.data); setBrands(b.data || []);
+            setListings(Array.isArray(l.data) ? l.data : []);
+            setOrders(Array.isArray(o.data) ? o.data : []);
+            setBrands(Array.isArray(b.data) ? b.data : []);
         } catch (e) { toast.error(formatApiError(e)); }
     };
     useEffect(() => { load(); /* eslint-disable-next-line */ }, [isApproved]);

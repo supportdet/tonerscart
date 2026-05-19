@@ -30,9 +30,9 @@ export default function TonerSearchInput({ value, onChange, onSubmit, placeholde
             if (!v || v.length < 2) { setItems([]); return; }
             try {
                 const r = await api.get("/toner-master", { params: { q: v, limit: 8 } });
-                setItems(r.data);
+                setItems(Array.isArray(r.data) ? r.data : []);
                 setActive(0);
-            } catch { /* ignore */ }
+            } catch { setItems([]); }
         }, 180);
         return () => clearTimeout(t);
     }, [value]);

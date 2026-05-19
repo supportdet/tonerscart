@@ -19,7 +19,9 @@ export default function Landing() {
     const rootRef = useReveal([grouped.length, city]);
 
     useEffect(() => {
-        api.get("/listings/facets").then((r) => setFacets({ ...r.data, models: [] })).catch(() => {});
+        api.get("/listings/facets")
+            .then((r) => setFacets({ ...(r.data || {}), models: [] }))
+            .catch(() => setFacets({ brands: [], cities: [], models: [] }));
     }, []);
 
     useEffect(() => {
@@ -27,14 +29,14 @@ export default function Landing() {
         if (city) params.city = city;
         api.get("/listings/grouped", { params })
             .then(async (r) => {
-                let items = r.data;
+                let items = Array.isArray(r.data) ? r.data : [];
                 if (items.length === 0) {
                     const all = await api.get("/listings/grouped");
-                    items = all.data;
+                    items = Array.isArray(all.data) ? all.data : [];
                 }
                 setGrouped(items.slice(0, 8));
             })
-            .catch(() => {});
+            .catch(() => setGrouped([]));
     }, [city]);
 
     const submit = (override) => {

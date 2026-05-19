@@ -57,7 +57,9 @@ export default function AdminDashboard() {
                 api.get("/admin/suppliers/pending"),
                 api.get("/admin/suppliers"),
             ]);
-            setStats(s.data); setPending(p.data); setApproved(a.data);
+            setStats(s.data || {});
+            setPending(Array.isArray(p.data) ? p.data : []);
+            setApproved(Array.isArray(a.data) ? a.data : []);
         } catch (e) { toast.error(formatApiError(e)); }
     };
     useEffect(() => { load(); }, []);
@@ -89,7 +91,7 @@ export default function AdminDashboard() {
         setDocsLoading(true);
         try {
             const r = await api.get(`/admin/suppliers/${p.id}/documents`);
-            setDocs({ urls: r.data.documents || {}, ai: r.data.ai_check || {} });
+            setDocs({ urls: r.data?.documents || {}, ai: r.data?.ai_check || {} });
         } catch (e) { /* non-fatal */ }
         finally { setDocsLoading(false); }
     };
@@ -272,7 +274,7 @@ export default function AdminDashboard() {
                                         <div className="text-[12px] text-[#6E6E73]">No documents uploaded.</div>
                                     ) : (
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                            {Object.entries(docs.urls).map(([field, url]) => {
+                                            {Object.entries(docs.urls || {}).map(([field, url]) => {
                                                 const ai = (docs.ai && docs.ai[field]) || null;
                                                 const label = field.replace(/^doc_/, "").replace(/_/g, " ");
                                                 const aiBadge = ai

@@ -22,7 +22,7 @@ export default function CustomerDashboard() {
     const [loading, setLoading] = useState(true);
 
     const load = async () => {
-        try { const r = await api.get("/orders/mine"); setOrders(r.data); }
+        try { const r = await api.get("/orders/mine"); setOrders(Array.isArray(r.data) ? r.data : []); }
         catch (e) { toast.error(formatApiError(e)); }
         finally { setLoading(false); }
     };

@@ -85,7 +85,7 @@ export default function Printers() {
             if (condition) usp.set("condition", condition); else usp.delete("condition");
             // City is opt-in — only applied when explicitly present in URL params (e.g. coming from the guided finder).
             const { data } = await api.get(`/printers?${usp.toString()}`);
-            setListings(data || []);
+            setListings(Array.isArray(data) ? data : []);
         } catch (err) { toast.error(formatApiError(err)); }
         finally { setLoading(false); }
     };
