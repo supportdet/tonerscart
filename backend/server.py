@@ -1118,11 +1118,14 @@ def root():
     return {"service": "TonersCart API (Supabase)", "ok": True}
 
 
-app.include_router(api)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://www.tonerscart.com",
+        "https://tonerscart.com",
+        "https://tonerscart.vercel.app",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
