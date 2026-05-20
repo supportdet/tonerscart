@@ -19,9 +19,7 @@ export default function Landing() {
     const rootRef = useReveal([grouped.length, city]);
 
     useEffect(() => {
-        api.get("/listings/facets")
-            .then((r) => setFacets({ ...(r.data || {}), models: [] }))
-            .catch(() => setFacets({ brands: [], cities: [], models: [] }));
+        api.get("/listings/facets").then((r) => setFacets({ brands: r.data?.brands || [], cities: r.data?.cities || [], models: r.data?.models || [] })).catch(() => {});
     }, []);
 
     useEffect(() => {
@@ -36,7 +34,7 @@ export default function Landing() {
                 }
                 setGrouped(items.slice(0, 8));
             })
-            .catch(() => setGrouped([]));
+            .catch(() => {});
     }, [city]);
 
     const submit = (override) => {
@@ -48,11 +46,9 @@ export default function Landing() {
 
     return (
         <div ref={rootRef} data-testid="landing-page">
-            {/* ============================== HERO ============================== */}
             <section className="tc-hero relative pt-8 pb-12 sm:pt-12 sm:pb-20 lg:pt-16 lg:pb-24">
                 <div className="tc-hero-grid" />
                 <div className="tc-container relative">
-                    {/* Search bar — full-width with side gutters */}
                     <div className="flex items-center gap-3 mb-4 tc-fade-up">
                         <span className="tc-strip" />
                         <span className="text-[10px] sm:text-[11px] tracking-[0.22em] uppercase font-semibold text-white/60">Now serving {city}</span>
@@ -73,8 +69,6 @@ export default function Landing() {
                             </button>
                         ))}
                     </div>
-
-                    {/* Hero content split */}
                     <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-center mt-10 lg:mt-16">
                         <div className="lg:col-span-7 order-2 lg:order-1">
                             <h1
@@ -94,7 +88,6 @@ export default function Landing() {
                                 Search any model, compare every supplier in {city}, and place an order request in minutes. No payment gateway, just direct B2B trade.
                             </p>
                         </div>
-
                         <div className="lg:col-span-5 order-1 lg:order-2 tc-fade-up tc-fade-up-2">
                             <TonerAnimation />
                         </div>
@@ -102,7 +95,6 @@ export default function Landing() {
                 </div>
             </section>
 
-            {/* ====== STATS STRIP ====== */}
             <section className="bg-white border-b border-black/[0.06]">
                 <div className="tc-container py-6 sm:py-8 grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
                     {[
@@ -119,7 +111,6 @@ export default function Landing() {
                 </div>
             </section>
 
-            {/* ============== TOP MODELS ============== */}
             <section className="tc-container py-12 sm:py-16 lg:py-20">
                 <div className="flex items-end justify-between mb-6 sm:mb-8 gap-4">
                     <div className="flex-1">
@@ -133,7 +124,6 @@ export default function Landing() {
                         Browse all <ArrowRight size={13} />
                     </button>
                 </div>
-
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
                     {grouped.map((g, idx) => (
                         <button
@@ -161,8 +151,6 @@ export default function Landing() {
                         </button>
                     ))}
                 </div>
-
-                {/* Mobile-only "browse all" */}
                 <div className="mt-6 sm:hidden">
                     <button onClick={() => navigate("/search")} className="btn-primary w-full text-[13px] inline-flex items-center justify-center gap-1.5" data-testid="browse-all-btn-mobile">
                         Browse all toners <ArrowRight size={13} />
@@ -170,7 +158,6 @@ export default function Landing() {
                 </div>
             </section>
 
-            {/* CTA STRIP */}
             <section className="tc-container pb-12 sm:pb-20">
                 <div className="tc-card-flat p-6 sm:p-8 lg:p-10 grid md:grid-cols-2 gap-5 sm:gap-6 items-start md:items-center">
                     <div>
