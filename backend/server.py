@@ -1,13 +1,4 @@
-"""TonersCart FastAPI backend — Supabase edition.
-
-All persistence (auth, DB, storage) lives in Supabase. This service exposes
-a thin /api layer that:
-  - Verifies Supabase access tokens (Bearer)
-  - Reads/writes Postgres tables via supabase-py service-role client
-  - Handles supplier signup → suppliers_pending row + auth user
-  - Admin approval flips suppliers_pending → suppliers
-  - Hosts the Claude AI chat endpoint (TonerBot)
-"""
+"""TonersCart FastAPI backend — Supabase edition."""
 import os
 import re
 import uuid
@@ -21,6 +12,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
+import google.generativeai as genai
 
 from supabase_client import sb_admin, sb_anon, get_user_from_token
 from email_service import (
@@ -30,7 +22,6 @@ from email_service import (
     email_mps_inquiry,
 )
 from ai_check import check_documents
-from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 load_dotenv(Path(__file__).parent / ".env")
 logging.basicConfig(level=logging.INFO)
@@ -39,8 +30,6 @@ logger = logging.getLogger("tonerscart")
 app = FastAPI(title="TonersCart API (Supabase)")
 api = APIRouter(prefix="/api")
 
-
-# ===== Helpers =================================================================
 
 def normalize(s: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (s or "").lower())
@@ -54,7 +43,6 @@ def get_token(request: Request) -> Optional[str]:
 
 
 def require_user(request: Request) -> dict:
-    """Returns {"id", "email", "role", ...} from public.users for authenticated requests."""
     token = get_token(request)
     uid, profile = get_user_from_token(token) if token else (None, None)
     if not uid or not profile:
@@ -71,7 +59,7 @@ def require_role(*roles: str):
     return dep
 
 
-SIGNED_URL_TTL = 60  # seconds — admin viewing supplier KYC docs
+SIGNED_URL_TTL = 60
 
 DOC_FIELDS = [
     "doc_brand_authorization",
@@ -84,8 +72,6 @@ DOC_FIELDS = [
 
 
 def _signed_doc_urls(application: dict, ttl: int = SIGNED_URL_TTL) -> dict:
-    """Build a {field: signed_url} map for whichever doc paths exist in the
-    application. Returns empty dict on failure (never raises)."""
     out = {}
     for f in DOC_FIELDS:
         path = application.get(f)
@@ -102,7 +88,6 @@ def _signed_doc_urls(application: dict, ttl: int = SIGNED_URL_TTL) -> dict:
 
 
 async def _run_ai_check(user_id: str, application: dict):
-    """Best-effort AI document clarity check. Writes into suppliers_pending.ai_check."""
     docs = {f: application.get(f) for f in DOC_FIELDS if application.get(f)}
     if not docs:
         return
@@ -113,8 +98,6 @@ async def _run_ai_check(user_id: str, application: dict):
     sb_admin.table("suppliers_pending").update({"ai_check": results}).eq("user_id", user_id).execute()
 
 
-# ===== Models ==================================================================
-
 class SignupCustomer(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6)
@@ -124,8 +107,6 @@ class SignupCustomer(BaseModel):
 
 
 class SellerApplication(BaseModel):
-    """Submitted by a logged-in user (any role) to apply to become a seller.
-    Does not change users.role — only admin-approval can do that."""
     business_name: str
     contact_person: str
     phone: str
@@ -164,10 +145,9 @@ class SignupSupplier(BaseModel):
     annual_turnover: Optional[str] = ""
     years_in_business: Optional[int] = None
     business_address: str
-    seller_types: List[str] = Field(default_factory=list)        # ["Original","Compatible","Refilled"]
+    seller_types: List[str] = Field(default_factory=list)
     compatible_brands: List[str] = Field(default_factory=list)
     testing_before_delivery: bool = False
-    # Storage paths inside supplier-documents bucket (relative paths)
     doc_brand_authorization: Optional[str] = ""
     doc_shop_photo: Optional[str] = ""
     doc_gst: Optional[str] = ""
@@ -177,7 +157,6 @@ class SignupSupplier(BaseModel):
 
 
 class ListingCreate(BaseModel):
-    # Either a toner_id from catalog, or brand+model_number for a new entry
     toner_id: Optional[str] = None
     brand: Optional[str] = None
     model_number: Optional[str] = None
@@ -185,7 +164,7 @@ class ListingCreate(BaseModel):
     page_yield: Optional[int] = None
     price: float = Field(ge=0)
     stock: int = Field(ge=0)
-    toner_type: str  # "Original" | "Compatible" | "Refilled"
+    toner_type: str
     image_url: Optional[str] = ""
 
 
@@ -214,12 +193,8 @@ class RejectPayload(BaseModel):
     reason: Optional[str] = ""
 
 
-# ===== Auth / Profile ==========================================================
-
 @api.post("/auth/oauth-bootstrap")
 def oauth_bootstrap(payload: dict, request: Request):
-    """Called after a Google OAuth redirect lands. Creates the public.users
-    profile row if missing. Default role = customer."""
     token = get_token(request)
     if not token:
         raise HTTPException(401, "Not authenticated")
@@ -248,7 +223,6 @@ def oauth_bootstrap(payload: dict, request: Request):
 
 @api.post("/auth/signup-customer")
 def signup_customer(payload: SignupCustomer):
-    """Customer signup — creates Supabase Auth user + public.users row."""
     try:
         created = sb_admin.auth.admin.create_user({
             "email": payload.email,
@@ -261,7 +235,6 @@ def signup_customer(payload: SignupCustomer):
         if "already" in msg or "registered" in msg or "exists" in msg:
             raise HTTPException(400, "Email already registered") from e
         raise HTTPException(400, str(e)) from e
-
     uid = created.user.id
     sb_admin.table("users").upsert({
         "id": uid,
@@ -271,15 +244,11 @@ def signup_customer(payload: SignupCustomer):
         "phone": payload.phone or None,
         "city": payload.city or None,
     }, on_conflict="id").execute()
-
     return {"ok": True, "user_id": uid}
 
 
 @api.post("/auth/signup-supplier")
 async def signup_supplier(payload: SignupSupplier):
-    """Supplier signup — creates auth user, profile (role=supplier), AND a
-    suppliers_pending row. The user can sign in but listings are blocked
-    until an admin moves their pending row into the suppliers table."""
     try:
         created = sb_admin.auth.admin.create_user({
             "email": payload.email,
@@ -292,7 +261,6 @@ async def signup_supplier(payload: SignupSupplier):
         if "already" in msg or "registered" in msg or "exists" in msg:
             raise HTTPException(400, "Email already registered") from e
         raise HTTPException(400, str(e)) from e
-
     uid = created.user.id
     sb_admin.table("users").upsert({
         "id": uid,
@@ -303,7 +271,6 @@ async def signup_supplier(payload: SignupSupplier):
         "company": payload.business_name,
         "city": payload.city,
     }, on_conflict="id").execute()
-
     application = {
         "user_id": uid,
         "business_name": payload.business_name,
@@ -331,18 +298,14 @@ async def signup_supplier(payload: SignupSupplier):
         "status": "pending",
     }
     sb_admin.table("suppliers_pending").upsert(application, on_conflict="user_id").execute()
-
-    # Fire-and-forget AI document check (best effort) + email notifications
     try:
         await _run_ai_check(uid, application)
     except Exception as e:
         logger.warning("AI check skipped: %s", e)
-
     try:
         await email_application_received(application)
     except Exception as e:
         logger.warning("application email skipped: %s", e)
-
     return {"ok": True, "user_id": uid, "status": "pending"}
 
 
@@ -357,13 +320,10 @@ class SupplierDocPaths(BaseModel):
 
 @api.post("/auth/apply-seller")
 async def apply_seller(payload: SellerApplication, user: dict = Depends(require_user)):
-    """Logged-in user submits an application to become a seller.
-    users.role is NOT changed — only admin approval flips it to 'supplier'."""
     if user.get("role") == "supplier":
         raise HTTPException(400, "You are already a seller")
     if user.get("role") == "admin":
         raise HTTPException(400, "Admins cannot apply as sellers")
-
     application = {
         "user_id": user["id"],
         "business_name": payload.business_name,
@@ -392,27 +352,21 @@ async def apply_seller(payload: SellerApplication, user: dict = Depends(require_
         "rejection_reason": None,
     }
     sb_admin.table("suppliers_pending").upsert(application, on_conflict="user_id").execute()
-
     async def _bg_ai():
         try:
             await _run_ai_check(user["id"], application)
         except Exception as e:
-            logger.warning("background AI check (apply) skipped: %s", e)
+            logger.warning("background AI check skipped: %s", e)
     asyncio.create_task(_bg_ai())
-
     try:
         await email_application_received(application)
     except Exception as e:
         logger.warning("application email skipped: %s", e)
-
     return {"ok": True, "status": "pending"}
 
 
 @api.post("/auth/supplier-documents")
 async def supplier_documents_patch(payload: SupplierDocPaths, user: dict = Depends(require_user)):
-    """Called by the supplier client after files are uploaded to
-    supplier-documents/<uid>/... — saves paths and queues the AI check in the background
-    so the client gets an immediate response."""
     upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v}
     if not upd:
         return {"ok": True}
@@ -434,9 +388,6 @@ async def supplier_document_upload(
     file: UploadFile = File(...),
     user: dict = Depends(require_user),
 ):
-    """Upload one supplier KYC document via the backend (service role) —
-    bypasses storage RLS so an applicant (still role=customer) can submit.
-    Returns the storage path which the client then sends to /auth/supplier-documents."""
     allowed = {
         "doc_brand_authorization", "doc_shop_photo", "doc_gst",
         "doc_pan", "doc_bank_proof", "doc_address_proof",
@@ -462,11 +413,7 @@ async def supplier_document_upload(
 
 @api.get("/auth/me")
 def me(user: dict = Depends(require_user)):
-    """Returns the user profile + application status if any.
-    Roles: 'admin' | 'supplier' (= seller) | 'customer' (= buyer).
-    application_status: 'pending' | 'rejected' | None — derived from suppliers_pending."""
     out = dict(user)
-    # Approved supplier?
     if user.get("role") == "supplier":
         s = sb_admin.table("suppliers").select("id,business_name,city,approved_at").eq(
             "user_id", user["id"]
@@ -476,24 +423,19 @@ def me(user: dict = Depends(require_user)):
             out["application_status"] = None
             out["supplier"] = s.data
             return out
-        # Edge case: role=supplier but no row in suppliers (shouldn't normally happen)
         out["supplier_status"] = "pending"
         out["application_status"] = "pending"
         return out
-
-    # For non-suppliers, look up any pending/rejected application
     p = sb_admin.table("suppliers_pending").select(
         "id,business_name,status,rejection_reason,submitted_at"
     ).eq("user_id", user["id"]).maybe_single().execute()
     if p and p.data:
-        out["application_status"] = p.data["status"]  # pending | approved | rejected
+        out["application_status"] = p.data["status"]
         out["application"] = p.data
     else:
         out["application_status"] = None
     return out
 
-
-# ===== Toner master ============================================================
 
 @api.get("/toner-master")
 def toner_master(q: Optional[str] = None, brand: Optional[str] = None, limit: int = 100):
@@ -511,8 +453,6 @@ def toner_master_brands():
     return sorted({r["brand"] for r in rows})
 
 
-# ===== Listings (read for everyone, write for approved suppliers) =============
-
 @api.get("/listings/search")
 def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
                     city: Optional[str] = None, toner_type: Optional[str] = None,
@@ -529,7 +469,6 @@ def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
     if toner_type and toner_type != "all":
         qry = qry.eq("toner_type", toner_type)
     rows = qry.execute().data or []
-    # Flatten
     for r in rows:
         s = r.pop("suppliers", None) or {}
         r["supplier_name"] = s.get("business_name")
@@ -549,7 +488,6 @@ def listing_facets():
 
 @api.get("/listings/grouped")
 def listings_grouped(city: Optional[str] = None, limit: int = 12):
-    """Group listings by toner model — used by Landing 'Top in <city>' grid."""
     qry = sb_admin.table("listings").select("brand,model_number,color,price,city")
     if city and city != "all":
         qry = qry.eq("city", city)
@@ -576,10 +514,7 @@ def listings_grouped(city: Optional[str] = None, limit: int = 12):
     return out[:limit]
 
 
-# ===== Supplier listings =======================================================
-
 def _approved_supplier(user: dict) -> dict:
-    """Returns the supplier row for this user; 403 if not approved."""
     s = sb_admin.table("suppliers").select("*").eq("user_id", user["id"]).maybe_single().execute()
     if not s or not s.data:
         raise HTTPException(403, "Supplier not approved yet")
@@ -600,8 +535,6 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
     s = _approved_supplier(user)
     if payload.toner_type not in ("Original", "Compatible", "Refilled"):
         raise HTTPException(400, "toner_type must be Original, Compatible or Refilled")
-
-    # Resolve toner_master row: use toner_id if given, else find/create by (brand, model)
     t = None
     if payload.toner_id:
         tm = sb_admin.table("toner_master").select("*").eq("id", payload.toner_id).maybe_single().execute()
@@ -611,7 +544,6 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
             raise HTTPException(400, "Provide toner_id or brand+model_number")
         brand = payload.brand.strip()
         model = payload.model_number.strip()
-        # Find existing
         existing = sb_admin.table("toner_master").select("*").eq("brand", brand).eq("model_number", model).maybe_single().execute()
         if existing and existing.data:
             t = existing.data
@@ -626,7 +558,6 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
             }
             res = sb_admin.table("toner_master").insert(insert).execute()
             t = res.data[0] if res.data else insert
-
     row = {
         "supplier_id": s["id"],
         "toner_id": t["id"],
@@ -665,8 +596,6 @@ def delete_listing(listing_id: str, user: dict = Depends(require_role("supplier"
     return {"ok": True}
 
 
-# ===== Orders ==================================================================
-
 @api.post("/orders")
 def create_order(payload: OrderCreate, user: dict = Depends(require_user)):
     if user["role"] not in ("customer", "supplier"):
@@ -692,7 +621,6 @@ def create_order(payload: OrderCreate, user: dict = Depends(require_user)):
         "status": "requested",
     }
     res = sb_admin.table("orders").insert(row).execute()
-    # Decrement stock (best effort)
     sb_admin.table("listings").update({"stock": L["stock"] - payload.qty}).eq("id", L["id"]).execute()
     return res.data[0] if res.data else row
 
@@ -731,8 +659,6 @@ def update_order_status(order_id: str, payload: OrderStatusUpdate, user: dict = 
     sb_admin.table("orders").update(upd).eq("id", order_id).execute()
     return {"ok": True}
 
-
-# ===== Admin approval ==========================================================
 
 @api.get("/admin/suppliers/pending")
 def admin_pending(user: dict = Depends(require_role("admin"))):
@@ -779,7 +705,6 @@ async def admin_approve(pending_id: str, user: dict = Depends(require_role("admi
         "reviewed_by": user["id"],
         "reviewed_at": datetime.now(timezone.utc).isoformat(),
     }).eq("id", pending_id).execute()
-    # Flip the user's role to supplier (= seller). This is the only place role becomes 'supplier'.
     sb_admin.table("users").update({"role": "supplier"}).eq("id", P["user_id"]).execute()
     try:
         await email_application_approved(P)
@@ -811,7 +736,6 @@ async def admin_reject(pending_id: str, payload: RejectPayload, user: dict = Dep
 
 @api.get("/admin/suppliers/{pending_id}/documents")
 def admin_documents(pending_id: str, user: dict = Depends(require_role("admin"))):
-    """Returns short-lived signed URLs for each uploaded supplier document."""
     p = sb_admin.table("suppliers_pending").select("*").eq("id", pending_id).maybe_single().execute()
     if not p or not p.data:
         raise HTTPException(404, "Pending application not found")
@@ -833,8 +757,6 @@ def admin_stats(user: dict = Depends(require_role("admin"))):
         "orders": cnt("orders"),
     }
 
-
-# ===== Printers + MPS =========================================================
 
 PRINTER_USAGES = {"home", "corporate", "commercial", "print_shop"}
 PRINTER_CATEGORIES = {"inkjet", "laser", "tank", "thermal", "production", "digital_press", "label_barcode", "ink", "other"}
@@ -870,7 +792,6 @@ def _supplier_id_for(user: dict) -> str:
 
 @api.post("/supplier/printer-image")
 async def upload_printer_image(file: UploadFile = File(...), user: dict = Depends(require_user)):
-    """Upload a printer image via the backend (service role) — bypasses storage RLS."""
     if user.get("role") != "supplier":
         raise HTTPException(403, "Only approved sellers can upload printer images")
     if not file.content_type or not file.content_type.startswith("image/"):
@@ -889,8 +810,6 @@ async def upload_printer_image(file: UploadFile = File(...), user: dict = Depend
         raise HTTPException(500, f"Upload failed: {e}") from e
     public_url = sb_admin.storage.from_("printer-images").get_public_url(path)
     return {"url": public_url, "path": path}
-
-
 
 
 @api.post("/supplier/printers")
@@ -965,7 +884,6 @@ def list_printers(
     brand: Optional[str] = None,
     q: Optional[str] = None,
 ):
-    """Public browse endpoint with optional filters from the MPS flow."""
     sel = (
         "id,brand,model_number,description,image_url,condition,usage_type,category,"
         "color,paper_sizes,functions,connectivity,features,monthly_volume_min,monthly_volume_max,"
@@ -1004,7 +922,6 @@ def list_printers(
     res = qry.order("created_at", desc=True).limit(200).execute()
     rows = res.data or []
     out = []
-    # Treat common India city aliases as equivalent for filtering
     _CITY_ALIASES = {
         "bangalore": {"bangalore", "bengaluru"},
         "bengaluru": {"bangalore", "bengaluru"},
@@ -1064,10 +981,6 @@ async def mps_inquiry(payload: MPSInquiry, request: Request):
     return {"ok": True}
 
 
-
-
-# ===== AI Chat (TonerBot) ======================================================
-
 class ChatMessage(BaseModel):
     role: str
     content: str
@@ -1093,21 +1006,16 @@ CHAT_SYSTEM = (
 async def chat(payload: ChatRequest):
     if not payload.messages:
         raise HTTPException(400, "messages required")
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    api_key = os.environ.get("GOOGLE_API_KEY")
     if not api_key:
         raise HTTPException(500, "LLM key not configured")
-    session_id = payload.session_id or str(uuid.uuid4())
     try:
-        chat_client = LlmChat(
-            api_key=api_key, session_id=session_id, system_message=CHAT_SYSTEM,
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-        latest = payload.messages[-1]
-        if latest.role != "user":
-            raise HTTPException(400, "last message must be from user")
-        reply = await chat_client.send_message(UserMessage(text=latest.content))
-        return {"reply": str(reply), "session_id": session_id}
-    except HTTPException:
-        raise
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-2.5-flash-preview-04-17", system_instruction=CHAT_SYSTEM)
+        messages = [{"role": "user" if m.role == "user" else "model", "parts": [m.content]} for m in payload.messages]
+        response = model.generate_content(messages)
+        reply = response.text
+        return {"reply": reply, "session_id": payload.session_id or str(uuid.uuid4())}
     except Exception as e:
         logger.exception("LLM call failed")
         raise HTTPException(502, f"Chat unavailable: {e}") from e
@@ -1136,9 +1044,11 @@ logger.info("CORS allowed origins: %s", _allowed_origins)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=_allowed_origins,
-    # Also allow Vercel/Railway preview subdomains and any *.tonerscart.com host
-    allow_origin_regex=r"^https://([a-z0-9-]+\.)?tonerscart\.com$|^https://[a-z0-9-]+\.preview\.emergentagent\.com$",
+    allow_origins=[
+        "https://www.tonerscart.com",
+        "https://tonerscart.com",
+        "https://tonerscart.vercel.app",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
