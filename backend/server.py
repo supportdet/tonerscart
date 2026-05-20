@@ -1027,6 +1027,20 @@ def root():
 
 
 app.include_router(api)
+
+# CORS — explicit origin list (browsers reject the wildcard "*" combined with allow_credentials=True,
+# which silently strips the Access-Control-Allow-Origin header on the response).
+_default_origins = [
+    "https://www.tonerscart.com",
+    "https://tonerscart.com",
+    "https://toners-marketplace.preview.emergentagent.com",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+_env_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip() and o.strip() != "*"]
+_allowed_origins = sorted(set(_default_origins + _env_origins))
+logger.info("CORS allowed origins: %s", _allowed_origins)
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -1037,4 +1051,6 @@ app.add_middleware(
     ],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=86400,
 )
