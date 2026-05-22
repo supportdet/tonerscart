@@ -178,3 +178,9 @@ Files: `backend/server.py`, `backend/email_service.py`, `backend/supabase_schema
 - `/app/frontend/src/pages/Register.jsx` — Customer + supplier signup with new fields
 - `/app/frontend/src/pages/SupplierDashboard.jsx` — Listings + image upload + orders
 - `/app/frontend/src/pages/AdminDashboard.jsx` — Approval queue
+
+
+### 2026-05-22 — Emergent badge removal + City dropdown z-index ✅
+- Removed `<script src="https://assets.emergent.sh/scripts/emergent-main.js">` from `frontend/public/index.html` (eliminates "Made with Emergent" watermark badge).
+- Bumped sticky header z-index `z-50 → z-[100]` in `Header.jsx` and city dropdown `z-index: 80 → 200` in `index.css` so the city dropdown sits cleanly above the hero search shell (`z-index: 60`).
+- Confirmed "Now serving Pan India" copy is already in `Landing.jsx` (line 58); deployed site must be re-published from GitHub to reflect.

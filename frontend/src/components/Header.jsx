@@ -39,7 +39,7 @@ export default function Header() {
     };
 
     return (
-        <header className="bg-white border-b border-black/[0.06] sticky top-0 z-50" data-testid="site-header">
+        <header className="bg-white border-b border-black/[0.06] sticky top-0 z-[100]" data-testid="site-header">
             <div className="tc-container flex items-center justify-between h-16 gap-3">
                 <Link to="/" className="flex items-center gap-2.5 group shrink-0" data-testid="logo-home-link" onClick={closeMobile}>
                     <div className="relative w-8 h-8 rounded-lg bg-[#0A0A0B] grid place-items-center overflow-hidden shrink-0 transition-transform group-hover:scale-105">

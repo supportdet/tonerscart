@@ -712,4 +712,4 @@
 }
 
 /* City dropdown must sit above the hero search shell */
-.tc-city-dropdown { z-index: 80; }
+.tc-city-dropdown { z-index: 200; }
