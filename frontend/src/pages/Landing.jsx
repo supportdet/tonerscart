@@ -59,9 +59,7 @@ export default function Landing() {
     const rootRef = useReveal([grouped.length, city]);
 
     useEffect(() => {
-        api.get("/listings/facets")
-            .then((r) => setFacets({ ...(r.data || {}), models: [] }))
-            .catch(() => setFacets({ brands: [], cities: [], models: [] }));
+        api.get("/listings/facets").then((r) => setFacets({ brands: r.data?.brands || [], cities: r.data?.cities || [], models: r.data?.models || [] })).catch(() => {});
     }, []);
 
     useEffect(() => {
@@ -76,7 +74,7 @@ export default function Landing() {
                 }
                 setGrouped(items.slice(0, 8));
             })
-            .catch(() => setGrouped([]));
+            .catch(() => {});
     }, [city]);
 
     const submit = (override) => {
@@ -88,11 +86,9 @@ export default function Landing() {
 
     return (
         <div ref={rootRef} data-testid="landing-page">
-            {/* ============================== HERO ============================== */}
             <section className="tc-hero relative pt-8 pb-12 sm:pt-12 sm:pb-20 lg:pt-16 lg:pb-24">
                 <div className="tc-hero-grid" />
                 <div className="tc-container relative">
-                    {/* Search bar — full-width with side gutters */}
                     <div className="flex items-center gap-3 mb-4 tc-fade-up">
                         <span className="tc-strip" />
                         <span className="text-[10px] sm:text-[11px] tracking-[0.22em] uppercase font-semibold text-white/60">Now serving Pan India</span>
@@ -118,8 +114,6 @@ export default function Landing() {
                             </button>
                         ))}
                     </div>
-
-                    {/* Hero content split */}
                     <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-center mt-10 lg:mt-16">
                         <div className="lg:col-span-7 order-2 lg:order-1">
                             <h1
@@ -139,7 +133,6 @@ export default function Landing() {
                                 Compare verified suppliers, real stock, better prices — no middlemen.
                             </p>
                         </div>
-
                         <div className="lg:col-span-5 order-1 lg:order-2 tc-fade-up tc-fade-up-2">
                             <TonerAnimation />
                         </div>
@@ -147,85 +140,6 @@ export default function Landing() {
                 </div>
             </section>
 
-            {/* ============ BRANDS MARQUEE — colored logo-style text ============ */}
-            <section className="tc-brand-marquee" data-testid="brand-marquee">
-                <div className="tc-container flex items-center gap-6">
-                    <span className="text-[10px] tracking-[0.22em] uppercase font-semibold text-[#F5C400] shrink-0">Brands on TonersCart</span>
-                    <div className="tc-marquee-mask flex-1">
-                        <div className="tc-marquee-track">
-                            {[...MARQUEE_BRANDS, ...MARQUEE_BRANDS, ...MARQUEE_BRANDS].map((b, i) => (
-                                <span
-                                    key={`${b.name}-${i}`}
-                                    className="tc-marquee-logo"
-                                    style={{ color: b.color }}
-                                    data-testid={`marquee-${b.name}`}
-                                >
-                                    {b.name}
-                                </span>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            {/* ============ FEATURED SUPPLIERS ============ */}
-            <section className="bg-[#0A0A0B] py-12 sm:py-16" data-testid="featured-suppliers">
-                <div className="tc-container">
-                    <div className="flex items-end justify-between mb-7 gap-4">
-                        <div>
-                            <div className="tc-eyebrow text-[#F5C400] inline-flex items-center gap-2">
-                                <span className="tc-strip" /> Featured Suppliers
-                            </div>
-                            <h2 className="mt-3 text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(22px, 3.2vw, 38px)", fontWeight: 300, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
-                                Trusted dealers, premium service.
-                            </h2>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
-                        {FEATURED_SUPPLIERS.map((s, i) => (
-                            <div
-                                key={s.id}
-                                className="tc-featured-card tc-reveal"
-                                style={{ transitionDelay: `${i * 80}ms` }}
-                                data-testid={`featured-card-${s.id}`}
-                            >
-                                {/* Logo placeholder — circular grey w/ camera icon */}
-                                <div className="flex flex-col items-center">
-                                    <div className="tc-featured-logo-ph" data-testid={`featured-logo-${s.id}`}>
-                                        <Camera size={24} className="text-white/45" strokeWidth={1.6} />
-                                    </div>
-                                    <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-white/35 mt-2">
-                                        Upload Logo
-                                    </div>
-                                </div>
-
-                                <div className="mt-5 text-center">
-                                    <div className="text-white text-[17px] font-semibold tracking-tight" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-                                        {s.name}
-                                    </div>
-                                    <div className="mt-1 inline-flex items-center gap-1 text-[12px] text-white/55">
-                                        <MapPin size={11} /> {s.city}
-                                    </div>
-                                    <p className="mt-3 text-[13px] text-white/70 leading-relaxed min-h-[40px]">
-                                        {s.tagline}
-                                    </p>
-                                </div>
-
-                                <button
-                                    onClick={() => navigate("/search")}
-                                    className="mt-5 w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#F5C400] hover:bg-[#FFD119] text-[#0A0A0B] text-[13px] font-semibold py-2.5 transition"
-                                    data-testid={`featured-cta-${s.id}`}
-                                >
-                                    View Listings <ArrowRight size={14} />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            {/* ====== STATS STRIP ====== */}
             <section className="bg-white border-b border-black/[0.06]">
                 <div className="tc-container py-6 sm:py-8 grid grid-cols-3 gap-4 sm:gap-6" data-testid="stats-strip">
                     {[
@@ -243,7 +157,6 @@ export default function Landing() {
                 <div className="tc-shiny-divider" aria-hidden="true" data-testid="stats-shiny-divider" />
             </section>
 
-            {/* ============== TOP MODELS ============== */}
             <section className="tc-container py-12 sm:py-16 lg:py-20">
                 <div className="flex items-end justify-between mb-6 sm:mb-8 gap-4">
                     <div className="flex-1">
@@ -257,7 +170,6 @@ export default function Landing() {
                         Browse all <ArrowRight size={13} />
                     </button>
                 </div>
-
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
                     {grouped.map((g, idx) => (
                         <button
@@ -285,8 +197,6 @@ export default function Landing() {
                         </button>
                     ))}
                 </div>
-
-                {/* Mobile-only "browse all" */}
                 <div className="mt-6 sm:hidden">
                     <button onClick={() => navigate("/search")} className="btn-primary w-full text-[13px] inline-flex items-center justify-center gap-1.5" data-testid="browse-all-btn-mobile">
                         Browse all toners <ArrowRight size={13} />
@@ -294,7 +204,6 @@ export default function Landing() {
                 </div>
             </section>
 
-            {/* CTA STRIP */}
             <section className="tc-container pb-12 sm:pb-20">
                 <div className="tc-card-flat p-6 sm:p-8 lg:p-10 grid md:grid-cols-2 gap-5 sm:gap-6 items-start md:items-center">
                     <div>
