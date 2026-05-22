@@ -1,6 +1,5 @@
 import os
 import json
-import base64
 import logging
 import asyncio
 from pathlib import Path
@@ -41,9 +40,9 @@ async def check_document_url(url: str, label: str = "document") -> dict:
             r = await client.get(url)
             r.raise_for_status()
             img_bytes = r.content
+            mime = r.headers.get("content-type", "image/jpeg").split(";")[0].strip()
         if len(img_bytes) > 8 * 1024 * 1024:
             return {"ok": False, "clear": False, "kind": label, "notes": "File >8MB; skipped"}
-        b64 = base64.b64encode(img_bytes).decode("ascii")
     except Exception as e:
         logger.warning("AI check download failed: %s", e)
         return {"ok": False, "clear": None, "kind": label, "notes": "Download failed"}
@@ -56,7 +55,7 @@ async def check_document_url(url: str, label: str = "document") -> dict:
         parsed["ok"] = True
         return parsed
     except Exception as e:
-        logger.warning("AI check LLM failed: %s", e)
+        logger.warning("Gemini doc-check failed: %s", e)
         return {"ok": False, "clear": None, "kind": label, "notes": "LLM error"}
 
 async def check_documents(doc_map: dict) -> dict:

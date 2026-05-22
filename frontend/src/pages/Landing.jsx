@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles, Camera, ShieldCheck, MapPin } from "lucide-react";
 import api from "../lib/api";
 import TonerSearchInput from "../components/TonerSearchInput";
 import TonerAnimation from "../components/TonerAnimation";
@@ -8,7 +8,47 @@ import TonerCartridge from "../components/TonerCartridge";
 import { useCity } from "../context/CityContext";
 import useReveal from "../hooks/useReveal";
 
-const POPULAR = ["HP 88A", "HP 12A", "HP 78A", "Canon 925", "Brother TN-2365"];
+// Brand text styled like logos — each gets its official color in the marquee
+const MARQUEE_BRANDS = [
+    { name: "HP",       color: "#0096D6" },
+    { name: "Canon",    color: "#CC0000" },
+    { name: "Brother",  color: "#003087" },
+    { name: "Epson",    color: "#1A1A8C" },
+    { name: "Ricoh",    color: "#00A0AF" },
+    { name: "Xerox",    color: "#FF0000" },
+    { name: "Kyocera",  color: "#1A1A1A" },
+    { name: "Samsung",  color: "#1428A0" },
+];
+
+// Curated popular models — 4 different brands buyers search the most
+const POPULAR_CHIPS = [
+    { label: "HP 88A",       q: "88A" },
+    { label: "Canon 337",    q: "337" },
+    { label: "Brother TN-2365", q: "TN-2365" },
+    { label: "Xerox 3020",   q: "3020" },
+];
+
+// Placeholder featured suppliers — real dealers will upload their logo via dashboard
+const FEATURED_SUPPLIERS = [
+    {
+        id: "fs-1",
+        name: "PrintZone Trading Co.",
+        city: "Mumbai, Maharashtra",
+        tagline: "Original HP & Canon — same-day dispatch.",
+    },
+    {
+        id: "fs-2",
+        name: "Toner Hub India",
+        city: "Bangalore, Karnataka",
+        tagline: "Bulk compatibles · 30-day replacement guarantee.",
+    },
+    {
+        id: "fs-3",
+        name: "Digital Office Solutions",
+        city: "Delhi NCR",
+        tagline: "Enterprise MPS contracts · pan-India delivery.",
+    },
+];
 
 export default function Landing() {
     const navigate = useNavigate();
@@ -51,21 +91,26 @@ export default function Landing() {
                 <div className="tc-container relative">
                     <div className="flex items-center gap-3 mb-4 tc-fade-up">
                         <span className="tc-strip" />
-                        <span className="text-[10px] sm:text-[11px] tracking-[0.22em] uppercase font-semibold text-white/60">Now serving {city}</span>
+                        <span className="text-[10px] sm:text-[11px] tracking-[0.22em] uppercase font-semibold text-white/60">Now serving Pan India</span>
                     </div>
                     <div className="tc-search-shell w-full tc-fade-up tc-fade-up-1" data-testid="hero-search-form">
                         <TonerSearchInput value={q} onChange={setQ} onSubmit={submit} testId="hero-search-input" />
-                        <button onClick={() => submit()} className="tc-search-go" data-testid="hero-search-submit">
+                        <button onClick={() => submit()} className="tc-search-go tc-search-go-yellow" data-testid="hero-search-submit">
                             Search <ArrowRight size={16} />
                         </button>
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 tc-fade-up tc-fade-up-2">
-                        <span className="text-[10px] sm:text-[11px] tracking-[0.22em] uppercase font-semibold text-[#F5C400]/90">Popular</span>
-                        {POPULAR.map((m) => (
-                            <button key={m} onClick={() => { setQ(m); submit({ query: m }); }}
-                                className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-[11px] sm:text-[12px] text-white/85 backdrop-blur transition-colors"
-                                data-testid={`trending-${m.replace(/\s+/g, '-')}`}>
-                                {m}
+
+                    {/* Popular model chips */}
+                    <div className="mt-4 flex flex-wrap items-center gap-2 tc-fade-up tc-fade-up-2" data-testid="popular-chips">
+                        <span className="text-[10px] sm:text-[11px] tracking-[0.22em] uppercase font-semibold text-white/45 mr-1">Popular:</span>
+                        {POPULAR_CHIPS.map((c) => (
+                            <button
+                                key={c.q}
+                                onClick={() => submit({ query: c.q })}
+                                className="tc-chip"
+                                data-testid={`popular-chip-${c.q}`}
+                            >
+                                {c.label}
                             </button>
                         ))}
                     </div>
@@ -82,10 +127,10 @@ export default function Landing() {
                                 }}
                                 data-testid="hero-headline"
                             >
-                                India&apos;s marketplace for printer toners — <span className="text-[#00B7C7]" style={{ fontWeight: 500 }}>verified suppliers</span>, <span className="text-[#F5C400]" style={{ fontWeight: 500 }}>real stock</span>, <span className="text-[#E6007E]" style={{ fontWeight: 500 }}>better prices</span>.
+                                India&apos;s <span className="text-[#F5C400]" style={{ fontWeight: 600 }}>#1</span> B2B marketplace for <span className="text-[#00B7C7]" style={{ fontWeight: 500 }}>printers</span> &amp; <span className="text-[#E6007E]" style={{ fontWeight: 500 }}>toners</span>
                             </h1>
-                            <p className="text-white/65 max-w-xl mt-4 sm:mt-5 text-[14px] sm:text-[16px] tc-fade-up tc-fade-up-4" style={{ fontFamily: "'Inter', sans-serif" }}>
-                                Search any model, compare every supplier in {city}, and place an order request in minutes. No payment gateway, just direct B2B trade.
+                            <p className="text-white/65 max-w-xl mt-4 sm:mt-5 text-[14px] sm:text-[16px] tc-fade-up tc-fade-up-4" style={{ fontFamily: "'Inter', sans-serif" }} data-testid="hero-subline">
+                                Compare verified suppliers, real stock, better prices — no middlemen.
                             </p>
                         </div>
                         <div className="lg:col-span-5 order-1 lg:order-2 tc-fade-up tc-fade-up-2">
@@ -96,19 +141,20 @@ export default function Landing() {
             </section>
 
             <section className="bg-white border-b border-black/[0.06]">
-                <div className="tc-container py-6 sm:py-8 grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
+                <div className="tc-container py-6 sm:py-8 grid grid-cols-3 gap-4 sm:gap-6" data-testid="stats-strip">
                     {[
-                        { v: facets.models.length || "—", k: "Toner SKUs" },
-                        { v: 25, k: "Verified suppliers" },
-                        { v: facets.cities.length || "—", k: "Cities (soon)" },
-                        { v: facets.brands.length || "—", k: "Brands listed" },
+                        { v: "250+", k: "Verified suppliers", testid: "stat-suppliers" },
+                        { v: "15+",  k: "Cities served",      testid: "stat-cities" },
+                        { v: "10+",  k: "Brands listed",      testid: "stat-brands" },
                     ].map((s, i) => (
-                        <div key={i} className="tc-reveal" style={{ transitionDelay: `${i * 80}ms` }}>
-                            <div className="font-mono text-xl sm:text-2xl lg:text-3xl font-semibold text-[#0A0A0B] tracking-tight">{s.v}</div>
+                        <div key={s.k} className="tc-reveal text-center sm:text-left" style={{ transitionDelay: `${i * 80}ms` }} data-testid={s.testid}>
+                            <div className="font-mono text-2xl sm:text-3xl lg:text-4xl font-semibold text-[#0A0A0B] tracking-tight">{s.v}</div>
                             <div className="text-[10px] sm:text-[11px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73] mt-1.5 sm:mt-2">{s.k}</div>
                         </div>
                     ))}
                 </div>
+                {/* Subtle shiny line — visual separator below stats */}
+                <div className="tc-shiny-divider" aria-hidden="true" data-testid="stats-shiny-divider" />
             </section>
 
             <section className="tc-container py-12 sm:py-16 lg:py-20">

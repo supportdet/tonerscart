@@ -1,10 +1,17 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+
+const BRANDS = ["HP", "Xerox", "Riso"];
 
 /**
  * Premium printer-toner cartridge animation. Pure CSS / SVG.
- * Floats, has CMYK glow, drum spins gently.
+ * Floats, has CMYK glow, drum spins gently. Label rotates across brands.
  */
 export default function TonerAnimation() {
+    const [bi, setBi] = useState(0);
+    useEffect(() => {
+        const t = setInterval(() => setBi((i) => (i + 1) % BRANDS.length), 2200);
+        return () => clearInterval(t);
+    }, []);
     return (
         <div className="tc-toner-wrap" aria-hidden="true" data-testid="toner-animation">
             {/* Glow halos */}
@@ -59,7 +66,7 @@ export default function TonerAnimation() {
                     <rect x="194" y="130" width="14" height="22" rx="2" fill="#E6007E" />
                     <rect x="216" y="130" width="14" height="22" rx="2" fill="#F5C400" />
                     <rect x="238" y="130" width="14" height="22" rx="2" fill="#FAFAFC" />
-                    <text x="266" y="148" fill="rgba(255,255,255,0.85)" fontSize="14" fontWeight="700" fontFamily="'JetBrains Mono', monospace" letterSpacing="2">HP 88A</text>
+                    <text key={BRANDS[bi]} x="266" y="148" fill="rgba(255,255,255,0.9)" fontSize="14" fontWeight="700" fontFamily="'JetBrains Mono', monospace" letterSpacing="2" className="tc-toner-label">{BRANDS[bi]}</text>
                     {/* Bottom branding */}
                     <text x="170" y="190" fill="rgba(255,255,255,0.55)" fontSize="10" fontWeight="500" letterSpacing="3">TONERSCART · ORIGINAL</text>
 

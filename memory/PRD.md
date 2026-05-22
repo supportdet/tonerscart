@@ -178,3 +178,31 @@ Files: `backend/server.py`, `backend/email_service.py`, `backend/supabase_schema
 - `/app/frontend/src/pages/Register.jsx` — Customer + supplier signup with new fields
 - `/app/frontend/src/pages/SupplierDashboard.jsx` — Listings + image upload + orders
 - `/app/frontend/src/pages/AdminDashboard.jsx` — Approval queue
+
+
+### 2026-05-22 — Emergent badge removal + City dropdown z-index ✅
+- Removed `<script src="https://assets.emergent.sh/scripts/emergent-main.js">` from `frontend/public/index.html` (eliminates "Made with Emergent" watermark badge).
+- Bumped sticky header z-index `z-50 → z-[100]` in `Header.jsx` and city dropdown `z-index: 80 → 200` in `index.css` so the city dropdown sits cleanly above the hero search shell (`z-index: 60`).
+- Confirmed "Now serving Pan India" copy is already in `Landing.jsx` (line 58); deployed site must be re-published from GitHub to reflect.
+
+
+### 2026-05-22 — Landing v2 + Featured Suppliers + Business Logo ✅
+**Landing page (`pages/Landing.jsx`, `index.css`):**
+- New hero copy: H1 → "India's #1 B2B marketplace for printers & toners"; subtitle shortened to "Compare verified suppliers, real stock, better prices — no middlemen."
+- Added 4 popular-model chips below the search bar (HP 88A, Canon 337, Brother TN-2365, Xerox 3020) — `.tc-chip` style, click pre-fills search.
+- Replaced plain marquee text with logo-style branded chips, each in its corporate color (HP #0096D6, Canon #CC0000, Brother #003087, Epson #1A1A8C, Ricoh #00A0AF, Xerox #FF0000, Kyocera #1A1A1A, Samsung #1428A0) via `.tc-marquee-logo`.
+- New "Featured Suppliers" section between marquee and stats: 3 dark glass cards with circular grey camera-icon logo placeholder + "Upload Logo" label, supplier name/city/tagline, yellow "View Listings" CTA. Uses placeholder data.
+- Stats strip now 3 tiles only: **250+** Verified suppliers · **15+** Cities served · **10+** Brands listed. Toner-SKU tile removed.
+- Added a subtle animated gold shiny divider (`.tc-shiny-divider`) under the stats strip.
+
+**Supplier dashboard (`pages/SupplierDashboard.jsx`):**
+- Hero now exposes a circular Business Logo uploader (image-only, 3 MB cap). Live preview, hover state, persisted via new backend endpoint.
+
+**Backend (`server.py`, `ai_check.py`):**
+- Removed all `emergentintegrations` imports (chat + AI doc check). Chat and document checks now use the `google-genai` SDK exclusively — require `GOOGLE_API_KEY` in `backend/.env`. CORS configuration left untouched.
+- New endpoints:
+  - `POST /api/supplier/business-logo` (multipart, supplier-only) — uploads to `supplier-documents/<uid>/business-logo-<uuid>.<ext>` via service role, updates `suppliers.business_logo`, returns 1-hour signed URL.
+  - `GET /api/supplier/business-logo` — returns current path + fresh signed URL.
+- `/api/auth/me` now returns `supplier.business_logo_url` (signed, 1 hr) for approved suppliers.
+
+**DB migration:** `backend/supabase_schema_logo.sql` — adds nullable `business_logo` text column to both `suppliers_pending` and `suppliers`. **MUST be run from the Supabase SQL editor before sellers can save a logo.**
