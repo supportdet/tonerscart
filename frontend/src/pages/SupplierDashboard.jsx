@@ -6,7 +6,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle, Camera, Loader2 } from "lucide-react";
 import { supabase, PRODUCT_BUCKET } from "../lib/supabase";
 import TonerCartridge from "../components/TonerCartridge";
 import PrinterListings from "../components/PrinterListings";
@@ -70,6 +70,10 @@ export default function SupplierDashboard() {
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState("");
 
+    // Business logo
+    const [logoUrl, setLogoUrl] = useState("");
+    const [logoUploading, setLogoUploading] = useState(false);
+
     const load = async () => {
         if (!isApproved) return;
         try {
@@ -84,6 +88,34 @@ export default function SupplierDashboard() {
         } catch (e) { toast.error(formatApiError(e)); }
     };
     useEffect(() => { load(); /* eslint-disable-next-line */ }, [isApproved]);
+
+    // Initial logo URL (signed) is returned with /auth/me via user.supplier.business_logo_url
+    useEffect(() => {
+        if (isApproved && user?.supplier?.business_logo_url) {
+            setLogoUrl(user.supplier.business_logo_url);
+        }
+    }, [isApproved, user?.supplier?.business_logo_url]);
+
+    const onPickLogo = async (e) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        if (!f.type.startsWith("image/")) { toast.error("Logo must be an image"); return; }
+        if (f.size > 3 * 1024 * 1024) { toast.error("Logo must be under 3 MB"); return; }
+        setLogoUploading(true);
+        try {
+            const fd = new FormData();
+            fd.append("file", f);
+            const { data } = await api.post("/supplier/business-logo", fd);
+            setLogoUrl(data.url || URL.createObjectURL(f));
+            toast.success("Logo updated");
+            refresh();
+        } catch (err) {
+            toast.error(formatApiError(err));
+        } finally {
+            setLogoUploading(false);
+            e.target.value = "";
+        }
+    };
 
     const reset = () => {
         setBrand(""); setModelNumber(""); setColor("Black");
@@ -166,15 +198,40 @@ export default function SupplierDashboard() {
                 <div className="tc-hero-grid" />
                 <div className="tc-container relative pt-8 sm:pt-10">
                     <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-                        <div>
-                            <div className="flex items-center gap-3 mb-3">
-                                <span className="tc-strip" />
-                                <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-emerald-300/90 inline-flex items-center gap-1.5"><CheckCircle2 size={12} /> Approved supplier</span>
+                        <div className="flex items-start gap-4 sm:gap-5">
+                            {/* Business logo uploader */}
+                            <label className="relative shrink-0 cursor-pointer group" data-testid="business-logo-uploader">
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={onPickLogo}
+                                    data-testid="business-logo-input"
+                                />
+                                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-dashed border-white/25 bg-white/[0.06] backdrop-blur grid place-items-center group-hover:border-[#F5C400]/70 transition">
+                                    {logoUploading ? (
+                                        <Loader2 size={22} className="text-white/70 animate-spin" />
+                                    ) : logoUrl ? (
+                                        <img src={logoUrl} alt="Business logo" className="w-full h-full object-cover" data-testid="business-logo-img" />
+                                    ) : (
+                                        <Camera size={22} className="text-white/55" strokeWidth={1.6} />
+                                    )}
+                                </div>
+                                <span className="block text-center mt-1.5 text-[9px] tracking-[0.18em] uppercase font-semibold text-white/45 group-hover:text-[#F5C400] transition">
+                                    {logoUrl ? "Change logo" : "Upload logo"}
+                                </span>
+                            </label>
+
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <span className="tc-strip" />
+                                    <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-emerald-300/90 inline-flex items-center gap-1.5"><CheckCircle2 size={12} /> Approved supplier</span>
+                                </div>
+                                <h1 className="text-white truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(24px, 3.4vw, 44px)", fontWeight: 300, letterSpacing: "-0.025em", lineHeight: 1.1 }}>
+                                    {user?.supplier?.business_name || user?.company || "Supplier dashboard"}
+                                </h1>
+                                <p className="text-[14px] text-white/65 mt-2">{user?.supplier?.city || user?.city}</p>
                             </div>
-                            <h1 className="text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(28px, 3.4vw, 44px)", fontWeight: 300, letterSpacing: "-0.025em", lineHeight: 1.1 }}>
-                                {user?.supplier?.business_name || user?.company || "Supplier dashboard"}
-                            </h1>
-                            <p className="text-[14px] text-white/65 mt-2">{user?.supplier?.city || user?.city}</p>
                         </div>
                         {catalog === "toners" && (
                             <Button className="btn-cta inline-flex items-center gap-2 self-start" onClick={openDialog} data-testid="add-listing-btn">

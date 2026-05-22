@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles, Camera, ShieldCheck, MapPin } from "lucide-react";
 import api from "../lib/api";
 import TonerSearchInput from "../components/TonerSearchInput";
 import TonerAnimation from "../components/TonerAnimation";
@@ -8,7 +8,47 @@ import TonerCartridge from "../components/TonerCartridge";
 import { useCity } from "../context/CityContext";
 import useReveal from "../hooks/useReveal";
 
-const MARQUEE_BRANDS = ["HP", "Canon", "Brother", "Epson", "Ricoh", "Xerox", "Kyocera", "Samsung"];
+// Brand text styled like logos — each gets its official color in the marquee
+const MARQUEE_BRANDS = [
+    { name: "HP",       color: "#0096D6" },
+    { name: "Canon",    color: "#CC0000" },
+    { name: "Brother",  color: "#003087" },
+    { name: "Epson",    color: "#1A1A8C" },
+    { name: "Ricoh",    color: "#00A0AF" },
+    { name: "Xerox",    color: "#FF0000" },
+    { name: "Kyocera",  color: "#1A1A1A" },
+    { name: "Samsung",  color: "#1428A0" },
+];
+
+// Curated popular models — 4 different brands buyers search the most
+const POPULAR_CHIPS = [
+    { label: "HP 88A",       q: "88A" },
+    { label: "Canon 337",    q: "337" },
+    { label: "Brother TN-2365", q: "TN-2365" },
+    { label: "Xerox 3020",   q: "3020" },
+];
+
+// Placeholder featured suppliers — real dealers will upload their logo via dashboard
+const FEATURED_SUPPLIERS = [
+    {
+        id: "fs-1",
+        name: "PrintZone Trading Co.",
+        city: "Mumbai, Maharashtra",
+        tagline: "Original HP & Canon — same-day dispatch.",
+    },
+    {
+        id: "fs-2",
+        name: "Toner Hub India",
+        city: "Bangalore, Karnataka",
+        tagline: "Bulk compatibles · 30-day replacement guarantee.",
+    },
+    {
+        id: "fs-3",
+        name: "Digital Office Solutions",
+        city: "Delhi NCR",
+        tagline: "Enterprise MPS contracts · pan-India delivery.",
+    },
+];
 
 export default function Landing() {
     const navigate = useNavigate();
@@ -64,6 +104,21 @@ export default function Landing() {
                         </button>
                     </div>
 
+                    {/* Popular model chips */}
+                    <div className="mt-4 flex flex-wrap items-center gap-2 tc-fade-up tc-fade-up-2" data-testid="popular-chips">
+                        <span className="text-[10px] sm:text-[11px] tracking-[0.22em] uppercase font-semibold text-white/45 mr-1">Popular:</span>
+                        {POPULAR_CHIPS.map((c) => (
+                            <button
+                                key={c.q}
+                                onClick={() => submit({ query: c.q })}
+                                className="tc-chip"
+                                data-testid={`popular-chip-${c.q}`}
+                            >
+                                {c.label}
+                            </button>
+                        ))}
+                    </div>
+
                     {/* Hero content split */}
                     <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-center mt-10 lg:mt-16">
                         <div className="lg:col-span-7 order-2 lg:order-1">
@@ -78,10 +133,10 @@ export default function Landing() {
                                 }}
                                 data-testid="hero-headline"
                             >
-                                India&apos;s marketplace for printer toners — <span className="text-[#00B7C7]" style={{ fontWeight: 500 }}>verified suppliers</span>, <span className="text-[#F5C400]" style={{ fontWeight: 500 }}>real stock</span>, <span className="text-[#E6007E]" style={{ fontWeight: 500 }}>better prices</span>.
+                                India&apos;s <span className="text-[#F5C400]" style={{ fontWeight: 600 }}>#1</span> B2B marketplace for <span className="text-[#00B7C7]" style={{ fontWeight: 500 }}>printers</span> &amp; <span className="text-[#E6007E]" style={{ fontWeight: 500 }}>toners</span>
                             </h1>
-                            <p className="text-white/65 max-w-xl mt-4 sm:mt-5 text-[14px] sm:text-[16px] tc-fade-up tc-fade-up-4" style={{ fontFamily: "'Inter', sans-serif" }}>
-                                Search any model, compare every supplier across India, and place an order request in minutes. No payment gateway, just direct B2B trade.
+                            <p className="text-white/65 max-w-xl mt-4 sm:mt-5 text-[14px] sm:text-[16px] tc-fade-up tc-fade-up-4" style={{ fontFamily: "'Inter', sans-serif" }} data-testid="hero-subline">
+                                Compare verified suppliers, real stock, better prices — no middlemen.
                             </p>
                         </div>
 
@@ -92,35 +147,100 @@ export default function Landing() {
                 </div>
             </section>
 
-            {/* ============ BRANDS MARQUEE ============ */}
+            {/* ============ BRANDS MARQUEE — colored logo-style text ============ */}
             <section className="tc-brand-marquee" data-testid="brand-marquee">
                 <div className="tc-container flex items-center gap-6">
                     <span className="text-[10px] tracking-[0.22em] uppercase font-semibold text-[#F5C400] shrink-0">Brands on TonersCart</span>
                     <div className="tc-marquee-mask flex-1">
                         <div className="tc-marquee-track">
                             {[...MARQUEE_BRANDS, ...MARQUEE_BRANDS, ...MARQUEE_BRANDS].map((b, i) => (
-                                <span key={`${b}-${i}`} className="tc-marquee-item">{b}</span>
+                                <span
+                                    key={`${b.name}-${i}`}
+                                    className="tc-marquee-logo"
+                                    style={{ color: b.color }}
+                                    data-testid={`marquee-${b.name}`}
+                                >
+                                    {b.name}
+                                </span>
                             ))}
                         </div>
                     </div>
                 </div>
             </section>
 
+            {/* ============ FEATURED SUPPLIERS ============ */}
+            <section className="bg-[#0A0A0B] py-12 sm:py-16" data-testid="featured-suppliers">
+                <div className="tc-container">
+                    <div className="flex items-end justify-between mb-7 gap-4">
+                        <div>
+                            <div className="tc-eyebrow text-[#F5C400] inline-flex items-center gap-2">
+                                <span className="tc-strip" /> Featured Suppliers
+                            </div>
+                            <h2 className="mt-3 text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(22px, 3.2vw, 38px)", fontWeight: 300, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
+                                Trusted dealers, premium service.
+                            </h2>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
+                        {FEATURED_SUPPLIERS.map((s, i) => (
+                            <div
+                                key={s.id}
+                                className="tc-featured-card tc-reveal"
+                                style={{ transitionDelay: `${i * 80}ms` }}
+                                data-testid={`featured-card-${s.id}`}
+                            >
+                                {/* Logo placeholder — circular grey w/ camera icon */}
+                                <div className="flex flex-col items-center">
+                                    <div className="tc-featured-logo-ph" data-testid={`featured-logo-${s.id}`}>
+                                        <Camera size={24} className="text-white/45" strokeWidth={1.6} />
+                                    </div>
+                                    <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-white/35 mt-2">
+                                        Upload Logo
+                                    </div>
+                                </div>
+
+                                <div className="mt-5 text-center">
+                                    <div className="text-white text-[17px] font-semibold tracking-tight" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                                        {s.name}
+                                    </div>
+                                    <div className="mt-1 inline-flex items-center gap-1 text-[12px] text-white/55">
+                                        <MapPin size={11} /> {s.city}
+                                    </div>
+                                    <p className="mt-3 text-[13px] text-white/70 leading-relaxed min-h-[40px]">
+                                        {s.tagline}
+                                    </p>
+                                </div>
+
+                                <button
+                                    onClick={() => navigate("/search")}
+                                    className="mt-5 w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#F5C400] hover:bg-[#FFD119] text-[#0A0A0B] text-[13px] font-semibold py-2.5 transition"
+                                    data-testid={`featured-cta-${s.id}`}
+                                >
+                                    View Listings <ArrowRight size={14} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
             {/* ====== STATS STRIP ====== */}
             <section className="bg-white border-b border-black/[0.06]">
-                <div className="tc-container py-6 sm:py-8 grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
+                <div className="tc-container py-6 sm:py-8 grid grid-cols-3 gap-4 sm:gap-6" data-testid="stats-strip">
                     {[
-                        { v: facets.models.length || "—", k: "Toner SKUs" },
-                        { v: 25, k: "Verified suppliers" },
-                        { v: facets.cities.length || "—", k: "Cities (soon)" },
-                        { v: facets.brands.length || "—", k: "Brands listed" },
+                        { v: "250+", k: "Verified suppliers", testid: "stat-suppliers" },
+                        { v: "15+",  k: "Cities served",      testid: "stat-cities" },
+                        { v: "10+",  k: "Brands listed",      testid: "stat-brands" },
                     ].map((s, i) => (
-                        <div key={i} className="tc-reveal" style={{ transitionDelay: `${i * 80}ms` }}>
-                            <div className="font-mono text-xl sm:text-2xl lg:text-3xl font-semibold text-[#0A0A0B] tracking-tight">{s.v}</div>
+                        <div key={s.k} className="tc-reveal text-center sm:text-left" style={{ transitionDelay: `${i * 80}ms` }} data-testid={s.testid}>
+                            <div className="font-mono text-2xl sm:text-3xl lg:text-4xl font-semibold text-[#0A0A0B] tracking-tight">{s.v}</div>
                             <div className="text-[10px] sm:text-[11px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73] mt-1.5 sm:mt-2">{s.k}</div>
                         </div>
                     ))}
                 </div>
+                {/* Subtle shiny line — visual separator below stats */}
+                <div className="tc-shiny-divider" aria-hidden="true" data-testid="stats-shiny-divider" />
             </section>
 
             {/* ============== TOP MODELS ============== */}

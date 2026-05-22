@@ -30,7 +30,6 @@ from email_service import (
     email_mps_inquiry,
 )
 from ai_check import check_documents
-from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 load_dotenv(Path(__file__).parent / ".env")
 logging.basicConfig(level=logging.INFO)
@@ -460,6 +459,61 @@ async def supplier_document_upload(
     return {"path": path, "field": field}
 
 
+@api.post("/supplier/business-logo")
+async def supplier_business_logo_upload(
+    file: UploadFile = File(...),
+    user: dict = Depends(require_user),
+):
+    """Approved supplier uploads/replaces their business logo.
+    Stored in the private `supplier-documents` bucket and the path is
+    persisted on `suppliers.business_logo`. Returns a short-lived signed
+    URL the client can immediately preview."""
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved suppliers can upload a logo")
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(400, "Logo must be an image (PNG / JPG / WEBP)")
+    content = await file.read()
+    if len(content) > 3 * 1024 * 1024:
+        raise HTTPException(400, "Logo must be under 3 MB")
+
+    ext = (file.filename.split(".")[-1] if file.filename and "." in file.filename else "png").lower()
+    path = f"{user['id']}/business-logo-{uuid.uuid4().hex}.{ext}"
+    try:
+        sb_admin.storage.from_("supplier-documents").upload(
+            path, content, {"content-type": file.content_type, "upsert": "false"}
+        )
+    except Exception as e:
+        logger.exception("business logo upload failed")
+        raise HTTPException(500, f"Upload failed: {e}") from e
+
+    sb_admin.table("suppliers").update({"business_logo": path}).eq("user_id", user["id"]).execute()
+
+    try:
+        signed = sb_admin.storage.from_("supplier-documents").create_signed_url(path, 60 * 60)
+        signed_url = signed.get("signedURL")
+    except Exception:
+        signed_url = None
+    return {"path": path, "url": signed_url}
+
+
+@api.get("/supplier/business-logo")
+def supplier_business_logo_get(user: dict = Depends(require_user)):
+    """Returns the supplier's current logo path + a fresh signed URL."""
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved suppliers can read their logo")
+    s = sb_admin.table("suppliers").select("business_logo").eq(
+        "user_id", user["id"]
+    ).maybe_single().execute()
+    path = (s.data or {}).get("business_logo") if s else None
+    if not path:
+        return {"path": None, "url": None}
+    try:
+        signed = sb_admin.storage.from_("supplier-documents").create_signed_url(path, 60 * 60)
+        return {"path": path, "url": signed.get("signedURL")}
+    except Exception:
+        return {"path": path, "url": None}
+
+
 @api.get("/auth/me")
 def me(user: dict = Depends(require_user)):
     """Returns the user profile + application status if any.
@@ -468,13 +522,24 @@ def me(user: dict = Depends(require_user)):
     out = dict(user)
     # Approved supplier?
     if user.get("role") == "supplier":
-        s = sb_admin.table("suppliers").select("id,business_name,city,approved_at").eq(
-            "user_id", user["id"]
-        ).maybe_single().execute()
+        s = sb_admin.table("suppliers").select(
+            "id,business_name,city,approved_at,business_logo"
+        ).eq("user_id", user["id"]).maybe_single().execute()
         if s and s.data:
             out["supplier_status"] = "approved"
             out["application_status"] = None
-            out["supplier"] = s.data
+            sd = dict(s.data)
+            logo_path = sd.get("business_logo")
+            if logo_path:
+                try:
+                    sd["business_logo_url"] = sb_admin.storage.from_(
+                        "supplier-documents"
+                    ).create_signed_url(logo_path, 60 * 60)["signedURL"]
+                except Exception:
+                    sd["business_logo_url"] = None
+            else:
+                sd["business_logo_url"] = None
+            out["supplier"] = sd
             return out
         # Edge case: role=supplier but no row in suppliers (shouldn't normally happen)
         out["supplier_status"] = "pending"
@@ -1122,23 +1187,13 @@ async def chat(payload: ChatRequest):
                 raise RuntimeError("empty Gemini response")
             return {"reply": reply, "session_id": session_id}
         except Exception:
-            logger.exception("Gemini chat failed; falling back")
-            # fall through to emergent path if available
+            logger.exception("Gemini chat failed")
+            raise HTTPException(502, "Chat unavailable — try again shortly")
 
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
-    if not api_key:
-        raise HTTPException(500, "LLM key not configured (set GOOGLE_API_KEY or EMERGENT_LLM_KEY)")
-    try:
-        chat_client = LlmChat(
-            api_key=api_key, session_id=session_id, system_message=CHAT_SYSTEM,
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-        reply = await chat_client.send_message(UserMessage(text=latest.content))
-        return {"reply": str(reply), "session_id": session_id}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("LLM call failed")
-        raise HTTPException(502, f"Chat unavailable: {e}") from e
+    raise HTTPException(
+        500,
+        "LLM key not configured (set GOOGLE_API_KEY in backend/.env to enable the chatbot)",
+    )
 
 
 @api.get("/")
