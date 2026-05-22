@@ -656,3 +656,60 @@
 .tc-step-fwd { animation: tc-step-fwd-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .tc-step-back { animation: tc-step-back-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 
+
+
+/* Yellow variant of the hero search submit button */
+.tc-search-go-yellow {
+    background: #F5C400 !important;
+    color: #0A0A0B !important;
+}
+.tc-search-go-yellow:hover {
+    background: #FFD119 !important;
+    color: #0A0A0B !important;
+}
+
+/* Rotating cartridge label fade transition */
+.tc-toner-label {
+    animation: tc-toner-label-pop 600ms ease both;
+}
+@keyframes tc-toner-label-pop {
+    from { opacity: 0; transform: translateY(2px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Brand marquee strip — sits under hero, above stats */
+.tc-brand-marquee {
+    background: linear-gradient(90deg, #0A0A0B 0%, #1F2025 50%, #0A0A0B 100%);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding: 14px 0;
+    overflow: hidden;
+}
+.tc-marquee-mask {
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 8%, #000 92%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 8%, #000 92%, transparent 100%);
+}
+.tc-marquee-track {
+    display: inline-flex; gap: 56px; padding-left: 56px;
+    white-space: nowrap;
+    animation: tc-marquee 22s linear infinite;
+    will-change: transform;
+}
+.tc-marquee-item {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: rgba(255,255,255,0.55);
+    text-transform: uppercase;
+    transition: color 200ms ease;
+}
+.tc-marquee-item:hover { color: #F5C400; }
+@keyframes tc-marquee {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+}
+
+/* City dropdown must sit above the hero search shell */
+.tc-city-dropdown { z-index: 80; }

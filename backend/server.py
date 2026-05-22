@@ -1093,17 +1093,45 @@ CHAT_SYSTEM = (
 async def chat(payload: ChatRequest):
     if not payload.messages:
         raise HTTPException(400, "messages required")
+    session_id = payload.session_id or str(uuid.uuid4())
+    latest = payload.messages[-1]
+    if latest.role != "user":
+        raise HTTPException(400, "last message must be from user")
+
+    google_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    if google_key:
+        # Preferred path: direct Google GenAI SDK
+        try:
+            from google import genai
+            from google.genai import types
+
+            client = genai.Client(api_key=google_key)
+            # Build content history (Gemini uses 'user'/'model' roles)
+            contents = []
+            for m in payload.messages:
+                role = "user" if m.role == "user" else "model"
+                contents.append(types.Content(role=role, parts=[types.Part.from_text(text=m.content)]))
+            resp = await asyncio.to_thread(
+                client.models.generate_content,
+                model="gemini-2.5-flash",
+                contents=contents,
+                config=types.GenerateContentConfig(system_instruction=CHAT_SYSTEM),
+            )
+            reply = (resp.text or "").strip()
+            if not reply:
+                raise RuntimeError("empty Gemini response")
+            return {"reply": reply, "session_id": session_id}
+        except Exception:
+            logger.exception("Gemini chat failed; falling back")
+            # fall through to emergent path if available
+
     api_key = os.environ.get("EMERGENT_LLM_KEY")
     if not api_key:
-        raise HTTPException(500, "LLM key not configured")
-    session_id = payload.session_id or str(uuid.uuid4())
+        raise HTTPException(500, "LLM key not configured (set GOOGLE_API_KEY or EMERGENT_LLM_KEY)")
     try:
         chat_client = LlmChat(
             api_key=api_key, session_id=session_id, system_message=CHAT_SYSTEM,
         ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-        latest = payload.messages[-1]
-        if latest.role != "user":
-            raise HTTPException(400, "last message must be from user")
         reply = await chat_client.send_message(UserMessage(text=latest.content))
         return {"reply": str(reply), "session_id": session_id}
     except HTTPException:

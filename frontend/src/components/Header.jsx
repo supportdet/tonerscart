@@ -22,6 +22,7 @@ export default function Header() {
     const navigate = useNavigate();
     const [cityOpen, setCityOpen] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [buyOpen, setBuyOpen] = useState(false);
 
     const role = user?.role; // 'admin' | 'supplier' | 'customer' | undefined
     const isSeller = role === "supplier";
@@ -29,6 +30,13 @@ export default function Header() {
     const isBuyer = !!user && !isSeller && !isAdmin;
 
     const closeMobile = () => setMobileOpen(false);
+
+    const handleLogout = async () => {
+        try { await logout(); } catch { /* ignore */ }
+        try { localStorage.clear(); sessionStorage.clear(); } catch { /* ignore */ }
+        // Hard reload to clear any in-memory state including cached token
+        window.location.replace("/");
+    };
 
     return (
         <header className="bg-white border-b border-black/[0.06] sticky top-0 z-50" data-testid="site-header">
@@ -45,9 +53,29 @@ export default function Header() {
 
                 {/* Desktop nav */}
                 <nav className="hidden md:flex items-center gap-1">
-                    <NavLink to="/search" className={navLink} data-testid="nav-browse">Toners</NavLink>
-                    <NavLink to="/printers" className={navLink} data-testid="nav-printers">Printers</NavLink>
-                    <NavLink to="/mps" className={navLink} data-testid="nav-mps">MPS</NavLink>
+                    <div
+                        className="relative"
+                        onMouseEnter={() => setBuyOpen(true)}
+                        onMouseLeave={() => setBuyOpen(false)}
+                    >
+                        <button
+                            type="button"
+                            onClick={() => setBuyOpen((o) => !o)}
+                            className="text-[14px] font-medium px-3.5 py-2 rounded-md text-[#1D1D1F] hover:text-[#0A0A0B] hover:bg-black/[0.04] inline-flex items-center gap-1"
+                            data-testid="nav-buy"
+                        >
+                            Buy <ChevronDown size={12} />
+                        </button>
+                        {buyOpen && (
+                            <div className="absolute left-0 top-full pt-1 z-50" data-testid="nav-buy-dropdown">
+                                <div className="w-44 bg-white rounded-xl shadow-xl border border-black/[0.08] py-1.5">
+                                    <Link to="/search" onClick={() => setBuyOpen(false)} className="block px-3.5 py-2 text-[13.5px] text-[#1D1D1F] hover:bg-black/[0.04]" data-testid="nav-buy-toners">Toners</Link>
+                                    <Link to="/printers" onClick={() => setBuyOpen(false)} className="block px-3.5 py-2 text-[13.5px] text-[#1D1D1F] hover:bg-black/[0.04]" data-testid="nav-buy-printers">Printers</Link>
+                                    <Link to="/mps" onClick={() => setBuyOpen(false)} className="block px-3.5 py-2 text-[13.5px] text-[#1D1D1F] hover:bg-black/[0.04]" data-testid="nav-buy-mps">MPS</Link>
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
                     {/* Sell — visible for guests, buyers and pending sellers; hidden for approved sellers */}
                     {!isSeller && !isAdmin && (
@@ -92,7 +120,7 @@ export default function Header() {
                             <ChevronDown size={12} />
                         </button>
                         {cityOpen && (
-                            <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl shadow-xl border border-black/[0.08] py-2 z-50 max-h-72 overflow-auto" data-testid="city-dropdown">
+                            <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl shadow-xl border border-black/[0.08] py-2 max-h-72 overflow-auto tc-city-dropdown" data-testid="city-dropdown">
                                 <div className="px-3 py-1 text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B]">Choose your city</div>
                                 {KNOWN_CITIES.map((c) => (
                                     <button key={c} onMouseDown={() => { setCity(c); setCityOpen(false); }}
@@ -115,7 +143,7 @@ export default function Header() {
                             <button onClick={() => navigate(isSeller ? "/supplier" : isAdmin ? "/admin" : "/customer")} className="text-[14px] font-medium text-[#1D1D1F] hover:text-[#0A0A0B] px-3 py-2 rounded-md hover:bg-black/[0.04]" data-testid="header-user-chip">
                                 {(user.name || "Account").split(" ")[0]}
                             </button>
-                            <button onClick={async () => { await logout(); navigate("/"); }} className="text-[14px] text-[#6E6E73] hover:text-[#0A0A0B] p-2 rounded-md hover:bg-black/[0.04]" data-testid="header-logout-btn">
+                            <button onClick={handleLogout} className="text-[14px] text-[#6E6E73] hover:text-[#0A0A0B] p-2 rounded-md hover:bg-black/[0.04]" data-testid="header-logout-btn">
                                 <LogOut size={15} />
                             </button>
                         </>
@@ -183,7 +211,7 @@ export default function Header() {
                                     Sign in
                                 </button>
                             ) : (
-                                <button onClick={async () => { closeMobile(); await logout(); navigate("/"); }} className="block w-full px-4 py-3 rounded-lg text-[15px] font-medium text-[#1D1D1F] hover:bg-black/[0.04] text-left flex items-center gap-2" data-testid="mobile-logout-btn">
+                                <button onClick={async () => { closeMobile(); await handleLogout(); }} className="block w-full px-4 py-3 rounded-lg text-[15px] font-medium text-[#1D1D1F] hover:bg-black/[0.04] text-left flex items-center gap-2" data-testid="mobile-logout-btn">
                                     <LogOut size={16} /> Log out ({(user.name || "").split(" ")[0]})
                                 </button>
                             )}

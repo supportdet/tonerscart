@@ -1,7 +1,10 @@
-"""AI document-clarity check using Gemini 2.5 Flash via Emergent LLM key.
+"""AI document-clarity check using Gemini 2.5 Flash.
 
 For each uploaded supplier document we ask the model whether the image is
-legible, returning a small JSON the admin can read at a glance."""
+legible, returning a small JSON the admin can read at a glance.
+
+Prefers the direct `google-genai` SDK when GOOGLE_API_KEY is set;
+falls back to `emergentintegrations` with EMERGENT_LLM_KEY otherwise."""
 import os
 import json
 import base64
@@ -17,6 +20,7 @@ load_dotenv(Path(__file__).parent / ".env")
 logger = logging.getLogger("tonerscart.aicheck")
 
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
 PROMPT = (
     "You are reviewing a document or photo a supplier uploaded for KYC verification on a "
@@ -44,21 +48,47 @@ def _safe_parse(text: str) -> dict:
 async def check_document_url(url: str, label: str = "document") -> dict:
     """Download an image and ask Gemini to verify clarity. Returns dict with
        keys: clear, kind, notes, ok (False on transport/llm error)."""
-    if not EMERGENT_LLM_KEY:
+    if not (GOOGLE_API_KEY or EMERGENT_LLM_KEY):
         return {"ok": False, "clear": None, "kind": label, "notes": "AI key missing"}
     try:
         async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
             r = await client.get(url)
             r.raise_for_status()
             img_bytes = r.content
+            mime = r.headers.get("content-type", "image/jpeg").split(";")[0].strip()
         if len(img_bytes) > 8 * 1024 * 1024:
             return {"ok": False, "clear": False, "kind": label, "notes": "File >8MB; skipped"}
-        b64 = base64.b64encode(img_bytes).decode("ascii")
     except Exception as e:
         logger.warning("AI check download failed: %s", e)
         return {"ok": False, "clear": None, "kind": label, "notes": "Download failed"}
 
+    # Preferred: direct Google GenAI SDK
+    if GOOGLE_API_KEY:
+        try:
+            from google import genai
+            from google.genai import types
+
+            client = genai.Client(api_key=GOOGLE_API_KEY)
+            resp = await asyncio.to_thread(
+                client.models.generate_content,
+                model="gemini-2.5-flash",
+                contents=[
+                    types.Part.from_bytes(data=img_bytes, mime_type=mime),
+                    f"Check this {label}.",
+                ],
+                config=types.GenerateContentConfig(system_instruction=PROMPT),
+            )
+            parsed = _safe_parse(resp.text or "")
+            parsed["ok"] = True
+            return parsed
+        except Exception as e:
+            logger.warning("Gemini direct SDK failed, trying fallback: %s", e)
+
+    # Fallback: Emergent LLM key
+    if not EMERGENT_LLM_KEY:
+        return {"ok": False, "clear": None, "kind": label, "notes": "AI key missing"}
     try:
+        b64 = base64.b64encode(img_bytes).decode("ascii")
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"doc-check-{label}",

@@ -8,7 +8,7 @@ import TonerCartridge from "../components/TonerCartridge";
 import { useCity } from "../context/CityContext";
 import useReveal from "../hooks/useReveal";
 
-const POPULAR = ["HP 88A", "HP 12A", "HP 78A", "Canon 925", "Brother TN-2365"];
+const MARQUEE_BRANDS = ["HP", "Canon", "Brother", "Epson", "Ricoh", "Xerox", "Kyocera", "Samsung"];
 
 export default function Landing() {
     const navigate = useNavigate();
@@ -55,23 +55,13 @@ export default function Landing() {
                     {/* Search bar — full-width with side gutters */}
                     <div className="flex items-center gap-3 mb-4 tc-fade-up">
                         <span className="tc-strip" />
-                        <span className="text-[10px] sm:text-[11px] tracking-[0.22em] uppercase font-semibold text-white/60">Now serving {city}</span>
+                        <span className="text-[10px] sm:text-[11px] tracking-[0.22em] uppercase font-semibold text-white/60">Now serving Pan India</span>
                     </div>
                     <div className="tc-search-shell w-full tc-fade-up tc-fade-up-1" data-testid="hero-search-form">
                         <TonerSearchInput value={q} onChange={setQ} onSubmit={submit} testId="hero-search-input" />
-                        <button onClick={() => submit()} className="tc-search-go" data-testid="hero-search-submit">
+                        <button onClick={() => submit()} className="tc-search-go tc-search-go-yellow" data-testid="hero-search-submit">
                             Search <ArrowRight size={16} />
                         </button>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 tc-fade-up tc-fade-up-2">
-                        <span className="text-[10px] sm:text-[11px] tracking-[0.22em] uppercase font-semibold text-[#F5C400]/90">Popular</span>
-                        {POPULAR.map((m) => (
-                            <button key={m} onClick={() => { setQ(m); submit({ query: m }); }}
-                                className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-[11px] sm:text-[12px] text-white/85 backdrop-blur transition-colors"
-                                data-testid={`trending-${m.replace(/\s+/g, '-')}`}>
-                                {m}
-                            </button>
-                        ))}
                     </div>
 
                     {/* Hero content split */}
@@ -91,12 +81,26 @@ export default function Landing() {
                                 India&apos;s marketplace for printer toners — <span className="text-[#00B7C7]" style={{ fontWeight: 500 }}>verified suppliers</span>, <span className="text-[#F5C400]" style={{ fontWeight: 500 }}>real stock</span>, <span className="text-[#E6007E]" style={{ fontWeight: 500 }}>better prices</span>.
                             </h1>
                             <p className="text-white/65 max-w-xl mt-4 sm:mt-5 text-[14px] sm:text-[16px] tc-fade-up tc-fade-up-4" style={{ fontFamily: "'Inter', sans-serif" }}>
-                                Search any model, compare every supplier in {city}, and place an order request in minutes. No payment gateway, just direct B2B trade.
+                                Search any model, compare every supplier across India, and place an order request in minutes. No payment gateway, just direct B2B trade.
                             </p>
                         </div>
 
                         <div className="lg:col-span-5 order-1 lg:order-2 tc-fade-up tc-fade-up-2">
                             <TonerAnimation />
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* ============ BRANDS MARQUEE ============ */}
+            <section className="tc-brand-marquee" data-testid="brand-marquee">
+                <div className="tc-container flex items-center gap-6">
+                    <span className="text-[10px] tracking-[0.22em] uppercase font-semibold text-[#F5C400] shrink-0">Brands on TonersCart</span>
+                    <div className="tc-marquee-mask flex-1">
+                        <div className="tc-marquee-track">
+                            {[...MARQUEE_BRANDS, ...MARQUEE_BRANDS, ...MARQUEE_BRANDS].map((b, i) => (
+                                <span key={`${b}-${i}`} className="tc-marquee-item">{b}</span>
+                            ))}
                         </div>
                     </div>
                 </div>
