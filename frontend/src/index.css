@@ -107,6 +107,36 @@
 .btn-cta:hover { background-color: var(--tc-yellow-2) !important; transform: translateY(-1px); box-shadow: 0 12px 28px -10px rgba(245,196,0,0.65); }
 .btn-cta:disabled { opacity: 0.55; cursor: not-allowed; }
 
+/* Navbar pill buttons — outlined "Buy" (cyan) and "Sell" (yellow). */
+.tc-pill-buy {
+    background-color: transparent;
+    border: 1.5px solid #00B7C7;
+    border-radius: 999px;
+    padding: 8px 18px;
+    color: #00B7C7;
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 1;
+    transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.tc-pill-buy:hover { background-color: rgba(0,183,199,0.08); }
+.tc-pill-buy:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(0,183,199,0.25); }
+
+.tc-pill-sell {
+    background-color: transparent;
+    border: 1.5px solid #F5C400;
+    border-radius: 999px;
+    padding: 8px 18px;
+    color: #F5C400;
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 1;
+    transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.tc-pill-sell:hover { background-color: rgba(245,196,0,0.08); }
+.tc-pill-sell:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(245,196,0,0.25); }
+
+
 /* Light button — white surface, dark text (for "Browse toners", "Add to cart") */
 .btn-light {
     background-color: white;

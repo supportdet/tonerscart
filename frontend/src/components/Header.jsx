@@ -52,7 +52,7 @@ export default function Header() {
                 </Link>
 
                 {/* Desktop nav — text-style buttons matching "Sign in" weight */}
-                <nav className="hidden md:flex items-center gap-1">
+                <nav className="hidden md:flex items-center gap-2">
                     <div
                         className="relative"
                         onMouseEnter={() => setBuyOpen(true)}
@@ -61,11 +61,11 @@ export default function Header() {
                         <button
                             type="button"
                             onClick={() => setBuyOpen((o) => !o)}
-                            className="inline-flex items-center gap-1 h-9 px-3 rounded-md text-[14px] font-medium text-[#1D1D1F] hover:bg-black/[0.04] transition"
+                            className="tc-pill-buy inline-flex items-center gap-1.5"
                             data-testid="nav-buy"
                             aria-expanded={buyOpen}
                         >
-                            Buy <ChevronDown size={12} className={`transition-transform ${buyOpen ? "rotate-180" : ""}`} />
+                            Buy <ChevronDown size={13} className={`transition-transform ${buyOpen ? "rotate-180" : ""}`} style={{ color: "#00B7C7" }} />
                         </button>
                         {buyOpen && (
                             <div className="absolute left-0 top-full pt-1 z-50" data-testid="nav-buy-dropdown">
@@ -78,11 +78,11 @@ export default function Header() {
                         )}
                     </div>
 
-                    {/* Sell — plain text link matching Sign-in weight. Hidden for approved sellers and admins. */}
+                    {/* Sell — outlined pill in brand yellow. Hidden for approved sellers and admins. */}
                     {!isSeller && !isAdmin && (
                         <NavLink
                             to="/sell"
-                            className={({ isActive }) => `inline-flex items-center h-9 px-3 rounded-md text-[14px] font-medium transition ${isActive ? "bg-black/[0.06] text-[#0A0A0B]" : "text-[#1D1D1F] hover:bg-black/[0.04]"}`}
+                            className="tc-pill-sell inline-flex items-center"
                             data-testid="nav-sell"
                         >
                             Sell
