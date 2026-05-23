@@ -113,6 +113,13 @@ export default function PrinterListings() {
     };
     useEffect(() => { load(); }, []);
 
+    // External trigger from parent dashboard "+ Add printer" button
+    useEffect(() => {
+        const handler = () => setOpen(true);
+        window.addEventListener("tc-open-add-printer", handler);
+        return () => window.removeEventListener("tc-open-add-printer", handler);
+    }, []);
+
     const remove = async (id) => {
         if (!window.confirm("Remove this printer listing?")) return;
         try { await api.delete(`/supplier/printers/${id}`); toast.success("Removed"); load(); }
@@ -123,9 +130,6 @@ export default function PrinterListings() {
         <div data-testid="printer-listings-section">
             <div className="flex items-center justify-between mb-4">
                 <div className="text-[12px] text-[#6E6E73]">{items.length} {items.length === 1 ? "printer" : "printers"} listed</div>
-                <Button className="btn-cta inline-flex items-center gap-2" onClick={() => setOpen(true)} data-testid="add-printer-btn">
-                    <Plus size={14} /> Add printer
-                </Button>
             </div>
 
             {loading ? (
@@ -486,7 +490,7 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                     <Label>Price (₹) <span className="text-red-500">*</span></Label>
-                                    <Input type="number" min="0" step="0.01" value={f.price} onChange={upd("price")} placeholder="e.g. 24999" className="tc-input-lg" data-testid="wizard-price" />
+                                    <Input type="number" min="0" step="0.01" value={f.price} onChange={upd("price")} className="tc-input-lg" data-testid="wizard-price" />
                                 </div>
                                 <div>
                                     <Label>Stock quantity <span className="text-red-500">*</span></Label>

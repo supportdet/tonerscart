@@ -198,7 +198,7 @@ export default function SupplierDashboard() {
     }
 
     return (
-        <div data-testid="supplier-dashboard">
+        <div data-testid="supplier-dashboard" style={{ fontFamily: "'Inter', sans-serif" }}>
             <div className="tc-hero relative pb-12">
                 <div className="tc-hero-grid" />
                 <div className="tc-container relative pt-8 sm:pt-10">
@@ -238,21 +238,6 @@ export default function SupplierDashboard() {
                                 <p className="text-[14px] text-white/65 mt-2">{user?.supplier?.city || user?.city}</p>
                             </div>
                         </div>
-                        {catalog === "toners" ? (
-                            <div className="flex flex-wrap items-center gap-2 self-start">
-                                <Button className="btn-cta inline-flex items-center gap-2" onClick={openDialog} data-testid="add-listing-btn">
-                                    <Plus size={16} /> Add toner
-                                </Button>
-                                <button
-                                    type="button"
-                                    onClick={() => setCatalog("printers")}
-                                    className="btn-outline-light"
-                                    data-testid="switch-to-printers-btn"
-                                >
-                                    <Printer size={14} /> Add printer
-                                </button>
-                            </div>
-                        ) : null}
                     </div>
 
                     {/* Stats inside hero — bordered, icon, 36px Montserrat */}
@@ -274,14 +259,21 @@ export default function SupplierDashboard() {
             </div>
 
             <div className="tc-container py-8 sm:py-10">
-                {/* Commission Calculator */}
-                <div className="mb-6">
-                    <CommissionCalculator />
-                </div>
-                {/* Catalog tabs */}
-                <div className="inline-flex items-center rounded-full bg-black/[0.05] p-1 mb-6" data-testid="catalog-tabs">
-                    <button onClick={() => setCatalog("toners")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "toners" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-toners">Toners</button>
-                    <button onClick={() => setCatalog("printers")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "printers" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-printers">Printers</button>
+                {/* Catalog tabs with contextual Add button on the right */}
+                <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+                    <div className="inline-flex items-center rounded-full bg-black/[0.05] p-1" data-testid="catalog-tabs" style={{ fontFamily: "'Inter', sans-serif" }}>
+                        <button onClick={() => setCatalog("toners")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "toners" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-toners">Toners</button>
+                        <button onClick={() => setCatalog("printers")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "printers" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-printers">Printers</button>
+                    </div>
+                    {catalog === "toners" ? (
+                        <Button className="btn-cta inline-flex items-center gap-2" onClick={openDialog} data-testid="add-listing-btn">
+                            <Plus size={16} /> Add toner
+                        </Button>
+                    ) : (
+                        <Button className="btn-cta inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-printer"))} data-testid="add-printer-cta-btn">
+                            <Plus size={16} /> Add printer
+                        </Button>
+                    )}
                 </div>
 
                 {catalog === "printers" ? (
@@ -392,6 +384,12 @@ export default function SupplierDashboard() {
             )}
                 </>
                 )}
+
+            {/* Commission Calculator — placed AFTER stock & orders so dealers
+                review their inventory first, then run payout estimates. */}
+            <div className="mt-8" data-testid="commission-calculator-wrap">
+                <CommissionCalculator />
+            </div>
 
             {/* Add listing dialog */}
             <Dialog open={open} onOpenChange={setOpen}>

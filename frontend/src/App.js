@@ -27,6 +27,9 @@ import OrderConfirmed from "./pages/OrderConfirmed";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import Contact from "./pages/Contact";
+import GetFeatured from "./pages/GetFeatured";
+import NotFound from "./pages/NotFound";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 function App() {
     return (
@@ -37,6 +40,7 @@ function App() {
                         <AuthProvider>
                             <Header />
                             <main className="flex-1">
+                                <ErrorBoundary>
                                 <Routes>
                                     <Route path="/" element={<Landing />} />
                                     <Route path="/search" element={<SearchPage />} />
@@ -52,12 +56,15 @@ function App() {
                                     <Route path="/terms" element={<Terms />} />
                                     <Route path="/privacy" element={<Privacy />} />
                                     <Route path="/contact" element={<Contact />} />
+                                    <Route path="/get-featured" element={<GetFeatured />} />
                                     <Route path="/order-confirmed/:id" element={<OrderConfirmed />} />
                                     <Route path="/order-confirmed" element={<OrderConfirmed />} />
                                     <Route path="/customer" element={<ProtectedRoute roles={["customer"]}><CustomerDashboard /></ProtectedRoute>} />
                                     <Route path="/supplier" element={<ProtectedRoute roles={["supplier"]}><SupplierDashboard /></ProtectedRoute>} />
                                     <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
+                                    <Route path="*" element={<NotFound />} />
                                 </Routes>
+                                </ErrorBoundary>
                             </main>
                             <Footer />
                             <AIChatWidget />

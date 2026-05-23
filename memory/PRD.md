@@ -296,3 +296,39 @@ Replaced the single-page dialog with a clean 4-step wizard:
 **Migrations to run in Supabase SQL editor before deploy:**
 1. `backend/supabase_schema_logo.sql` (from previous batch)
 2. `backend/supabase_schema_buyer_gst.sql` (this batch) — adds `users.gst_number text`
+
+
+### 2026-05-23 — Production polish #2 (autocomplete, mobile, skeletons, 404, header pills, get-featured) ✅
+**1. Search autocomplete** — `TonerSearchInput.jsx` rewritten with debounced (300 ms) live suggestions from `GET /api/toner-master?q=&limit=8`, AbortController on every keypress, keyboard nav (↑/↓/Enter/Esc), "No suggestions — press Search to browse all" empty state, crash-safe array guards.
+
+**2. Mobile responsiveness** — hamburger menu (`header-mobile-menu-btn`) now exposes Buy with Toners/Printers/MPS, Sell, **Sign in** (outline) + **Join free** (yellow CTA) — both new — and city selector. Removed redundant "Join" cluster pill on mobile header. Dialogs now `max-h-[90vh] overflow-y-auto` (shadcn primitive).
+
+**3. Loading skeletons** — `Landing.jsx` grouped grid shows 4 toner-card skeletons before the API resolves; `CustomerDashboard.jsx` shows 3 order-row skeletons. Search results page already had skeletons.
+
+**4. Error boundary + 404** — `components/ErrorBoundary.jsx` wraps all `<Routes>`. New `pages/NotFound.jsx` catches unmatched routes with branded TonersCart-style 404 + "Go to homepage" / "Search toners" CTAs.
+
+**5. Header redesign** — Buy is now a pill button (border `#E8E8EC`, chevron rotates on open). Sell is a pill button (outlined black border, fills black on hover/active). Mobile slide-down menu has the Sign in + Join free buttons inside.
+
+**6. Dealer dashboard structural fixes**
+- Removed top-right "+ Add toner / + Add printer" cluster from the hero.
+- New contextual button on the right side of the tabs row — "+ Add toner" when Toners tab is active, "+ Add printer" when Printers tab is active. `+ Add printer` button dispatches `tc-open-add-printer` window event that `<PrinterListings>` listens to (so the wizard dialog opens without prop drilling). Internal Add-printer button inside `<PrinterListings>` was removed to avoid duplication.
+- Commission Calculator moved **below** the listings + orders sections (was above the tabs).
+- Calculator typography upgraded — Montserrat 600 for heading, tier values and Row labels (Inter 500 for descriptive text). Anti-thin/cheap fonts.
+- Inter body-font wrapper applied to entire supplier dashboard root.
+
+**7. Get Featured**
+- New CTA banner under Featured Suppliers on Landing: 🌟 + "Get your brand featured here" + yellow "Apply now →" → `/get-featured`.
+- `pages/GetFeatured.jsx` — dark-themed hero, fields: Company *, Contact person *, Phone (with locked `+91` prefix), Email *, City * (KNOWN_CITIES dropdown), Type of business (Dealer / OEM / Distributor / Other) as pills, Description textarea. POSTs to `/api/mps/inquiry` with `selections.type = "featured_application"`.
+- `email_service.email_mps_inquiry` now branches on `selections.type` — Featured applications send to `support@tonerscart.com` with subject `"New Featured Supplier Application — {company}"`. MPS path unchanged.
+
+**8. Smaller fixes**
+- Hero title → "India's only Trusted Source for Printers, Toners & More."
+- Modal scroll: shadcn `DialogContent` now `max-h-[90vh] overflow-y-auto` everywhere.
+- Login popup: `<OrderRequestDialog>` quick-signin section now reads "Sign in or create an account" with explicit "Go to login" / "Create account" deep-links.
+- +91 phone prefix on OrderRequestDialog phone input (10-digit cap + digits-only sanitiser) and on GetFeatured phone input.
+- Placeholder example numbers removed from Add Printer wizard price input.
+- Hero title and font upgrades passing 0 pageerrors on Landing.
+
+**Verified end-to-end on preview URL:** 0 pageerrors on Landing, 8 live autocomplete results for "HP", `/get-featured` form renders with +91 prefix, `/this-does-not-exist` resolves the NotFound page, mobile menu (390 px viewport) shows hamburger + Sign in/Join free.
+
+**Constraints honoured:** No CORS changes, no `emergentintegrations`, no git push.

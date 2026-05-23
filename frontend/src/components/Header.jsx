@@ -52,7 +52,7 @@ export default function Header() {
                 </Link>
 
                 {/* Desktop nav */}
-                <nav className="hidden md:flex items-center gap-1">
+                <nav className="hidden md:flex items-center gap-2">
                     <div
                         className="relative"
                         onMouseEnter={() => setBuyOpen(true)}
@@ -61,10 +61,11 @@ export default function Header() {
                         <button
                             type="button"
                             onClick={() => setBuyOpen((o) => !o)}
-                            className="text-[14px] font-medium px-3.5 py-2 rounded-md text-[#1D1D1F] hover:text-[#0A0A0B] hover:bg-black/[0.04] inline-flex items-center gap-1"
+                            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-[#E8E8EC] text-[13px] font-semibold text-[#1D1D1F] hover:border-[#0A0A0B] hover:bg-black/[0.03] transition"
                             data-testid="nav-buy"
+                            aria-expanded={buyOpen}
                         >
-                            Buy <ChevronDown size={12} />
+                            Buy <ChevronDown size={12} className={`transition-transform ${buyOpen ? "rotate-180" : ""}`} />
                         </button>
                         {buyOpen && (
                             <div className="absolute left-0 top-full pt-1 z-50" data-testid="nav-buy-dropdown">
@@ -77,9 +78,15 @@ export default function Header() {
                         )}
                     </div>
 
-                    {/* Sell — visible for guests, buyers and pending sellers; hidden for approved sellers */}
+                    {/* Sell — pill button. Hidden for approved sellers and admins. */}
                     {!isSeller && !isAdmin && (
-                        <NavLink to="/sell" className={navLink} data-testid="nav-sell">Sell</NavLink>
+                        <NavLink
+                            to="/sell"
+                            className={({ isActive }) => `inline-flex items-center h-9 px-4 rounded-full text-[13px] font-semibold transition border ${isActive ? "bg-[#0A0A0B] text-white border-[#0A0A0B]" : "bg-white text-[#0A0A0B] border-[#0A0A0B] hover:bg-[#0A0A0B] hover:text-white"}`}
+                            data-testid="nav-sell"
+                        >
+                            Sell
+                        </NavLink>
                     )}
 
                     {/* Buyer */}
@@ -160,9 +167,6 @@ export default function Header() {
                             )}
                         </button>
                     )}
-                    {!user && (
-                        <button onClick={() => navigate("/register")} className="btn-cta text-[12px] px-3 py-1.5" data-testid="header-register-btn-mobile">Join</button>
-                    )}
                     <button onClick={() => setMobileOpen((o) => !o)} className="w-10 h-10 grid place-items-center rounded-md hover:bg-black/[0.04]" aria-label="Menu" data-testid="header-mobile-menu-btn">
                         {mobileOpen ? <X size={20} /> : <Menu size={20} />}
                     </button>
@@ -205,11 +209,24 @@ export default function Header() {
                             <NavLink to="/admin" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-admin">Admin</NavLink>
                         )}
 
-                        <div className="pt-2 mt-2 border-t border-black/[0.06]">
+                        <div className="pt-2 mt-2 border-t border-black/[0.06] space-y-2">
                             {!user ? (
-                                <button onClick={() => { closeMobile(); navigate("/login"); }} className="block w-full px-4 py-3 rounded-lg text-[15px] font-medium text-[#1D1D1F] hover:bg-black/[0.04] text-left" data-testid="mobile-login-btn">
-                                    Sign in
-                                </button>
+                                <>
+                                    <button
+                                        onClick={() => { closeMobile(); navigate("/login"); }}
+                                        className="block w-full px-4 py-3 rounded-lg text-[14.5px] font-semibold text-[#1D1D1F] border border-[#E8E8EC] hover:bg-black/[0.04] text-left"
+                                        data-testid="mobile-login-btn"
+                                    >
+                                        Sign in
+                                    </button>
+                                    <button
+                                        onClick={() => { closeMobile(); navigate("/register"); }}
+                                        className="btn-cta w-full"
+                                        data-testid="mobile-register-btn"
+                                    >
+                                        Join free
+                                    </button>
+                                </>
                             ) : (
                                 <button onClick={async () => { closeMobile(); await handleLogout(); }} className="block w-full px-4 py-3 rounded-lg text-[15px] font-medium text-[#1D1D1F] hover:bg-black/[0.04] text-left flex items-center gap-2" data-testid="mobile-logout-btn">
                                     <LogOut size={16} /> Log out ({(user.name || "").split(" ")[0]})

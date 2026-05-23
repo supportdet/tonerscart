@@ -119,7 +119,19 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
                         </div>
                         <div>
                             <Label className="text-[12px]">Phone</Label>
-                            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91-..." required data-testid="order-phone-input" className="h-9 text-[13px]" />
+                            <div className="flex items-center">
+                                <span className="h-9 inline-flex items-center px-2.5 rounded-l-md border-y border-l border-[#E8E8EC] bg-[#F4F4F6] text-[12.5px] font-semibold text-[#0A0A0B] select-none">+91</span>
+                                <Input
+                                    type="tel"
+                                    inputMode="numeric"
+                                    maxLength={10}
+                                    value={phone.replace(/^\+?91[\s-]?/, "").replace(/\D/g, "")}
+                                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                                    required
+                                    data-testid="order-phone-input"
+                                    className="h-9 text-[13px] rounded-l-none"
+                                />
+                            </div>
                         </div>
                     </div>
                     <div>
@@ -134,9 +146,9 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
                     {!user && (
                         <div className="pt-2 mt-1 border-t border-black/[0.06]">
                             <div className="text-[11px] font-semibold uppercase tracking-wider text-[#0A0A0B] flex items-center gap-1.5">
-                                <Lock size={11} /> Quick sign-in
+                                <Lock size={11} /> Sign in or create an account
                             </div>
-                            <p className="text-[11px] text-[#6E6E73] mt-0.5">New buyer? Account is created instantly. Already have one? Same email + password — we sign you in.</p>
+                            <p className="text-[11px] text-[#6E6E73] mt-0.5">New here? Account is created instantly. Already registered? Same email + password — we sign you in.</p>
                             <div className="grid grid-cols-2 gap-2.5 mt-2">
                                 <div>
                                     <Label className="text-[12px]">Email</Label>
@@ -146,6 +158,9 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
                                     <Label className="text-[12px]">Password</Label>
                                     <Input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="6+ characters" data-testid="order-auth-password" className="h-9 text-[13px]" />
                                 </div>
+                            </div>
+                            <div className="mt-2 text-[11px] text-[#6E6E73]">
+                                Prefer full sign-in? <button type="button" onClick={() => { onClose?.(); navigate("/login"); }} className="text-[#00B7C7] hover:underline font-semibold" data-testid="order-go-login">Go to login</button> · <button type="button" onClick={() => { onClose?.(); navigate("/register"); }} className="text-[#00B7C7] hover:underline font-semibold" data-testid="order-go-register">Create account</button>
                             </div>
                         </div>
                     )}

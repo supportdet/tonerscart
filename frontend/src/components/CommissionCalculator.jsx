@@ -9,14 +9,14 @@ export default function CommissionCalculator() {
     const result = commissionFor(price);
 
     return (
-        <div className="tc-card-flat p-5 sm:p-6" data-testid="commission-calculator">
+        <div className="tc-card-flat p-5 sm:p-6" data-testid="commission-calculator" style={{ fontFamily: "'Inter', sans-serif" }}>
             <div className="flex items-center gap-2 mb-3">
                 <Calculator size={16} className="text-[#F5C400]" />
-                <h3 className="text-[#0A0A0B] text-[15px] font-semibold tracking-tight" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                <h3 className="text-[#0A0A0B] text-[17px] font-semibold tracking-tight" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 600, letterSpacing: "-0.01em" }}>
                     Estimate your payout
                 </h3>
             </div>
-            <p className="text-[12.5px] text-[#6E6E73] mb-4">
+            <p className="text-[13px] text-[#6E6E73] mb-4">
                 Enter your listing price to see TonersCart&apos;s commission and your final payout.
             </p>
 
@@ -61,12 +61,12 @@ export default function CommissionCalculator() {
             )}
 
             <div className="mt-5 pt-4 border-t border-black/[0.06]">
-                <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B] mb-2">Tier table</div>
-                <ul className="space-y-1 text-[12px] text-[#3a3a40]" data-testid="calc-tier-list">
+                <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-[#86868B] mb-2" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 600 }}>Tier table</div>
+                <ul className="space-y-1.5 text-[13px] text-[#1D1D1F]" data-testid="calc-tier-list">
                     {COMMISSION_TIERS.map((t) => (
                         <li key={t.id} className="flex items-center justify-between">
-                            <span>{t.label}</span>
-                            <span className="font-mono font-semibold">{t.rateLabel}</span>
+                            <span style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500 }}>{t.label}</span>
+                            <span className="font-mono text-[14px] text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 600 }}>{t.rateLabel}</span>
                         </li>
                     ))}
                 </ul>
@@ -78,8 +78,8 @@ export default function CommissionCalculator() {
 function Row({ label, value, valueClass }) {
     return (
         <div className="flex items-center justify-between gap-3">
-            <span className="text-[12.5px] text-[#6E6E73]">{label}</span>
-            <span className={`text-[13.5px] font-semibold font-mono ${valueClass}`}>{value}</span>
+            <span className="text-[13px] text-[#6E6E73]" style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500 }}>{label}</span>
+            <span className={`text-[14px] font-mono ${valueClass}`} style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 600 }}>{value}</span>
         </div>
     );
 }
