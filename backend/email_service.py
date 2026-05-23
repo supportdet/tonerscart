@@ -186,3 +186,147 @@ async def email_mps_inquiry(payload: dict):
     {f'<p style="margin-top:18px;"><strong>Requirement:</strong><br/>{description}</p>' if description else ''}
     """
     await _send(SUPPORT_INBOX, f"[TonersCart MPS] New enquiry — {name} ({estimated} printers)", html, reply_to=email)
+
+
+# ===== Order notifications =====================================================
+
+_COMMISSION_TIERS = [
+    (5000,   0.08),
+    (25000,  0.05),
+    (150000, 0.03),
+]
+
+
+def _commission_breakdown(total: float) -> tuple[float, float, str]:
+    """Return (commission ₹, payout ₹, rateLabel) — matches frontend rules.
+    For orders above ₹1.5 L returns (None-like 0.0, total, 'Deal basis')."""
+    t = float(total or 0)
+    for cap, rate in _COMMISSION_TIERS:
+        if t <= cap:
+            c = round(t * rate)
+            return c, t - c, f"{int(rate * 100)}%"
+    return 0.0, t, "Deal basis"
+
+
+def _money(n) -> str:
+    try:
+        return f"₹{int(round(float(n))):,}"
+    except Exception:
+        return f"₹{n}"
+
+
+async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: dict):
+    """Send confirmation email to buyer AND seller for a new order.
+
+    `order` keys expected: id, qty, unit_price, total, delivery_address,
+        delivery_city, delivery_pincode, customer_name, customer_phone,
+        buyer_gst_number, supplier_gst_number, created_at
+    `listing` keys: brand, model_number, toner_type
+    `supplier` keys: business_name, city, gst_number, contact_email
+    `buyer` keys: email, name
+    """
+    brand = (listing or {}).get("brand", "")
+    model = (listing or {}).get("model_number", "")
+    toner_type = (listing or {}).get("toner_type", "")
+    seller_biz = (supplier or {}).get("business_name") or "Seller"
+    seller_city = (supplier or {}).get("city") or ""
+    seller_gst = (supplier or {}).get("gst_number") or order.get("supplier_gst_number")
+    buyer_gst = order.get("buyer_gst_number") or buyer.get("gst_number")
+    order_id_short = str(order.get("id", ""))[:8].upper()
+    qty = order.get("qty", 1)
+    unit_price = order.get("unit_price", 0)
+    total = order.get("total", 0)
+    delivery_address = order.get("delivery_address") or "—"
+    delivery_city = order.get("delivery_city") or ""
+    delivery_pin = order.get("delivery_pincode") or ""
+    delivery_full = f"{delivery_address}{', ' + delivery_city if delivery_city else ''}{' - ' + delivery_pin if delivery_pin else ''}"
+    customer_name = order.get("customer_name") or (buyer or {}).get("name") or "Buyer"
+    customer_phone = order.get("customer_phone") or "—"
+
+    commission, payout, rate_label = _commission_breakdown(total)
+    gst_block_b = ""
+    if buyer_gst or seller_gst:
+        rows_g = ""
+        if buyer_gst:
+            rows_g += f"<tr><td style='padding:4px 12px;color:#86868B;'>Buyer GST</td><td style='padding:4px 12px;'><strong>{buyer_gst}</strong></td></tr>"
+        if seller_gst:
+            rows_g += f"<tr><td style='padding:4px 12px;color:#86868B;'>Seller GST</td><td style='padding:4px 12px;'><strong>{seller_gst}</strong></td></tr>"
+        gst_block_b = f"""
+        <div style="margin:14px 0;padding:14px 16px;background:#F5F5F7;border-radius:10px;">
+          <div style="font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#86868B;margin-bottom:6px;">GST</div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">{rows_g}</table>
+          <div style="margin-top:8px;font-size:11.5px;color:#6E6E73;">GST invoice to be issued by seller directly. TonersCart is a marketplace platform.</div>
+        </div>"""
+
+    # ---------- Buyer email ----------
+    buyer_email = (buyer or {}).get("email")
+    if buyer_email:
+        buyer_html = f"""
+        <h2 style="margin:0 0 6px 0;font-size:18px;">Order confirmed — {brand} {model}</h2>
+        <p style="margin:0 0 18px 0;color:#6E6E73;">Hi {customer_name}, your order has been sent to the seller.</p>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <tr><td style='padding:4px 12px;color:#86868B;'>Order ID</td><td style='padding:4px 12px;'><strong style="font-family:monospace;">#{order_id_short}</strong></td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Product</td><td style='padding:4px 12px;'><strong>{brand} · {model}</strong>{f' · {toner_type}' if toner_type else ''}</td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Quantity</td><td style='padding:4px 12px;'><strong>{qty}</strong></td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Unit price</td><td style='padding:4px 12px;'>{_money(unit_price)}</td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Total <span style="font-weight:400;color:#86868B;">(locked)</span></td><td style='padding:4px 12px;'><strong>{_money(total)}</strong></td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Delivery</td><td style='padding:4px 12px;'>{delivery_full}</td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Seller</td><td style='padding:4px 12px;'><strong>{seller_biz}</strong>{f' · {seller_city}' if seller_city else ''}</td></tr>
+        </table>
+        {gst_block_b}
+        <p style="margin:18px 0 4px 0;">Seller will dispatch within <strong>2 business days</strong>. You&apos;ll receive tracking once shipped.</p>
+        <p style="margin:18px 0;">
+          <a href="https://wa.me/919742270585?text=Order%20%23{order_id_short}%20support"
+             style="display:inline-block;padding:12px 20px;background:#25D366;color:#fff;border-radius:10px;font-weight:600;text-decoration:none;">
+            Chat with support on WhatsApp
+          </a>
+        </p>
+        <p style="color:#6E6E73;font-size:12.5px;">Prices are locked at order time and never change after placement.</p>
+        """
+        await _send(buyer_email, f"Order confirmed — {brand} {model} on TonersCart", buyer_html)
+
+    # ---------- Seller email ----------
+    seller_email = (supplier or {}).get("contact_email") or (supplier or {}).get("email")
+    if seller_email:
+        payout_line = (
+            f"<tr><td style='padding:4px 12px;color:#86868B;'>Commission ({rate_label})</td><td style='padding:4px 12px;'>−{_money(commission)}</td></tr>"
+            f"<tr><td style='padding:4px 12px;color:#86868B;'>Your payout</td><td style='padding:4px 12px;'><strong style='color:#0A8754;'>{_money(payout)}</strong></td></tr>"
+            if rate_label != "Deal basis"
+            else "<tr><td style='padding:4px 12px;color:#86868B;'>Commission</td><td style='padding:4px 12px;'>Deal basis — our team will contact you.</td></tr>"
+        )
+        gst_block_s = ""
+        if buyer_gst or seller_gst:
+            rows_gs = ""
+            if buyer_gst:
+                rows_gs += f"<tr><td style='padding:4px 12px;color:#86868B;'>Buyer GST</td><td style='padding:4px 12px;'><strong>{buyer_gst}</strong></td></tr>"
+            if seller_gst:
+                rows_gs += f"<tr><td style='padding:4px 12px;color:#86868B;'>Seller GST</td><td style='padding:4px 12px;'><strong>{seller_gst}</strong></td></tr>"
+            gst_block_s = f"""
+            <div style="margin:14px 0;padding:14px 16px;background:#F5F5F7;border-radius:10px;">
+              <div style="font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#86868B;margin-bottom:6px;">GST</div>
+              <table style="width:100%;border-collapse:collapse;font-size:13px;">{rows_gs}</table>
+              <div style="margin-top:8px;font-size:11.5px;color:#6E6E73;">Please raise a GST-compliant invoice for the buyer.</div>
+            </div>"""
+
+        seller_html = f"""
+        <h2 style="margin:0 0 6px 0;font-size:18px;">New order received — {brand} {model}</h2>
+        <p style="margin:0 0 18px 0;color:#6E6E73;">A buyer has placed an order against your listing.</p>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <tr><td style='padding:4px 12px;color:#86868B;'>Order ID</td><td style='padding:4px 12px;'><strong style="font-family:monospace;">#{order_id_short}</strong></td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Product</td><td style='padding:4px 12px;'><strong>{brand} · {model}</strong>{f' · {toner_type}' if toner_type else ''}</td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Quantity</td><td style='padding:4px 12px;'><strong>{qty}</strong></td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Order value</td><td style='padding:4px 12px;'><strong>{_money(total)}</strong></td></tr>
+          {payout_line}
+          <tr><td style='padding:4px 12px;color:#86868B;'>Buyer</td><td style='padding:4px 12px;'>{customer_name}{f' · {customer_phone}' if customer_phone else ''}</td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Delivery</td><td style='padding:4px 12px;'>{delivery_full}</td></tr>
+        </table>
+        {gst_block_s}
+        <p style="margin:18px 0 4px 0;"><strong>Please dispatch within 2 business days</strong> and update tracking in your dashboard.</p>
+        <p style="margin:18px 0;">
+          <a href="https://toners-marketplace.preview.emergentagent.com/supplier"
+             style="display:inline-block;padding:12px 22px;background:#F7C600;color:#0A0A0B;border-radius:10px;font-weight:600;text-decoration:none;">
+            Open my dashboard
+          </a>
+        </p>
+        """
+        await _send(seller_email, f"New order received — {brand} {model}", seller_html)

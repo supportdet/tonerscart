@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Trash2, Plus, Minus, ShoppingBag, ArrowRight } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingBag, ArrowRight, Lock } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import TonerCartridge from "../components/TonerCartridge";
 
@@ -77,11 +77,25 @@ export default function Cart() {
                                 </div>
                                 <div className="text-[13px] text-[#6E6E73] flex justify-between"><span>Items</span><span className="font-mono text-[#0A0A0B]">{count}</span></div>
                                 <div className="text-[13px] text-[#6E6E73] flex justify-between mt-1"><span>Subtotal</span><span className="font-mono text-[#0A0A0B]">₹{subtotal.toLocaleString("en-IN")}</span></div>
-                                <div className="text-[11px] text-[#86868B] mt-3">Final pricing is confirmed by each supplier on accept. No payment online.</div>
+                                <div className="text-[11px] text-[#86868B] mt-3">Final pricing is confirmed by each supplier on accept. Prices are locked at order time.</div>
                                 <button onClick={() => navigate("/checkout")} className="btn-cta w-full mt-5 inline-flex items-center justify-center gap-2" data-testid="cart-checkout-btn">
                                     Proceed to checkout <ArrowRight size={14} />
                                 </button>
                                 <button onClick={() => navigate("/search")} className="btn-light w-full mt-2" data-testid="cart-keep-shopping-btn">Keep shopping</button>
+
+                                {/* Pay Online — UI groundwork for Razorpay */}
+                                <div className="mt-5 pt-5 border-t border-black/[0.06]">
+                                    <button
+                                        type="button"
+                                        disabled
+                                        title="Online payments launching soon"
+                                        className="btn-cta w-full inline-flex items-center justify-center gap-2 opacity-50 cursor-not-allowed"
+                                        data-testid="pay-online-btn"
+                                    >
+                                        <Lock size={14} /> Pay Online
+                                    </button>
+                                    <p className="text-[11px] text-[#86868B] mt-2 text-center">Currently accepting order requests. Online payment coming shortly.</p>
+                                </div>
                             </div>
                         </aside>
                     </div>

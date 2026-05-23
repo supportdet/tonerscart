@@ -10,6 +10,7 @@ import { useCart } from "../context/CartContext";
 import OrderRequestDialog from "../components/OrderRequestDialog";
 import TonerSearchInput from "../components/TonerSearchInput";
 import TonerCartridge from "../components/TonerCartridge";
+import WhatsAppEnquiry from "../components/WhatsAppEnquiry";
 import useReveal from "../hooks/useReveal";
 
 const SidebarItem = ({ active, onClick, children, testid }) => (
@@ -28,7 +29,10 @@ function ProductCard({ p, qty, setQty, onBuy, onCart }) {
         ? "bg-blue-50 text-blue-700 border-blue-200"
         : "bg-amber-50 text-amber-700 border-amber-200";
     return (
-        <div className="tc-product-card" data-testid={`product-card-${p.id}`}>
+        <div className="tc-product-card group relative" data-testid={`product-card-${p.id}`}>
+            <div className="absolute top-3 right-3 z-10">
+                <WhatsAppEnquiry brand={p.brand} model={p.model_number} />
+            </div>
             <div className="tc-product-img">
                 <span className="tc-product-img-label">{p.brand}</span>
                 {p.image_url ? (
