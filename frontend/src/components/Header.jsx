@@ -41,14 +41,13 @@ export default function Header() {
     return (
         <header className="bg-white border-b border-black/[0.06] sticky top-0 z-[100]" data-testid="site-header">
             <div className="tc-container flex items-center justify-between h-16 gap-3">
-                <Link to="/" className="flex items-center gap-2.5 group shrink-0" data-testid="logo-home-link" onClick={closeMobile}>
-                    <div className="relative w-8 h-8 rounded-lg bg-[#0A0A0B] grid place-items-center overflow-hidden shrink-0 transition-transform group-hover:scale-105">
-                        <span className="text-white font-bold text-[13px] relative z-10 tracking-tight">TC</span>
-                        <span className="absolute top-0 left-0 w-1.5 h-1.5 bg-[#00B7C7]" />
-                        <span className="absolute top-0 right-0 w-1.5 h-1.5 bg-[#E6007E]" />
-                        <span className="absolute bottom-0 left-0 w-1.5 h-1.5 bg-[#F5C400]" />
-                    </div>
-                    <span className="font-semibold text-[#0A0A0B] tracking-tight text-[17px]" style={{ fontFamily: "'Montserrat', sans-serif" }}>TonersCart</span>
+                <Link to="/" className="flex items-center group shrink-0" data-testid="logo-home-link" onClick={closeMobile} aria-label="TonersCart home">
+                    <img
+                        src="/logo.png"
+                        alt="TonersCart"
+                        className="block h-9 w-auto transition-transform group-hover:scale-[1.03]"
+                        data-testid="header-logo-img"
+                    />
                 </Link>
 
                 {/* Desktop nav */}

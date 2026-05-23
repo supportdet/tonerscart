@@ -9,16 +9,18 @@ export default function Footer() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-12">
                     {/* Brand column */}
                     <div data-testid="footer-brand">
-                        <div className="flex items-center gap-2.5 mb-4">
-                            <div className="w-8 h-8 rounded-lg bg-white grid place-items-center">
-                                <span className="text-[#0A0A0B] font-bold text-sm">TC</span>
+                        <div className="inline-flex flex-col items-start">
+                            <div className="bg-white rounded-lg p-2 inline-flex">
+                                <img src="/logo.png" alt="TonersCart" className="block h-10 w-auto" data-testid="footer-logo-img" />
                             </div>
-                            <div className="font-bold text-white text-[17px]">TonersCart</div>
+                            <p className="mt-4 text-white text-[13px] opacity-70 max-w-xs" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                                Buy Better. Print Smarter.
+                            </p>
+                            <p className="mt-2 text-white text-[11px] opacity-50">
+                                A brand of Digital Edge Technologies | Bangalore
+                            </p>
+                            <p className="mt-5 text-[12px] text-white/40">© {year} TonersCart. All rights reserved.</p>
                         </div>
-                        <p className="text-[13px] text-white/70 leading-relaxed max-w-xs">
-                            India&apos;s B2B marketplace for printers &amp; toners.
-                        </p>
-                        <p className="mt-5 text-[12px] text-white/40">© {year} TonersCart. All rights reserved.</p>
                     </div>
 
                     {/* Marketplace column */}

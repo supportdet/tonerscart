@@ -332,3 +332,19 @@ Replaced the single-page dialog with a clean 4-step wizard:
 **Verified end-to-end on preview URL:** 0 pageerrors on Landing, 8 live autocomplete results for "HP", `/get-featured` form renders with +91 prefix, `/this-does-not-exist` resolves the NotFound page, mobile menu (390 px viewport) shows hamburger + Sign in/Join free.
 
 **Constraints honoured:** No CORS changes, no `emergentintegrations`, no git push.
+
+
+### 2026-05-23 — Branding pass: logo + Digital Edge attribution ✅
+**1. Navbar logo** — Removed inline "TC" tile + decorative dots + "TonersCart" wordmark from `Header.jsx`. Replaced with `<img src="/logo.png" alt="TonersCart" className="h-9 w-auto" data-testid="header-logo-img" />` that links to `/`. Hover triggers a tiny scale-up.
+
+**2. Footer logo + taglines** — `Footer.jsx` brand column now renders `<img src="/logo.png" className="h-10 w-auto" />` inside a white-rounded backing tile (`bg-white rounded-lg p-2`) so the dark/CMYK logo stays legible on the `#0A0A0B` footer. Below it: Montserrat 13 px white/70 "**Buy Better. Print Smarter.**" + white/50 11 px "**A brand of Digital Edge Technologies | Bangalore**" + © {year} line.
+
+**3. Legal pages branding**
+- `Terms.jsx` and `Privacy.jsx` — added attribution paragraph below the "Last updated: May 2025" line: "TonersCart is a brand of **Digital Edge Technologies**, a partnership firm registered in Bangalore, India." (`data-testid="terms-attribution"` / `privacy-attribution`).
+- `Contact.jsx` — added subtitle below "Get in touch" heading: "TonersCart — A brand of **Digital Edge Technologies** | Bangalore" (`data-testid="contact-attribution"`).
+
+**4. Dealer registration agreement** — `SellerApplicationForm.jsx` Step 4 now shows a checkbox row above Submit: "I agree to the **TonersCart Seller Terms** (link to `/terms`) operated by **Digital Edge Technologies**." The Submit button is disabled until `agreed === true && allDocsValid()`.
+
+**5. Browser tab + favicon** — `public/index.html` `<title>` updated to "TonersCart — Buy Better. Print Smarter." Added three favicon links pointing to `/logo.png` (`icon`, `apple-touch-icon`, `shortcut icon`) — works on every browser as a PNG until a proper `.ico` is added.
+
+**Verified** in preview: 0 pageerrors, header_logo_img + footer_logo_img elements present, all three attribution lines render, title set, favicon link added. **Logo image itself will only render once `frontend/public/logo.png` is also placed in the Emergent workspace** (current preview shows a broken-image placeholder because the file lives only in user's GitHub repo). On the production build it renders correctly.
