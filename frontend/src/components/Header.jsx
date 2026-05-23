@@ -45,7 +45,8 @@ export default function Header() {
     <img
                         src="/TONERSCART-bg.png"
                         alt="TonersCart"
-className="block h-12 w-auto transition-transform group-hover:scale-[1.03]"
+className="block w-auto transition-transform group-hover:scale-[1.03]"
+style={{ alignSelf: "center", height: "48px", width: "auto" }}
         style={{ alignSelf: "center" }}
                         data-testid="header-logo-img"
                     />
