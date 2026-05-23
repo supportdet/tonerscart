@@ -111,8 +111,8 @@
 .tc-pill-buy {
     background-color: transparent;
     border: 1.5px solid #00B7C7;
-    border-radius: 8px;
-    padding: 8px 18px;
+    border-radius: 14px;
+    padding: 10px 22px;
     color: #00B7C7;
     font-weight: 600;
     font-size: 14px;
@@ -125,8 +125,8 @@
 .tc-pill-sell {
     background-color: transparent;
     border: 1.5px solid #F5C400;
-    border-radius: 8px;
-    padding: 8px 18px;
+    border-radius: 14px;
+    padding: 10px 22px;
     color: #F5C400;
     font-weight: 600;
     font-size: 14px;
