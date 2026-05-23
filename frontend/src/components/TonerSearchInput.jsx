@@ -104,7 +104,7 @@ export default function TonerSearchInput({ value, onChange, onSubmit, placeholde
                 onChange={(e) => { onChange?.(e.target.value); setOpen(true); setFocusedIdx(-1); }}
                 onFocus={() => trimmed.length >= 2 && setOpen(true)}
                 onKeyDown={onKeyDown}
-                placeholder={placeholder || "Search HP 88A, Canon 337, Brother TN-2365…"}
+                placeholder={placeholder || ""}
                 className="tc-search-input"
                 aria-label="Search toners"
                 aria-autocomplete="list"
