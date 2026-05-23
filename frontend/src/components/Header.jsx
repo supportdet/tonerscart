@@ -39,14 +39,14 @@ export default function Header() {
     };
 
     return (
-        <header ="bg-white border-b border-black/[0.06] sticky top-0 z-[100]" data-testid="site-header">
-            <div ="tc-container flex items-center justify-between h-16 gap-3">
-                <Link to="/" ="flex items-center self-center shrink-0 group" data-testid="logo-home-link" onClick={closeMobile} aria-label="TonersCart home">
-                    <img
+<header className="bg-white border-b border-black/[0.06] sticky top-0 z-[100]" data-testid="site-header">
+<div className="tc-container flex items-center justify-between h-16 gap-3">
+<Link to="/" className="flex items-center self-center shrink-0 group" data-testid="logo-home-link" onClick={closeMobile} aria-label="TonersCart home">
+    <img
                         src="/TONERSCART-bg.png"
                         alt="TonersCart"
-                        className="block h-13 w-auto transition-transform group-hover:scale-[1.03]"
-                        style={{ alignSelf: "center" }}
+className="block h-13 w-auto transition-transform group-hover:scale-[1.03]"
+        style={{ alignSelf: "center" }}
                         data-testid="header-logo-img"
                     />
                 </Link>
