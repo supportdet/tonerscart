@@ -111,7 +111,7 @@
 .tc-pill-buy {
     background-color: transparent;
     border: 1.5px solid #00B7C7;
-    border-radius: 999px;
+    border-radius: 8px;
     padding: 8px 18px;
     color: #00B7C7;
     font-weight: 600;
@@ -125,7 +125,7 @@
 .tc-pill-sell {
     background-color: transparent;
     border: 1.5px solid #F5C400;
-    border-radius: 999px;
+    border-radius: 8px;
     padding: 8px 18px;
     color: #F5C400;
     font-weight: 600;
@@ -305,12 +305,12 @@
     color: #FFFFFF !important;
     border: none !important; outline: none !important; box-shadow: none !important;
     font-size: 15px; font-weight: 500; letter-spacing: -0.015em;
-    padding: 12px 8px;
+    padding: 12px 8px 12px 44px;
     caret-color: var(--tc-cyan);
     font-family: 'Inter', sans-serif;
 }
 @media (min-width: 640px) {
-    .tc-search-input { font-size: 17px; padding: 14px 8px; }
+    .tc-search-input { font-size: 17px; padding: 14px 8px 14px 46px; }
 }
 .tc-search-input::placeholder { color: rgba(255,255,255,0.6) !important; font-weight: 400; opacity: 1; }
 
