@@ -1117,7 +1117,7 @@ async def chat(payload: ChatRequest):
         raise HTTPException(500, "LLM key not configured")
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.5-flash-preview-04-17", system_instruction=CHAT_SYSTEM)
+        model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=CHAT_SYSTEM)
         messages = [{"role": "user" if m.role == "user" else "model", "parts": [m.content]} for m in payload.messages]
         response = model.generate_content(messages)
         reply = response.text
