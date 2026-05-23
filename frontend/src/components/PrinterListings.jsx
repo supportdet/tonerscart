@@ -45,8 +45,8 @@ const TECH_BY_USAGE = {
     ],
 };
 
-const PAPER_SIZES   = ["A4", "A3", "SRA3", "A2", "A1", "Roll"];
-const CONNECTIVITY  = ["Wi-Fi", "USB", "Bluetooth", "Ethernet"];
+const PAPER_SIZES   = []; /* removed from dealer flow — buyer-only */
+const CONNECTIVITY  = []; /* removed from dealer flow — buyer-only */
 
 const COLOR_OPTS = [
     { id: "color", label: "Color" }, { id: "bw", label: "B&W" }, { id: "both", label: "Both" },
@@ -59,13 +59,8 @@ const FUNCTIONS = [
     { id: "high_volume", label: "High-volume" },
 ];
 
-// All special features in one combined list — dealer chooses which apply
-const ALL_FEATURES = [
-    "Duplex", "Mobile printing", "High-resolution", "Voice assistant",
-    "Secure printing", "Cloud printing", "Department tracking",
-    "Heavy duty", "Oversized media", "Print management software",
-    "Large format", "Finishing options", "Advanced color management",
-];
+// All special features in one combined list — buyer-only (removed from dealer)
+const ALL_FEATURES = [];
 
 const PRETTY = {
     home: "Home", corporate: "Corporate / Office",
@@ -84,13 +79,10 @@ const EMPTY = {
     brand: "", model_number: "", description: "",
     image_url: "",
     usage_type: "", category: "",
-    paper_sizes: [],
     color: "",
     functions: [],
     monthly_volume_min: "",
     monthly_volume_max: "",
-    connectivity: [],
-    features: [],
     price: "",
     stock: "1",
     condition: "new",
@@ -248,13 +240,11 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
         if (step === 2) {
             if (!f.usage_type) return false;
             if (!f.category) return false;
-            if (!f.paper_sizes.length) return false;
             if (!f.color) return false;
             if (!f.functions.length) return false;
             const minV = Number(f.monthly_volume_min);
             const maxV = Number(f.monthly_volume_max);
             if (!minV || !maxV || minV < 0 || maxV < minV) return false;
-            if (!f.connectivity.length) return false;
             return true;
         }
         if (step === 3) {
@@ -303,10 +293,7 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
                 usage_type: f.usage_type,
                 category: f.category,
                 color: f.color,
-                paper_sizes: f.paper_sizes,
                 functions: f.functions,
-                connectivity: f.connectivity,
-                features: f.features,
                 monthly_volume_min: Number(f.monthly_volume_min) || 0,
                 monthly_volume_max: Number(f.monthly_volume_max) || 0,
                 price: parseFloat(f.price),
@@ -412,16 +399,6 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
                                 />
                             </SpecGroup>
 
-                            <SpecGroup label="Paper sizes supported" required hint="Choose all that apply">
-                                <PillRow
-                                    options={PAPER_SIZES.map((p) => ({ id: p, label: p }))}
-                                    selected={f.paper_sizes}
-                                    onClick={(id) => toggleArr("paper_sizes", id)}
-                                    multi
-                                    testKey="paper"
-                                />
-                            </SpecGroup>
-
                             <SpecGroup label="Color capability" required>
                                 <PillRow
                                     options={COLOR_OPTS}
@@ -458,26 +435,6 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
                                         </div>
                                     </div>
                                 </div>
-                            </SpecGroup>
-
-                            <SpecGroup label="Connectivity" required>
-                                <PillRow
-                                    options={CONNECTIVITY.map((c) => ({ id: c, label: c }))}
-                                    selected={f.connectivity}
-                                    onClick={(id) => toggleArr("connectivity", id)}
-                                    multi
-                                    testKey="conn"
-                                />
-                            </SpecGroup>
-
-                            <SpecGroup label="Special features (optional)" hint="Choose all that apply">
-                                <PillRow
-                                    options={ALL_FEATURES.map((c) => ({ id: c, label: c }))}
-                                    selected={f.features}
-                                    onClick={(id) => toggleArr("features", id)}
-                                    multi
-                                    testKey="feature"
-                                />
                             </SpecGroup>
                         </div>
                     </div>
@@ -534,12 +491,9 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
 
                         <ReviewRow k="Usage type"      v={fmt(f.usage_type)} />
                         <ReviewRow k="Technology"      v={fmt(f.category)} />
-                        <ReviewRow k="Paper sizes"     v={f.paper_sizes.join(", ") || "—"} />
                         <ReviewRow k="Color"           v={fmt(f.color)} />
                         <ReviewRow k="Functions"       v={(f.functions || []).map(fmt).join(", ") || "—"} />
                         <ReviewRow k="Monthly volume"  v={`${Number(f.monthly_volume_min || 0).toLocaleString("en-IN")} – ${Number(f.monthly_volume_max || 0).toLocaleString("en-IN")} pages`} />
-                        <ReviewRow k="Connectivity"    v={f.connectivity.join(", ") || "—"} />
-                        <ReviewRow k="Features"        v={(f.features || []).join(", ") || "—"} />
                     </div>
                 )}
 

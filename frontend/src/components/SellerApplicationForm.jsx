@@ -7,7 +7,7 @@ import { Textarea } from "../components/ui/textarea";
 import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
-import { Upload, CheckCircle2, ChevronLeft, ChevronRight, FileText } from "lucide-react";
+import { Upload, CheckCircle2, ChevronLeft, ChevronRight, FileText, ShieldCheck, CircleDashed } from "lucide-react";
 
 const KNOWN_CITIES = ["Bangalore","Mumbai","Delhi","Chennai","Hyderabad","Pune","Kolkata","Ahmedabad","Jaipur","Lucknow","Chandigarh","Surat","Indore","Nagpur","Coimbatore","Kochi","Bhopal","Noida","Gurgaon"];
 const INDIAN_STATES = [
@@ -342,6 +342,24 @@ export default function SellerApplicationForm() {
 
             {step === 4 && (
                 <div className="space-y-3" data-testid="apply-step-4">
+                    {/* Checklist card — what's required */}
+                    <div className="rounded-xl border border-white/10 bg-gradient-to-br from-[#1A1B1F] to-[#0F1013] text-white p-4 sm:p-5" data-testid="kyc-checklist-card">
+                        <div className="flex items-center gap-2 mb-3">
+                            <ShieldCheck size={15} className="text-emerald-400" />
+                            <div className="text-[12px] tracking-[0.16em] uppercase font-semibold text-white/65" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                                Documents required
+                            </div>
+                        </div>
+                        <ul className="space-y-1.5 text-[13.5px]" style={{ fontFamily: "'Inter', sans-serif" }}>
+                            <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>GST Certificate</strong> <span className="text-white/55">(required)</span></span></li>
+                            <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>PAN Card</strong> <span className="text-white/55">(required)</span></span></li>
+                            <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>Shop / Office Photo</strong> <span className="text-white/55">(required for Refilled sellers)</span></span></li>
+                            <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>Cancelled Cheque or Bank Passbook</strong> <span className="text-white/55">(required)</span></span></li>
+                            <li className="flex items-start gap-2"><CircleDashed size={14} className="text-amber-400 mt-0.5 shrink-0" /><span><strong>Brand Authorization Letter</strong> <span className="text-white/55">(required only for Original OEM sellers)</span></span></li>
+                            <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>Address Proof</strong> <span className="text-white/55">(utility bill / rent agreement)</span></span></li>
+                        </ul>
+                    </div>
+
                     <div className="text-[12.5px] text-[#6E6E73] mb-1">All documents are mandatory and stored privately. Only TonersCart admins can view them via short-lived signed links.</div>
                     {s.seller_types.includes("Original") && (
                         <FileSlot label="Brand Authorization Letter *" hint="Required for Original (OEM) sellers" file={docs.brand_authorization}

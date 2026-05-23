@@ -41,17 +41,18 @@ export default function Header() {
     return (
         <header className="bg-white border-b border-black/[0.06] sticky top-0 z-[100]" data-testid="site-header">
             <div className="tc-container flex items-center justify-between h-16 gap-3">
-                <Link to="/" className="flex items-center group shrink-0" data-testid="logo-home-link" onClick={closeMobile} aria-label="TonersCart home">
+                <Link to="/" className="flex items-center self-center shrink-0 group" data-testid="logo-home-link" onClick={closeMobile} aria-label="TonersCart home">
                     <img
                         src="/logo.png"
                         alt="TonersCart"
                         className="block h-9 w-auto transition-transform group-hover:scale-[1.03]"
+                        style={{ alignSelf: "center" }}
                         data-testid="header-logo-img"
                     />
                 </Link>
 
-                {/* Desktop nav */}
-                <nav className="hidden md:flex items-center gap-2">
+                {/* Desktop nav — text-style buttons matching "Sign in" weight */}
+                <nav className="hidden md:flex items-center gap-1">
                     <div
                         className="relative"
                         onMouseEnter={() => setBuyOpen(true)}
@@ -60,7 +61,7 @@ export default function Header() {
                         <button
                             type="button"
                             onClick={() => setBuyOpen((o) => !o)}
-                            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-[#E8E8EC] text-[13px] font-semibold text-[#1D1D1F] hover:border-[#0A0A0B] hover:bg-black/[0.03] transition"
+                            className="inline-flex items-center gap-1 h-9 px-3 rounded-md text-[14px] font-medium text-[#1D1D1F] hover:bg-black/[0.04] transition"
                             data-testid="nav-buy"
                             aria-expanded={buyOpen}
                         >
@@ -77,11 +78,11 @@ export default function Header() {
                         )}
                     </div>
 
-                    {/* Sell — pill button. Hidden for approved sellers and admins. */}
+                    {/* Sell — plain text link matching Sign-in weight. Hidden for approved sellers and admins. */}
                     {!isSeller && !isAdmin && (
                         <NavLink
                             to="/sell"
-                            className={({ isActive }) => `inline-flex items-center h-9 px-4 rounded-full text-[13px] font-semibold transition border ${isActive ? "bg-[#0A0A0B] text-white border-[#0A0A0B]" : "bg-white text-[#0A0A0B] border-[#0A0A0B] hover:bg-[#0A0A0B] hover:text-white"}`}
+                            className={({ isActive }) => `inline-flex items-center h-9 px-3 rounded-md text-[14px] font-medium transition ${isActive ? "bg-black/[0.06] text-[#0A0A0B]" : "text-[#1D1D1F] hover:bg-black/[0.04]"}`}
                             data-testid="nav-sell"
                         >
                             Sell
