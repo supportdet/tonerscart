@@ -46,7 +46,7 @@ export default function Header() {
                         src="/TONERSCART-bg.png"
                         alt="TonersCart"
 className="block w-auto transition-transform group-hover:scale-[1.03]"
-style={{ alignSelf: "center", height: "48px", width: "auto" }}
+style={{ alignSelf: "center", height: "38px", width: "auto" }}
         style={{ alignSelf: "center" }}
                         data-testid="header-logo-img"
                     />
