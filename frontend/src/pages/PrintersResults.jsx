@@ -6,6 +6,7 @@ import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
 import { Printer as PrinterIcon, X, SlidersHorizontal, Search as SearchIcon, Sparkles } from "lucide-react";
 import { useCity } from "../context/CityContext";
+import WhatsAppEnquiry from "../components/WhatsAppEnquiry";
 
 const CONDITIONS = [
     { id: "new", label: "Brand New" },
@@ -24,7 +25,10 @@ function fmt(v) { return LABELS[v] || v; }
 
 function PrinterCard({ p, onRequest }) {
     return (
-        <div className="bg-white border border-black/[0.06] rounded-2xl overflow-hidden transition hover:shadow-xl" data-testid={`printer-card-${p.id}`}>
+        <div className="bg-white border border-black/[0.06] rounded-2xl overflow-hidden transition hover:shadow-xl group relative" data-testid={`printer-card-${p.id}`}>
+            <div className="absolute top-3 right-3 z-10">
+                <WhatsAppEnquiry brand={p.brand} model={p.model_number} />
+            </div>
             <div className="bg-black/[0.03] aspect-[4/3] grid place-items-center">
                 {p.image_url ? (
                     <img src={p.image_url} alt={`${p.brand} ${p.model_number}`} className="w-full h-full object-contain" />

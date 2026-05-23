@@ -243,3 +243,56 @@ Replaced the single-page dialog with a clean 4-step wizard:
 - Dealer (supplier1@test.com): Add printer dialog opens → Step 1 Next disabled until brand+model+image filled → Step 2 all spec pills toggle yellow, min/max validation works → Step 3 price/stock/condition → Step 4 Review card shows TestBrand TM-100 ₹25,000 · 3 in stock · Refurbished with all spec rows; Publish CTA active.
 
 **Backend untouched** — no CORS changes, no new endpoints, no `emergentintegrations` usage. Existing `POST /api/mps/inquiry`, `GET /api/printers`, `POST /api/supplier/printers`, `POST /api/supplier/printer-image` consumed as-is.
+
+
+### 2026-05-23 — Production polish batch (Footer, Legal pages, Commission, GST, Emails, Order Confirmed) ✅
+**Footer (site-wide):** Marketplace / Company columns + CMYK strip as final element. `components/Footer.jsx`.
+
+**Legal & contact pages:** `/terms`, `/privacy`, `/contact` — clean white page, Montserrat headings, Inter body. Contact page renders phones, email, WhatsApp CTA + Mon-Sat 9-7 hours block + form that POSTs `/api/mps/inquiry`.
+
+**Commission utility & UI:**
+- `lib/commission.js` — tiered (8 / 5 / 3 / deal-basis) `commissionFor(price)` helper + `COMMISSION_TIERS`.
+- `<CommissionBanner />` injected below price on both Add Toner and Add Printer forms.
+- `<CommissionCalculator />` card on supplier dashboard above the catalog tabs.
+- Supplier order rows show `Commission (X%) -₹XXX` + bold green `Payout ₹XXXX`.
+
+**WhatsApp & Pay Online:**
+- `<WhatsAppEnquiry brand model />` floats on toner/printer cards — hover-only desktop, always visible on mobile.
+- Disabled "🔒 Pay Online" CTA on cart with "launching soon" tooltip and muted subtext.
+
+**Return & Dispute Policy:**
+- `<ReturnPolicyBox />` collapsible card on every customer order row + on OrderConfirmed page.
+
+**H — Pixel-perfect dealer forms:**
+- New CSS layer in `index.css` (~150 lines): `.tc-pill`, `.tc-pill-sm`, `.tc-input-lg` (cyan focus glow), `.tc-image-drop` (160 px dashed cyan), `.btn-pill-cta`, `.tc-swatch` (40 px circular w/ white checkmark on select), `.tc-suffix-wrap` (pages/month suffix), `.tc-listing-card` (hover lift), `.tc-badge-new` / `.tc-badge-refurb`, `.tc-stock-dot` (green/red dot), `.tc-stat-card` (icon + 36 px Montserrat), `.btn-outline-light`, `.tc-shadow-lg`.
+- **Add Toner dialog** rebuilt: 680 px modal, 32 px padding, 20 px radius, BASIC INFO / PRICING & STOCK / PRODUCT IMAGE section dividers, circular CMYK swatches, type pills, height-52 inputs, page-yield field, cyan dashed upload zone, pill CTA.
+- **Add Printer wizard** restyled: same section dividers across all 4 steps, pill row replaced with `tc-pill`, height-52 inputs, cyan upload zone, pages/month suffix on volume inputs, pill CTA.
+- **Supplier hero**: bordered glass stats with icons + 36 px values; added outline-style "+ Add printer" button beside yellow "+ Add toner".
+- **Printer listing cards**: hover lift, new yellow `NEW` and grey `REFURBISHED` badges, category tag chip, green/red stock-dot indicator.
+
+**E — GST compliance:**
+- Backend: `users.gst_number` column (migration `supabase_schema_buyer_gst.sql`), `GET /auth/me` returns it, `PATCH /auth/me` accepts validated GSTIN.
+- `/orders/mine` joins `suppliers.gst_number` for buyer view and looks up buyer GST + email for seller view.
+- Dealer registration: GST helper text `"Required for B2B invoicing. Format: 22AAAAA0000A1Z5"`.
+- New `<BuyerGSTCard />` on customer dashboard — clear / edit GSTIN inline with format validation.
+- Per-order GST block on customer dashboard order rows AND on OrderConfirmed page with disclaimer "GST invoice to be issued by seller directly. TonersCart is a marketplace platform."
+
+**G — Order confirmation emails:**
+- `email_service.email_order_placed(order, listing, supplier, buyer)` sends two HTML emails:
+  - **Buyer**: subject `"Order confirmed — {brand} {model} on TonersCart"`, order ID, product, qty, locked total, delivery, seller, GST block, dispatch ETA, WhatsApp CTA.
+  - **Seller**: subject `"New order received — {brand} {model}"`, order ID, product, qty, order value, commission row + bold green payout (using same tiered logic), buyer name/phone/delivery, GST block, dispatch instruction, "Open my dashboard" CTA.
+- Fired (non-blocking) from `POST /api/orders` immediately after the insert. Failure logged, never blocks order creation. Auto-skips when `RESEND_API_KEY` not set.
+
+**I.1 — Dedicated order confirmation page (`/order-confirmed/:id`):**
+- Animated green check burst (CSS `tc-check-pop` + `tc-check-pulse` keyframes), eyebrow "Order placed", h1 "Your order is confirmed", "Your seller will contact you within 24 hours", monospace Order ID.
+- Summary card: Product, Quantity, Seller, Delivery, big total, "Price locked at order time", "Dispatch within 2 business days" with clock icon, GST block when present.
+- CTA row: green "Chat with support" → `wa.me/919742270585?text=Order #...` + yellow "Track your order" → `/customer`.
+- ReturnPolicyBox at the bottom.
+- Page re-fetches authoritative order via `/orders/mine` on mount but renders instantly using state passed by the placing screen.
+- Both `<OrderRequestDialog>` (single-item Buy Now) and `Checkout.jsx` (single-line cart checkout) now navigate to this page after successful POST `/orders`. Multi-line checkouts still go to `/customer`.
+
+**Constraints honoured throughout:** no CORS changes, no `emergentintegrations` anywhere in code, no git push (user controls via Save to GitHub).
+
+**Migrations to run in Supabase SQL editor before deploy:**
+1. `backend/supabase_schema_logo.sql` (from previous batch)
+2. `backend/supabase_schema_buyer_gst.sql` (this batch) — adds `users.gst_number text`

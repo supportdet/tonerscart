@@ -7,6 +7,7 @@ import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { Plus, Trash2, Image as ImageIcon, ChevronLeft, ChevronRight, CheckCircle2 } from "lucide-react";
 import api, { formatApiError } from "../lib/api";
+import CommissionBanner from "./CommissionBanner";
 
 // ============================================================
 // Option catalogues — kept aligned with PrintersGuide.jsx so
@@ -136,27 +137,36 @@ export default function PrinterListings() {
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {items.map((p) => (
-                        <div key={p.id} className="bg-white border border-black/[0.06] rounded-xl overflow-hidden" data-testid={`printer-listing-${p.id}`}>
-                            <div className="bg-black/[0.03] aspect-[4/3] grid place-items-center">
-                                {p.image_url
-                                    ? <img src={p.image_url} alt="" className="w-full h-full object-contain" loading="lazy" />
-                                    : <ImageIcon size={32} className="text-[#D2D2D7]" />}
-                            </div>
-                            <div className="p-4 space-y-1">
-                                <div className="flex items-center justify-between">
-                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-[0.08em] ${p.condition === "new" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
+                        <div key={p.id} className="tc-listing-card" data-testid={`printer-listing-${p.id}`}>
+                            {p.image_url
+                                ? <img src={p.image_url} alt="" className="tc-listing-img" loading="lazy" />
+                                : <div className="tc-listing-img-ph"><ImageIcon size={32} /></div>}
+                            <div className="p-4 space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className={p.condition === "new" ? "tc-badge-new" : "tc-badge-refurb"}>
                                         {p.condition === "new" ? "New" : "Refurbished"}
                                     </span>
-                                    <span className="text-[10px] text-[#86868B]">{fmt(p.usage_type)} · {fmt(p.category)}</span>
+                                    <span className="tc-badge-tag">{fmt(p.usage_type)} · {fmt(p.category)}</span>
                                 </div>
-                                <div className="font-mono text-[14px] font-semibold text-[#0A0A0B]">{p.brand} · {p.model_number}</div>
+                                <div className="text-[#0A0A0B] text-[16px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif", letterSpacing: "-0.005em" }}>
+                                    {p.brand} · {p.model_number}
+                                </div>
                                 <div className="flex items-center justify-between">
-                                    <div className="font-mono text-[16px] font-semibold text-[#0A0A0B]">₹{Number(p.price).toLocaleString("en-IN")}</div>
-                                    <div className="text-[12px] text-[#6E6E73]">Stock: <span className="font-mono font-semibold text-[#0A0A0B]">{p.stock}</span></div>
+                                    <div className="font-mono text-[20px] font-bold text-[#0A0A0B] leading-none">₹{Number(p.price).toLocaleString("en-IN")}</div>
+                                    <span className={`tc-stock-dot ${p.stock > 0 ? "is-in" : "is-out"}`}>
+                                        {p.stock > 0 ? `${p.stock} in stock` : "Out of stock"}
+                                    </span>
                                 </div>
-                                <button onClick={() => remove(p.id)} className="mt-1 text-[11.5px] text-red-600 hover:text-red-700 inline-flex items-center gap-1" data-testid={`remove-printer-${p.id}`}>
-                                    <Trash2 size={11} /> Remove
-                                </button>
+                                <div className="flex items-center justify-end pt-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => remove(p.id)}
+                                        className="text-[11.5px] text-red-600 hover:text-red-700 inline-flex items-center gap-1"
+                                        data-testid={`remove-printer-${p.id}`}
+                                    >
+                                        <Trash2 size={11} /> Remove
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     ))}
@@ -311,9 +321,9 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
 
     return (
         <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-            <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto" data-testid="add-printer-dialog">
+            <DialogContent className="max-w-[680px] max-h-[92vh] overflow-y-auto p-8 rounded-[20px] tc-shadow-lg" data-testid="add-printer-dialog">
                 <DialogHeader>
-                    <DialogTitle className="text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
+                    <DialogTitle className="text-[#0A0A0B] text-[22px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500, letterSpacing: "-0.01em" }}>
                         Add a printer
                     </DialogTitle>
                 </DialogHeader>
@@ -335,140 +345,164 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
 
                 {/* Steps */}
                 {step === 1 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="wizard-step-1">
-                        <div className="sm:col-span-2">
-                            <Label>Product image <span className="text-red-500">*</span></Label>
-                            <label className="block mt-1 cursor-pointer">
-                                <input type="file" accept="image/*" onChange={onPickFile} className="hidden" data-testid="wizard-image-input" />
-                                <div className={`border-2 border-dashed rounded-lg px-4 py-6 text-center transition ${imagePreview ? "border-emerald-300 bg-emerald-50" : "border-[#D2D2D7] hover:border-[#F5C400]"}`}>
-                                    {imagePreview
-                                        ? <img src={imagePreview} alt="preview" className="max-h-32 mx-auto rounded" />
-                                        : <div className="text-[#6E6E73] text-[13px] flex items-center justify-center gap-2"><ImageIcon size={16} /> Click to upload (required, max 5 MB)</div>}
-                                </div>
-                            </label>
-                        </div>
-                        <div>
-                            <Label>Brand <span className="text-red-500">*</span></Label>
-                            <Input value={f.brand} onChange={upd("brand")} placeholder="HP, Canon, Epson…" data-testid="wizard-brand" />
-                        </div>
-                        <div>
-                            <Label>Model number <span className="text-red-500">*</span></Label>
-                            <Input value={f.model_number} onChange={upd("model_number")} placeholder="M1138w, LBP2900B…" data-testid="wizard-model" />
-                        </div>
-                        <div className="sm:col-span-2">
-                            <Label>Description (optional)</Label>
-                            <Textarea rows={3} value={f.description} onChange={upd("description")} placeholder="Highlight key strengths buyers should know…" data-testid="wizard-description" />
+                    <div data-testid="wizard-step-1">
+                        <div className="tc-form-section">Basic info</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="sm:col-span-2">
+                                <Label>Product image <span className="text-red-500">*</span></Label>
+                                <label className="block mt-1 cursor-pointer">
+                                    <input type="file" accept="image/*" onChange={onPickFile} className="hidden" data-testid="wizard-image-input" />
+                                    <div className={`tc-image-drop ${imagePreview ? "has-image" : ""}`}>
+                                        {imagePreview
+                                            ? <img src={imagePreview} alt="preview" className="max-h-32 rounded-md" />
+                                            : (
+                                                <>
+                                                    <ImageIcon size={22} />
+                                                    <span>Click to upload printer image</span>
+                                                    <span className="text-[11px] text-[#86868B] font-normal">PNG / JPG, max 5 MB</span>
+                                                </>
+                                            )}
+                                    </div>
+                                </label>
+                            </div>
+                            <div>
+                                <Label>Brand <span className="text-red-500">*</span></Label>
+                                <Input value={f.brand} onChange={upd("brand")} placeholder="HP, Canon, Epson…" className="tc-input-lg" data-testid="wizard-brand" />
+                            </div>
+                            <div>
+                                <Label>Model number <span className="text-red-500">*</span></Label>
+                                <Input value={f.model_number} onChange={upd("model_number")} placeholder="M1138w, LBP2900B…" className="tc-input-lg" data-testid="wizard-model" />
+                            </div>
+                            <div className="sm:col-span-2">
+                                <Label>Description (optional)</Label>
+                                <Textarea rows={3} value={f.description} onChange={upd("description")} placeholder="Highlight key strengths buyers should know…" className="tc-input-lg" data-testid="wizard-description" />
+                            </div>
                         </div>
                     </div>
                 )}
 
                 {step === 2 && (
-                    <div className="space-y-4" data-testid="wizard-step-2">
-                        <SpecGroup label="Usage type" required>
-                            <PillRow
-                                options={USAGE_OPTS}
-                                selected={[f.usage_type]}
-                                onClick={(id) => setF({ ...f, usage_type: id, category: "" })}
-                                testKey="usage"
-                            />
-                        </SpecGroup>
+                    <div data-testid="wizard-step-2">
+                        <div className="tc-form-section">Specifications</div>
+                        <div className="space-y-4">
+                            <SpecGroup label="Usage type" required>
+                                <PillRow
+                                    options={USAGE_OPTS}
+                                    selected={[f.usage_type]}
+                                    onClick={(id) => setF({ ...f, usage_type: id, category: "" })}
+                                    testKey="usage"
+                                />
+                            </SpecGroup>
 
-                        <SpecGroup
-                            label="Printer technology"
-                            required
-                            hint={!f.usage_type ? "Pick a usage type first" : undefined}
-                        >
-                            <PillRow
-                                options={techOpts}
-                                selected={[f.category]}
-                                onClick={(id) => setVal("category", id)}
-                                disabled={!f.usage_type}
-                                testKey="tech"
-                            />
-                        </SpecGroup>
+                            <SpecGroup
+                                label="Printer technology"
+                                required
+                                hint={!f.usage_type ? "Pick a usage type first" : undefined}
+                            >
+                                <PillRow
+                                    options={techOpts}
+                                    selected={[f.category]}
+                                    onClick={(id) => setVal("category", id)}
+                                    disabled={!f.usage_type}
+                                    testKey="tech"
+                                />
+                            </SpecGroup>
 
-                        <SpecGroup label="Paper sizes supported" required hint="Choose all that apply">
-                            <PillRow
-                                options={PAPER_SIZES.map((p) => ({ id: p, label: p }))}
-                                selected={f.paper_sizes}
-                                onClick={(id) => toggleArr("paper_sizes", id)}
-                                multi
-                                testKey="paper"
-                            />
-                        </SpecGroup>
+                            <SpecGroup label="Paper sizes supported" required hint="Choose all that apply">
+                                <PillRow
+                                    options={PAPER_SIZES.map((p) => ({ id: p, label: p }))}
+                                    selected={f.paper_sizes}
+                                    onClick={(id) => toggleArr("paper_sizes", id)}
+                                    multi
+                                    testKey="paper"
+                                />
+                            </SpecGroup>
 
-                        <SpecGroup label="Color capability" required>
-                            <PillRow
-                                options={COLOR_OPTS}
-                                selected={[f.color]}
-                                onClick={(id) => setVal("color", id)}
-                                testKey="color"
-                            />
-                        </SpecGroup>
+                            <SpecGroup label="Color capability" required>
+                                <PillRow
+                                    options={COLOR_OPTS}
+                                    selected={[f.color]}
+                                    onClick={(id) => setVal("color", id)}
+                                    testKey="color"
+                                />
+                            </SpecGroup>
 
-                        <SpecGroup label="Functions" required>
-                            <PillRow
-                                options={FUNCTIONS}
-                                selected={f.functions}
-                                onClick={(id) => toggleArr("functions", id)}
-                                multi
-                                testKey="function"
-                            />
-                        </SpecGroup>
+                            <SpecGroup label="Functions" required>
+                                <PillRow
+                                    options={FUNCTIONS}
+                                    selected={f.functions}
+                                    onClick={(id) => toggleArr("functions", id)}
+                                    multi
+                                    testKey="function"
+                                />
+                            </SpecGroup>
 
-                        <SpecGroup label="Monthly volume capacity" required hint="Range the printer supports (pages / month)">
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <Label className="text-[11.5px] text-[#6E6E73]">Minimum</Label>
-                                    <Input type="number" min="0" value={f.monthly_volume_min} onChange={upd("monthly_volume_min")} placeholder="500" data-testid="wizard-vol-min" />
+                            <SpecGroup label="Monthly volume capacity" required hint="Range the printer supports">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <Label className="text-[11.5px] text-[#6E6E73]">Minimum</Label>
+                                        <div className="tc-suffix-wrap">
+                                            <Input type="number" min="0" value={f.monthly_volume_min} onChange={upd("monthly_volume_min")} placeholder="500" className="tc-input-lg" data-testid="wizard-vol-min" />
+                                            <span className="tc-suffix">pages/month</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <Label className="text-[11.5px] text-[#6E6E73]">Maximum</Label>
+                                        <div className="tc-suffix-wrap">
+                                            <Input type="number" min="0" value={f.monthly_volume_max} onChange={upd("monthly_volume_max")} placeholder="10000" className="tc-input-lg" data-testid="wizard-vol-max" />
+                                            <span className="tc-suffix">pages/month</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <Label className="text-[11.5px] text-[#6E6E73]">Maximum</Label>
-                                    <Input type="number" min="0" value={f.monthly_volume_max} onChange={upd("monthly_volume_max")} placeholder="10000" data-testid="wizard-vol-max" />
-                                </div>
-                            </div>
-                        </SpecGroup>
+                            </SpecGroup>
 
-                        <SpecGroup label="Connectivity" required>
-                            <PillRow
-                                options={CONNECTIVITY.map((c) => ({ id: c, label: c }))}
-                                selected={f.connectivity}
-                                onClick={(id) => toggleArr("connectivity", id)}
-                                multi
-                                testKey="conn"
-                            />
-                        </SpecGroup>
+                            <SpecGroup label="Connectivity" required>
+                                <PillRow
+                                    options={CONNECTIVITY.map((c) => ({ id: c, label: c }))}
+                                    selected={f.connectivity}
+                                    onClick={(id) => toggleArr("connectivity", id)}
+                                    multi
+                                    testKey="conn"
+                                />
+                            </SpecGroup>
 
-                        <SpecGroup label="Special features (optional)" hint="Choose all that apply">
-                            <PillRow
-                                options={ALL_FEATURES.map((c) => ({ id: c, label: c }))}
-                                selected={f.features}
-                                onClick={(id) => toggleArr("features", id)}
-                                multi
-                                testKey="feature"
-                            />
-                        </SpecGroup>
+                            <SpecGroup label="Special features (optional)" hint="Choose all that apply">
+                                <PillRow
+                                    options={ALL_FEATURES.map((c) => ({ id: c, label: c }))}
+                                    selected={f.features}
+                                    onClick={(id) => toggleArr("features", id)}
+                                    multi
+                                    testKey="feature"
+                                />
+                            </SpecGroup>
+                        </div>
                     </div>
                 )}
 
                 {step === 3 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="wizard-step-3">
-                        <div>
-                            <Label>Price (₹) <span className="text-red-500">*</span></Label>
-                            <Input type="number" min="0" step="0.01" value={f.price} onChange={upd("price")} placeholder="e.g. 24999" data-testid="wizard-price" />
-                        </div>
-                        <div>
-                            <Label>Stock quantity <span className="text-red-500">*</span></Label>
-                            <Input type="number" min="0" value={f.stock} onChange={upd("stock")} data-testid="wizard-stock" />
-                        </div>
-                        <div className="sm:col-span-2">
-                            <Label>Condition <span className="text-red-500">*</span></Label>
-                            <PillRow
-                                options={[{ id: "new", label: "Brand New" }, { id: "refurbished", label: "Refurbished" }]}
-                                selected={[f.condition]}
-                                onClick={(id) => setVal("condition", id)}
-                                testKey="condition"
-                            />
+                    <div data-testid="wizard-step-3">
+                        <div className="tc-form-section">Pricing &amp; stock</div>
+                        <div className="space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <Label>Price (₹) <span className="text-red-500">*</span></Label>
+                                    <Input type="number" min="0" step="0.01" value={f.price} onChange={upd("price")} placeholder="e.g. 24999" className="tc-input-lg" data-testid="wizard-price" />
+                                </div>
+                                <div>
+                                    <Label>Stock quantity <span className="text-red-500">*</span></Label>
+                                    <Input type="number" min="0" value={f.stock} onChange={upd("stock")} className="tc-input-lg" data-testid="wizard-stock" />
+                                </div>
+                            </div>
+                            <CommissionBanner />
+                            <div>
+                                <Label>Condition <span className="text-red-500">*</span></Label>
+                                <PillRow
+                                    options={[{ id: "new", label: "Brand New" }, { id: "refurbished", label: "Refurbished" }]}
+                                    selected={[f.condition]}
+                                    onClick={(id) => setVal("condition", id)}
+                                    testKey="condition"
+                                />
+                            </div>
                         </div>
                     </div>
                 )}
@@ -506,18 +540,18 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
                 )}
 
                 {/* Footer */}
-                <div className="mt-5 pt-4 border-t border-black/[0.06] flex items-center justify-between">
+                <div className="mt-6 pt-4 border-t border-black/[0.06] flex items-center justify-between">
                     <Button variant="outline" type="button" onClick={step === 1 ? onClose : goBack} disabled={saving || uploading} data-testid="wizard-back-btn">
                         <ChevronLeft size={14} className="mr-1" /> {step === 1 ? "Cancel" : "Back"}
                     </Button>
                     {step < 4 ? (
-                        <Button className="btn-cta inline-flex items-center" onClick={goNext} disabled={!canNext() || uploading} data-testid="wizard-next-btn">
-                            {uploading ? "Uploading…" : "Next"} <ChevronRight size={14} className="ml-1" />
-                        </Button>
+                        <button type="button" className="btn-pill-cta" onClick={goNext} disabled={!canNext() || uploading} data-testid="wizard-next-btn">
+                            {uploading ? "Uploading…" : "Next"} <ChevronRight size={14} />
+                        </button>
                     ) : (
-                        <Button className="btn-cta inline-flex items-center gap-1.5" onClick={submit} disabled={saving} data-testid="wizard-publish-btn">
+                        <button type="button" className="btn-pill-cta" onClick={submit} disabled={saving} data-testid="wizard-publish-btn">
                             {saving ? "Publishing…" : <><CheckCircle2 size={14} /> Publish printer</>}
-                        </Button>
+                        </button>
                     )}
                 </div>
             </DialogContent>
@@ -555,9 +589,7 @@ function PillRow({ options, selected, onClick, multi, disabled, testKey }) {
                         type="button"
                         onClick={() => !disabled && onClick(o.id)}
                         disabled={disabled}
-                        className={`px-3 py-1.5 rounded-full border text-[12.5px] font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${isSel
-                            ? "bg-[#F5C400] text-[#0A0A0B] border-[#F5C400] shadow-sm"
-                            : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#86868B]"}`}
+                        className={`tc-pill ${isSel ? "is-selected" : ""}`}
                         data-testid={`wizard-${testKey}-${o.id}`}
                     >
                         {o.label}

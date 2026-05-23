@@ -61,8 +61,9 @@ export default function Checkout() {
         setLoading(true);
         try {
             await ensureAuth();
+            const createdOrders = [];
             for (const it of items) {
-                await api.post("/orders", {
+                const { data: created } = await api.post("/orders", {
                     listing_id: it.id,
                     qty: it.qty,
                     customer_name: name,
@@ -70,10 +71,24 @@ export default function Checkout() {
                     delivery_address: address,
                     notes,
                 });
+                if (created) createdOrders.push({ created, product: it.product });
             }
             clear();
             toast.success(`${items.length} order ${items.length === 1 ? "request" : "requests"} sent to suppliers`);
-            navigate("/customer");
+            // If single-line checkout — go to dedicated confirmation page; else customer dashboard
+            if (createdOrders.length === 1) {
+                const { created, product } = createdOrders[0];
+                const enriched = {
+                    ...created,
+                    listings: { brand: product.brand, model_number: product.model_number, toner_type: product.toner_type, image_url: product.image_url },
+                    suppliers: { business_name: product.supplier_name, city: product.city },
+                    supplier_name: product.supplier_name,
+                    supplier_city: product.city,
+                };
+                navigate(`/order-confirmed/${created.id}`, { state: { order: enriched } });
+            } else {
+                navigate("/customer");
+            }
         } catch (err) {
             toast.error(formatApiError(err));
         } finally { setLoading(false); }

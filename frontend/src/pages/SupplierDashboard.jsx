@@ -6,10 +6,13 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle, Camera, Loader2 } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle, Camera, Loader2, Package, ShoppingCart, Clock, Printer } from "lucide-react";
 import { supabase, PRODUCT_BUCKET } from "../lib/supabase";
 import TonerCartridge from "../components/TonerCartridge";
 import PrinterListings from "../components/PrinterListings";
+import CommissionBanner from "../components/CommissionBanner";
+import CommissionCalculator from "../components/CommissionCalculator";
+import { commissionFor } from "../lib/commission";
 
 const ORDER_STATUS = {
     requested: "Requested",
@@ -67,6 +70,7 @@ export default function SupplierDashboard() {
     const [price, setPrice] = useState("");
     const [stock, setStock] = useState("");
     const [tonerType, setTonerType] = useState("Original");
+    const [pageYield, setPageYield] = useState("");
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState("");
 
@@ -119,7 +123,7 @@ export default function SupplierDashboard() {
 
     const reset = () => {
         setBrand(""); setModelNumber(""); setColor("Black");
-        setPrice(""); setStock(""); setTonerType("Original");
+        setPrice(""); setStock(""); setTonerType("Original"); setPageYield("");
         setImageFile(null); setImagePreview("");
     };
     const openDialog = () => { reset(); setOpen(true); };
@@ -154,6 +158,7 @@ export default function SupplierDashboard() {
                 price: parseFloat(price),
                 stock: parseInt(stock, 10),
                 toner_type: tonerType,
+                page_yield: pageYield ? parseInt(pageYield, 10) : null,
                 image_url: imageUrl,
             });
             toast.success("Listing added");
@@ -233,24 +238,35 @@ export default function SupplierDashboard() {
                                 <p className="text-[14px] text-white/65 mt-2">{user?.supplier?.city || user?.city}</p>
                             </div>
                         </div>
-                        {catalog === "toners" && (
-                            <Button className="btn-cta inline-flex items-center gap-2 self-start" onClick={openDialog} data-testid="add-listing-btn">
-                                <Plus size={16} /> Add toner
-                            </Button>
-                        )}
+                        {catalog === "toners" ? (
+                            <div className="flex flex-wrap items-center gap-2 self-start">
+                                <Button className="btn-cta inline-flex items-center gap-2" onClick={openDialog} data-testid="add-listing-btn">
+                                    <Plus size={16} /> Add toner
+                                </Button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCatalog("printers")}
+                                    className="btn-outline-light"
+                                    data-testid="switch-to-printers-btn"
+                                >
+                                    <Printer size={14} /> Add printer
+                                </button>
+                            </div>
+                        ) : null}
                     </div>
 
-                    {/* Stats inside hero */}
+                    {/* Stats inside hero — bordered, icon, 36px Montserrat */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-8">
                         {[
-                            { k: "Listings", v: stats.listings },
-                            { k: "Active", v: stats.active },
-                            { k: "Orders", v: stats.orders },
-                            { k: "Pending", v: stats.pending },
-                        ].map((s) => (
-                            <div key={s.k} className="bg-white/[0.06] backdrop-blur border border-white/10 rounded-xl p-4">
-                                <div className="font-mono text-2xl font-semibold text-white">{s.v}</div>
-                                <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-white/55 mt-1">{s.k}</div>
+                            { k: "Listings", v: stats.listings, Icon: Package },
+                            { k: "Active",   v: stats.active,   Icon: CheckCircle2 },
+                            { k: "Orders",   v: stats.orders,   Icon: ShoppingCart },
+                            { k: "Pending",  v: stats.pending,  Icon: Clock },
+                        ].map(({ k, v, Icon }) => (
+                            <div key={k} className="tc-stat-card" data-testid={`supplier-stat-${k.toLowerCase()}`}>
+                                <div className="tc-stat-icon"><Icon size={16} /></div>
+                                <div className="tc-stat-value">{v}</div>
+                                <div className="tc-stat-label">{k}</div>
                             </div>
                         ))}
                     </div>
@@ -258,6 +274,10 @@ export default function SupplierDashboard() {
             </div>
 
             <div className="tc-container py-8 sm:py-10">
+                {/* Commission Calculator */}
+                <div className="mb-6">
+                    <CommissionCalculator />
+                </div>
                 {/* Catalog tabs */}
                 <div className="inline-flex items-center rounded-full bg-black/[0.05] p-1 mb-6" data-testid="catalog-tabs">
                     <button onClick={() => setCatalog("toners")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "toners" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-toners">Toners</button>
@@ -330,7 +350,21 @@ export default function SupplierDashboard() {
                                         <td className="p-3 font-mono">{o.listings?.model_number || "—"}</td>
                                         <td className="p-3">{o.customer_name}<div className="text-[11px] text-[#86868B]">{o.customer_phone}</div></td>
                                         <td className="p-3 font-mono">{o.qty}</td>
-                                        <td className="p-3 font-mono">₹{Number(o.total).toLocaleString("en-IN")}</td>
+                                        <td className="p-3 font-mono">
+                                            ₹{Number(o.total).toLocaleString("en-IN")}
+                                            {(() => {
+                                                const c = commissionFor(o.total);
+                                                if (!c || c.commission === null) {
+                                                    return <div className="text-[10.5px] text-[#86868B] mt-0.5">Deal basis · contact team</div>;
+                                                }
+                                                return (
+                                                    <div className="mt-0.5 leading-tight" data-testid={`order-payout-${o.id}`}>
+                                                        <div className="text-[10.5px] text-[#86868B]">Commission ({c.rateLabel}): −₹{c.commission.toLocaleString("en-IN")}</div>
+                                                        <div className="text-[11px] text-emerald-700 font-semibold">Payout: ₹{c.payout.toLocaleString("en-IN")}</div>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </td>
                                         <td className="p-3 text-[11px] uppercase font-semibold tracking-[0.1em] text-[#0A0A0B]">{ORDER_STATUS[o.status]}</td>
                                         <td className="p-3">
                                             {o.status === "requested" && (
@@ -361,17 +395,20 @@ export default function SupplierDashboard() {
 
             {/* Add listing dialog */}
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="max-w-lg" data-testid="add-listing-dialog">
+                <DialogContent className="max-w-[680px] p-8 rounded-[20px] tc-shadow-lg" data-testid="add-listing-dialog">
                     <DialogHeader>
-                        <DialogTitle>Add product</DialogTitle>
+                        <DialogTitle className="text-[22px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500, letterSpacing: "-0.01em" }}>
+                            Add a toner
+                        </DialogTitle>
                     </DialogHeader>
-                    <form onSubmit={submit} className="space-y-4">
-                        {/* Brand dropdown + model text */}
+                    <form onSubmit={submit} className="mt-2">
+                        <div className="tc-form-section">Basic info</div>
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <Label>Brand<span className="text-red-500"> *</span></Label>
                                 <select value={brand} onChange={(e) => setBrand(e.target.value)} required
-                                    className="w-full h-10 px-3 rounded-md border border-[#D2D2D7] bg-white text-[14px]"
+                                    className="tc-input-lg w-full"
                                     data-testid="listing-brand-select">
                                     <option value="">Select brand…</option>
                                     {brands.map((b) => <option key={b} value={b}>{b}</option>)}
@@ -387,63 +424,124 @@ export default function SupplierDashboard() {
                             </div>
                             <div>
                                 <Label>Model number<span className="text-red-500"> *</span></Label>
-                                <Input value={modelNumber} onChange={(e) => setModelNumber(e.target.value)} placeholder="e.g. 88A, TN-2365, 925" required data-testid="listing-model-input" />
+                                <Input
+                                    value={modelNumber}
+                                    onChange={(e) => setModelNumber(e.target.value)}
+                                    placeholder="e.g. 88A, TN-2365, 925"
+                                    required
+                                    className="tc-input-lg"
+                                    data-testid="listing-model-input"
+                                />
                             </div>
                         </div>
-                        <div>
+
+                        {/* Circular color swatches */}
+                        <div className="mt-4">
                             <Label>Color</Label>
-                            <div className="grid grid-cols-4 gap-2 mt-1">
-                                {["Black", "Cyan", "Magenta", "Yellow"].map((c) => (
-                                    <button type="button" key={c} onClick={() => setColor(c)}
-                                        className={`px-2 py-2 rounded-lg border text-[12.5px] font-semibold transition ${color === c ? "bg-[#0A0A0B] text-white border-[#0A0A0B]" : "bg-white text-[#1D1D1F] border-[#D2D2D7]"}`}
-                                        data-testid={`listing-color-${c}`}>{c}</button>
+                            <div className="flex items-center gap-3 mt-2" data-testid="listing-color-row">
+                                {[
+                                    { name: "Black",   hex: "#1A1A1A" },
+                                    { name: "Cyan",    hex: "#00B7C7" },
+                                    { name: "Magenta", hex: "#E6007E" },
+                                    { name: "Yellow",  hex: "#F5C400" },
+                                ].map((c) => (
+                                    <button
+                                        type="button"
+                                        key={c.name}
+                                        onClick={() => setColor(c.name)}
+                                        aria-label={c.name}
+                                        title={c.name}
+                                        className={`tc-swatch ${color === c.name ? "is-selected" : ""}`}
+                                        style={{ "--swatch": c.hex }}
+                                        data-testid={`listing-color-${c.name}`}
+                                    />
                                 ))}
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <Label>Price (₹)<span className="text-red-500"> *</span></Label>
-                                <Input type="number" min="0" step="1" value={price} onChange={(e) => setPrice(e.target.value)} required data-testid="listing-price-input" />
-                            </div>
-                            <div>
-                                <Label>Stock<span className="text-red-500"> *</span></Label>
-                                <Input type="number" min="0" step="1" value={stock} onChange={(e) => setStock(e.target.value)} required data-testid="listing-stock-input" />
-                            </div>
-                        </div>
-
-                        <div>
+                        {/* Toner type — pill cards */}
+                        <div className="mt-4">
                             <Label>Toner type<span className="text-red-500"> *</span></Label>
-                            <div className="grid grid-cols-3 gap-2 mt-1">
+                            <div className="flex flex-wrap gap-2 mt-2">
                                 {["Original", "Compatible", "Refilled"].map((t) => (
-                                    <button type="button" key={t} onClick={() => setTonerType(t)}
-                                        className={`px-3 py-2.5 rounded-lg border text-[13px] font-semibold transition ${tonerType === t ? "bg-[#0A0A0B] text-white border-[#0A0A0B]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#86868B]"}`}
-                                        data-testid={`listing-type-${t}`}>
+                                    <button
+                                        type="button"
+                                        key={t}
+                                        onClick={() => setTonerType(t)}
+                                        className={`tc-pill ${tonerType === t ? "is-selected" : ""}`}
+                                        data-testid={`listing-type-${t}`}
+                                    >
                                         {t}
                                     </button>
                                 ))}
                             </div>
                         </div>
 
-                        <div>
-                            <Label>Product image<span className="text-red-500"> *</span></Label>
-                            <label className="block mt-1 cursor-pointer">
-                                <input type="file" accept="image/*" onChange={onPickFile} className="hidden" data-testid="listing-image-input" />
-                                <div className={`border-2 border-dashed rounded-lg px-4 py-6 text-center transition ${imagePreview ? "border-emerald-300 bg-emerald-50" : "border-[#D2D2D7] hover:border-[#86868B]"}`}>
-                                    {imagePreview ? (
-                                        <img src={imagePreview} alt="preview" className="max-h-32 mx-auto rounded" />
-                                    ) : (
-                                        <div className="text-[#6E6E73] text-[13px] flex items-center justify-center gap-2">
-                                            <ImageIcon size={16} /> Click to upload (required, max 5 MB)
-                                        </div>
-                                    )}
-                                </div>
-                            </label>
+                        <div className="tc-form-section">Pricing &amp; stock</div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <Label>Price (₹)<span className="text-red-500"> *</span></Label>
+                                <Input
+                                    type="number" min="0" step="1"
+                                    value={price}
+                                    onChange={(e) => setPrice(e.target.value)}
+                                    required
+                                    className="tc-input-lg"
+                                    data-testid="listing-price-input"
+                                />
+                            </div>
+                            <div>
+                                <Label>Stock<span className="text-red-500"> *</span></Label>
+                                <Input
+                                    type="number" min="0" step="1"
+                                    value={stock}
+                                    onChange={(e) => setStock(e.target.value)}
+                                    required
+                                    className="tc-input-lg"
+                                    data-testid="listing-stock-input"
+                                />
+                            </div>
+                        </div>
+                        <CommissionBanner />
+
+                        <div className="mt-3">
+                            <Label>Page yield (sheets)</Label>
+                            <div className="tc-suffix-wrap">
+                                <Input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    value={pageYield}
+                                    onChange={(e) => setPageYield(e.target.value)}
+                                    placeholder="e.g. 2000"
+                                    className="tc-input-lg"
+                                    data-testid="listing-page-yield"
+                                />
+                                <span className="tc-suffix">sheets</span>
+                            </div>
+                            <div className="text-[11.5px] text-[#86868B] mt-1">e.g. 2000 for HP 88A. Helps buyers compare cost per page.</div>
                         </div>
 
-                        <DialogFooter>
+                        <div className="tc-form-section">Product image</div>
+                        <label className="block cursor-pointer">
+                            <input type="file" accept="image/*" onChange={onPickFile} className="hidden" data-testid="listing-image-input" />
+                            <div className={`tc-image-drop ${imagePreview ? "has-image" : ""}`}>
+                                {imagePreview ? (
+                                    <img src={imagePreview} alt="preview" className="max-h-32 rounded-md" />
+                                ) : (
+                                    <>
+                                        <Camera size={22} />
+                                        <span>Click to upload toner image</span>
+                                        <span className="text-[11px] text-[#86868B] font-normal">PNG / JPG, max 5 MB</span>
+                                    </>
+                                )}
+                            </div>
+                        </label>
+
+                        <DialogFooter className="mt-6">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
-                            <Button type="submit" className="btn-cta" disabled={saving} data-testid="listing-save-btn">
+                            <Button type="submit" className="btn-pill-cta" disabled={saving} data-testid="listing-save-btn">
                                 {saving ? "Publishing…" : "Publish listing"}
                             </Button>
                         </DialogFooter>

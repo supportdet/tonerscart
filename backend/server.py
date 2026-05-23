@@ -28,6 +28,7 @@ from email_service import (
     email_application_approved,
     email_application_rejected,
     email_mps_inquiry,
+    email_order_placed,
 )
 from ai_check import check_documents
 
@@ -520,6 +521,12 @@ def me(user: dict = Depends(require_user)):
     Roles: 'admin' | 'supplier' (= seller) | 'customer' (= buyer).
     application_status: 'pending' | 'rejected' | None — derived from suppliers_pending."""
     out = dict(user)
+    # Buyer GSTIN (optional, used for B2B invoicing on orders)
+    try:
+        u = sb_admin.table("users").select("gst_number").eq("id", user["id"]).maybe_single().execute()
+        out["gst_number"] = (u.data or {}).get("gst_number") if u else None
+    except Exception:
+        out["gst_number"] = None
     # Approved supplier?
     if user.get("role") == "supplier":
         s = sb_admin.table("suppliers").select(
@@ -556,6 +563,29 @@ def me(user: dict = Depends(require_user)):
     else:
         out["application_status"] = None
     return out
+
+
+class ProfileUpdate(BaseModel):
+    gst_number: Optional[str] = None
+
+
+_GSTIN_RE = re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$")
+
+
+@api.patch("/auth/me")
+def update_me(payload: ProfileUpdate, user: dict = Depends(require_user)):
+    """Buyer can save an optional GST number for B2B invoicing.
+    Pass an empty string to clear. Format is validated server-side."""
+    updates: dict = {}
+    if payload.gst_number is not None:
+        v = (payload.gst_number or "").strip().upper()
+        if v and not _GSTIN_RE.match(v):
+            raise HTTPException(400, "Invalid GSTIN — must be 15 alphanumeric chars (e.g. 22AAAAA0000A1Z5)")
+        updates["gst_number"] = v or None
+    if not updates:
+        return {"ok": True, "updated": []}
+    sb_admin.table("users").update(updates).eq("id", user["id"]).execute()
+    return {"ok": True, "updated": list(updates.keys()), **updates}
 
 
 # ===== Toner master ============================================================
@@ -733,7 +763,7 @@ def delete_listing(listing_id: str, user: dict = Depends(require_role("supplier"
 # ===== Orders ==================================================================
 
 @api.post("/orders")
-def create_order(payload: OrderCreate, user: dict = Depends(require_user)):
+async def create_order(payload: OrderCreate, user: dict = Depends(require_user)):
     if user["role"] not in ("customer", "supplier"):
         raise HTTPException(403, "Only signed-in buyers and sellers can place orders")
     lst = sb_admin.table("listings").select("*").eq("id", payload.listing_id).maybe_single().execute()
@@ -759,16 +789,55 @@ def create_order(payload: OrderCreate, user: dict = Depends(require_user)):
     res = sb_admin.table("orders").insert(row).execute()
     # Decrement stock (best effort)
     sb_admin.table("listings").update({"stock": L["stock"] - payload.qty}).eq("id", L["id"]).execute()
-    return res.data[0] if res.data else row
+    created = res.data[0] if res.data else row
+
+    # Fire confirmation emails (best effort — never block the order)
+    try:
+        sup = sb_admin.table("suppliers").select(
+            "business_name,city,gst_number,contact_email"
+        ).eq("id", L["supplier_id"]).maybe_single().execute()
+        buyer_row = sb_admin.table("users").select("email,name,gst_number").eq("id", user["id"]).maybe_single().execute()
+        order_for_email = dict(created)
+        order_for_email["buyer_gst_number"] = (buyer_row.data or {}).get("gst_number") if buyer_row else None
+        order_for_email["supplier_gst_number"] = (sup.data or {}).get("gst_number") if sup else None
+        await email_order_placed(
+            order=order_for_email,
+            listing=L,
+            supplier=(sup.data if sup else {}) or {},
+            buyer=(buyer_row.data if buyer_row else {}) or {},
+        )
+    except Exception:
+        logger.exception("order confirmation email failed (non-fatal)")
+
+    return created
 
 
 @api.get("/orders/mine")
 def my_orders(user: dict = Depends(require_user)):
     if user["role"] == "customer":
-        rows = sb_admin.table("orders").select("*,listings(model_number,brand,toner_type,image_url),suppliers(business_name,city)").eq("customer_id", user["id"]).order("created_at", desc=True).execute().data or []
+        rows = sb_admin.table("orders").select("*,listings(model_number,brand,toner_type,image_url),suppliers(business_name,city,gst_number)").eq("customer_id", user["id"]).order("created_at", desc=True).execute().data or []
+        # Attach buyer GST (same for all rows since it's the same buyer)
+        try:
+            u = sb_admin.table("users").select("gst_number").eq("id", user["id"]).maybe_single().execute()
+            buyer_gst = (u.data or {}).get("gst_number") if u else None
+        except Exception:
+            buyer_gst = None
+        for r in rows:
+            r["buyer_gst_number"] = buyer_gst
     elif user["role"] == "supplier":
         s = _approved_supplier(user)
         rows = sb_admin.table("orders").select("*,listings(model_number,brand,toner_type,image_url)").eq("supplier_id", s["id"]).order("created_at", desc=True).execute().data or []
+        if rows:
+            buyer_ids = list({r["customer_id"] for r in rows if r.get("customer_id")})
+            buyer_map: dict = {}
+            if buyer_ids:
+                ulist = sb_admin.table("users").select("id,gst_number,email").in_("id", buyer_ids).execute().data or []
+                buyer_map = {u["id"]: u for u in ulist}
+            for r in rows:
+                u = buyer_map.get(r.get("customer_id")) or {}
+                r["buyer_gst_number"] = u.get("gst_number")
+                r["buyer_email"] = u.get("email")
+                r["supplier_gst_number"] = s.get("gst_number")
     else:
         rows = sb_admin.table("orders").select("*").order("created_at", desc=True).limit(500).execute().data or []
     return rows

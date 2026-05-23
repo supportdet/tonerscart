@@ -5,6 +5,7 @@ import { Button } from "../components/ui/button";
 import { toast } from "sonner";
 import { PackageSearch } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import ReturnPolicyBox from "../components/ReturnPolicyBox";
 
 const STATUS_STYLE = {
     requested: "bg-amber-50 text-amber-700 border-amber-200",
@@ -54,6 +55,10 @@ export default function CustomerDashboard() {
                 ))}
             </div>
 
+            <div className="mt-5">
+                <BuyerGSTCard />
+            </div>
+
             <h2 className="text-[#0A0A0B] mt-10 mb-3" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>My orders</h2>
             {loading ? (
                 <div className="tc-card-flat p-8 text-center text-[#6E6E73]">Loading…</div>
@@ -64,27 +69,41 @@ export default function CustomerDashboard() {
                     <div className="text-[13px] text-[#6E6E73] mt-1">Search for a toner model and send your first order request.</div>
                 </div>
             ) : (
-                <div className="tc-card-flat p-0 overflow-x-auto">
-                    <table className="w-full text-[13px]">
-                        <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">
-                            <tr><th className="text-left p-3">Toner</th><th className="text-left p-3">Supplier</th><th className="text-left p-3">Qty</th><th className="text-left p-3">Total</th><th className="text-left p-3">Status</th><th className="text-left p-3">Tracking</th></tr>
-                        </thead>
-                        <tbody>
-                            {orders.map((o) => (
-                                <tr key={o.id} className="border-t border-black/[0.05]" data-testid={`customer-order-row-${o.id}`}>
-                                    <td className="p-3">
-                                        <div className="font-mono font-semibold text-[#0A0A0B]">{o.listings?.model_number || "—"}</div>
-                                        <div className="text-[11px] text-[#86868B]">{o.listings?.brand} · {o.listings?.toner_type}</div>
-                                    </td>
-                                    <td className="p-3">{o.suppliers?.business_name || "—"}<div className="text-[11px] text-[#86868B]">{o.suppliers?.city}</div></td>
-                                    <td className="p-3 font-mono">{o.qty}</td>
-                                    <td className="p-3 font-mono font-semibold">₹{Number(o.total).toLocaleString('en-IN')}</td>
-                                    <td className="p-3"><span className={`text-[11px] font-bold px-2 py-1 rounded-md border uppercase tracking-[0.08em] ${STATUS_STYLE[o.status] || STATUS_STYLE.cancelled}`}>{o.status}</span></td>
-                                    <td className="p-3 font-mono text-[12px]">{o.tracking_number || "—"}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                <div className="space-y-3" data-testid="customer-orders-list">
+                    {orders.map((o) => (
+                        <div key={o.id} className="tc-card-flat p-4 sm:p-5" data-testid={`customer-order-row-${o.id}`}>
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <div className="font-mono font-semibold text-[#0A0A0B] text-[15px]">{o.listings?.brand} · {o.listings?.model_number || "—"}</div>
+                                    <div className="text-[11.5px] text-[#86868B] mt-0.5">{o.listings?.toner_type || ""} · Qty {o.qty}</div>
+                                    <div className="text-[12px] text-[#3a3a40] mt-1">Seller: <span className="font-semibold text-[#0A0A0B]">{o.suppliers?.business_name || "—"}</span>{o.suppliers?.city ? ` · ${o.suppliers.city}` : ""}</div>
+                                    {o.tracking_number && <div className="text-[11.5px] text-[#3a3a40] mt-0.5 font-mono">Tracking: {o.tracking_number}</div>}
+                                </div>
+                                <div className="text-right">
+                                    <span className={`text-[10.5px] font-bold px-2 py-1 rounded-md border uppercase tracking-[0.08em] ${STATUS_STYLE[o.status] || STATUS_STYLE.cancelled}`}>{o.status}</span>
+                                    <div className="font-mono font-bold text-[18px] text-[#0A0A0B] mt-2">₹{Number(o.total).toLocaleString('en-IN')}</div>
+                                    <div className="text-[10.5px] text-[#86868B] mt-0.5" data-testid={`order-price-locked-${o.id}`}>Price locked at order time</div>
+                                </div>
+                            </div>
+
+                            {/* GST invoice block */}
+                            {(o.buyer_gst_number || o.suppliers?.gst_number) && (
+                                <div className="mt-3 bg-[#F4F4F6] border border-black/[0.04] rounded-[10px] p-3 text-[12px]" data-testid={`order-gst-${o.id}`}>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {o.buyer_gst_number && (
+                                            <div><span className="text-[#86868B]">Buyer GST</span><div className="font-mono font-semibold text-[#0A0A0B]">{o.buyer_gst_number}</div></div>
+                                        )}
+                                        {o.suppliers?.gst_number && (
+                                            <div><span className="text-[#86868B]">Seller GST</span><div className="font-mono font-semibold text-[#0A0A0B]">{o.suppliers.gst_number}</div></div>
+                                        )}
+                                    </div>
+                                    <div className="text-[10.5px] text-[#6E6E73] mt-1.5">GST invoice to be issued by seller directly. TonersCart is a marketplace platform.</div>
+                                </div>
+                            )}
+
+                            <ReturnPolicyBox className="mt-4" />
+                        </div>
+                    ))}
                 </div>
             )}
         </div>

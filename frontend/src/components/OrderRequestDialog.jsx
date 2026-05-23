@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
@@ -10,6 +11,7 @@ import { useAuth } from "../context/AuthContext";
 import { Lock, Minus, Plus } from "lucide-react";
 
 export default function OrderRequestDialog({ product, initialQty = 1, onClose }) {
+    const navigate = useNavigate();
     const { user, login, signupCustomer } = useAuth();
     const [qty, setQty] = useState(initialQty);
     const [name, setName] = useState(user?.name || "");
@@ -51,7 +53,7 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
         setLoading(true);
         try {
             await ensureAuth();
-            await api.post("/orders", {
+            const { data: created } = await api.post("/orders", {
                 listing_id: product.id,
                 qty: Number(qty),
                 customer_name: name,
@@ -61,6 +63,23 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
             });
             toast.success("Order request sent to supplier");
             onClose?.();
+            // Enrich with the joined fields the OrderConfirmed page expects
+            const enriched = {
+                ...created,
+                listings: {
+                    brand: product.brand,
+                    model_number: product.model_number,
+                    toner_type: product.toner_type,
+                    image_url: product.image_url,
+                },
+                suppliers: {
+                    business_name: product.supplier_name,
+                    city: product.city,
+                },
+                supplier_name: product.supplier_name,
+                supplier_city: product.city,
+            };
+            navigate(`/order-confirmed/${created?.id || ""}`, { state: { order: enriched } });
         } catch (e) { toast.error(formatApiError(e)); }
         finally { setLoading(false); }
     };
