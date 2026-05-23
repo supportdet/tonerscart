@@ -43,13 +43,11 @@ export default function Header() {
 <div className="tc-container flex items-center justify-between h-16 gap-3">
 <Link to="/" className="flex items-center self-center shrink-0 group" data-testid="logo-home-link" onClick={closeMobile} aria-label="TonersCart home">
     <img
-                        src="/TONERSCART-bg.png"
-                        alt="TonersCart"
-className="block w-auto transition-transform group-hover:scale-[1.03]"
-style={{ alignSelf: "center", height: "38px", width: "auto" }}
-        style={{ alignSelf: "center" }}
-                        data-testid="header-logo-img"
-                    />
+    src="/TONERSCART-bg.png"
+    alt="TonersCart"
+    style={{ height: "38px", width: "auto", display: "block", alignSelf: "center" }}
+    data-testid="header-logo-img"
+/>
                 </Link>
 
                 {/* Desktop nav — text-style buttons matching "Sign in" weight */}
