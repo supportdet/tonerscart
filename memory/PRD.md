@@ -206,3 +206,40 @@ Files: `backend/server.py`, `backend/email_service.py`, `backend/supabase_schema
 - `/api/auth/me` now returns `supplier.business_logo_url` (signed, 1 hr) for approved suppliers.
 
 **DB migration:** `backend/supabase_schema_logo.sql` — adds nullable `business_logo` text column to both `suppliers_pending` and `suppliers`. **MUST be run from the Supabase SQL editor before sellers can save a logo.**
+
+
+### 2026-05-22 — Printer Guided Finder v2 + Dealer Wizard ✅
+**Buyer side (`pages/PrintersGuide.jsx`):**
+Full 10-step questionnaire with branch-aware routing.
+- Step 1 Usage → auto-advance (Home / Corporate / Commercial / Print Shop)
+- Step 2 Technology → dynamic per usage, auto-advance
+- Step 3 Paper size → shown only for Commercial / Print Shop, auto-advance. **Non-A4 → Lead Capture**
+- Step 4 Color → auto-advance
+- Step 5 Function (Print only / Print+Scan / All-in-One / High-volume) → auto-advance
+- Step 6 Volume → dynamic per usage, auto-advance
+- Step 7 Connectivity → multi-select + Next (Wi-Fi / USB / Bluetooth / Ethernet)
+- Step 8 Features → dynamic per usage, multi-select + Next (allow empty)
+- Step 9 Budget → 4 tiers, auto-advance. **Above ₹1.5L → Lead Capture**
+- Step 10 Quantity → 4 ranges, auto-advance. **20+ → Lead Capture, else marketplace**
+- Marketplace redirect builds full `/printers/results?...` URL with `usage_type`, `category`, `paper_size`, `color`, `function_`, `min_volume`, `max_volume`, `connectivity`, `feature`, `city` query params (matches existing `GET /api/printers` filter contract).
+
+**Lead Capture form (in-page state in PrintersGuide):**
+- Heading "Let's find the right printer for you" + 24-hour assurance subhead
+- Collapsible dark glass summary card showing every selection
+- Fields: Name *, Phone *, Email *, City (dropdown of KNOWN_CITIES), Additional requirements (textarea)
+- Yellow "Send Enquiry" submit → POST `/api/mps/inquiry` with full `selections` JSON + `source: "printers_guide"`; existing email notification fires.
+- Success state with green check and "Enquiry sent! Our team will reach out within 24 hours."
+
+**Dealer side (`components/PrinterListings.jsx`):**
+Replaced the single-page dialog with a clean 4-step wizard:
+- Step 1 Basic info — brand, model, description, image upload (5 MB cap, uploaded via existing `/supplier/printer-image` proxy)
+- Step 2 Specs — usage / technology (dynamic) / paper sizes (multi) / color / functions (multi) / monthly volume min+max / connectivity (multi) / features (single combined ALL_FEATURES list, multi, optional)
+- Step 3 Pricing — price, stock, condition pill row (New / Refurbished)
+- Step 4 Review — preview card + every entered field rendered for confirmation, yellow "Publish printer" CTA → POST `/api/supplier/printers`
+- Step indicator pills at top (current step black, completed yellow, future grey); per-step validation prevents Next until required fields are filled.
+
+**Verified end-to-end on preview URL** (smoke test):
+- Buyer: Home → Laser → Color → Print only → 1-100 → Wi-Fi → Skip features → "Above ₹1.5L" → Lead Capture page renders with 7-answer summary, all form fields, and yellow Send Enquiry button.
+- Dealer (supplier1@test.com): Add printer dialog opens → Step 1 Next disabled until brand+model+image filled → Step 2 all spec pills toggle yellow, min/max validation works → Step 3 price/stock/condition → Step 4 Review card shows TestBrand TM-100 ₹25,000 · 3 in stock · Refurbished with all spec rows; Publish CTA active.
+
+**Backend untouched** — no CORS changes, no new endpoints, no `emergentintegrations` usage. Existing `POST /api/mps/inquiry`, `GET /api/printers`, `POST /api/supplier/printers`, `POST /api/supplier/printer-image` consumed as-is.
