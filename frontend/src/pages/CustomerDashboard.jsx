@@ -2,10 +2,12 @@ import React, { useEffect, useState } from "react";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/ui/button";
+import { Skeleton } from "../components/ui/skeleton";
 import { toast } from "sonner";
 import { PackageSearch } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ReturnPolicyBox from "../components/ReturnPolicyBox";
+import BuyerGSTCard from "../components/BuyerGSTCard";
 
 const STATUS_STYLE = {
     requested: "bg-amber-50 text-amber-700 border-amber-200",
@@ -61,7 +63,23 @@ export default function CustomerDashboard() {
 
             <h2 className="text-[#0A0A0B] mt-10 mb-3" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>My orders</h2>
             {loading ? (
-                <div className="tc-card-flat p-8 text-center text-[#6E6E73]">Loading…</div>
+                <div className="space-y-3" data-testid="customer-orders-skeleton">
+                    {[0, 1, 2].map((i) => (
+                        <div key={i} className="tc-card-flat p-4 sm:p-5">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="flex-1 space-y-2">
+                                    <Skeleton className="h-4 w-2/3" />
+                                    <Skeleton className="h-3 w-1/3" />
+                                    <Skeleton className="h-3 w-1/2" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Skeleton className="h-5 w-16" />
+                                    <Skeleton className="h-6 w-24" />
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             ) : orders.length === 0 ? (
                 <div className="tc-card-flat p-12 text-center" data-testid="customer-empty-state">
                     <PackageSearch className="mx-auto text-[#D2D2D7]" size={42} />

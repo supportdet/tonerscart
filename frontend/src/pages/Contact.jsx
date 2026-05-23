@@ -38,6 +38,9 @@ export default function Contact() {
                 <h1 className="mt-3 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 300, letterSpacing: "-0.02em", lineHeight: 1.12 }}>
                     Get in touch
                 </h1>
+                <p className="mt-1.5 text-[12.5px] tracking-[0.04em] text-[#86868B]" data-testid="contact-attribution">
+                    TonersCart — A brand of <strong className="text-[#0A0A0B]">Digital Edge Technologies</strong> | Bangalore
+                </p>
                 <p className="mt-3 text-[14.5px] text-[#6E6E73] max-w-xl">
                     For dealer onboarding, bulk orders, or support — our team is one message away.
                 </p>

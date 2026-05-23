@@ -41,18 +41,18 @@ export default function Header() {
     return (
         <header className="bg-white border-b border-black/[0.06] sticky top-0 z-[100]" data-testid="site-header">
             <div className="tc-container flex items-center justify-between h-16 gap-3">
-                <Link to="/" className="flex items-center gap-2.5 group shrink-0" data-testid="logo-home-link" onClick={closeMobile}>
-                    <div className="relative w-8 h-8 rounded-lg bg-[#0A0A0B] grid place-items-center overflow-hidden shrink-0 transition-transform group-hover:scale-105">
-                        <span className="text-white font-bold text-[13px] relative z-10 tracking-tight">TC</span>
-                        <span className="absolute top-0 left-0 w-1.5 h-1.5 bg-[#00B7C7]" />
-                        <span className="absolute top-0 right-0 w-1.5 h-1.5 bg-[#E6007E]" />
-                        <span className="absolute bottom-0 left-0 w-1.5 h-1.5 bg-[#F5C400]" />
-                    </div>
-                    <span className="font-semibold text-[#0A0A0B] tracking-tight text-[17px]" style={{ fontFamily: "'Montserrat', sans-serif" }}>TonersCart</span>
+                <Link to="/" className="flex items-center self-center shrink-0 group" data-testid="logo-home-link" onClick={closeMobile} aria-label="TonersCart home">
+                    <img
+                        src="/logo.png"
+                        alt="TonersCart"
+                        className="block h-9 w-auto transition-transform group-hover:scale-[1.03]"
+                        style={{ alignSelf: "center" }}
+                        data-testid="header-logo-img"
+                    />
                 </Link>
 
-                {/* Desktop nav */}
-                <nav className="hidden md:flex items-center gap-1">
+                {/* Desktop nav — text-style buttons matching "Sign in" weight */}
+                <nav className="hidden md:flex items-center gap-2">
                     <div
                         className="relative"
                         onMouseEnter={() => setBuyOpen(true)}
@@ -61,10 +61,11 @@ export default function Header() {
                         <button
                             type="button"
                             onClick={() => setBuyOpen((o) => !o)}
-                            className="text-[14px] font-medium px-3.5 py-2 rounded-md text-[#1D1D1F] hover:text-[#0A0A0B] hover:bg-black/[0.04] inline-flex items-center gap-1"
+                            className="tc-pill-buy inline-flex items-center gap-1.5"
                             data-testid="nav-buy"
+                            aria-expanded={buyOpen}
                         >
-                            Buy <ChevronDown size={12} />
+                            Buy <ChevronDown size={13} className={`transition-transform ${buyOpen ? "rotate-180" : ""}`} style={{ color: "#00B7C7" }} />
                         </button>
                         {buyOpen && (
                             <div className="absolute left-0 top-full pt-1 z-50" data-testid="nav-buy-dropdown">
@@ -77,9 +78,15 @@ export default function Header() {
                         )}
                     </div>
 
-                    {/* Sell — visible for guests, buyers and pending sellers; hidden for approved sellers */}
+                    {/* Sell — outlined pill in brand yellow. Hidden for approved sellers and admins. */}
                     {!isSeller && !isAdmin && (
-                        <NavLink to="/sell" className={navLink} data-testid="nav-sell">Sell</NavLink>
+                        <NavLink
+                            to="/sell"
+                            className="tc-pill-sell inline-flex items-center"
+                            data-testid="nav-sell"
+                        >
+                            Sell
+                        </NavLink>
                     )}
 
                     {/* Buyer */}
@@ -160,9 +167,6 @@ export default function Header() {
                             )}
                         </button>
                     )}
-                    {!user && (
-                        <button onClick={() => navigate("/register")} className="btn-cta text-[12px] px-3 py-1.5" data-testid="header-register-btn-mobile">Join</button>
-                    )}
                     <button onClick={() => setMobileOpen((o) => !o)} className="w-10 h-10 grid place-items-center rounded-md hover:bg-black/[0.04]" aria-label="Menu" data-testid="header-mobile-menu-btn">
                         {mobileOpen ? <X size={20} /> : <Menu size={20} />}
                     </button>
@@ -205,11 +209,24 @@ export default function Header() {
                             <NavLink to="/admin" onClick={closeMobile} className={mobileNavLink} data-testid="mobile-nav-admin">Admin</NavLink>
                         )}
 
-                        <div className="pt-2 mt-2 border-t border-black/[0.06]">
+                        <div className="pt-2 mt-2 border-t border-black/[0.06] space-y-2">
                             {!user ? (
-                                <button onClick={() => { closeMobile(); navigate("/login"); }} className="block w-full px-4 py-3 rounded-lg text-[15px] font-medium text-[#1D1D1F] hover:bg-black/[0.04] text-left" data-testid="mobile-login-btn">
-                                    Sign in
-                                </button>
+                                <>
+                                    <button
+                                        onClick={() => { closeMobile(); navigate("/login"); }}
+                                        className="block w-full px-4 py-3 rounded-lg text-[14.5px] font-semibold text-[#1D1D1F] border border-[#E8E8EC] hover:bg-black/[0.04] text-left"
+                                        data-testid="mobile-login-btn"
+                                    >
+                                        Sign in
+                                    </button>
+                                    <button
+                                        onClick={() => { closeMobile(); navigate("/register"); }}
+                                        className="btn-cta w-full"
+                                        data-testid="mobile-register-btn"
+                                    >
+                                        Join free
+                                    </button>
+                                </>
                             ) : (
                                 <button onClick={async () => { closeMobile(); await handleLogout(); }} className="block w-full px-4 py-3 rounded-lg text-[15px] font-medium text-[#1D1D1F] hover:bg-black/[0.04] text-left flex items-center gap-2" data-testid="mobile-logout-btn">
                                     <LogOut size={16} /> Log out ({(user.name || "").split(" ")[0]})

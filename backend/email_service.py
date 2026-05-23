@@ -162,21 +162,38 @@ async def email_application_rejected(application: dict, reason: str):
 
 
 async def email_mps_inquiry(payload: dict):
-    """Sends an MPS inquiry to the support inbox for follow-up."""
+    """Sends an MPS or Contact / Featured-application inquiry to the support
+    inbox. The subject line and heading adapt based on `selections.type`:
+       - 'featured_application' → Featured supplier application
+       - default                → MPS enquiry
+    """
     name = payload.get("name", "")
     email = payload.get("email", "")
     phone = payload.get("phone", "")
     description = payload.get("description") or ""
     estimated = payload.get("estimated_printers", "—")
     sel = payload.get("selections") or {}
+    kind = (sel.get("type") or "").lower()
+    is_featured = kind == "featured_application"
     sel_rows = "".join(
         f"<tr><td style='padding:4px 12px;color:#86868B;'>{k}</td>"
         f"<td style='padding:4px 12px;'><strong>{v if not isinstance(v, list) else ', '.join(v)}</strong></td></tr>"
         for k, v in sel.items() if v
     )
+
+    if is_featured:
+        company = sel.get("company") or name
+        heading = "New Featured Supplier Application"
+        intro = f"<p style='margin:0 0 18px 0;color:#6E6E73;'>Company: <strong>{company}</strong></p>"
+        subject = f"New Featured Supplier Application — {company}"
+    else:
+        heading = "New Managed Print Services (MPS) enquiry"
+        intro = f"<p style='margin:0 0 18px 0;color:#6E6E73;'>Estimated fleet: <strong>{estimated}</strong> printers</p>"
+        subject = f"[TonersCart MPS] New enquiry — {name} ({estimated} printers)"
+
     html = f"""
-    <h2 style="margin:0 0 6px 0;font-size:18px;">New Managed Print Services (MPS) enquiry</h2>
-    <p style="margin:0 0 18px 0;color:#6E6E73;">Estimated fleet: <strong>{estimated}</strong> printers</p>
+    <h2 style="margin:0 0 6px 0;font-size:18px;">{heading}</h2>
+    {intro}
     <table style="width:100%;border-collapse:collapse;font-size:13px;">
       <tr><td style='padding:4px 12px;color:#86868B;'>Name</td><td style='padding:4px 12px;'><strong>{name}</strong></td></tr>
       <tr><td style='padding:4px 12px;color:#86868B;'>Email</td><td style='padding:4px 12px;'><strong>{email}</strong></td></tr>
@@ -185,7 +202,7 @@ async def email_mps_inquiry(payload: dict):
     </table>
     {f'<p style="margin-top:18px;"><strong>Requirement:</strong><br/>{description}</p>' if description else ''}
     """
-    await _send(SUPPORT_INBOX, f"[TonersCart MPS] New enquiry — {name} ({estimated} printers)", html, reply_to=email)
+    await _send(SUPPORT_INBOX, subject, html, reply_to=email)
 
 
 # ===== Order notifications =====================================================

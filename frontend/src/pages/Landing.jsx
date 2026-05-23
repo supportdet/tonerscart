@@ -7,6 +7,7 @@ import TonerAnimation from "../components/TonerAnimation";
 import TonerCartridge from "../components/TonerCartridge";
 import { useCity } from "../context/CityContext";
 import useReveal from "../hooks/useReveal";
+import { Skeleton } from "../components/ui/skeleton";
 
 // Brand text styled like logos — each gets its official color in the marquee
 const MARQUEE_BRANDS = [
@@ -56,6 +57,7 @@ export default function Landing() {
     const [q, setQ] = useState("");
     const [facets, setFacets] = useState({ brands: [], cities: [], models: [] });
     const [grouped, setGrouped] = useState([]);
+    const [groupedLoading, setGroupedLoading] = useState(true);
     const rootRef = useReveal([grouped.length, city]);
 
     useEffect(() => {
@@ -65,6 +67,7 @@ export default function Landing() {
     }, []);
 
     useEffect(() => {
+        setGroupedLoading(true);
         const params = {};
         if (city) params.city = city;
         api.get("/listings/grouped", { params })
@@ -76,7 +79,8 @@ export default function Landing() {
                 }
                 setGrouped(items.slice(0, 8));
             })
-            .catch(() => setGrouped([]));
+            .catch(() => setGrouped([]))
+            .finally(() => setGroupedLoading(false));
     }, [city]);
 
     const submit = (override) => {
@@ -133,7 +137,7 @@ export default function Landing() {
                                 }}
                                 data-testid="hero-headline"
                             >
-                                India&apos;s <span className="text-[#F5C400]" style={{ fontWeight: 600 }}>#1</span> B2B marketplace for <span className="text-[#00B7C7]" style={{ fontWeight: 500 }}>printers</span> &amp; <span className="text-[#E6007E]" style={{ fontWeight: 500 }}>toners</span>
+                                India&apos;s only <span className="text-[#F5C400]" style={{ fontWeight: 600 }}>Trusted Source</span> for <span className="text-[#00B7C7]" style={{ fontWeight: 500 }}>Printers</span>, <span className="text-[#E6007E]" style={{ fontWeight: 500 }}>Toners</span> &amp; More.
                             </h1>
                             <p className="text-white/65 max-w-xl mt-4 sm:mt-5 text-[14px] sm:text-[16px] tc-fade-up tc-fade-up-4" style={{ fontFamily: "'Inter', sans-serif" }} data-testid="hero-subline">
                                 Compare verified suppliers, real stock, better prices — no middlemen.
@@ -222,6 +226,29 @@ export default function Landing() {
                             </div>
                         ))}
                     </div>
+
+                    {/* "Get featured" CTA banner */}
+                    <div
+                        className="mt-7 sm:mt-9 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl bg-gradient-to-r from-[#1A1B1F] via-[#23252B] to-[#1A1B1F] border border-white/10 p-5 sm:px-6 sm:py-5"
+                        data-testid="get-featured-banner"
+                    >
+                        <div className="flex items-start sm:items-center gap-3">
+                            <span className="text-[20px] leading-none">🌟</span>
+                            <div>
+                                <div className="text-white text-[14.5px] sm:text-[15.5px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                                    Get your brand featured here
+                                </div>
+                                <div className="text-white/65 text-[12.5px] mt-0.5">Reach thousands of B2B buyers across India.</div>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => navigate("/get-featured")}
+                            className="inline-flex items-center justify-center gap-1.5 h-11 px-5 rounded-full bg-[#F5C400] hover:bg-[#FFD119] text-[#0A0A0B] text-[13.5px] font-semibold transition shrink-0"
+                            data-testid="get-featured-apply-btn"
+                        >
+                            Apply now <ArrowRight size={14} />
+                        </button>
+                    </div>
                 </div>
             </section>
 
@@ -259,6 +286,21 @@ export default function Landing() {
                 </div>
 
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+                    {groupedLoading && grouped.length === 0 && (
+                        [0, 1, 2, 3].map((i) => (
+                            <div key={`s-${i}`} className="tc-product-card" data-testid={`model-card-skeleton-${i}`}>
+                                <Skeleton className="aspect-square w-full" />
+                                <div className="p-3 sm:p-4 space-y-2">
+                                    <Skeleton className="h-4 w-2/3" />
+                                    <Skeleton className="h-3 w-1/2" />
+                                    <div className="pt-3 border-t border-black/[0.05] flex items-end justify-between">
+                                        <div className="space-y-1.5"><Skeleton className="h-2.5 w-10" /><Skeleton className="h-4 w-16" /></div>
+                                        <Skeleton className="h-8 w-8 rounded-full" />
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
                     {grouped.map((g, idx) => (
                         <button
                             key={g.model_number}

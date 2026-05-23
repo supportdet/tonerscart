@@ -177,12 +177,11 @@ export default function PrintersGuide() {
         if (a.tech && a.tech !== "other") params.set("category", a.tech);
         if (a.color) params.set("color", a.color);
         if (a.function) params.set("function_", a.function);
-        if (a.paper) params.set("paper_size", a.paper);
-        if (a.connectivity?.length) params.set("connectivity", a.connectivity[0]);
-        if (a.features?.length) params.set("feature", a.features[0]);
         const vol = VOLUMES_BY_USAGE[a.usage]?.find((v) => v.id === a.volume);
         if (vol) { params.set("min_volume", String(vol.min)); params.set("max_volume", String(vol.max)); }
         if (currentCity) params.set("city", currentCity);
+        // Note: paper_size, connectivity, feature, budget and quantity are
+        // intentionally NOT sent — questionnaire-only signals for routing.
         navigate(`/printers/results?${params.toString()}`);
     };
 

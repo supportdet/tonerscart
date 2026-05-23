@@ -10,6 +10,9 @@ export default function Privacy() {
                     Privacy Policy
                 </h1>
                 <p className="text-[12.5px] text-[#86868B] mt-2">Last updated: May 2025</p>
+                <p className="text-[13px] text-[#3a3a40] mt-3 max-w-2xl" data-testid="privacy-attribution">
+                    TonersCart is a brand of <strong>Digital Edge Technologies</strong>, a partnership firm registered in Bangalore, India.
+                </p>
 
                 <div className="prose mt-8 text-[#1D1D1F] text-[14.5px] leading-[1.75]" style={{ fontFamily: "'Inter', sans-serif" }}>
                     <Section title="1. Data Collected">

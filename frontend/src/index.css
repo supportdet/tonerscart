@@ -107,6 +107,36 @@
 .btn-cta:hover { background-color: var(--tc-yellow-2) !important; transform: translateY(-1px); box-shadow: 0 12px 28px -10px rgba(245,196,0,0.65); }
 .btn-cta:disabled { opacity: 0.55; cursor: not-allowed; }
 
+/* Navbar pill buttons — outlined "Buy" (cyan) and "Sell" (yellow). */
+.tc-pill-buy {
+    background-color: transparent;
+    border: 1.5px solid #00B7C7;
+    border-radius: 14px;
+    padding: 10px 22px;
+    color: #00B7C7;
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 1;
+    transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.tc-pill-buy:hover { background-color: rgba(0,183,199,0.08); }
+.tc-pill-buy:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(0,183,199,0.25); }
+
+.tc-pill-sell {
+    background-color: transparent;
+    border: 1.5px solid #F5C400;
+    border-radius: 14px;
+    padding: 10px 22px;
+    color: #F5C400;
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 1;
+    transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.tc-pill-sell:hover { background-color: rgba(245,196,0,0.08); }
+.tc-pill-sell:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(245,196,0,0.25); }
+
+
 /* Light button — white surface, dark text (for "Browse toners", "Add to cart") */
 .btn-light {
     background-color: white;
@@ -275,12 +305,12 @@
     color: #FFFFFF !important;
     border: none !important; outline: none !important; box-shadow: none !important;
     font-size: 15px; font-weight: 500; letter-spacing: -0.015em;
-    padding: 12px 8px;
+    padding: 12px 8px 12px 44px;
     caret-color: var(--tc-cyan);
     font-family: 'Inter', sans-serif;
 }
 @media (min-width: 640px) {
-    .tc-search-input { font-size: 17px; padding: 14px 8px; }
+    .tc-search-input { font-size: 17px; padding: 14px 8px 14px 46px; }
 }
 .tc-search-input::placeholder { color: rgba(255,255,255,0.6) !important; font-weight: 400; opacity: 1; }
 
@@ -738,20 +768,20 @@
 .tc-city-dropdown { z-index: 200; }
 
 /* ==========================================================
-   POPULAR MODEL CHIPS (hero)
+   POPULAR MODEL CHIPS (hero) — sized 15% smaller per design
    ========================================================== */
 .tc-chip {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    height: 30px;
-    padding: 0 12px;
+    gap: 5px;
+    height: 26px;
+    padding: 0 10px;
     border-radius: 999px;
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.14);
     color: rgba(255,255,255,0.85);
     font-family: 'Inter', sans-serif;
-    font-size: 12.5px;
+    font-size: 10.5px;
     font-weight: 500;
     letter-spacing: 0.005em;
     backdrop-filter: blur(8px);
