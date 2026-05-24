@@ -220,7 +220,7 @@ export default function SearchPage() {
     return (
         <div className="tc-container py-6 sm:py-10" ref={rootRef} data-testid="search-page">
             <div className="tc-search-shell tc-search-light" data-testid="search-bar">
-                <TonerSearchInput value={q} onChange={setQ} onSubmit={apply} testId="search-input" />
+                <TonerSearchInput value={q} onChange={setQ} onSubmit={apply} testId="search-input" placeholder="Search by brand or model number…" />
                 <button onClick={() => apply()} className="tc-search-go" data-testid="search-apply-btn">Search</button>
             </div>
 
