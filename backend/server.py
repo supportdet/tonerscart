@@ -1184,13 +1184,11 @@ async def create_quotation(payload: QuotationRequest, user: dict = Depends(requi
     total = float(L["price"]) * payload.qty
     try:
         await email_quotation(
-            quote_number=quote_num,
-            buyer=buyer_data,
-            listing=L,
-            supplier=sup_data,
-            qty=payload.qty,
-            total=total,
-        )
+    quote_number=quote_num,
+    buyer=buyer_data,
+    item={**L, "qty": payload.qty, "total": total, "unit_price": L.get("price", 0)},
+    supplier_label="Verified Supplier on TonersCart",
+)
     except Exception as e:
         logger.exception("quotation email failed")
         raise HTTPException(500, f"Quotation email failed: {e}") from e
