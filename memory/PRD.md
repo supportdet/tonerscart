@@ -1,5 +1,30 @@
 # TonersCart — Product Requirements (Supabase edition)
 
+## Latest changelog (2026-02 polish patch — 12 items)
+
+- **Landing hero** rewritten to "India's digital marketplace for printers, toners & MFDs"; removed "— no middlemen" from sub-headline. Featured Suppliers section now hydrates from `/api/featured/suppliers` (admin-controlled `suppliers.is_featured`) with placeholder fallback.
+- **Universal +91 PhonePrefixInput** rolled out everywhere: Register, Checkout, OrderRequestDialog, SellerApplicationForm, MPS, Contact, GetFeatured, PrintersGuide lead form. Grey non-editable `+91` box on the left; 10-digit numeric-only input on the right.
+- **MPS / Contact / GetFeatured / PrintersGuide lead form** now collect Company name + 6-digit Pincode (validated client + server side).
+- **/search shell** gets a visible 1.5px `#D2D2D7` border in light mode (was invisible white-on-white).
+- **Add Toner / Add Printer modals** — modal containers explicitly `max-h-[92vh] overflow-y-auto` so they breathe top/bottom. Both modals gain a new optional "Technical specs / Product brochure" upload field — PDF, ≤10 MB, dashed-border + FileText icon. Uploaded through backend service-role to private `supplier-documents` bucket; path stored in `listings.spec_pdf_url` / `printer_listings.spec_pdf_url`.
+- **Product card buyer actions** (Search + PrintersResults): new `ProductActions` component renders two buttons under every listing.
+  - **Brochure** — enabled only when `spec_pdf_url` exists. Click → backend short-lived signed URL → opens in new tab. Anonymous → redirect to `/login`.
+  - **Quotation** — always shown. Click → `POST /api/quotation` with `{listing_id, listing_type, qty}` → backend generates quote no. `TC-YYYYMMDD-XXXXX`, sends HTML quotation to buyer email + BCC support; dealer details intentionally omitted, surfaced only as **"Verified Supplier on TonersCart"**. Toast: "Quotation sent to your email".
+- **Get-Featured pipeline** — new dedicated `POST /api/featured/apply` writes to `featured_applications`, emails support, and sends an applicant auto-reply with placement pricing (₹5,000 / ₹7,000 / ₹25,000) — pricing kept off the website. Status pipeline: `new → contacted → active | rejected`.
+- **Admin Featured tab** — new tab in admin dashboard listing all featured applications with status dropdown (`PUT /api/admin/featured/applications/{id}/status`). Approved Suppliers list gets a per-row "Featured" toggle (`PUT /api/admin/suppliers/{id}/featured`).
+- **Commission tiers** updated across the codebase (frontend `lib/commission.js`, backend `email_service._COMMISSION_TIERS`):
+  - < ₹5,000 → 8 %
+  - ₹5,000 – ₹25,000 → 6 %
+  - ₹25,000 – ₹1,50,000 → 4 %
+  - > ₹1,50,000 → deal basis (returns `null` rate; UI shows "Contact team")
+- **New backend endpoints**: `/featured/apply`, `/featured/suppliers`, `/admin/featured/applications`, `/admin/featured/applications/{id}/status`, `/admin/suppliers/{id}/featured`, `/supplier/spec-pdf`, `/listings/{id}/brochure`, `/quotation`, `/supplier/listing-spec-pdf`.
+- **Migration file**: `/app/backend/supabase_schema_quotation_featured.sql` — adds `is_featured` to `suppliers`, `spec_pdf_url` to `listings` + `printer_listings`, creates `featured_applications` + `quotations` audit tables. **User runs manually**; backend endpoints already degrade gracefully (no 500s) until migration runs.
+- **Backend tests**: 15/15 polish-patch tests pass in `/app/backend/tests/test_polish_patch.py`. Full regression: 69 passed, 1 skipped, 3 pre-existing (unrelated) failures.
+
+---
+
+# TonersCart — Product Requirements (Supabase edition)
+
 ## Vision
 B2B marketplace for printer toners in India. Buyers search by toner model,
 compare verified suppliers (city, price, Original/Compatible), and send

@@ -8,6 +8,7 @@ import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
 import { Upload, CheckCircle2, ChevronLeft, ChevronRight, FileText, ShieldCheck, CircleDashed } from "lucide-react";
+import PhonePrefixInput from "./PhonePrefixInput";
 
 const KNOWN_CITIES = ["Bangalore","Mumbai","Delhi","Chennai","Hyderabad","Pune","Kolkata","Ahmedabad","Jaipur","Lucknow","Chandigarh","Surat","Indore","Nagpur","Coimbatore","Kochi","Bhopal","Noida","Gurgaon"];
 const INDIAN_STATES = [
@@ -65,7 +66,7 @@ export default function SellerApplicationForm() {
     const [step, setStep] = useState(1);
     const [s, setS] = useState({
         contact_person: user?.name || "",
-        phone: user?.phone || "",
+        phone: (user?.phone || "").replace(/^\+?91[\s-]?/, "").replace(/\D/g, "").slice(0, 10),
         city: user?.city || "",
         state: "",
         pincode: "",
@@ -115,7 +116,8 @@ export default function SellerApplicationForm() {
     const canNext = () => {
         if (step === 1) {
             if (!s.contact_person.trim()) return false;
-            if (!PHONE_RE.test(s.phone.trim())) return false;
+            // Phone is now 10 digits only (PhonePrefixInput strips +91)
+            if (!/^[6-9]\d{9}$/.test(s.phone || "")) return false;
             if (!s.city) return false;
             if (!s.state) return false;
             if (!PINCODE_RE.test(s.pincode.trim())) return false;
@@ -163,7 +165,7 @@ export default function SellerApplicationForm() {
                 ...s,
                 gst_number: s.gst_number.trim().toUpperCase(),
                 pan_number: s.pan_number.trim().toUpperCase(),
-                phone: s.phone.trim(),
+                phone: `+91 ${s.phone.trim()}`,
                 pincode: s.pincode.trim(),
                 years_in_business: s.years_in_business ? parseInt(s.years_in_business, 10) : null,
                 doc_brand_authorization: "",
@@ -228,9 +230,14 @@ export default function SellerApplicationForm() {
                     <div className="sm:col-span-2"><Label>Contact person<span className="text-red-500"> *</span></Label><Input value={s.contact_person} onChange={updS("contact_person")} required data-testid="apply-contact-person" /></div>
                     <div>
                         <Label>Phone<span className="text-red-500"> *</span></Label>
-                        <Input value={s.phone} onChange={updS("phone")} placeholder="10-digit Indian mobile, e.g. 9876543210" required data-testid="apply-phone" inputMode="tel" maxLength={14} />
-                        {s.phone && !PHONE_RE.test(s.phone.trim()) && (
-                            <div className="text-[11px] text-red-600 mt-1">Enter a valid Indian mobile (starts 6-9, 10 digits, optional +91)</div>
+                        <PhonePrefixInput
+                            value={s.phone}
+                            onChange={(v) => setS({ ...s, phone: v })}
+                            required
+                            testId="apply-phone"
+                        />
+                        {s.phone && s.phone.length !== 10 && (
+                            <div className="text-[11px] text-red-600 mt-1">Enter a valid 10-digit Indian mobile (no country code)</div>
                         )}
                     </div>
                     <div>

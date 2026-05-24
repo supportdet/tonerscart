@@ -29,7 +29,8 @@ const POPULAR_CHIPS = [
     { label: "Xerox 3020",   q: "3020" },
 ];
 
-// Placeholder featured suppliers — real dealers will upload their logo via dashboard
+// Placeholder featured suppliers — fallback when no real featured suppliers
+// exist yet. Real ones come from /api/featured/suppliers.
 const FEATURED_SUPPLIERS = [
     {
         id: "fs-1",
@@ -58,12 +59,19 @@ export default function Landing() {
     const [facets, setFacets] = useState({ brands: [], cities: [], models: [] });
     const [grouped, setGrouped] = useState([]);
     const [groupedLoading, setGroupedLoading] = useState(true);
+    const [featured, setFeatured] = useState([]);
     const rootRef = useReveal([grouped.length, city]);
 
     useEffect(() => {
         api.get("/listings/facets")
             .then((r) => setFacets({ ...(r.data || {}), models: [] }))
             .catch(() => setFacets({ brands: [], cities: [], models: [] }));
+    }, []);
+
+    useEffect(() => {
+        api.get("/featured/suppliers", { params: { limit: 6 } })
+            .then((r) => setFeatured(Array.isArray(r.data) ? r.data : []))
+            .catch(() => setFeatured([]));
     }, []);
 
     useEffect(() => {
@@ -137,10 +145,10 @@ export default function Landing() {
                                 }}
                                 data-testid="hero-headline"
                             >
-                                India&apos;s only <span className="text-[#F5C400]" style={{ fontWeight: 600 }}>Trusted Source</span> for <span className="text-[#00B7C7]" style={{ fontWeight: 500 }}>Printers</span>, <span className="text-[#E6007E]" style={{ fontWeight: 500 }}>Toners</span> &amp; More.
+                                India&apos;s <span className="text-[#F5C400]" style={{ fontWeight: 600 }}>digital marketplace</span> for <span className="text-[#00B7C7]" style={{ fontWeight: 500 }}>printers</span>, <span className="text-[#E6007E]" style={{ fontWeight: 500 }}>toners</span> &amp; MFDs
                             </h1>
                             <p className="text-white/65 max-w-xl mt-4 sm:mt-5 text-[14px] sm:text-[16px] tc-fade-up tc-fade-up-4" style={{ fontFamily: "'Inter', sans-serif" }} data-testid="hero-subline">
-                                Compare verified suppliers, real stock, better prices — no middlemen.
+                                Compare verified suppliers, real stock, better prices.
                             </p>
                         </div>
 
@@ -187,21 +195,36 @@ export default function Landing() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
-                        {FEATURED_SUPPLIERS.map((s, i) => (
+                        {(featured.length > 0
+                            ? featured.map((s) => ({
+                                  id: s.id,
+                                  name: s.business_name || "Verified Supplier",
+                                  city: [s.city, s.state].filter(Boolean).join(", "),
+                                  tagline: (s.seller_types || []).slice(0, 3).join(" · ") || "Verified TonersCart supplier",
+                                  logo_url: s.logo_url || null,
+                              }))
+                            : FEATURED_SUPPLIERS
+                        ).map((s, i) => (
                             <div
                                 key={s.id}
                                 className="tc-featured-card tc-reveal"
                                 style={{ transitionDelay: `${i * 80}ms` }}
                                 data-testid={`featured-card-${s.id}`}
                             >
-                                {/* Logo placeholder — circular grey w/ camera icon */}
+                                {/* Logo — circular */}
                                 <div className="flex flex-col items-center">
                                     <div className="tc-featured-logo-ph" data-testid={`featured-logo-${s.id}`}>
-                                        <Camera size={24} className="text-white/45" strokeWidth={1.6} />
+                                        {s.logo_url ? (
+                                            <img src={s.logo_url} alt={s.name} className="w-full h-full object-cover rounded-full" />
+                                        ) : (
+                                            <Camera size={24} className="text-white/45" strokeWidth={1.6} />
+                                        )}
                                     </div>
-                                    <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-white/35 mt-2">
-                                        Upload Logo
-                                    </div>
+                                    {!s.logo_url && (
+                                        <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-white/35 mt-2">
+                                            Upload Logo
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="mt-5 text-center">
@@ -209,7 +232,7 @@ export default function Landing() {
                                         {s.name}
                                     </div>
                                     <div className="mt-1 inline-flex items-center gap-1 text-[12px] text-white/55">
-                                        <MapPin size={11} /> {s.city}
+                                        <MapPin size={11} /> {s.city || "Pan-India"}
                                     </div>
                                     <p className="mt-3 text-[13px] text-white/70 leading-relaxed min-h-[40px]">
                                         {s.tagline}

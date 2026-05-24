@@ -21,6 +21,8 @@ from email_service import (
     email_application_rejected,
     email_mps_inquiry,
     email_order_placed,
+    email_featured_applicant_reply,
+    email_quotation,
 )
 from ai_check import check_documents
 
@@ -167,6 +169,7 @@ class ListingCreate(BaseModel):
     stock: int = Field(ge=0)
     toner_type: str
     image_url: Optional[str] = ""
+    spec_pdf_url: Optional[str] = None
 
 
 class ListingUpdate(BaseModel):
@@ -637,8 +640,17 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
         "stock": payload.stock,
         "image_url": payload.image_url or None,
         "city": s["city"],
+        "spec_pdf_url": payload.spec_pdf_url or None,
     }
-    res = sb_admin.table("listings").insert(row).execute()
+    try:
+        res = sb_admin.table("listings").insert(row).execute()
+    except Exception as e:
+        # Graceful fallback if spec_pdf_url column hasn't been migrated yet
+        if "spec_pdf_url" in str(e):
+            row.pop("spec_pdf_url", None)
+            res = sb_admin.table("listings").insert(row).execute()
+        else:
+            raise
     return res.data[0] if res.data else row
 
 
@@ -887,6 +899,7 @@ class PrinterListingCreate(BaseModel):
     monthly_volume_max: int = 0
     price: float
     stock: int = 1
+    spec_pdf_url: Optional[str] = None
 
 
 def _supplier_id_for(user: dict) -> str:
@@ -953,8 +966,16 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         "monthly_volume_max": int(payload.monthly_volume_max or 0),
         "price": float(payload.price),
         "stock": int(payload.stock),
+        "spec_pdf_url": payload.spec_pdf_url or None,
     }
-    res = sb_admin.table("printer_listings").insert(row).execute()
+    try:
+        res = sb_admin.table("printer_listings").insert(row).execute()
+    except Exception as e:
+        if "spec_pdf_url" in str(e):
+            row.pop("spec_pdf_url", None)
+            res = sb_admin.table("printer_listings").insert(row).execute()
+        else:
+            raise
     if not res.data:
         raise HTTPException(500, "Failed to insert printer")
     return {"id": res.data[0]["id"]}
@@ -993,39 +1014,48 @@ def list_printers(
     sel = (
         "id,brand,model_number,description,image_url,condition,usage_type,category,"
         "color,paper_sizes,functions,connectivity,features,monthly_volume_min,monthly_volume_max,"
-        "price,stock,supplier:suppliers(business_name,city)"
+        "price,stock,spec_pdf_url,supplier:suppliers(business_name,city)"
     )
-    qry = sb_admin.table("printer_listings").select(sel).gt("stock", 0)
-    if usage_type and usage_type in PRINTER_USAGES:
-        qry = qry.eq("usage_type", usage_type)
-    if category and category in PRINTER_CATEGORIES:
-        qry = qry.eq("category", category)
-    if condition and condition in PRINTER_CONDITIONS:
-        qry = qry.eq("condition", condition)
-    if color and color in PRINTER_COLORS:
-        if color == "color":
-            qry = qry.in_("color", ["color", "both"])
-        elif color == "bw":
-            qry = qry.in_("color", ["bw", "both"])
+    sel_no_brochure = sel.replace(",spec_pdf_url", "")
+    def _build_query(select_str):
+        qry = sb_admin.table("printer_listings").select(select_str).gt("stock", 0)
+        if usage_type and usage_type in PRINTER_USAGES:
+            qry = qry.eq("usage_type", usage_type)
+        if category and category in PRINTER_CATEGORIES:
+            qry = qry.eq("category", category)
+        if condition and condition in PRINTER_CONDITIONS:
+            qry = qry.eq("condition", condition)
+        if color and color in PRINTER_COLORS:
+            if color == "color":
+                qry = qry.in_("color", ["color", "both"])
+            elif color == "bw":
+                qry = qry.in_("color", ["bw", "both"])
+            else:
+                qry = qry.eq("color", "both")
+        if paper_size:
+            qry = qry.contains("paper_sizes", [paper_size])
+        if function_:
+            qry = qry.contains("functions", [function_])
+        if connectivity:
+            qry = qry.contains("connectivity", [connectivity])
+        if feature:
+            qry = qry.contains("features", [feature])
+        if min_volume is not None:
+            qry = qry.gte("monthly_volume_max", min_volume)
+        if max_volume is not None:
+            qry = qry.lte("monthly_volume_min", max_volume)
+        if brand:
+            qry = qry.ilike("brand", f"%{brand}%")
+        if q:
+            qry = qry.or_(f"brand.ilike.%{q}%,model_number.ilike.%{q}%,description.ilike.%{q}%")
+        return qry.order("created_at", desc=True).limit(200)
+    try:
+        res = _build_query(sel).execute()
+    except Exception as e:
+        if "spec_pdf_url" in str(e):
+            res = _build_query(sel_no_brochure).execute()
         else:
-            qry = qry.eq("color", "both")
-    if paper_size:
-        qry = qry.contains("paper_sizes", [paper_size])
-    if function_:
-        qry = qry.contains("functions", [function_])
-    if connectivity:
-        qry = qry.contains("connectivity", [connectivity])
-    if feature:
-        qry = qry.contains("features", [feature])
-    if min_volume is not None:
-        qry = qry.gte("monthly_volume_max", min_volume)
-    if max_volume is not None:
-        qry = qry.lte("monthly_volume_min", max_volume)
-    if brand:
-        qry = qry.ilike("brand", f"%{brand}%")
-    if q:
-        qry = qry.or_(f"brand.ilike.%{q}%,model_number.ilike.%{q}%,description.ilike.%{q}%")
-    res = qry.order("created_at", desc=True).limit(200).execute()
+            raise
     rows = res.data or []
     out = []
     _CITY_ALIASES = {

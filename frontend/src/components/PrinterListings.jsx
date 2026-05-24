@@ -5,7 +5,7 @@ import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
-import { Plus, Trash2, Image as ImageIcon, ChevronLeft, ChevronRight, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, ChevronLeft, ChevronRight, CheckCircle2, FileText } from "lucide-react";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
 
@@ -78,6 +78,7 @@ const fmt = (v) => PRETTY[v] || v;
 const EMPTY = {
     brand: "", model_number: "", description: "",
     image_url: "",
+    spec_pdf_path: "",
     usage_type: "", category: "",
     color: "",
     functions: [],
@@ -187,6 +188,7 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
     const [f, setF] = useState(EMPTY);
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState("");
+    const [brochureFile, setBrochureFile] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [saving, setSaving] = useState(false);
 
@@ -197,6 +199,7 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
             setF(EMPTY);
             setImageFile(null);
             setImagePreview("");
+            setBrochureFile(null);
         }
     }, [open]);
 
@@ -284,6 +287,13 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
         if (saving) return;
         setSaving(true);
         try {
+            let brochurePath = null;
+            if (brochureFile) {
+                const fd = new FormData();
+                fd.append("file", brochureFile);
+                const { data: up } = await api.post("/supplier/spec-pdf", fd);
+                brochurePath = up?.path || null;
+            }
             await api.post("/supplier/printers", {
                 brand: f.brand.trim(),
                 model_number: f.model_number.trim(),
@@ -298,6 +308,7 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
                 monthly_volume_max: Number(f.monthly_volume_max) || 0,
                 price: parseFloat(f.price),
                 stock: parseInt(f.stock || "1", 10),
+                spec_pdf_url: brochurePath,
             });
             toast.success("Printer listed");
             onSaved();
@@ -353,6 +364,29 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
                                                     <span className="text-[11px] text-[#86868B] font-normal">PNG / JPG, max 5 MB</span>
                                                 </>
                                             )}
+                                    </div>
+                                </label>
+                            </div>
+                            <div className="sm:col-span-2">
+                                <Label>Technical specs / Product brochure (optional)</Label>
+                                <label className="block mt-1 cursor-pointer">
+                                    <input
+                                        type="file"
+                                        accept="application/pdf"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+                                            if (file.type !== "application/pdf") { toast.error("Brochure must be PDF"); return; }
+                                            if (file.size > 10 * 1024 * 1024) { toast.error("Brochure must be under 10 MB"); return; }
+                                            setBrochureFile(file);
+                                        }}
+                                        className="hidden"
+                                        data-testid="wizard-brochure-input"
+                                    />
+                                    <div className={`tc-image-drop ${brochureFile ? "has-image" : ""}`} style={{ borderStyle: "dashed" }}>
+                                        <FileText size={22} />
+                                        <span>{brochureFile ? brochureFile.name : "Upload product brochure (PDF, optional)"}</span>
+                                        <span className="text-[11px] text-[#86868B] font-normal">PDF · max 10 MB</span>
                                     </div>
                                 </label>
                             </div>

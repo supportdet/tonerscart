@@ -8,6 +8,7 @@ import { CheckCircle2, Sparkles } from "lucide-react";
 import api, { formatApiError } from "../lib/api";
 import { useCity } from "../context/CityContext";
 import { KNOWN_CITIES } from "../context/CityContext";
+import PhonePrefixInput from "../components/PhonePrefixInput";
 
 const BUSINESS_TYPES = [
     { id: "dealer",      label: "Dealer" },
@@ -21,6 +22,7 @@ export default function GetFeatured() {
     const [form, setForm] = useState({
         company: "", contact_person: "", phone: "", email: "",
         city: currentCity || "",
+        pincode: "",
         business_type: "dealer",
         description: "",
     });
@@ -30,28 +32,23 @@ export default function GetFeatured() {
 
     const submit = async (e) => {
         e.preventDefault();
-        if (!form.company.trim() || !form.contact_person.trim() || !form.phone.trim() || !form.email.trim() || !form.city) {
+        if (!form.company.trim() || !form.contact_person.trim() || !form.phone || !form.email.trim() || !form.city || !form.pincode) {
             toast.error("Please fill all required fields");
             return;
         }
-        const phone = form.phone.startsWith("+91") ? form.phone : `+91 ${form.phone}`;
+        if (form.phone.length !== 10) { toast.error("Enter a valid 10-digit phone"); return; }
+        if (!/^[1-9][0-9]{5}$/.test(form.pincode)) { toast.error("Enter a valid 6-digit pincode"); return; }
         setLoading(true);
         try {
-            await api.post("/mps/inquiry", {
-                name: form.contact_person.trim(),
+            await api.post("/featured/apply", {
+                company: form.company.trim(),
+                contact_person: form.contact_person.trim(),
+                phone: `+91 ${form.phone}`,
                 email: form.email.trim(),
-                phone,
+                city: form.city,
+                pincode: form.pincode,
+                business_type: form.business_type,
                 description: form.description.trim(),
-                estimated_printers: "—",
-                selections: {
-                    type: "featured_application",
-                    company: form.company.trim(),
-                    contact_person: form.contact_person.trim(),
-                    city: form.city,
-                    business_type: form.business_type,
-                    description: form.description.trim(),
-                    source: "get_featured_page",
-                },
             });
             setDone(true);
         } catch (err) {
@@ -82,7 +79,7 @@ export default function GetFeatured() {
                             <CheckCircle2 size={26} className="text-emerald-600" />
                         </div>
                         <h2 className="mt-5 text-[22px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>Application received!</h2>
-                        <p className="text-[#6E6E73] text-[14px] mt-2">Our team will contact you within 24 hours.</p>
+                        <p className="text-[#6E6E73] text-[14px] mt-2">Application received! Our team will contact you within 24 hours.</p>
                     </div>
                 ) : (
                     <form onSubmit={submit} className="mt-8 bg-white border border-black/[0.06] rounded-2xl shadow-2xl p-5 sm:p-7 space-y-4 text-[#0A0A0B]" data-testid="featured-form">
@@ -97,25 +94,13 @@ export default function GetFeatured() {
                             </div>
                             <div>
                                 <Label>Phone <span className="text-red-500">*</span></Label>
-                                <div className="flex items-center">
-                                    <span className="h-[52px] inline-flex items-center px-3 rounded-l-xl border-y border-l border-[#E8E8EC] bg-[#F4F4F6] text-[14px] font-semibold text-[#0A0A0B] select-none">+91</span>
-                                    <Input
-                                        type="tel"
-                                        inputMode="numeric"
-                                        maxLength={10}
-                                        value={form.phone.replace(/^\+?91\s?/, "")}
-                                        onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
-                                        required
-                                        className="tc-input-lg rounded-l-none"
-                                        data-testid="featured-phone"
-                                    />
-                                </div>
+                                <PhonePrefixInput value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} required testId="featured-phone" />
                             </div>
                             <div>
                                 <Label>Email <span className="text-red-500">*</span></Label>
                                 <Input type="email" value={form.email} onChange={upd("email")} required className="tc-input-lg" data-testid="featured-email" />
                             </div>
-                            <div className="sm:col-span-2">
+                            <div>
                                 <Label>City <span className="text-red-500">*</span></Label>
                                 <select
                                     value={form.city}
@@ -127,6 +112,19 @@ export default function GetFeatured() {
                                     <option value="">Select city…</option>
                                     {KNOWN_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
                                 </select>
+                            </div>
+                            <div>
+                                <Label>Pincode <span className="text-red-500">*</span></Label>
+                                <Input
+                                    inputMode="numeric"
+                                    maxLength={6}
+                                    value={form.pincode}
+                                    onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+                                    required
+                                    placeholder="6-digit pincode"
+                                    className="tc-input-lg"
+                                    data-testid="featured-pincode"
+                                />
                             </div>
                             <div className="sm:col-span-2">
                                 <Label>Type of business</Label>

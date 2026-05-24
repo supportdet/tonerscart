@@ -6,7 +6,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle, Camera, Loader2, Package, ShoppingCart, Clock, Printer } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle, Camera, Loader2, Package, ShoppingCart, Clock, Printer, FileText } from "lucide-react";
 import { supabase, PRODUCT_BUCKET } from "../lib/supabase";
 import TonerCartridge from "../components/TonerCartridge";
 import PrinterListings from "../components/PrinterListings";
@@ -73,6 +73,7 @@ export default function SupplierDashboard() {
     const [pageYield, setPageYield] = useState("");
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState("");
+    const [brochureFile, setBrochureFile] = useState(null);
 
     // Business logo
     const [logoUrl, setLogoUrl] = useState("");
@@ -125,6 +126,7 @@ export default function SupplierDashboard() {
         setBrand(""); setModelNumber(""); setColor("Black");
         setPrice(""); setStock(""); setTonerType("Original"); setPageYield("");
         setImageFile(null); setImagePreview("");
+        setBrochureFile(null);
     };
     const openDialog = () => { reset(); setOpen(true); };
 
@@ -142,6 +144,9 @@ export default function SupplierDashboard() {
         if (!modelNumber.trim()) { toast.error("Please enter a model number"); return; }
         if (!price || !stock) { toast.error("Price and stock are required"); return; }
         if (!imageFile) { toast.error("A product image is required"); return; }
+        if (brochureFile && brochureFile.size > 10 * 1024 * 1024) {
+            toast.error("Brochure must be under 10 MB"); return;
+        }
         setSaving(true);
         try {
             // Upload image to Supabase Storage (mandatory)
@@ -151,7 +156,17 @@ export default function SupplierDashboard() {
             if (error) throw new Error(error.message);
             const { data: pub } = supabase.storage.from(PRODUCT_BUCKET).getPublicUrl(path);
             const imageUrl = pub.publicUrl;
-            await api.post("/supplier/listings", {
+
+            // Optional brochure (PDF) via backend service role
+            let brochurePath = null;
+            if (brochureFile) {
+                const fd = new FormData();
+                fd.append("file", brochureFile);
+                const { data: up } = await api.post("/supplier/spec-pdf", fd);
+                brochurePath = up?.path || null;
+            }
+
+            const { data: created } = await api.post("/supplier/listings", {
                 brand,
                 model_number: modelNumber.trim(),
                 color,
@@ -160,7 +175,10 @@ export default function SupplierDashboard() {
                 toner_type: tonerType,
                 page_yield: pageYield ? parseInt(pageYield, 10) : null,
                 image_url: imageUrl,
+                spec_pdf_url: brochurePath,
             });
+            // Already attached at creation; nothing else to do.
+            void created;
             toast.success("Listing added");
             setOpen(false);
             reset();
@@ -393,7 +411,7 @@ export default function SupplierDashboard() {
 
             {/* Add listing dialog */}
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="max-w-[680px] p-8 rounded-[20px] tc-shadow-lg" data-testid="add-listing-dialog">
+                <DialogContent className="max-w-[680px] max-h-[92vh] overflow-y-auto p-8 rounded-[20px] tc-shadow-lg" data-testid="add-listing-dialog">
                     <DialogHeader>
                         <DialogTitle className="text-[22px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500, letterSpacing: "-0.01em" }}>
                             Add a toner
@@ -534,6 +552,28 @@ export default function SupplierDashboard() {
                                         <span className="text-[11px] text-[#86868B] font-normal">PNG / JPG, max 5 MB</span>
                                     </>
                                 )}
+                            </div>
+                        </label>
+
+                        <div className="tc-form-section">Product brochure (optional)</div>
+                        <label className="block cursor-pointer">
+                            <input
+                                type="file"
+                                accept="application/pdf"
+                                onChange={(e) => {
+                                    const f = e.target.files?.[0];
+                                    if (!f) return;
+                                    if (f.type !== "application/pdf") { toast.error("Brochure must be a PDF"); return; }
+                                    if (f.size > 10 * 1024 * 1024) { toast.error("Brochure must be under 10 MB"); return; }
+                                    setBrochureFile(f);
+                                }}
+                                className="hidden"
+                                data-testid="listing-brochure-input"
+                            />
+                            <div className={`tc-image-drop ${brochureFile ? "has-image" : ""}`} style={{ borderStyle: "dashed" }}>
+                                <FileText size={22} />
+                                <span>{brochureFile ? brochureFile.name : "Upload product brochure (PDF, optional)"}</span>
+                                <span className="text-[11px] text-[#86868B] font-normal">Technical specs / Product brochure · PDF · max 10 MB</span>
                             </div>
                         </label>
 

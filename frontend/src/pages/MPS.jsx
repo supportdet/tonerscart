@@ -6,24 +6,36 @@ import { Label } from "../components/ui/label";
 import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
 import { CheckCircle2, Phone, Mail, Headphones } from "lucide-react";
+import PhonePrefixInput from "../components/PhonePrefixInput";
 
 export default function MPS() {
-    const [form, setForm] = useState({ name: "", email: "", phone: "", description: "" });
+    const [form, setForm] = useState({
+        name: "", company: "", email: "", phone: "", pincode: "", description: "",
+    });
     const [loading, setLoading] = useState(false);
     const [done, setDone] = useState(false);
     const upd = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
     const submit = async (e) => {
         e.preventDefault();
-        if (!form.name.trim() || !form.email.trim() || !form.phone.trim()) {
-            toast.error("Name, email and phone are required"); return;
+        if (!form.name.trim() || !form.email.trim() || !form.phone || !form.company.trim() || !form.pincode) {
+            toast.error("Name, company, email, phone and pincode are required"); return;
         }
+        if (form.phone.length !== 10) { toast.error("Enter a valid 10-digit phone"); return; }
+        if (!/^[1-9][0-9]{5}$/.test(form.pincode)) { toast.error("Enter a valid 6-digit pincode"); return; }
         setLoading(true);
         try {
             await api.post("/mps/inquiry", {
-                ...form,
+                name: form.name.trim(),
+                email: form.email.trim(),
+                phone: `+91 ${form.phone}`,
+                description: form.description.trim(),
                 estimated_printers: "—",
-                selections: {},
+                selections: {
+                    source: "mps_page",
+                    company: form.company.trim(),
+                    pincode: form.pincode,
+                },
             });
             setDone(true);
         } catch (err) { toast.error(formatApiError(err)); }
@@ -60,9 +72,25 @@ export default function MPS() {
                             <form onSubmit={submit} className="bg-white border border-black/[0.06] rounded-2xl shadow-2xl p-5 sm:p-7 space-y-4 text-[#0A0A0B]" data-testid="mps-form">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div><Label>Full name *</Label><Input value={form.name} onChange={upd("name")} required data-testid="mps-name" /></div>
+                                    <div><Label>Company *</Label><Input value={form.company} onChange={upd("company")} required data-testid="mps-company" /></div>
                                     <div><Label>Email *</Label><Input type="email" value={form.email} onChange={upd("email")} required data-testid="mps-email" /></div>
+                                    <div>
+                                        <Label>Phone *</Label>
+                                        <PhonePrefixInput value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} required testId="mps-phone" />
+                                    </div>
+                                    <div>
+                                        <Label>Pincode *</Label>
+                                        <Input
+                                            inputMode="numeric"
+                                            maxLength={6}
+                                            value={form.pincode}
+                                            onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+                                            required
+                                            placeholder="6-digit pincode"
+                                            data-testid="mps-pincode"
+                                        />
+                                    </div>
                                 </div>
-                                <div><Label>Phone *</Label><Input value={form.phone} onChange={upd("phone")} placeholder="+91-..." required data-testid="mps-phone" /></div>
                                 <div>
                                     <Label>What are you looking for?</Label>
                                     <Textarea rows={5} value={form.description} onChange={upd("description")} placeholder="Tell us about your fleet size, current pain points, timeline…" data-testid="mps-description" />

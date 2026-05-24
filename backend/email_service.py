@@ -205,12 +205,144 @@ async def email_mps_inquiry(payload: dict):
     await _send(SUPPORT_INBOX, subject, html, reply_to=email)
 
 
+async def email_featured_applicant_reply(app: dict):
+    """Auto-reply sent to the applicant after they submit a Get-Featured form.
+    Includes pricing tiers (kept OFF the public website, only here)."""
+    company = app.get("company") or app.get("name") or "there"
+    to_email = app.get("email")
+    if not to_email:
+        return
+    html = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;">Thank you, {company}!</h2>
+    <p>We&apos;ve received your <strong>featured placement</strong> request on TonersCart. Our team will
+    contact you within <strong>24 hours</strong> with placement options.</p>
+
+    <div style="margin:18px 0;padding:16px 18px;border:1px solid #F5E5A6;background:#FFFBEB;border-radius:10px;">
+      <div style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;font-weight:700;color:#8C6A00;margin-bottom:8px;">Featured placement pricing</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13.5px;color:#0A0A0B;">
+        <tr><td style="padding:6px 0;">3 days featured placement</td><td style="padding:6px 0;text-align:right;"><strong>₹5,000</strong></td></tr>
+        <tr><td style="padding:6px 0;border-top:1px solid #F5E5A6;">1 week featured placement</td><td style="padding:6px 0;border-top:1px solid #F5E5A6;text-align:right;"><strong>₹7,000</strong></td></tr>
+        <tr><td style="padding:6px 0;border-top:1px solid #F5E5A6;">1 month featured placement</td><td style="padding:6px 0;border-top:1px solid #F5E5A6;text-align:right;"><strong>₹25,000</strong></td></tr>
+      </table>
+      <div style="margin-top:8px;font-size:11.5px;color:#6E6E73;">All prices exclusive of GST. Custom packages available on request.</div>
+    </div>
+
+    <p>For urgent queries call <a href="tel:+919742270585" style="color:#0A0A0B;font-weight:600;">+91 97422 70585</a>
+    or reply to this email.</p>
+    <p style="margin-top:22px;color:#86868B;font-size:12.5px;">— Team TonersCart</p>
+    """
+    await _send(to_email, f"We received your featured placement request, {company}", html)
+
+
+def _quote_money(n) -> str:
+    try:
+        return f"₹{int(round(float(n))):,}"
+    except Exception:
+        return f"₹{n}"
+
+
+async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplier_label: str = "Verified Supplier on TonersCart"):
+    """Send a B2B-style quotation email to the buyer + BCC copy to support.
+    `item` keys expected:
+        brand, model_number, type/color, unit_price, qty, total, listing_type, notes
+    `buyer` keys expected: name, email, phone, gst
+    """
+    from datetime import datetime as _dt
+    today = _dt.now().strftime("%d %b %Y")
+    buyer_name = buyer.get("name") or "Customer"
+    buyer_email = buyer.get("email")
+    buyer_phone = buyer.get("phone") or "—"
+    buyer_gst = buyer.get("gst") or "—"
+
+    brand = item.get("brand") or ""
+    model = item.get("model_number") or ""
+    color = item.get("color") or "—"
+    item_type = item.get("type") or item.get("listing_type") or "—"
+    qty = int(item.get("qty") or 1)
+    unit = float(item.get("unit_price") or 0)
+    total = float(item.get("total") or (unit * qty))
+
+    body = f"""
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px;">
+      <div>
+        <div style="font-size:11px;letter-spacing:0.22em;text-transform:uppercase;font-weight:700;color:#86868B;">Quotation</div>
+        <div style="font-family:monospace;font-size:15px;font-weight:700;color:#0A0A0B;margin-top:2px;">{quote_number}</div>
+        <div style="font-size:12px;color:#6E6E73;margin-top:2px;">Issued: {today}</div>
+      </div>
+      <div style="text-align:right;font-size:12.5px;color:#0A0A0B;line-height:1.5;">
+        <div style="font-weight:700;">TonersCart</div>
+        <div style="color:#6E6E73;">A brand of Digital Edge Technologies, Bangalore</div>
+        <div style="color:#6E6E73;">support@tonerscart.com</div>
+        <div style="color:#6E6E73;">+91 97422 70585 · +91 89717 68796</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:18px;margin-bottom:18px;">
+      <div style="flex:1;padding:12px 14px;background:#F5F5F7;border-radius:10px;">
+        <div style="font-size:10.5px;letter-spacing:0.18em;text-transform:uppercase;color:#86868B;font-weight:700;">Bill to</div>
+        <div style="font-size:14px;font-weight:600;color:#0A0A0B;margin-top:4px;">{buyer_name}</div>
+        <div style="font-size:12.5px;color:#3a3a40;">{buyer_email or '—'}</div>
+        <div style="font-size:12.5px;color:#3a3a40;">{buyer_phone}</div>
+        <div style="font-size:12px;color:#6E6E73;margin-top:2px;">GST: <strong>{buyer_gst}</strong></div>
+      </div>
+      <div style="flex:1;padding:12px 14px;background:#F5F5F7;border-radius:10px;">
+        <div style="font-size:10.5px;letter-spacing:0.18em;text-transform:uppercase;color:#86868B;font-weight:700;">Sold by</div>
+        <div style="font-size:14px;font-weight:600;color:#0A0A0B;margin-top:4px;">{supplier_label}</div>
+        <div style="font-size:12.5px;color:#3a3a40;">via tonerscart.com</div>
+      </div>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #E5E5EA;border-radius:8px;overflow:hidden;">
+      <thead>
+        <tr style="background:#0A0A0B;color:#fff;">
+          <th style="text-align:left;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Item</th>
+          <th style="text-align:left;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Type</th>
+          <th style="text-align:left;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Color</th>
+          <th style="text-align:right;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Unit</th>
+          <th style="text-align:right;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Qty</th>
+          <th style="text-align:right;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:12px;border-top:1px solid #E5E5EA;"><strong>{brand}</strong> · <span style="font-family:monospace;">{model}</span></td>
+          <td style="padding:12px;border-top:1px solid #E5E5EA;">{item_type}</td>
+          <td style="padding:12px;border-top:1px solid #E5E5EA;">{color}</td>
+          <td style="padding:12px;border-top:1px solid #E5E5EA;text-align:right;">{_quote_money(unit)}</td>
+          <td style="padding:12px;border-top:1px solid #E5E5EA;text-align:right;">{qty}</td>
+          <td style="padding:12px;border-top:1px solid #E5E5EA;text-align:right;font-weight:700;">{_quote_money(total)}</td>
+        </tr>
+        <tr>
+          <td colspan="5" style="padding:12px;border-top:1px solid #E5E5EA;text-align:right;font-size:11.5px;letter-spacing:0.16em;text-transform:uppercase;color:#6E6E73;">Grand Total</td>
+          <td style="padding:12px;border-top:1px solid #E5E5EA;text-align:right;font-weight:800;font-size:15px;">{_quote_money(total)}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="margin-top:16px;padding:12px 14px;border-left:3px solid #F5C400;background:#FFFBEB;border-radius:6px;font-size:12.5px;color:#5C4A00;">
+      This quotation is valid for <strong>7 days</strong>. Prices are subject to availability.
+      Place your order at <a href="https://tonerscart.com" style="color:#0A0A0B;font-weight:600;">tonerscart.com</a>.
+    </div>
+
+    <p style="margin-top:22px;color:#86868B;font-size:11.5px;">
+      TonersCart — A brand of <strong>Digital Edge Technologies, Bangalore</strong> · GST invoice raised by the supplier on order confirmation.
+    </p>
+    """
+
+    subject = f"Quotation {quote_number} — {brand} {model}"
+    if buyer_email:
+        await _send(buyer_email, subject, body)
+    # Always BCC support inbox
+    if SUPPORT_INBOX and SUPPORT_INBOX != buyer_email:
+        await _send(SUPPORT_INBOX, f"[Quotation copy] {subject}", body, reply_to=buyer_email)
+
+
 # ===== Order notifications =====================================================
 
 _COMMISSION_TIERS = [
     (5000,   0.08),
-    (25000,  0.05),
-    (150000, 0.03),
+    (25000,  0.06),
+    (150000, 0.04),
 ]
 
 
