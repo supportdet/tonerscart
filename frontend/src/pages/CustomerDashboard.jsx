@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/ui/button";
 import { Skeleton } from "../components/ui/skeleton";
 import { toast } from "sonner";
-import { PackageSearch } from "lucide-react";
+import { PackageSearch, CheckCircle2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ReturnPolicyBox from "../components/ReturnPolicyBox";
 import BuyerGSTCard from "../components/BuyerGSTCard";
@@ -30,6 +30,15 @@ export default function CustomerDashboard() {
         finally { setLoading(false); }
     };
     useEffect(() => { load(); }, []);
+
+    const confirmDelivery = async (orderId) => {
+        if (!window.confirm("Confirm that you have received this order? This will mark it as delivered.")) return;
+        try {
+            await api.put(`/orders/${orderId}/status`, { status: "delivered" });
+            toast.success("Delivery confirmed — thank you!");
+            load();
+        } catch (e) { toast.error(formatApiError(e)); }
+    };
 
     return (
         <div className="tc-container py-8 sm:py-10" data-testid="customer-dashboard">
@@ -120,6 +129,16 @@ export default function CustomerDashboard() {
                             )}
 
                             <ReturnPolicyBox className="mt-4" />
+
+                            {o.status === "shipped" && (
+                                <button
+                                    onClick={() => confirmDelivery(o.id)}
+                                    className="mt-3 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[13px] font-semibold transition"
+                                    data-testid={`confirm-delivery-${o.id}`}
+                                >
+                                    <CheckCircle2 size={15} /> Confirm Delivery
+                                </button>
+                            )}
                         </div>
                     ))}
                 </div>

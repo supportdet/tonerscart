@@ -50,6 +50,37 @@ function PendingScreen({ application }) {
     );
 }
 
+function TrackingInput({ onSubmit, testIdSuffix }) {
+    const [val, setVal] = React.useState("");
+    const submit = () => {
+        const v = val.trim();
+        if (!v) return;
+        onSubmit(v);
+        setVal("");
+    };
+    return (
+        <div className="flex items-center gap-1.5">
+            <input
+                value={val}
+                onChange={(e) => setVal(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
+                placeholder="Tracking number"
+                className="h-7 px-2 text-[11.5px] rounded border border-[#D2D2D7] bg-white w-32"
+                data-testid={`tracking-input-${testIdSuffix}`}
+            />
+            <button
+                onClick={submit}
+                disabled={!val.trim()}
+                className="text-[11px] px-2 py-1 rounded bg-[#0A0A0B] text-white border border-[#0A0A0B] hover:bg-[#1D1D1F] disabled:opacity-40 disabled:cursor-not-allowed"
+                data-testid={`tracking-submit-${testIdSuffix}`}
+            >
+                Update Tracking
+            </button>
+        </div>
+    );
+}
+
+
 export default function SupplierDashboard() {
     const { user, refresh } = useAuth();
     const isApproved = user?.supplier_status === "approved";
@@ -379,18 +410,15 @@ export default function SupplierDashboard() {
                                         <td className="p-3">
                                             {o.status === "requested" && (
                                                 <div className="flex gap-1">
-                                                    <button onClick={() => updateOrder(o.id, "accepted")} className="text-[11px] px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Accept</button>
-                                                    <button onClick={() => updateOrder(o.id, "rejected")} className="text-[11px] px-2 py-1 rounded bg-red-50 text-red-700 border border-red-200">Reject</button>
+                                                    <button onClick={() => updateOrder(o.id, "accepted")} className="text-[11px] px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200" data-testid={`accept-order-${o.id}`}>Accept</button>
+                                                    <button onClick={() => updateOrder(o.id, "rejected")} className="text-[11px] px-2 py-1 rounded bg-red-50 text-red-700 border border-red-200" data-testid={`reject-order-${o.id}`}>Reject</button>
                                                 </div>
                                             )}
                                             {o.status === "accepted" && (
-                                                <button onClick={() => {
-                                                    const t = window.prompt("Tracking number:");
-                                                    if (t) updateOrder(o.id, "shipped", t);
-                                                }} className="text-[11px] px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200">Mark shipped</button>
+                                                <TrackingInput onSubmit={(t) => updateOrder(o.id, "shipped", t)} testIdSuffix={o.id} />
                                             )}
                                             {o.status === "shipped" && (
-                                                <button onClick={() => updateOrder(o.id, "delivered")} className="text-[11px] px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Mark delivered</button>
+                                                <div className="text-[10.5px] text-[#6E6E73]">Awaiting buyer confirmation…<div className="font-mono text-[#0A0A0B]">Tracking: {o.tracking_number || "—"}</div></div>
                                             )}
                                         </td>
                                     </tr>

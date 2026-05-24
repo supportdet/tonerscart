@@ -14,11 +14,12 @@ import uuid
 import asyncio
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Any
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, UploadFile, File
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
 
@@ -31,6 +32,9 @@ from email_service import (
     email_order_placed,
     email_featured_applicant_reply,
     email_quotation,
+    email_order_shipped,
+    email_order_delivered_support,
+    _commission_breakdown,
 )
 from ai_check import check_documents
 
@@ -647,7 +651,7 @@ def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
                     city: Optional[str] = None, toner_type: Optional[str] = None,
                     limit: int = 200):
     qry = sb_admin.table("listings").select(
-        "*,suppliers!inner(business_name,city)"
+        "*,suppliers!inner(business_name,city,is_suspended)"
     ).order("price").limit(limit)
     if q:
         qry = qry.ilike("search_norm", f"%{normalize(q)}%")
@@ -657,13 +661,34 @@ def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
         qry = qry.eq("city", city)
     if toner_type and toner_type != "all":
         qry = qry.eq("toner_type", toner_type)
-    rows = qry.execute().data or []
-    # Flatten
+    try:
+        rows = qry.execute().data or []
+    except Exception as e:
+        # Graceful fallback if is_suspended column is not yet migrated
+        if "is_suspended" in str(e):
+            qry = sb_admin.table("listings").select(
+                "*,suppliers!inner(business_name,city)"
+            ).order("price").limit(limit)
+            if q:
+                qry = qry.ilike("search_norm", f"%{normalize(q)}%")
+            if brand and brand != "all":
+                qry = qry.eq("brand", brand)
+            if city and city != "all":
+                qry = qry.eq("city", city)
+            if toner_type and toner_type != "all":
+                qry = qry.eq("toner_type", toner_type)
+            rows = qry.execute().data or []
+        else:
+            raise
+    out = []
     for r in rows:
         s = r.pop("suppliers", None) or {}
+        if s.get("is_suspended"):
+            continue
         r["supplier_name"] = s.get("business_name")
         r["supplier_city"] = s.get("city")
-    return rows
+        out.append(r)
+    return out
 
 
 @api.get("/listings/facets")
@@ -887,7 +912,7 @@ def my_orders(user: dict = Depends(require_user)):
 
 
 @api.put("/orders/{order_id}/status")
-def update_order_status(order_id: str, payload: OrderStatusUpdate, user: dict = Depends(require_user)):
+async def update_order_status(order_id: str, payload: OrderStatusUpdate, user: dict = Depends(require_user)):
     allowed = {"requested", "accepted", "shipped", "delivered", "rejected", "cancelled"}
     if payload.status not in allowed:
         raise HTTPException(400, "Invalid status")
@@ -896,16 +921,63 @@ def update_order_status(order_id: str, payload: OrderStatusUpdate, user: dict = 
         raise HTTPException(404, "Order not found")
     O_row = o.data
     if user["role"] == "customer":
-        if O_row["customer_id"] != user["id"] or payload.status != "cancelled":
-            raise HTTPException(403, "Customers can only cancel their own orders")
+        # Buyer can cancel a pending order OR confirm delivery on a shipped order
+        if O_row["customer_id"] != user["id"]:
+            raise HTTPException(403, "Not your order")
+        if payload.status == "cancelled" and O_row.get("status") in ("requested", "accepted"):
+            pass  # ok
+        elif payload.status == "delivered" and O_row.get("status") == "shipped":
+            pass  # ok
+        else:
+            raise HTTPException(403, "Customers can only cancel pending orders or confirm shipped orders")
     elif user["role"] == "supplier":
         s = _approved_supplier(user)
         if O_row["supplier_id"] != s["id"]:
             raise HTTPException(403, "Not your order")
     upd = {"status": payload.status, "updated_at": datetime.now(timezone.utc).isoformat()}
     if payload.tracking_number:
-        upd["tracking_number"] = payload.tracking_number
-    sb_admin.table("orders").update(upd).eq("id", order_id).execute()
+        try:
+            upd["tracking_number"] = payload.tracking_number
+            sb_admin.table("orders").update(upd).eq("id", order_id).execute()
+        except Exception as e:
+            if "tracking_number" in str(e):
+                upd.pop("tracking_number", None)
+                sb_admin.table("orders").update(upd).eq("id", order_id).execute()
+            else:
+                raise
+    else:
+        sb_admin.table("orders").update(upd).eq("id", order_id).execute()
+
+    # --- Side-effects: emails ---
+    if payload.status == "shipped" and payload.tracking_number:
+        try:
+            listing = sb_admin.table("listings").select(
+                "brand,model_number"
+            ).eq("id", O_row["listing_id"]).maybe_single().execute().data or {}
+            buyer = sb_admin.table("users").select("email,name").eq(
+                "id", O_row["customer_id"]
+            ).maybe_single().execute().data or {}
+            await email_order_shipped(
+                {**O_row, "tracking_number": payload.tracking_number},
+                listing,
+                buyer,
+            )
+        except Exception as e:
+            logger.warning("shipped email failed: %s", e)
+    elif payload.status == "delivered" and user["role"] == "customer":
+        try:
+            listing = sb_admin.table("listings").select(
+                "brand,model_number"
+            ).eq("id", O_row["listing_id"]).maybe_single().execute().data or {}
+            supplier = sb_admin.table("suppliers").select(
+                "business_name"
+            ).eq("id", O_row["supplier_id"]).maybe_single().execute().data or {}
+            buyer = sb_admin.table("users").select("email,name").eq(
+                "id", O_row["customer_id"]
+            ).maybe_single().execute().data or {}
+            await email_order_delivered_support(O_row, listing, supplier, buyer)
+        except Exception as e:
+            logger.warning("delivered notify failed: %s", e)
     return {"ok": True}
 
 
@@ -1155,9 +1227,10 @@ def list_printers(
     sel = (
         "id,brand,model_number,description,image_url,condition,usage_type,category,"
         "color,paper_sizes,functions,connectivity,features,monthly_volume_min,monthly_volume_max,"
-        "price,stock,spec_pdf_url,supplier:suppliers(business_name,city)"
+        "price,stock,spec_pdf_url,supplier:suppliers(business_name,city,is_suspended)"
     )
-    sel_no_brochure = sel.replace(",spec_pdf_url", "")
+    sel_no_suspend = sel.replace(",is_suspended", "")
+    sel_no_brochure = sel_no_suspend.replace(",spec_pdf_url", "")
     def _build_query(select_str):
         qry = sb_admin.table("printer_listings").select(select_str).gt("stock", 0)
         if usage_type and usage_type in PRINTER_USAGES:
@@ -1193,7 +1266,16 @@ def list_printers(
     try:
         res = _build_query(sel).execute()
     except Exception as e:
-        if "spec_pdf_url" in str(e):
+        msg = str(e)
+        if "is_suspended" in msg:
+            try:
+                res = _build_query(sel_no_suspend).execute()
+            except Exception as e2:
+                if "spec_pdf_url" in str(e2):
+                    res = _build_query(sel_no_brochure).execute()
+                else:
+                    raise
+        elif "spec_pdf_url" in msg:
             res = _build_query(sel_no_brochure).execute()
         else:
             raise
@@ -1214,6 +1296,8 @@ def list_printers(
     accepted = _CITY_ALIASES.get(want, {want}) if want else None
     for r in rows:
         sup = r.pop("supplier", None) or {}
+        if sup.get("is_suspended"):
+            continue
         r["supplier_name"] = sup.get("business_name", "")
         r["city"] = sup.get("city", "")
         if accepted is not None and r["city"].lower() not in accepted:
@@ -1598,6 +1682,449 @@ async def chat(payload: ChatRequest):
         500,
         "LLM key not configured (set GOOGLE_API_KEY in backend/.env to enable the chatbot)",
     )
+
+
+# =============================================================================
+# Admin v2 — analytics, dealer mgmt, order mgmt, site config
+# =============================================================================
+
+from collections import Counter, defaultdict  # noqa: E402
+import csv  # noqa: E402
+import io  # noqa: E402
+from datetime import timedelta as _td  # noqa: E402
+
+
+def _safe_int(n):
+    try:
+        return int(n)
+    except Exception:
+        return 0
+
+
+def _supplier_is_suspended(sid: str, suspended_ids: set) -> bool:
+    return sid in suspended_ids
+
+
+@api.get("/admin/analytics")
+def admin_analytics(user: dict = Depends(require_role("admin"))):
+    """Single payload powering the admin Analytics dashboard.
+    Everything is computed from live Supabase tables — no cached or hardcoded numbers.
+    """
+    now = datetime.now(timezone.utc)
+    week_ago = now - _td(days=7)
+    month_ago = now - _td(days=30)
+    today_date = now.date()
+
+    # Pull every order (limit reasonably for now; orders table is small in MVP)
+    # Brand/model live on the joined listings row; supplier city → "orders by city".
+    orders = sb_admin.table("orders").select(
+        "id,total,unit_price,qty,status,supplier_id,customer_id,delivery_address,created_at,"
+        "listings(brand,model_number,city)"
+    ).order("created_at", desc=True).limit(5000).execute().data or []
+    # Flatten the join so the rest of the function can reference o['brand']/o['model_number']/o['city']
+    for o in orders:
+        L = o.pop("listings", None) or {}
+        o["brand"] = L.get("brand")
+        o["model_number"] = L.get("model_number")
+        o["delivery_city"] = L.get("city")
+
+    suppliers = sb_admin.table("suppliers").select(
+        "id,business_name,city,approved_at"
+    ).execute().data or []
+    suppliers_by_id = {s["id"]: s for s in suppliers}
+
+    users = sb_admin.table("users").select("id,role,name,created_at").execute().data or []
+    listings_cnt = sb_admin.table("listings").select("id", count="exact").execute().count or 0
+    printers_cnt = sb_admin.table("printer_listings").select("id", count="exact").execute().count or 0
+
+    # Aggregates
+    total_gmv = 0.0
+    total_commission = 0.0
+    orders_week = 0
+    orders_month = 0
+    by_day_orders = defaultdict(int)
+    by_day_commission = defaultdict(float)
+    by_model = Counter()
+    by_dealer_gmv = defaultdict(float)
+    by_city = Counter()
+
+    # Pre-seed last-30-day buckets so charts have continuous x-axis
+    for i in range(30):
+        d = (today_date - _td(days=i)).isoformat()
+        by_day_orders[d] = 0
+        by_day_commission[d] = 0.0
+
+    for o in orders:
+        total = float(o.get("total") or 0)
+        total_gmv += total
+        commission, _payout, _label = _commission_breakdown(total)
+        total_commission += commission
+
+        created = o.get("created_at")
+        if created:
+            try:
+                cdt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+            except Exception:
+                cdt = None
+        else:
+            cdt = None
+
+        if cdt:
+            if cdt >= week_ago:
+                orders_week += 1
+            if cdt >= month_ago:
+                orders_month += 1
+                day_key = cdt.date().isoformat()
+                by_day_orders[day_key] += 1
+                by_day_commission[day_key] += float(commission)
+
+        model_label = f"{o.get('brand') or '—'} {o.get('model_number') or ''}".strip()
+        by_model[model_label] += 1
+
+        sid = o.get("supplier_id")
+        if sid:
+            by_dealer_gmv[sid] += total
+
+        city = (o.get("delivery_city") or "").strip()
+        if city:
+            by_city[city] += 1
+
+    new_dealers_week = sum(
+        1 for s in suppliers
+        if (s.get("approved_at") or "") and
+        datetime.fromisoformat(s["approved_at"].replace("Z", "+00:00")) >= week_ago
+    )
+    buyers = [u for u in users if u.get("role") == "customer"]
+    new_buyers_week = sum(
+        1 for u in buyers
+        if (u.get("created_at") or "") and
+        datetime.fromisoformat(u["created_at"].replace("Z", "+00:00")) >= week_ago
+    )
+
+    top_dealers = sorted(by_dealer_gmv.items(), key=lambda x: x[1], reverse=True)[:5]
+    top_dealers_out = [
+        {
+            "supplier_id": sid,
+            "name": (suppliers_by_id.get(sid) or {}).get("business_name") or "Unknown",
+            "gmv": round(g, 2),
+        }
+        for sid, g in top_dealers
+    ]
+
+    return {
+        "stats": {
+            "total_gmv": round(total_gmv, 2),
+            "total_commission": round(total_commission, 2),
+            "total_orders": len(orders),
+            "orders_week": orders_week,
+            "orders_month": orders_month,
+            "total_dealers": len(suppliers),
+            "new_dealers_week": new_dealers_week,
+            "total_buyers": len(buyers),
+            "new_buyers_week": new_buyers_week,
+            "active_listings": int(listings_cnt) + int(printers_cnt),
+        },
+        "orders_per_day": [
+            {"date": d, "count": by_day_orders[d]}
+            for d in sorted(by_day_orders.keys())
+        ],
+        "commission_per_day": [
+            {"date": d, "amount": round(by_day_commission[d], 2)}
+            for d in sorted(by_day_commission.keys())
+        ],
+        "top_models": [
+            {"model": m, "count": c}
+            for m, c in by_model.most_common(5)
+        ],
+        "top_dealers": top_dealers_out,
+        "orders_by_city": [
+            {"city": c, "count": n}
+            for c, n in by_city.most_common(8)
+        ],
+    }
+
+
+# ---------- Dealer management ----------
+
+@api.get("/admin/suppliers/{supplier_id}/detail")
+def admin_supplier_detail(supplier_id: str, user: dict = Depends(require_role("admin"))):
+    s = sb_admin.table("suppliers").select("*").eq("id", supplier_id).maybe_single().execute()
+    if not s or not s.data:
+        raise HTTPException(404, "Supplier not found")
+    toners = sb_admin.table("listings").select("*").eq("supplier_id", supplier_id).order(
+        "created_at", desc=True
+    ).execute().data or []
+    printers = sb_admin.table("printer_listings").select("*").eq("supplier_id", supplier_id).order(
+        "created_at", desc=True
+    ).execute().data or []
+    orders = sb_admin.table("orders").select("*,listings(brand,model_number)").eq("supplier_id", supplier_id).order(
+        "created_at", desc=True
+    ).limit(500).execute().data or []
+    for o in orders:
+        L = o.pop("listings", None) or {}
+        o["brand"] = L.get("brand")
+        o["model_number"] = L.get("model_number")
+    gmv = sum(float(o.get("total") or 0) for o in orders)
+    return {
+        "supplier": s.data,
+        "toner_listings": toners,
+        "printer_listings": printers,
+        "orders": orders,
+        "stats": {
+            "listing_count": len(toners) + len(printers),
+            "order_count": len(orders),
+            "gmv": round(gmv, 2),
+        },
+    }
+
+
+class SupplierEdit(BaseModel):
+    business_name: Optional[str] = None
+    city: Optional[str] = None
+
+
+@api.put("/admin/suppliers/{supplier_id}")
+def admin_edit_supplier(supplier_id: str, payload: SupplierEdit,
+                        user: dict = Depends(require_role("admin"))):
+    upd = {}
+    if payload.business_name is not None and payload.business_name.strip():
+        upd["business_name"] = payload.business_name.strip()
+    if payload.city is not None and payload.city.strip():
+        upd["city"] = payload.city.strip()
+    if not upd:
+        return {"ok": True, "updated": []}
+    sb_admin.table("suppliers").update(upd).eq("id", supplier_id).execute()
+    return {"ok": True, "updated": list(upd.keys())}
+
+
+def _set_suspended(supplier_id: str, value: bool):
+    try:
+        sb_admin.table("suppliers").update({"is_suspended": value}).eq("id", supplier_id).execute()
+    except Exception as e:
+        if "is_suspended" in str(e):
+            raise HTTPException(503, "is_suspended column not yet migrated — run supabase_schema_admin_v2.sql") from e
+        raise
+
+
+@api.post("/admin/suppliers/{supplier_id}/suspend")
+def admin_suspend_supplier(supplier_id: str, user: dict = Depends(require_role("admin"))):
+    _set_suspended(supplier_id, True)
+    return {"ok": True, "is_suspended": True}
+
+
+@api.post("/admin/suppliers/{supplier_id}/unsuspend")
+def admin_unsuspend_supplier(supplier_id: str, user: dict = Depends(require_role("admin"))):
+    _set_suspended(supplier_id, False)
+    return {"ok": True, "is_suspended": False}
+
+
+@api.delete("/admin/listings/{listing_id}")
+def admin_delete_listing(listing_id: str, user: dict = Depends(require_role("admin"))):
+    sb_admin.table("listings").delete().eq("id", listing_id).execute()
+    return {"ok": True}
+
+
+@api.delete("/admin/printers/{printer_id}")
+def admin_delete_printer(printer_id: str, user: dict = Depends(require_role("admin"))):
+    sb_admin.table("printer_listings").delete().eq("id", printer_id).execute()
+    return {"ok": True}
+
+
+# ---------- Order management ----------
+
+@api.get("/admin/orders")
+def admin_orders(
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = 1,
+    limit: int = 50,
+    user: dict = Depends(require_role("admin")),
+):
+    page = max(1, page)
+    limit = max(1, min(limit, 200))
+    qry = sb_admin.table("orders").select("*,listings(brand,model_number,toner_type)").order("created_at", desc=True)
+    if status and status != "all":
+        qry = qry.eq("status", status)
+    rows = qry.limit(2000).execute().data or []
+    # Flatten join
+    for r in rows:
+        L = r.pop("listings", None) or {}
+        r["brand"] = L.get("brand")
+        r["model_number"] = L.get("model_number")
+        r["toner_type"] = L.get("toner_type")
+    if search:
+        s = search.lower()
+        rows = [
+            r for r in rows
+            if s in (r.get("customer_name") or "").lower()
+            or s in (r.get("model_number") or "").lower()
+            or s in (r.get("brand") or "").lower()
+            or s in (r.get("customer_phone") or "")
+        ]
+    suppliers = sb_admin.table("suppliers").select("id,business_name").execute().data or []
+    sup_map = {s["id"]: s.get("business_name") for s in suppliers}
+    total = len(rows)
+    start = (page - 1) * limit
+    end = start + limit
+    page_rows = rows[start:end]
+    for r in page_rows:
+        c, p, lbl = _commission_breakdown(r.get("total") or 0)
+        r["commission"] = c
+        r["payout"] = p
+        r["commission_rate"] = lbl
+        r["supplier_name"] = sup_map.get(r.get("supplier_id")) or "—"
+        # Apply search filter to brand/model after flatten (already done above)
+    return {"rows": page_rows, "total": total, "page": page, "limit": limit}
+
+
+@api.get("/admin/orders/export")
+def admin_orders_export(user: dict = Depends(require_role("admin"))):
+    orders = sb_admin.table("orders").select("*,listings(brand,model_number,toner_type)").order("created_at", desc=True).limit(5000).execute().data or []
+    suppliers = sb_admin.table("suppliers").select("id,business_name").execute().data or []
+    sup_map = {s["id"]: s.get("business_name") for s in suppliers}
+    buf = io.StringIO()
+    buf.write("\ufeff")  # UTF-8 BOM for Excel
+    writer = csv.writer(buf)
+    writer.writerow([
+        "Order ID", "Created", "Status", "Tracking",
+        "Buyer Name", "Buyer Phone", "Delivery Address",
+        "Brand", "Model", "Type", "Qty", "Unit Price", "Total",
+        "Commission Rate", "Commission", "Payout",
+        "Dealer Name",
+    ])
+    for o in orders:
+        L = o.get("listings") or {}
+        total = float(o.get("total") or 0)
+        c, p, label = _commission_breakdown(total)
+        writer.writerow([
+            o.get("id"),
+            o.get("created_at"),
+            o.get("status"),
+            o.get("tracking_number") or "",
+            o.get("customer_name") or "",
+            o.get("customer_phone") or "",
+            o.get("delivery_address") or "",
+            L.get("brand") or "",
+            L.get("model_number") or "",
+            L.get("toner_type") or "",
+            o.get("qty") or 0,
+            o.get("unit_price") or 0,
+            total,
+            label,
+            c,
+            p,
+            sup_map.get(o.get("supplier_id")) or "",
+        ])
+    csv_text = buf.getvalue()
+    headers = {
+        "Content-Disposition": 'attachment; filename="tonerscart_orders.csv"',
+    }
+    return Response(content=csv_text, media_type="text/csv; charset=utf-8", headers=headers)
+
+
+# ---------- Site config (popular_chips, marquee_brands) ----------
+
+# Defaults used when no row exists yet — also returned by the public GET so the
+# frontend never has to ship its own hardcoded fallback.
+_CONFIG_DEFAULTS = {
+    "popular_chips": [
+        {"label": "HP 88A",        "query": "HP 88A"},
+        {"label": "Canon 337",     "query": "Canon 337"},
+        {"label": "Brother TN-2365", "query": "TN-2365"},
+        {"label": "Xerox 3020",    "query": "Xerox 3020"},
+    ],
+    "marquee_brands": [
+        {"name": "HP",      "color": "#0096D6"},
+        {"name": "Canon",   "color": "#CC0000"},
+        {"name": "Brother", "color": "#2D3192"},
+        {"name": "Epson",   "color": "#003399"},
+        {"name": "Ricoh",   "color": "#D71921"},
+        {"name": "Xerox",   "color": "#000000"},
+        {"name": "Kyocera", "color": "#C00000"},
+        {"name": "Samsung", "color": "#1428A0"},
+    ],
+}
+
+
+@api.get("/config/{key}")
+def get_site_config(key: str):
+    """Public — site_config value with a sensible default fallback."""
+    if key not in _CONFIG_DEFAULTS and key not in {"popular_chips", "marquee_brands"}:
+        # Allow any key but require it exists; otherwise just 404
+        pass
+    try:
+        row = sb_admin.table("site_config").select("value").eq("key", key).maybe_single().execute()
+    except Exception as e:
+        logger.warning("site_config select failed: %s", e)
+        row = None
+    if row and row.data and row.data.get("value") is not None:
+        val = row.data["value"]
+        if isinstance(val, list) and len(val) > 0:
+            return {"key": key, "value": val}
+        if isinstance(val, dict) and val:
+            return {"key": key, "value": val}
+    return {"key": key, "value": _CONFIG_DEFAULTS.get(key, [])}
+
+
+class ConfigPayload(BaseModel):
+    value: Any
+
+
+@api.post("/admin/config/{key}")
+def set_site_config(key: str, payload: ConfigPayload, user: dict = Depends(require_role("admin"))):
+    try:
+        sb_admin.table("site_config").upsert({
+            "key": key,
+            "value": payload.value,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }, on_conflict="key").execute()
+    except Exception as e:
+        if "site_config" in str(e):
+            raise HTTPException(503, "site_config table not yet migrated — run supabase_schema_admin_v2.sql") from e
+        raise
+    return {"ok": True, "key": key}
+
+
+# ---------- Stats overlay for landing (real numbers, no auth) ----------
+
+@api.get("/stats/public")
+def public_stats():
+    """Lightweight public counters for the landing-page stats strip."""
+    sup_rows = None
+    try:
+        sup_rows = sb_admin.table("suppliers").select(
+            "id,city", count="exact"
+        ).eq("is_suspended", False).execute()
+    except Exception as e:
+        if "is_suspended" in str(e):
+            try:
+                sup_rows = sb_admin.table("suppliers").select(
+                    "id,city", count="exact"
+                ).execute()
+            except Exception:
+                sup_rows = None
+        else:
+            logger.warning("public_stats suppliers failed: %s", e)
+    sup_count = (sup_rows.count if sup_rows else 0) or 0
+    cities = {(r.get("city") or "").strip() for r in ((sup_rows.data if sup_rows else []) or []) if r.get("city")}
+
+    try:
+        brands_rows = sb_admin.table("listings").select("brand").limit(2000).execute().data or []
+        brands = {(r.get("brand") or "").strip() for r in brands_rows if r.get("brand")}
+    except Exception:
+        brands = set()
+    try:
+        prn_brands = sb_admin.table("printer_listings").select("brand").limit(2000).execute().data or []
+        brands.update({(r.get("brand") or "").strip() for r in prn_brands if r.get("brand")})
+    except Exception:
+        pass
+
+    return {
+        "suppliers": sup_count,
+        "cities": len(cities),
+        "brands": len(brands),
+    }
+
 
 
 @api.get("/")
