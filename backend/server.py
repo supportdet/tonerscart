@@ -1375,7 +1375,7 @@ def admin_toggle_supplier_featured(supplier_id: str, payload: SupplierFeaturedTo
         ).execute()
     except Exception as e:
         logger.warning("toggle featured failed (column missing?): %s", e)
-        raise HTTPException(500, "is_featured column not yet migrated — run supabase_schema_quotation_featured.sql") from e
+        raise HTTPException(503, "is_featured column not yet migrated — run supabase_schema_quotation_featured.sql") from e
     return {"ok": True, "is_featured": bool(payload.is_featured)}
 
 
@@ -1408,6 +1408,8 @@ def listing_brochure_url(listing_id: str, listing_type: str = "toner",
                          user: dict = Depends(require_user)):
     """Returns a short-lived signed URL for the brochure PDF, if any.
     Authenticated buyers / sellers only."""
+    if listing_type not in ("toner", "printer"):
+        raise HTTPException(400, "listing_type must be 'toner' or 'printer'")
     table = "printer_listings" if listing_type == "printer" else "listings"
     try:
         row = sb_admin.table(table).select("spec_pdf_url").eq("id", listing_id).maybe_single().execute()
