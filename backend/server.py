@@ -1161,7 +1161,61 @@ async def chat(payload: ChatRequest):
 def root():
     return {"service": "TonersCart API (Supabase)", "ok": True}
 
+class QuotationRequest(BaseModel):
+    listing_id: str
+    listing_type: str = "toner"
+    qty: int = 1
 
+@api.post("/quotation")
+async def create_quotation(payload: QuotationRequest, user: dict = Depends(require_user)):
+    import random, string
+    quote_num = "TC-" + datetime.now(timezone.utc).strftime("%Y%m%d") + "-" + ''.join(random.choices(string.digits, k=5))
+    if payload.listing_type == "printer":
+        lst = sb_admin.table("printer_listings").select("*").eq("id", payload.listing_id).maybe_single().execute()
+    else:
+        lst = sb_admin.table("listings").select("*").eq("id", payload.listing_id).maybe_single().execute()
+    if not lst or not lst.data:
+        raise HTTPException(404, "Listing not found")
+    L = lst.data
+    sup = sb_admin.table("suppliers").select("business_name,city,gst_number").eq("id", L["supplier_id"]).maybe_single().execute()
+    buyer = sb_admin.table("users").select("email,name,phone,gst_number").eq("id", user["id"]).maybe_single().execute()
+    buyer_data = (buyer.data if buyer else {}) or {}
+    sup_data = (sup.data if sup else {}) or {}
+    total = float(L["price"]) * payload.qty
+    try:
+        await email_quotation(
+            quote_number=quote_num,
+            buyer=buyer_data,
+            listing=L,
+            supplier=sup_data,
+            qty=payload.qty,
+            total=total,
+        )
+    except Exception as e:
+        logger.exception("quotation email failed")
+        raise HTTPException(500, f"Quotation email failed: {e}") from e
+    return {"ok": True, "quote_number": quote_num}
+
+@api.get("/featured/suppliers")
+def featured_suppliers(limit: int = 6):
+    try:
+        rows = sb_admin.table("suppliers").select("id,business_name,city,business_logo").eq("is_featured", True).limit(limit).execute().data or []
+        return rows
+    except Exception:
+        return []
+
+@api.post("/featured/apply")
+async def featured_apply(payload: dict, request: Request):
+    try:
+        sb_admin.table("featured_applications").insert(payload).execute()
+    except Exception:
+        pass
+    try:
+        await email_featured_applicant_reply(payload)
+    except Exception as e:
+        logger.warning("featured reply email failed: %s", e)
+    return {"ok": True}
+    
 app.include_router(api)
 
 # CORS — explicit origin list (browsers reject the wildcard "*" combined with allow_credentials=True,
