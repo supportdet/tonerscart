@@ -297,7 +297,43 @@
 @media (max-width: 640px) {
     .tc-search-shell { grid-template-columns: 1fr; padding: 6px; border-radius: 16px; }
     .tc-search-go { width: 100%; justify-content: center; }
+    /* On the light /search shell, mobile splits the input + button into two
+       distinct rounded rectangles so the search input is obviously a "field"
+       and the Search CTA is clearly a separate button. */
+    .tc-search-shell.tc-search-light {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        padding: 0;
+        gap: 10px;
+    }
+    .tc-search-shell.tc-search-light > div:first-child {
+        background: #FFFFFF;
+        border: 1.5px solid #D2D2D7;
+        border-radius: 14px;
+        box-shadow: 0 1px 2px rgba(10,10,11,0.04);
+    }
+    .tc-search-shell.tc-search-light:focus-within {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        transform: none;
+    }
+    .tc-search-shell.tc-search-light:focus-within > div:first-child {
+        border-color: #00B7C7;
+        box-shadow: 0 0 0 3px rgba(0,183,199,0.18);
+    }
+    .tc-search-shell.tc-search-light .tc-search-go {
+        background: var(--tc-ink);
+        color: #FFFFFF;
+        border-radius: 14px;
+        height: 48px;
+    }
 }
+
+/* Ensure the magnifier icon is dark/visible on light shells (even on
+   mobile, where the default icon color is light for the glass variant). */
+.tc-search-shell.tc-search-light > div:first-child > svg { color: #86868B; }
 
 .tc-search-input {
     flex: 1; width: 100%;
