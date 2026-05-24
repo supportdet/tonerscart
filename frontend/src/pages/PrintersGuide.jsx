@@ -8,6 +8,7 @@ import { ChevronLeft, ArrowRight, Printer, CheckCircle2, ChevronDown, ChevronUp,
 import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
+import PhonePrefixInput from "../components/PhonePrefixInput";
 
 // ============================================================
 // Question catalog
@@ -460,8 +461,9 @@ function summaryLines(a) {
 
 function LeadCaptureForm({ answers, currentCity, onBack }) {
     const [form, setForm] = useState({
-        name: "", phone: "", email: "",
+        name: "", company: "", phone: "", email: "",
         city: currentCity || "",
+        pincode: "",
         notes: "",
     });
     const [summaryOpen, setSummaryOpen] = useState(true);
@@ -476,22 +478,32 @@ function LeadCaptureForm({ answers, currentCity, onBack }) {
 
     const submit = async (e) => {
         e.preventDefault();
-        if (!form.name.trim() || !form.phone.trim() || !form.email.trim()) {
-            toast.error("Name, phone and email are required");
+        if (!form.name.trim() || !form.company.trim() || !form.phone || !form.email.trim() || !form.pincode) {
+            toast.error("Name, company, email, phone and pincode are required");
             return;
         }
+        if (form.phone.length !== 10) { toast.error("Enter a valid 10-digit phone"); return; }
+        if (!/^[1-9][0-9]{5}$/.test(form.pincode)) { toast.error("Enter a valid 6-digit pincode"); return; }
         setLoading(true);
         try {
             await api.post("/mps/inquiry", {
                 name: form.name.trim(),
                 email: form.email.trim(),
-                phone: form.phone.trim(),
+                phone: `+91 ${form.phone}`,
                 description: [
+                    form.company ? `Company: ${form.company}` : "",
                     form.city ? `City: ${form.city}` : "",
+                    form.pincode ? `Pincode: ${form.pincode}` : "",
                     form.notes ? `Notes: ${form.notes}` : "",
                 ].filter(Boolean).join("\n"),
                 estimated_printers: estimated,
-                selections: { ...answers, contact_city: form.city || null, source: "printers_guide" },
+                selections: {
+                    ...answers,
+                    company: form.company,
+                    contact_city: form.city || null,
+                    pincode: form.pincode,
+                    source: "printers_guide",
+                },
             });
             setDone(true);
         } catch (err) {
@@ -564,8 +576,12 @@ function LeadCaptureForm({ answers, currentCity, onBack }) {
                                     <Input value={form.name} onChange={upd("name")} required data-testid="lead-name" />
                                 </div>
                                 <div>
+                                    <Label>Company <span className="text-red-500">*</span></Label>
+                                    <Input value={form.company} onChange={upd("company")} required data-testid="lead-company" />
+                                </div>
+                                <div>
                                     <Label>Phone <span className="text-red-500">*</span></Label>
-                                    <Input value={form.phone} onChange={upd("phone")} placeholder="+91 …" required data-testid="lead-phone" />
+                                    <PhonePrefixInput value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} required testId="lead-phone" />
                                 </div>
                                 <div>
                                     <Label>Email <span className="text-red-500">*</span></Label>
@@ -582,6 +598,18 @@ function LeadCaptureForm({ answers, currentCity, onBack }) {
                                         <option value="">Select city…</option>
                                         {KNOWN_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
                                     </select>
+                                </div>
+                                <div>
+                                    <Label>Pincode <span className="text-red-500">*</span></Label>
+                                    <Input
+                                        inputMode="numeric"
+                                        maxLength={6}
+                                        value={form.pincode}
+                                        onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+                                        required
+                                        placeholder="6-digit pincode"
+                                        data-testid="lead-pincode"
+                                    />
                                 </div>
                             </div>
                             <div>

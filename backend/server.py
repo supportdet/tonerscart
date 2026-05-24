@@ -29,6 +29,8 @@ from email_service import (
     email_application_rejected,
     email_mps_inquiry,
     email_order_placed,
+    email_featured_applicant_reply,
+    email_quotation,
 )
 from ai_check import check_documents
 
@@ -187,6 +189,7 @@ class ListingCreate(BaseModel):
     stock: int = Field(ge=0)
     toner_type: str  # "Original" | "Compatible" | "Refilled"
     image_url: Optional[str] = ""
+    spec_pdf_url: Optional[str] = None
 
 
 class ListingUpdate(BaseModel):
@@ -212,6 +215,37 @@ class OrderStatusUpdate(BaseModel):
 
 class RejectPayload(BaseModel):
     reason: Optional[str] = ""
+
+
+class QuotationRequest(BaseModel):
+    listing_id: str
+    listing_type: str = "toner"  # "toner" | "printer"
+    qty: int = Field(default=1, ge=1)
+
+
+class FeaturedAppCreate(BaseModel):
+    company: str
+    contact_person: str
+    phone: str
+    email: EmailStr
+    city: Optional[str] = ""
+    pincode: Optional[str] = ""
+    business_type: Optional[str] = "dealer"
+    description: Optional[str] = ""
+
+
+class FeaturedStatusUpdate(BaseModel):
+    status: str  # "new" | "contacted" | "active" | "rejected"
+
+
+class SupplierFeaturedToggle(BaseModel):
+    is_featured: bool
+
+
+class SpecPdfPath(BaseModel):
+    listing_id: str
+    listing_type: str = "toner"  # "toner" | "printer"
+    spec_pdf_url: str
 
 
 # ===== Auth / Profile ==========================================================
@@ -734,8 +768,17 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
         "stock": payload.stock,
         "image_url": payload.image_url or None,
         "city": s["city"],
+        "spec_pdf_url": payload.spec_pdf_url or None,
     }
-    res = sb_admin.table("listings").insert(row).execute()
+    try:
+        res = sb_admin.table("listings").insert(row).execute()
+    except Exception as e:
+        # Graceful fallback if spec_pdf_url column hasn't been migrated yet
+        if "spec_pdf_url" in str(e):
+            row.pop("spec_pdf_url", None)
+            res = sb_admin.table("listings").insert(row).execute()
+        else:
+            raise
     return res.data[0] if res.data else row
 
 
@@ -993,6 +1036,7 @@ class PrinterListingCreate(BaseModel):
     monthly_volume_max: int = 0
     price: float
     stock: int = 1
+    spec_pdf_url: Optional[str] = None
 
 
 def _supplier_id_for(user: dict) -> str:
@@ -1062,8 +1106,16 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         "monthly_volume_max": int(payload.monthly_volume_max or 0),
         "price": float(payload.price),
         "stock": int(payload.stock),
+        "spec_pdf_url": payload.spec_pdf_url or None,
     }
-    res = sb_admin.table("printer_listings").insert(row).execute()
+    try:
+        res = sb_admin.table("printer_listings").insert(row).execute()
+    except Exception as e:
+        if "spec_pdf_url" in str(e):
+            row.pop("spec_pdf_url", None)
+            res = sb_admin.table("printer_listings").insert(row).execute()
+        else:
+            raise
     if not res.data:
         raise HTTPException(500, "Failed to insert printer")
     return {"id": res.data[0]["id"]}
@@ -1103,39 +1155,48 @@ def list_printers(
     sel = (
         "id,brand,model_number,description,image_url,condition,usage_type,category,"
         "color,paper_sizes,functions,connectivity,features,monthly_volume_min,monthly_volume_max,"
-        "price,stock,supplier:suppliers(business_name,city)"
+        "price,stock,spec_pdf_url,supplier:suppliers(business_name,city)"
     )
-    qry = sb_admin.table("printer_listings").select(sel).gt("stock", 0)
-    if usage_type and usage_type in PRINTER_USAGES:
-        qry = qry.eq("usage_type", usage_type)
-    if category and category in PRINTER_CATEGORIES:
-        qry = qry.eq("category", category)
-    if condition and condition in PRINTER_CONDITIONS:
-        qry = qry.eq("condition", condition)
-    if color and color in PRINTER_COLORS:
-        if color == "color":
-            qry = qry.in_("color", ["color", "both"])
-        elif color == "bw":
-            qry = qry.in_("color", ["bw", "both"])
+    sel_no_brochure = sel.replace(",spec_pdf_url", "")
+    def _build_query(select_str):
+        qry = sb_admin.table("printer_listings").select(select_str).gt("stock", 0)
+        if usage_type and usage_type in PRINTER_USAGES:
+            qry = qry.eq("usage_type", usage_type)
+        if category and category in PRINTER_CATEGORIES:
+            qry = qry.eq("category", category)
+        if condition and condition in PRINTER_CONDITIONS:
+            qry = qry.eq("condition", condition)
+        if color and color in PRINTER_COLORS:
+            if color == "color":
+                qry = qry.in_("color", ["color", "both"])
+            elif color == "bw":
+                qry = qry.in_("color", ["bw", "both"])
+            else:
+                qry = qry.eq("color", "both")
+        if paper_size:
+            qry = qry.contains("paper_sizes", [paper_size])
+        if function_:
+            qry = qry.contains("functions", [function_])
+        if connectivity:
+            qry = qry.contains("connectivity", [connectivity])
+        if feature:
+            qry = qry.contains("features", [feature])
+        if min_volume is not None:
+            qry = qry.gte("monthly_volume_max", min_volume)
+        if max_volume is not None:
+            qry = qry.lte("monthly_volume_min", max_volume)
+        if brand:
+            qry = qry.ilike("brand", f"%{brand}%")
+        if q:
+            qry = qry.or_(f"brand.ilike.%{q}%,model_number.ilike.%{q}%,description.ilike.%{q}%")
+        return qry.order("created_at", desc=True).limit(200)
+    try:
+        res = _build_query(sel).execute()
+    except Exception as e:
+        if "spec_pdf_url" in str(e):
+            res = _build_query(sel_no_brochure).execute()
         else:
-            qry = qry.eq("color", "both")
-    if paper_size:
-        qry = qry.contains("paper_sizes", [paper_size])
-    if function_:
-        qry = qry.contains("functions", [function_])
-    if connectivity:
-        qry = qry.contains("connectivity", [connectivity])
-    if feature:
-        qry = qry.contains("features", [feature])
-    if min_volume is not None:
-        qry = qry.gte("monthly_volume_max", min_volume)
-    if max_volume is not None:
-        qry = qry.lte("monthly_volume_min", max_volume)
-    if brand:
-        qry = qry.ilike("brand", f"%{brand}%")
-    if q:
-        qry = qry.or_(f"brand.ilike.%{q}%,model_number.ilike.%{q}%,description.ilike.%{q}%")
-    res = qry.order("created_at", desc=True).limit(200).execute()
+            raise
     rows = res.data or []
     out = []
     # Treat common India city aliases as equivalent for filtering
@@ -1195,6 +1256,278 @@ async def mps_inquiry(payload: MPSInquiry, request: Request):
         await email_mps_inquiry(row)
     except Exception as e:
         logger.warning("MPS email failed: %s", e)
+    return {"ok": True}
+
+
+# ===== Featured Supplier — applications + admin + landing =====================
+
+@api.post("/featured/apply")
+async def featured_apply(payload: FeaturedAppCreate):
+    """Public — accepts a Get Featured application from a dealer/OEM/distributor.
+    Best-effort DB insert (table may not be migrated yet); always emails support + applicant."""
+    row = {
+        "company": payload.company.strip(),
+        "contact_person": payload.contact_person.strip(),
+        "phone": payload.phone.strip(),
+        "email": str(payload.email).strip(),
+        "city": (payload.city or "").strip() or None,
+        "pincode": (payload.pincode or "").strip() or None,
+        "business_type": (payload.business_type or "dealer").strip() or "dealer",
+        "description": (payload.description or "").strip() or None,
+        "status": "new",
+    }
+    try:
+        sb_admin.table("featured_applications").insert(row).execute()
+    except Exception as e:
+        logger.warning("featured_applications insert skipped (migration pending?): %s", e)
+
+    # Notify support inbox (reuse the MPS inquiry helper for consistency)
+    try:
+        await email_mps_inquiry({
+            "name": row["contact_person"],
+            "email": row["email"],
+            "phone": row["phone"],
+            "description": row.get("description") or "",
+            "estimated_printers": "—",
+            "selections": {
+                "type": "featured_application",
+                "company": row["company"],
+                "city": row.get("city"),
+                "pincode": row.get("pincode"),
+                "business_type": row.get("business_type"),
+            },
+        })
+    except Exception as e:
+        logger.warning("featured admin notify failed: %s", e)
+
+    # Auto-reply to applicant with pricing tiers
+    try:
+        await email_featured_applicant_reply(row)
+    except Exception as e:
+        logger.warning("featured applicant auto-reply failed: %s", e)
+
+    return {"ok": True}
+
+
+@api.get("/featured/suppliers")
+def featured_suppliers_public(limit: int = 6):
+    """Public — return suppliers where is_featured = true, with signed logo URLs.
+    Returns [] gracefully if the migration has not been run yet."""
+    try:
+        rows = sb_admin.table("suppliers").select(
+            "id,business_name,city,state,business_logo,is_featured,seller_types"
+        ).eq("is_featured", True).limit(limit).execute().data or []
+    except Exception as e:
+        logger.warning("featured_suppliers (column likely missing): %s", e)
+        return []
+    out = []
+    for s in rows:
+        item = {
+            "id": s["id"],
+            "business_name": s.get("business_name"),
+            "city": s.get("city"),
+            "state": s.get("state"),
+            "seller_types": s.get("seller_types") or [],
+            "logo_url": None,
+        }
+        if s.get("business_logo"):
+            try:
+                signed = sb_admin.storage.from_("supplier-documents").create_signed_url(
+                    s["business_logo"], 60 * 60
+                )
+                item["logo_url"] = signed.get("signedURL") or signed.get("signed_url")
+            except Exception:
+                item["logo_url"] = None
+        out.append(item)
+    return out
+
+
+@api.get("/admin/featured/applications")
+def admin_featured_applications(user: dict = Depends(require_role("admin"))):
+    try:
+        rows = sb_admin.table("featured_applications").select("*").order(
+            "created_at", desc=True
+        ).limit(500).execute().data or []
+        return rows
+    except Exception as e:
+        logger.warning("featured_applications table missing: %s", e)
+        return []
+
+
+@api.put("/admin/featured/applications/{app_id}/status")
+def admin_featured_status(app_id: str, payload: FeaturedStatusUpdate,
+                          user: dict = Depends(require_role("admin"))):
+    if payload.status not in {"new", "contacted", "active", "rejected"}:
+        raise HTTPException(400, "Invalid status")
+    sb_admin.table("featured_applications").update({
+        "status": payload.status,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", app_id).execute()
+    return {"ok": True}
+
+
+@api.put("/admin/suppliers/{supplier_id}/featured")
+def admin_toggle_supplier_featured(supplier_id: str, payload: SupplierFeaturedToggle,
+                                    user: dict = Depends(require_role("admin"))):
+    try:
+        sb_admin.table("suppliers").update({"is_featured": bool(payload.is_featured)}).eq(
+            "id", supplier_id
+        ).execute()
+    except Exception as e:
+        logger.warning("toggle featured failed (column missing?): %s", e)
+        raise HTTPException(500, "is_featured column not yet migrated — run supabase_schema_quotation_featured.sql") from e
+    return {"ok": True, "is_featured": bool(payload.is_featured)}
+
+
+# ===== Brochure (spec PDF) upload + signed download ===========================
+
+@api.post("/supplier/spec-pdf")
+async def upload_spec_pdf(file: UploadFile = File(...), user: dict = Depends(require_user)):
+    """Approved supplier uploads a product brochure (PDF, max 10 MB).
+    Stored in the private `supplier-documents` bucket. Returns the storage path."""
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved sellers can upload brochures")
+    if not file.content_type or file.content_type != "application/pdf":
+        raise HTTPException(400, "Brochure must be a PDF")
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(400, "Brochure must be under 10 MB")
+    path = f"{user['id']}/brochure-{uuid.uuid4().hex}.pdf"
+    try:
+        sb_admin.storage.from_("supplier-documents").upload(
+            path, content, {"content-type": "application/pdf", "upsert": "false"}
+        )
+    except Exception as e:
+        logger.exception("brochure upload failed")
+        raise HTTPException(500, f"Upload failed: {e}") from e
+    return {"path": path}
+
+
+@api.get("/listings/{listing_id}/brochure")
+def listing_brochure_url(listing_id: str, listing_type: str = "toner",
+                         user: dict = Depends(require_user)):
+    """Returns a short-lived signed URL for the brochure PDF, if any.
+    Authenticated buyers / sellers only."""
+    table = "printer_listings" if listing_type == "printer" else "listings"
+    try:
+        row = sb_admin.table(table).select("spec_pdf_url").eq("id", listing_id).maybe_single().execute()
+    except Exception as e:
+        logger.warning("spec_pdf_url column missing (migration pending): %s", e)
+        raise HTTPException(404, "No brochure available") from e
+    if not row or not row.data:
+        raise HTTPException(404, "Listing not found")
+    path = (row.data or {}).get("spec_pdf_url")
+    if not path:
+        raise HTTPException(404, "No brochure available")
+    try:
+        signed = sb_admin.storage.from_("supplier-documents").create_signed_url(path, 60 * 5)
+        return {"url": signed.get("signedURL") or signed.get("signed_url")}
+    except Exception as e:
+        logger.warning("brochure sign failed: %s", e)
+        raise HTTPException(500, "Could not generate download URL") from e
+
+
+# ===== Quotation ===============================================================
+
+def _gen_quote_number() -> str:
+    """Format: TC-YYYYMMDD-XXXXX (5-char alphanumeric suffix)."""
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    suffix = uuid.uuid4().hex[:5].upper()
+    return f"TC-{today}-{suffix}"
+
+
+@api.post("/quotation")
+async def create_quotation(payload: QuotationRequest, user: dict = Depends(require_user)):
+    """Authenticated buyer requests a quotation. Sends a professional
+    quotation email to the buyer's address + a copy to support@tonerscart.com.
+    Dealer details are intentionally NOT included — only 'Verified Supplier on TonersCart'.
+    """
+    if payload.listing_type not in ("toner", "printer"):
+        raise HTTPException(400, "listing_type must be 'toner' or 'printer'")
+
+    table = "printer_listings" if payload.listing_type == "printer" else "listings"
+    lst = sb_admin.table(table).select("*").eq("id", payload.listing_id).maybe_single().execute()
+    if not lst or not lst.data:
+        raise HTTPException(404, "Listing not found")
+    L = lst.data
+    qty = max(1, int(payload.qty or 1))
+    unit = float(L.get("price") or 0)
+    total = round(unit * qty, 2)
+
+    # Buyer details (name, email, gst, phone)
+    u = sb_admin.table("users").select("name,email,phone,gst_number").eq(
+        "id", user["id"]
+    ).maybe_single().execute()
+    buyer = u.data or {}
+
+    qnum = _gen_quote_number()
+
+    # Audit row (best-effort, no failure to the user)
+    try:
+        sb_admin.table("quotations").insert({
+            "quote_number": qnum,
+            "buyer_id": user["id"],
+            "buyer_email": buyer.get("email"),
+            "buyer_name": buyer.get("name"),
+            "buyer_phone": buyer.get("phone"),
+            "buyer_gst": buyer.get("gst_number"),
+            "listing_id": payload.listing_id,
+            "listing_type": payload.listing_type,
+            "brand": L.get("brand"),
+            "model_number": L.get("model_number"),
+            "color": L.get("color"),
+            "unit_price": unit,
+            "qty": qty,
+            "total": total,
+            "supplier_id": L.get("supplier_id"),
+        }).execute()
+    except Exception as e:
+        logger.warning("quotation audit insert failed: %s", e)
+
+    item = {
+        "brand": L.get("brand"),
+        "model_number": L.get("model_number"),
+        "color": L.get("color") or "—",
+        "type": L.get("toner_type") if payload.listing_type == "toner" else L.get("condition"),
+        "unit_price": unit,
+        "qty": qty,
+        "total": total,
+        "listing_type": payload.listing_type,
+    }
+    try:
+        await email_quotation(
+            quote_number=qnum,
+            buyer={
+                "name": buyer.get("name"),
+                "email": buyer.get("email"),
+                "phone": buyer.get("phone"),
+                "gst": buyer.get("gst_number"),
+            },
+            item=item,
+        )
+    except Exception as e:
+        logger.exception("quotation email failed")
+        raise HTTPException(502, "Could not send quotation email — please try again") from e
+
+    return {"ok": True, "quote_number": qnum, "email": buyer.get("email")}
+
+
+@api.post("/supplier/listing-spec-pdf")
+def attach_spec_pdf(payload: SpecPdfPath, user: dict = Depends(require_user)):
+    """Approved supplier attaches an uploaded brochure path to one of their listings."""
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved sellers can update listings")
+    s = sb_admin.table("suppliers").select("id").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        raise HTTPException(403, "Supplier not approved yet")
+    table = "printer_listings" if payload.listing_type == "printer" else "listings"
+    try:
+        sb_admin.table(table).update({"spec_pdf_url": payload.spec_pdf_url}).eq(
+            "id", payload.listing_id
+        ).eq("supplier_id", s.data["id"]).execute()
+    except Exception as e:
+        logger.warning("attach_spec_pdf failed (column missing?): %s", e)
+        raise HTTPException(500, "spec_pdf column not yet migrated — run supabase_schema_quotation_featured.sql") from e
     return {"ok": True}
 
 

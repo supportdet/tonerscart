@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Lock, Minus, Plus } from "lucide-react";
+import PhonePrefixInput from "./PhonePrefixInput";
 
 export default function OrderRequestDialog({ product, initialQty = 1, onClose }) {
     const navigate = useNavigate();
@@ -50,6 +51,9 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
             toast.error("Email and a 6+ character password are required to place the order");
             return;
         }
+        const phoneRaw = phone.replace(/^\+?91[\s-]?/, "").replace(/\D/g, "");
+        if (phoneRaw.length !== 10) { toast.error("Enter a valid 10-digit phone"); return; }
+        const phoneFull = `+91 ${phoneRaw}`;
         setLoading(true);
         try {
             await ensureAuth();
@@ -57,7 +61,7 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
                 listing_id: product.id,
                 qty: Number(qty),
                 customer_name: name,
-                customer_phone: phone,
+                customer_phone: phoneFull,
                 delivery_address: address,
                 notes,
             });
@@ -119,19 +123,13 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
                         </div>
                         <div>
                             <Label className="text-[12px]">Phone</Label>
-                            <div className="flex items-center">
-                                <span className="h-9 inline-flex items-center px-2.5 rounded-l-md border-y border-l border-[#E8E8EC] bg-[#F4F4F6] text-[12.5px] font-semibold text-[#0A0A0B] select-none">+91</span>
-                                <Input
-                                    type="tel"
-                                    inputMode="numeric"
-                                    maxLength={10}
-                                    value={phone.replace(/^\+?91[\s-]?/, "").replace(/\D/g, "")}
-                                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                                    required
-                                    data-testid="order-phone-input"
-                                    className="h-9 text-[13px] rounded-l-none"
-                                />
-                            </div>
+                            <PhonePrefixInput
+                                value={phone}
+                                onChange={setPhone}
+                                size="sm"
+                                required
+                                testId="order-phone-input"
+                            />
                         </div>
                     </div>
                     <div>

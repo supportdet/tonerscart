@@ -11,6 +11,7 @@ import OrderRequestDialog from "../components/OrderRequestDialog";
 import TonerSearchInput from "../components/TonerSearchInput";
 import TonerCartridge from "../components/TonerCartridge";
 import WhatsAppEnquiry from "../components/WhatsAppEnquiry";
+import ProductActions from "../components/ProductActions";
 import useReveal from "../hooks/useReveal";
 
 const SidebarItem = ({ active, onClick, children, testid }) => (
@@ -75,6 +76,9 @@ function ProductCard({ p, qty, setQty, onBuy, onCart }) {
                     <button onClick={() => onBuy(p, qty)} className="btn-cta text-[12.5px] py-2" disabled={p.stock <= 0} data-testid={`buy-${p.id}`}>
                         {p.stock > 0 ? "Buy" : "Out of stock"}
                     </button>
+                </div>
+                <div className="mt-2">
+                    <ProductActions listing={p} listingType="toner" qty={qty} />
                 </div>
             </div>
         </div>

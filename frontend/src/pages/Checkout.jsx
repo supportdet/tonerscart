@@ -9,13 +9,14 @@ import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
 import { CheckCircle2, ShoppingBag, Lock } from "lucide-react";
+import PhonePrefixInput from "../components/PhonePrefixInput";
 
 export default function Checkout() {
     const { user, login, signupCustomer } = useAuth();
     const { items, subtotal, count, clear } = useCart();
     const navigate = useNavigate();
     const [name, setName] = useState(user?.name || "");
-    const [phone, setPhone] = useState(user?.phone || "");
+    const [phone, setPhone] = useState((user?.phone || "").replace(/^\+?91[\s-]?/, "").replace(/\D/g, ""));
     const [address, setAddress] = useState("");
     const [notes, setNotes] = useState("");
     const [authEmail, setAuthEmail] = useState("");
@@ -24,13 +25,14 @@ export default function Checkout() {
 
     const ensureAuth = async () => {
         if (user) return;
+        const phoneFull = phone ? `+91 ${phone}` : "";
         // Quick sign-up; if email already exists, fall through to sign-in.
         try {
             await signupCustomer({
                 email: authEmail.trim(),
                 password: authPassword,
                 name: name.trim(),
-                phone: phone.trim(),
+                phone: phoneFull,
                 city: "",
             });
         } catch (err) {
@@ -46,10 +48,11 @@ export default function Checkout() {
     const submit = async (e) => {
         e.preventDefault();
         if (items.length === 0) { toast.error("Cart is empty"); return; }
-        if (!name.trim() || !phone.trim() || !address.trim()) {
+        if (!name.trim() || !phone || !address.trim()) {
             toast.error("Name, phone and delivery address are required");
             return;
         }
+        if (phone.length !== 10) { toast.error("Enter a valid 10-digit phone"); return; }
         if (user && user.role && user.role !== "customer") {
             toast.error("Sign in with a buyer account to place order requests");
             return;
@@ -58,6 +61,7 @@ export default function Checkout() {
             toast.error("Email and a 6+ character password are required to place the order");
             return;
         }
+        const phoneFull = `+91 ${phone}`;
         setLoading(true);
         try {
             await ensureAuth();
@@ -67,7 +71,7 @@ export default function Checkout() {
                     listing_id: it.id,
                     qty: it.qty,
                     customer_name: name,
-                    customer_phone: phone,
+                    customer_phone: phoneFull,
                     delivery_address: address,
                     notes,
                 });
@@ -124,7 +128,7 @@ export default function Checkout() {
                         <div className="text-[12px] font-semibold uppercase tracking-wider text-[#0A0A0B]">Buyer details</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div><Label>Your name</Label><Input value={name} onChange={(e) => setName(e.target.value)} required data-testid="checkout-name" /></div>
-                            <div><Label>Contact phone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="+91-..." data-testid="checkout-phone" /></div>
+                            <div><Label>Contact phone</Label><PhonePrefixInput value={phone} onChange={setPhone} required testId="checkout-phone" /></div>
                         </div>
                         <div><Label>Delivery address</Label><Textarea rows={3} value={address} onChange={(e) => setAddress(e.target.value)} required placeholder="Full address with PIN code" data-testid="checkout-address" /></div>
                         <div><Label>Notes for suppliers (optional)</Label><Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special instructions" data-testid="checkout-notes" /></div>

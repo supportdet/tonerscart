@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="15" failures="21" skipped="1" tests="108" time="115.229" timestamp="2026-05-24T16:06:10.908973+00:00" hostname="agent-env-4a881df6-ae37-45d9-8277-25ab31694ec0"><testcase classname="tests.test_batch_fixes.TestOAuthBootstrap" name="test_no_bearer_returns_401" time="0.147" /><testcase classname="tests.test_batch_fixes.TestOAuthBootstrap" name="test_bad_bearer_returns_401" time="0.988" /><testcase classname="tests.test_batch_fixes.TestOAuthBootstrap" name="test_existing_user_bootstrap_idempotent" time="1.561" /><testcase classname="tests.test_batch_fixes.TestOAuthBootstrap" name="test_new_supabase_user_bootstrap_creates_row" time="0.969"><skipped type="pytest.skip" message="cannot create supabase user: Invalid API key">/app/backend/tests/test_batch_fixes.py:111: cannot create supabase user: Invalid API key</skipped></testcase><testcase classname="tests.test_batch_fixes.TestListingCreation" name="test_create_listing_freetext_refilled" time="2.499" /><testcase classname="tests.test_batch_fixes.TestListingCreation" name="test_toner_master_autocreated" time="0.401" /><testcase classname="tests.test_batch_fixes.TestListingCreation" name="test_listing_appears_in_search" time="0.447" /><testcase classname="tests.test_batch_fixes.TestListingCreation" name="test_create_listing_legacy_toner_id" time="1.823" /><testcase classname="tests.test_batch_fixes.TestListingCreation" name="test_missing_both_returns_400" time="0.962" /><testcase classname="tests.test_batch_fixes.TestListingCreation" name="test_invalid_toner_type_returns_400" time="0.965" /><testcase classname="tests.test_batch_fixes.TestCartCheckout" name="test_two_orders_decrement_stock_independently" time="7.378" /><testcase classname="tests.test_batch_fixes.TestCleanup" name="test_delete_test_listings" time="2.504" /><testcase classname="tests.test_polish_patch.TestSmoke" name="test_root" time="0.106" /><testcase classname="tests.test_polish_patch.TestPublicReads" name="test_listings_search" time="0.383" /><testcase classname="tests.test_polish_patch.TestPublicReads" name="test_printers" time="0.688" /><testcase classname="tests.test_polish_patch.TestPublicReads" name="test_listings_facets" time="0.395" /><testcase classname="tests.test_polish_patch.TestFeaturedSuppliers" name="test_returns_list_no_500" time="0.411" /><testcase classname="tests.test_polish_patch.TestFeaturedApply" name="test_apply_valid_payload_returns_200" time="0.836" /><testcase classname="tests.test_polish_patch.TestFeaturedApply" name="test_apply_missing_required_returns_422" time="0.126" /><testcase classname="tests.test_polish_patch.TestQuotation" name="test_quotation_requires_auth" time="0.682" /><testcase classname="tests.test_polish_patch.TestQuotation" name="test_quotation_with_buyer_returns_quote_number" time="2.501" /><testcase classname="tests.test_polish_patch.TestQuotation" name="test_quotation_bad_listing_type" time="0.639" /><testcase classname="tests.test_polish_patch.TestQuotation" name="test_quotation_unknown_listing" time="0.933" /><testcase classname="tests.test_polish_patch.TestBrochure" name="test_brochure_no_url_returns_404_not_500" time="0.943" /><testcase classname="tests.test_polish_patch.TestBrochure" name="test_brochure_requires_auth" time="0.125" /><testcase classname="tests.test_polish_patch.TestCommissionTiers" name="test_commission_tiers_module_constant" time="0.015" /><testcase classname="tests.test_polish_patch.TestOrderPhoneNormalization" name="test_order_accepts_plus91_prefixed_phone" time="0.989" /><testcase classname="tests.test_supabase_backend.TestHealth" name="test_root" time="0.116" /><testcase classname="tests.test_supabase_backend.TestSignup" name="test_signup_customer" time="0.826" /><testcase classname="tests.test_supabase_backend.TestSignup" name="test_signup_supplier_will_be_approved" time="1.398" /><testcase classname="tests.test_supabase_backend.TestSignup" name="test_signup_supplier_will_be_rejected" time="1.593" /><testcase classname="tests.test_supabase_backend.TestSignup" name="test_signup_duplicate_email" time="0.400" /><testcase classname="tests.test_supabase_backend.TestAuthMe" name="test_admin_me" time="1.780" /><testcase classname="tests.test_supabase_backend.TestAuthMe" name="test_customer_me" time="1.719" /><testcase classname="tests.test_supabase_backend.TestAuthMe" name="test_supplier_pending_me" time="1.687" /><testcase classname="tests.test_supabase_backend.TestAuthMe" name="test_existing_approved_supplier_me" time="1.767" /><testcase classname="tests.test_supabase_backend.TestAuthMe" name="test_no_token_401" time="0.107" /><testcase classname="tests.test_supabase_backend.TestAdminApproval" name="test_admin_pending_list" time="0.992" /><testcase classname="tests.test_supabase_backend.TestAdminApproval" name="test_non_admin_forbidden_on_admin" time="0.710" /><testcase classname="tests.test_supabase_backend.TestAdminApproval" name="test_approve_supplier" time="3.356" /><testcase classname="tests.test_supabase_backend.TestAdminApproval" name="test_reject_supplier" time="3.148"><failure message="AssertionError: assert 'pending' == 'rejected'&#10;  &#10;  - rejected&#10;  + pending">tests/test_supabase_backend.py:198: in test_reject_supplier
+    assert me.get("supplier_status") == "rejected"
+E   AssertionError: assert 'pending' == 'rejected'
+E     
+E     - rejected
+E     + pending</failure></testcase><testcase classname="tests.test_supabase_backend.TestSupplierListings" name="test_unapproved_supplier_cannot_list" time="3.374" /><testcase classname="tests.test_supabase_backend.TestSupplierListings" name="test_approved_supplier_can_list_original" time="2.252" /><testcase classname="tests.test_supabase_backend.TestSupplierListings" name="test_refilled_accepted" time="1.794" /><testcase classname="tests.test_supabase_backend.TestSupplierListings" name="test_invalid_toner_type_rejected" time="0.994" /><testcase classname="tests.test_supabase_backend.TestSupplierListings" name="test_supplier_role_forbidden_for_customer" time="0.715" /><testcase classname="tests.test_supabase_backend.TestPublicListings" name="test_search_hp_88a" time="0.386" /><testcase classname="tests.test_supabase_backend.TestPublicListings" name="test_grouped" time="0.395" /><testcase classname="tests.test_supabase_backend.TestPublicListings" name="test_facets" time="0.394" /><testcase classname="tests.test_supabase_backend.TestPublicListings" name="test_toner_master_search" time="0.377" /><testcase classname="tests.test_supabase_backend.TestPublicListings" name="test_toner_master_brands" time="0.390" /><testcase classname="tests.test_supabase_backend.TestOrders" name="test_create_order_and_decrements_stock" time="3.094" /><testcase classname="tests.test_supabase_backend.TestOrders" name="test_orders_mine_customer" time="1.259" /><testcase classname="tests.test_supabase_backend.TestOrders" name="test_supplier_accepts_with_tracking" time="1.542" /><testcase classname="tests.test_supabase_backend.TestOrders" name="test_supplier_ships" time="1.549" /><testcase classname="tests.test_supabase_backend.TestOrders" name="test_customer_cannot_change_to_delivered" time="1.051" /><testcase classname="tests.test_supabase_backend.TestOrders" name="test_supplier_delivers" time="1.545" /><testcase classname="tests.test_supabase_backend.TestOrders" name="test_customer_cancel_own_order" time="3.058" /><testcase classname="tests.test_supabase_backend.TestOrders" name="test_supplier_orders_mine" time="1.575" /><testcase classname="tests.test_supabase_backend.TestAdminStats" name="test_stats" time="2.149" /><testcase classname="tests.test_supabase_backend.TestChat" name="test_chat_llm" time="0.111"><failure message="AssertionError: {&quot;detail&quot;:&quot;LLM key not configured (set GOOGLE_API_KEY in backend/.env to enable the chatbot)&quot;}&#10;assert 500 == 200&#10; +  where 500 = &lt;Response [500]&gt;.status_code">tests/test_supabase_backend.py:403: in test_chat_llm
+    assert r.status_code == 200, r.text
+E   AssertionError: {"detail":"LLM key not configured (set GOOGLE_API_KEY in backend/.env to enable the chatbot)"}
+E   assert 500 == 200
+E    +  where 500 = &lt;Response [500]&gt;.status_code</failure></testcase><testcase classname="tests.test_supabase_backend.TestChat" name="test_chat_empty_messages" time="0.102" /><testcase classname="tests.test_supabase_backend.TestAuthEnforcement" name="test_admin_requires_admin" time="1.481" /><testcase classname="tests.test_supabase_backend.TestAuthEnforcement" name="test_supplier_requires_supplier" time="0.824" /><testcase classname="tests.test_supabase_backend.TestV2SupplierOnboarding" name="test_signup_supplier_extended_payload" time="1.520" /><testcase classname="tests.test_supabase_backend.TestV2SupplierOnboarding" name="test_v2_admin_pending_has_new_fields" time="0.984" /><testcase classname="tests.test_supabase_backend.TestV2SupplierOnboarding" name="test_signup_supplier_empty_seller_types" time="1.379" /><testcase classname="tests.test_supabase_backend.TestV2SupplierOnboarding" name="test_supplier_documents_patch" time="3.094" /><testcase classname="tests.test_supabase_backend.TestV2SupplierOnboarding" name="test_supplier_documents_requires_auth" time="0.109" /><testcase classname="tests.test_supabase_backend.TestV2SupplierOnboarding" name="test_admin_documents_endpoint" time="1.782" /><testcase classname="tests.test_supabase_backend.TestV2SupplierOnboarding" name="test_admin_documents_for_empty_app" time="1.988" /><testcase classname="tests.test_supabase_backend.TestV2SupplierOnboarding" name="test_approve_v2_copies_new_fields" time="4.217" /><testcase classname="tests.test_supabase_backend.TestV2SupplierOnboarding" name="test_reject_v2_empty_with_reason" time="4.155"><failure message="AssertionError: assert 'pending' == 'rejected'&#10;  &#10;  - rejected&#10;  + pending">tests/test_supabase_backend.py:592: in test_reject_v2_empty_with_reason
+    assert me.get("supplier_status") == "rejected"
+E   AssertionError: assert 'pending' == 'rejected'
+E     
+E     - rejected
+E     + pending</failure></testcase><testcase classname="tests.test_tonerscart.TestProducts" name="test_facets" time="0.108"><failure message="assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_tonerscart.py:63: in test_facets
+    assert r.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_tonerscart.TestProducts" name="test_search_by_query" time="0.150"><failure message="assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_tonerscart.py:71: in test_search_by_query
+    assert r.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_tonerscart.TestProducts" name="test_search_brand_filter" time="0.104"><failure message="assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_tonerscart.py:79: in test_search_brand_filter
+    assert r.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_tonerscart.TestProducts" name="test_search_city_filter" time="0.104"><failure message="assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_tonerscart.py:85: in test_search_city_filter
+    assert r.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_tonerscart.TestProducts" name="test_grouped" time="0.111"><failure message="assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_tonerscart.py:89: in test_grouped
+    assert r.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_tonerscart.TestAuth" name="test_register_customer" time="0.123"><failure message="AssertionError: {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 in (200, 201)&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_tonerscart.py:105: in test_register_customer
+    assert r.status_code in (200, 201), r.text
+E   AssertionError: {"detail":"Not Found"}
+E   assert 404 in (200, 201)
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_tonerscart.TestAuth" name="test_register_supplier_pending" time="0.105"><failure message="AssertionError: {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 in (200, 201)&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_tonerscart.py:116: in test_register_supplier_pending
+    assert r.status_code in (200, 201), r.text
+E   AssertionError: {"detail":"Not Found"}
+E   assert 404 in (200, 201)
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_tonerscart.TestAuth" name="test_login_admin" time="0.127"><failure message="AssertionError: login failed for admin@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_tonerscart.py:127: in test_login_admin
+    t, d = _login(*ADMIN)
+           ^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for admin@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_tonerscart.TestAuth" name="test_login_customer" time="0.123"><failure message="AssertionError: login failed for buyer@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_tonerscart.py:131: in test_login_customer
+    t, _ = _login(*CUSTOMER)
+           ^^^^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for buyer@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_tonerscart.TestAuth" name="test_login_supplier" time="0.103"><failure message="AssertionError: login failed for delhi.toners@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_tonerscart.py:135: in test_login_supplier
+    t, _ = _login(*APPROVED_SUPPLIER)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for delhi.toners@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_tonerscart.TestAuth" name="test_me_with_bearer" time="0.108"><error message="failed on setup with &quot;AssertionError: login failed for admin@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_tonerscart.py:37: in admin_token
+    t, _ = _login(*ADMIN)
+           ^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for admin@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_tonerscart.TestAuth" name="test_me_with_cookie" time="0.101"><failure message="assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_tonerscart.py:149: in test_me_with_cookie
+    assert r.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_tonerscart.TestCustomerOrders" name="test_create_and_list_order" time="0.101"><error message="failed on setup with &quot;AssertionError: login failed for buyer@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_tonerscart.py:43: in customer_token
+    t, _ = _login(*CUSTOMER)
+           ^^^^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for buyer@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_tonerscart.TestSupplierCRUD" name="test_pending_supplier_blocked" time="0.094"><error message="failed on setup with &quot;AssertionError: login failed for pending.supplier@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_tonerscart.py:55: in pending_supplier_token
+    t, _ = _login(*PENDING_SUPPLIER)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for pending.supplier@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_tonerscart.TestSupplierCRUD" name="test_create_list_update_delete" time="0.102"><error message="failed on setup with &quot;AssertionError: login failed for delhi.toners@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_tonerscart.py:49: in supplier_token
+    t, _ = _login(*APPROVED_SUPPLIER)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for delhi.toners@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_tonerscart.TestOrderStatusFlow" name="test_full_status_flow" time="0.000"><error message="failed on setup with &quot;AssertionError: login failed for buyer@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_tonerscart.py:43: in customer_token
+    t, _ = _login(*CUSTOMER)
+           ^^^^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for buyer@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_tonerscart.TestAdmin" name="test_stats" time="0.000"><error message="failed on setup with &quot;AssertionError: login failed for admin@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_tonerscart.py:37: in admin_token
+    t, _ = _login(*ADMIN)
+           ^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for admin@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_tonerscart.TestAdmin" name="test_pending_suppliers_includes_seed" time="0.000"><error message="failed on setup with &quot;AssertionError: login failed for admin@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_tonerscart.py:37: in admin_token
+    t, _ = _login(*ADMIN)
+           ^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for admin@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_tonerscart.TestAdmin" name="test_approve_then_reject_new_supplier" time="0.000"><error message="failed on setup with &quot;AssertionError: login failed for admin@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_tonerscart.py:37: in admin_token
+    t, _ = _login(*ADMIN)
+           ^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for admin@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_tonerscart.TestAdmin" name="test_admin_lists" time="0.000"><error message="failed on setup with &quot;AssertionError: login failed for admin@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_tonerscart.py:37: in admin_token
+    t, _ = _login(*ADMIN)
+           ^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for admin@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_tonerscart.TestSmartSearch" name="test_grouped_smart_queries[HP 88A]" time="0.107"><failure message="AssertionError: {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_tonerscart.py:320: in test_grouped_smart_queries
+    assert r.status_code == 200, r.text
+E   AssertionError: {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_tonerscart.TestSmartSearch" name="test_grouped_smart_queries[HP88A]" time="11.308"><failure message="AssertionError: {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_tonerscart.py:320: in test_grouped_smart_queries
+    assert r.status_code == 200, r.text
+E   AssertionError: {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_tonerscart.TestSmartSearch" name="test_grouped_smart_queries[hp 88 a]" time="0.169"><failure message="AssertionError: {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_tonerscart.py:320: in test_grouped_smart_queries
+    assert r.status_code == 200, r.text
+E   AssertionError: {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_tonerscart.TestSmartSearch" name="test_grouped_smart_queries[88-A]" time="0.107"><failure message="AssertionError: {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_tonerscart.py:320: in test_grouped_smart_queries
+    assert r.status_code == 200, r.text
+E   AssertionError: {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_tonerscart.TestSmartSearch" name="test_grouped_smart_queries[88a]" time="0.107"><failure message="AssertionError: {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_tonerscart.py:320: in test_grouped_smart_queries
+    assert r.status_code == 200, r.text
+E   AssertionError: {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_tonerscart.TestTonerMaster" name="test_toner_master_list" time="0.510" /><testcase classname="tests.test_tonerscart.TestTonerMaster" name="test_autocomplete_hp88" time="0.429"><failure message="AssertionError: assert ('Original' in {None} or False)&#10; +  where False = any(&lt;generator object TestTonerMaster.test_autocomplete_hp88.&lt;locals&gt;.&lt;genexpr&gt; at 0xfb193f6df3e0&gt;)">tests/test_tonerscart.py:347: in test_autocomplete_hp88
+    assert "Original" in types or any("Original" in (it.get("title") or "") for it in items)
+E   AssertionError: assert ('Original' in {None} or False)
+E    +  where False = any(&lt;generator object TestTonerMaster.test_autocomplete_hp88.&lt;locals&gt;.&lt;genexpr&gt; at 0xfb193f6df3e0&gt;)</failure></testcase><testcase classname="tests.test_tonerscart.TestTonerMaster" name="test_brands" time="0.427" /><testcase classname="tests.test_tonerscart.TestFacetsCounts" name="test_facets_counts" time="0.108"><failure message="assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code">tests/test_tonerscart.py:360: in test_facets_counts
+    assert r.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</failure></testcase><testcase classname="tests.test_tonerscart.TestAdminStatsExpected" name="test_stats_values" time="0.000"><error message="failed on setup with &quot;AssertionError: login failed for admin@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_tonerscart.py:37: in admin_token
+    t, _ = _login(*ADMIN)
+           ^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for admin@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_tonerscart.TestSupplierMasterFlow" name="test_add_product_via_master_id_and_search" time="0.000"><error message="failed on setup with &quot;AssertionError: login failed for delhi.toners@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_tonerscart.py:49: in supplier_token
+    t, _ = _login(*APPROVED_SUPPLIER)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for delhi.toners@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_tonerscart.TestSupplierMasterFlow" name="test_add_freetext_product_searchable" time="0.000"><error message="failed on setup with &quot;AssertionError: login failed for delhi.toners@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_tonerscart.py:49: in supplier_token
+    t, _ = _login(*APPROVED_SUPPLIER)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for delhi.toners@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_tonerscart.TestRBAC" name="test_customer_blocked_from_supplier" time="0.000"><error message="failed on setup with &quot;AssertionError: login failed for buyer@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_tonerscart.py:43: in customer_token
+    t, _ = _login(*CUSTOMER)
+           ^^^^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for buyer@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_tonerscart.TestRBAC" name="test_customer_blocked_from_admin" time="0.000"><error message="failed on setup with &quot;AssertionError: login failed for buyer@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_tonerscart.py:43: in customer_token
+    t, _ = _login(*CUSTOMER)
+           ^^^^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for buyer@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_tonerscart.TestRBAC" name="test_supplier_blocked_from_admin" time="0.000"><error message="failed on setup with &quot;AssertionError: login failed for delhi.toners@tonerscart.in: 404 {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_tonerscart.py:49: in supplier_token
+    t, _ = _login(*APPROVED_SUPPLIER)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_tonerscart.py:25: in _login
+    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+E   AssertionError: login failed for delhi.toners@tonerscart.in: 404 {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase></testsuite></testsuites>

@@ -6,25 +6,36 @@ import { Label } from "../components/ui/label";
 import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
 import { CheckCircle2, Phone, Mail, MessageCircle, Clock } from "lucide-react";
+import PhonePrefixInput from "../components/PhonePrefixInput";
 
 export default function Contact() {
-    const [form, setForm] = useState({ name: "", email: "", phone: "", description: "" });
+    const [form, setForm] = useState({
+        name: "", company: "", email: "", phone: "", pincode: "", description: "",
+    });
     const [loading, setLoading] = useState(false);
     const [done, setDone] = useState(false);
     const upd = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
     const submit = async (e) => {
         e.preventDefault();
-        if (!form.name.trim() || !form.email.trim()) {
-            toast.error("Name and email are required"); return;
+        if (!form.name.trim() || !form.email.trim() || !form.company.trim() || !form.phone || !form.pincode) {
+            toast.error("Name, company, email, phone and pincode are required"); return;
         }
+        if (form.phone.length !== 10) { toast.error("Enter a valid 10-digit phone"); return; }
+        if (!/^[1-9][0-9]{5}$/.test(form.pincode)) { toast.error("Enter a valid 6-digit pincode"); return; }
         setLoading(true);
         try {
             await api.post("/mps/inquiry", {
-                ...form,
-                phone: form.phone || "—",
+                name: form.name.trim(),
+                email: form.email.trim(),
+                phone: `+91 ${form.phone}`,
+                description: form.description.trim(),
                 estimated_printers: "—",
-                selections: { source: "contact_page" },
+                selections: {
+                    source: "contact_page",
+                    company: form.company.trim(),
+                    pincode: form.pincode,
+                },
             });
             setDone(true);
         } catch (err) { toast.error(formatApiError(err)); }
@@ -90,9 +101,25 @@ export default function Contact() {
                                 <div className="text-[12px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73]">Send us a message</div>
                                 <div className="grid sm:grid-cols-2 gap-3">
                                     <div><Label>Name *</Label><Input value={form.name} onChange={upd("name")} required data-testid="contact-name" /></div>
+                                    <div><Label>Company *</Label><Input value={form.company} onChange={upd("company")} required data-testid="contact-company" /></div>
                                     <div><Label>Email *</Label><Input type="email" value={form.email} onChange={upd("email")} required data-testid="contact-email-input" /></div>
+                                    <div>
+                                        <Label>Phone *</Label>
+                                        <PhonePrefixInput value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} required testId="contact-phone-input" />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <Label>Pincode *</Label>
+                                        <Input
+                                            inputMode="numeric"
+                                            maxLength={6}
+                                            value={form.pincode}
+                                            onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+                                            required
+                                            placeholder="6-digit pincode"
+                                            data-testid="contact-pincode"
+                                        />
+                                    </div>
                                 </div>
-                                <div><Label>Phone (optional)</Label><Input value={form.phone} onChange={upd("phone")} placeholder="+91 …" data-testid="contact-phone-input" /></div>
                                 <div><Label>Message *</Label><Textarea rows={5} value={form.description} onChange={upd("description")} required placeholder="Tell us what you need — dealer onboarding, bulk order, support…" data-testid="contact-message" /></div>
                                 <Button type="submit" className="btn-cta w-full" disabled={loading} data-testid="contact-submit">
                                     {loading ? "Sending…" : "Send"}

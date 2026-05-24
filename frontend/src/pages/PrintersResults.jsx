@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Printer as PrinterIcon, X, SlidersHorizontal, Search as SearchIcon, Sparkles } from "lucide-react";
 import { useCity } from "../context/CityContext";
 import WhatsAppEnquiry from "../components/WhatsAppEnquiry";
+import ProductActions from "../components/ProductActions";
 
 const CONDITIONS = [
     { id: "new", label: "Brand New" },
@@ -57,6 +58,9 @@ function PrinterCard({ p, onRequest }) {
                     <Button size="sm" className="btn-cta" onClick={() => onRequest(p)} data-testid={`printer-request-${p.id}`}>Request</Button>
                 </div>
                 <div className="text-[10.5px] text-emerald-700 font-semibold">{p.stock} in stock</div>
+                <div className="mt-2">
+                    <ProductActions listing={p} listingType="printer" qty={1} />
+                </div>
             </div>
         </div>
     );

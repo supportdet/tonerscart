@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { formatApiError } from "../lib/api";
 import { toast } from "sonner";
 import { ArrowRight } from "lucide-react";
+import PhonePrefixInput from "../components/PhonePrefixInput";
 
 const GoogleIcon = (props) => (
     <svg viewBox="0 0 48 48" width="18" height="18" {...props}>
@@ -30,7 +31,8 @@ export default function Register() {
         e.preventDefault();
         setLoading(true);
         try {
-            await signupCustomer(c);
+            const payload = { ...c, phone: c.phone ? `+91 ${c.phone}` : "" };
+            await signupCustomer(payload);
             toast.success("Welcome to TonersCart!");
             navigate(next);
         } catch (err) {
@@ -74,7 +76,7 @@ export default function Register() {
                         <div className="sm:col-span-2"><Label>Full name</Label><Input value={c.name} onChange={upd("name")} required data-testid="register-name-input" /></div>
                         <div className="sm:col-span-2"><Label>Email</Label><Input type="email" value={c.email} onChange={upd("email")} required data-testid="register-email-input" /></div>
                         <div className="sm:col-span-2"><Label>Password</Label><Input type="password" value={c.password} onChange={upd("password")} required minLength={6} placeholder="6+ characters" data-testid="register-password-input" /></div>
-                        <div><Label>Phone</Label><Input value={c.phone} onChange={upd("phone")} placeholder="+91-..." data-testid="register-phone-input" /></div>
+                        <div><Label>Phone</Label><PhonePrefixInput value={c.phone} onChange={(v) => setC({ ...c, phone: v })} testId="register-phone-input" /></div>
                         <div><Label>City</Label><Input value={c.city} onChange={upd("city")} data-testid="register-city-input" /></div>
                         <div className="sm:col-span-2">
                             <Button type="submit" className="btn-cta w-full inline-flex items-center justify-center gap-2" disabled={loading} data-testid="register-submit-btn">

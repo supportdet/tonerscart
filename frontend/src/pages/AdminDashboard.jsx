@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { Textarea } from "../components/ui/textarea";
 import { toast } from "sonner";
-import { CheckCircle2, XCircle, MapPin, Building2, Phone, Mail, FileText, IndianRupee, Sparkles, AlertTriangle, MinusCircle } from "lucide-react";
+import { CheckCircle2, XCircle, MapPin, Building2, Phone, Mail, FileText, IndianRupee, Sparkles, AlertTriangle, MinusCircle, Star } from "lucide-react";
 
 function aiSummary(application) {
     const ai = application?.ai_check || {};
@@ -45,6 +45,7 @@ export default function AdminDashboard() {
     const [stats, setStats] = useState(null);
     const [pending, setPending] = useState([]);
     const [approved, setApproved] = useState([]);
+    const [featured, setFeatured] = useState([]);
     const [tab, setTab] = useState("pending");
     const [reviewing, setReviewing] = useState(null);
     const [rejecting, setRejecting] = useState(null);
@@ -52,14 +53,16 @@ export default function AdminDashboard() {
 
     const load = async () => {
         try {
-            const [s, p, a] = await Promise.all([
+            const [s, p, a, f] = await Promise.all([
                 api.get("/admin/stats"),
                 api.get("/admin/suppliers/pending"),
                 api.get("/admin/suppliers"),
+                api.get("/admin/featured/applications").catch(() => ({ data: [] })),
             ]);
             setStats(s.data || {});
             setPending(Array.isArray(p.data) ? p.data : []);
             setApproved(Array.isArray(a.data) ? a.data : []);
+            setFeatured(Array.isArray(f.data) ? f.data : []);
         } catch (e) { toast.error(formatApiError(e)); }
     };
     useEffect(() => { load(); }, []);
@@ -78,6 +81,22 @@ export default function AdminDashboard() {
             await api.post(`/admin/suppliers/${id}/reject`, { reason: r || "Not approved" });
             toast.success("Supplier rejected");
             setRejecting(null); setReason(""); setReviewing(null);
+            load();
+        } catch (e) { toast.error(formatApiError(e)); }
+    };
+
+    const setFeaturedStatus = async (id, status) => {
+        try {
+            await api.put(`/admin/featured/applications/${id}/status`, { status });
+            toast.success(`Marked ${status}`);
+            load();
+        } catch (e) { toast.error(formatApiError(e)); }
+    };
+
+    const toggleSupplierFeatured = async (s) => {
+        try {
+            await api.put(`/admin/suppliers/${s.id}/featured`, { is_featured: !s.is_featured });
+            toast.success(s.is_featured ? "Removed from featured" : "Added to featured");
             load();
         } catch (e) { toast.error(formatApiError(e)); }
     };
@@ -129,6 +148,9 @@ export default function AdminDashboard() {
                         Pending approval {pending.length > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5">{pending.length}</span>)}
                     </TabsTrigger>
                     <TabsTrigger value="approved" data-testid="tab-approved">Approved suppliers ({approved.length})</TabsTrigger>
+                    <TabsTrigger value="featured" data-testid="tab-featured">
+                        Featured {featured.filter((x) => x.status === "new").length > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-[#F5C400] text-[#0A0A0B] text-[10px] font-bold px-1.5">{featured.filter((x) => x.status === "new").length}</span>)}
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="pending">
@@ -187,6 +209,7 @@ export default function AdminDashboard() {
                                         <th className="text-left p-3">City</th>
                                         <th className="text-left p-3">GST</th>
                                         <th className="text-left p-3">Approved</th>
+                                        <th className="text-left p-3">Featured</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -197,6 +220,65 @@ export default function AdminDashboard() {
                                             <td className="p-3">{s.city}</td>
                                             <td className="p-3 font-mono text-[12px]">{s.gst_number || "—"}</td>
                                             <td className="p-3 text-[11px] text-[#6E6E73]">{new Date(s.approved_at).toLocaleDateString()}</td>
+                                            <td className="p-3">
+                                                <button
+                                                    onClick={() => toggleSupplierFeatured(s)}
+                                                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition ${s.is_featured ? "bg-[#FFFBEB] text-[#8C6A00] border-[#F5C400]" : "bg-white text-[#6E6E73] border-[#D2D2D7] hover:border-[#F5C400]"}`}
+                                                    data-testid={`toggle-featured-${s.id}`}
+                                                >
+                                                    <Star size={11} className={s.is_featured ? "fill-[#F5C400] text-[#F5C400]" : ""} />
+                                                    {s.is_featured ? "Featured" : "Make featured"}
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </TabsContent>
+
+                <TabsContent value="featured">
+                    {featured.length === 0 ? (
+                        <div className="tc-card-flat p-10 text-center text-[#6E6E73]">No featured-supplier applications yet.</div>
+                    ) : (
+                        <div className="tc-card-flat p-0 overflow-x-auto" data-testid="featured-table">
+                            <table className="w-full text-[13px]">
+                                <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">
+                                    <tr>
+                                        <th className="text-left p-3">Company</th>
+                                        <th className="text-left p-3">Contact</th>
+                                        <th className="text-left p-3">City</th>
+                                        <th className="text-left p-3">Type</th>
+                                        <th className="text-left p-3">Submitted</th>
+                                        <th className="text-left p-3">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {featured.map((a) => (
+                                        <tr key={a.id} className="border-t border-black/[0.05]" data-testid={`featured-row-${a.id}`}>
+                                            <td className="p-3 font-semibold">{a.company}</td>
+                                            <td className="p-3">
+                                                {a.contact_person}
+                                                <div className="text-[11px] text-[#86868B] font-mono">{a.phone}</div>
+                                                <div className="text-[11px] text-[#86868B] truncate">{a.email}</div>
+                                            </td>
+                                            <td className="p-3">{a.city || "—"}{a.pincode ? ` · ${a.pincode}` : ""}</td>
+                                            <td className="p-3 capitalize">{a.business_type || "—"}</td>
+                                            <td className="p-3 text-[11px] text-[#6E6E73]">{new Date(a.created_at).toLocaleDateString()}</td>
+                                            <td className="p-3">
+                                                <select
+                                                    value={a.status}
+                                                    onChange={(e) => setFeaturedStatus(a.id, e.target.value)}
+                                                    className="h-8 px-2 rounded-md border border-[#D2D2D7] bg-white text-[12px] font-semibold"
+                                                    data-testid={`featured-status-${a.id}`}
+                                                >
+                                                    <option value="new">New</option>
+                                                    <option value="contacted">Contacted</option>
+                                                    <option value="active">Active</option>
+                                                    <option value="rejected">Rejected</option>
+                                                </select>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
