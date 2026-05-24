@@ -1,5 +1,20 @@
 # TonersCart — Product Requirements (Supabase edition)
 
+## Latest changelog (2026-02 admin v2 — analytics, dealers, orders, content)
+
+- **Admin Analytics tab** (recharts): live GMV, commission earned, total orders, weekly/monthly slices, dealers, buyers, active listings. Two daily-trend line charts (orders + commission, 30 days), two horizontal bar charts (top 5 toner models, top 5 dealers), donut chart of orders by city. Backend `GET /api/admin/analytics` derives everything from live Supabase data + `_commission_breakdown`.
+- **Admin Dealers tab**: searchable table with order count / GMV. Row click opens detail drawer with all toner + printer listings + last 50 orders; permanent Delete per listing; Suspend / Unsuspend toggle; inline business-name / city edit. Suspended dealers are excluded from `/listings/search` and `/printers` immediately.
+- **Admin Orders tab**: paginated table (50/page) with status filter, search by buyer / dealer / model, status-mutating modal, "Export CSV" with UTF-8 BOM. `GET /api/admin/orders` joins `orders → listings` and enriches with commission/payout/rate/supplier_name.
+- **Admin Content tab**: editor for popular chips, marquee brands (with colour picker), per-supplier Featured toggle. Persisted to a generic `site_config(key, value jsonb)` table. Public reads via `GET /api/config/{key}` with backend-shipped defaults.
+- **Order tracking**: dealer dashboard has inline `TrackingInput` — sets status to `shipped` and fires `email_order_shipped` (tracking number + WhatsApp support).
+- **Buyer Confirm Delivery**: shipped orders show a green button in the customer dashboard. Transitions to `delivered` and emails `support@tonerscart.com` with commission breakdown for payout release.
+- **Landing page cleanup**: every hardcoded array gone — brands, chips, featured suppliers, the fake `250+ / 15+ / 10+` stats. All hydrate from public endpoints. Featured Suppliers section hidden silently when empty; "Get featured" CTA banner remains visible.
+- **New migration**: `/app/backend/supabase_schema_admin_v2.sql` — adds `suppliers.is_suspended`, `orders.tracking_number`, table `site_config`. **User runs manually**. Until then: graceful degradation everywhere (no 500s).
+- **Backend tests**: 22/22 admin v2 tests pass (`/app/backend/tests/test_admin_v2.py`), 1 skipped (seed). Full regression: 91/94 — 3 pre-existing failures unrelated to this patch.
+- **Note**: `seed_supabase.py` and `toner_master_seed.py` are NOT invoked on server startup.
+
+---
+
 ## Latest changelog (2026-02 polish patch — 12 items)
 
 - **Landing hero** rewritten to "India's digital marketplace for printers, toners & MFDs"; removed "— no middlemen" from sub-headline. Featured Suppliers section now hydrates from `/api/featured/suppliers` (admin-controlled `suppliers.is_featured`) with placeholder fallback.
