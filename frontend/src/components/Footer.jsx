@@ -11,7 +11,7 @@ export default function Footer() {
                     <div data-testid="footer-brand">
                         <div className="inline-flex flex-col items-start">
                             <div className="bg-white rounded-lg p-2 inline-flex">
-                                <img src="/logo.png" alt="TonersCart" className="block h-10 w-auto" data-testid="footer-logo-img" />
+                                <img src="/TONERSCART-bg.png" alt="TonersCart" className="block h-10 w-auto" data-testid="footer-logo-img" />
                             </div>
                             <p className="mt-4 text-white text-[13px] opacity-70 max-w-xs" style={{ fontFamily: "'Montserrat', sans-serif" }}>
                                 Buy Better. Print Smarter.
