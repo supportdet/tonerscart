@@ -1,17 +1,16 @@
-"""AI document-clarity check using Gemini 2.5 Flash via google-genai SDK."""
 import os
 import json
 import logging
 import asyncio
 from pathlib import Path
-
 import httpx
 from dotenv import load_dotenv
+import google.generativeai as genai
 
 load_dotenv(Path(__file__).parent / ".env")
 logger = logging.getLogger("tonerscart.aicheck")
 
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 
 PROMPT = (
     "You are reviewing a document or photo a supplier uploaded for KYC verification on a "
@@ -19,13 +18,11 @@ PROMPT = (
     "of shape: {\"clear\": true/false, \"kind\": \"<short label>\", \"notes\": \"<one short sentence>\"}. "
     "`clear` should be false if the image is blank, blurry, cropped, illegible, or clearly not a "
     "real document. `kind` should be a 1-3 word guess of what's shown (e.g., \"GST certificate\", "
-    "\"PAN card\", \"Brand authorization\", \"Shop photo\", \"Bank passbook\"). Keep `notes` ≤ 80 chars."
+    "\"PAN card\", \"Brand authorization\", \"Shop photo\", \"Bank passbook\"). Keep `notes` <= 80 chars."
 )
-
 
 def _safe_parse(text: str) -> dict:
     text = (text or "").strip()
-    # Strip code fences if present
     if text.startswith("```"):
         text = text.strip("`")
         if text.lower().startswith("json"):
@@ -35,10 +32,7 @@ def _safe_parse(text: str) -> dict:
     except Exception:
         return {"clear": None, "kind": "unknown", "notes": text[:120]}
 
-
 async def check_document_url(url: str, label: str = "document") -> dict:
-    """Download an image and ask Gemini to verify clarity. Returns dict with
-       keys: clear, kind, notes, ok (False on transport/llm error)."""
     if not GOOGLE_API_KEY:
         return {"ok": False, "clear": None, "kind": label, "notes": "AI key missing"}
     try:
@@ -52,31 +46,19 @@ async def check_document_url(url: str, label: str = "document") -> dict:
     except Exception as e:
         logger.warning("AI check download failed: %s", e)
         return {"ok": False, "clear": None, "kind": label, "notes": "Download failed"}
-
     try:
-        from google import genai
-        from google.genai import types
-
-        client = genai.Client(api_key=GOOGLE_API_KEY)
-        resp = await asyncio.to_thread(
-            client.models.generate_content,
-            model="gemini-2.5-flash",
-            contents=[
-                types.Part.from_bytes(data=img_bytes, mime_type=mime),
-                f"Check this {label}.",
-            ],
-            config=types.GenerateContentConfig(system_instruction=PROMPT),
-        )
-        parsed = _safe_parse(resp.text or "")
+        genai.configure(api_key=GOOGLE_API_KEY)
+        model = genai.GenerativeModel("gemini-2.5-flash-preview-04-17")
+        img_part = {"mime_type": "image/jpeg", "data": b64}
+        response = model.generate_content([PROMPT, img_part])
+        parsed = _safe_parse(response.text)
         parsed["ok"] = True
         return parsed
     except Exception as e:
         logger.warning("Gemini doc-check failed: %s", e)
         return {"ok": False, "clear": None, "kind": label, "notes": "LLM error"}
 
-
-async def check_documents(doc_map: dict[str, str]) -> dict:
-    """doc_map: {label: signed_url}. Runs all checks concurrently."""
+async def check_documents(doc_map: dict) -> dict:
     if not doc_map:
         return {}
     items = [(k, v) for k, v in doc_map.items() if v]
