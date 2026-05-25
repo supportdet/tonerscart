@@ -344,6 +344,7 @@ export default function AdminDashboard() {
                                                     onClick={() => openFeatureModal(a)}
                                                     className="ml-2 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#FFFBEB] border border-[#F5C400] text-[#8C6A00] text-[11.5px] font-semibold hover:bg-[#FFF7D6]"
                                                     data-testid={`feature-company-btn-${a.id}`}
+                                                    title="Upload company logo and feature on landing"
                                                 >
                                                     <Star size={11} /> Feature this company
                                                 </button>

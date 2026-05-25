@@ -2772,7 +2772,7 @@ def _generate_order_number() -> Optional[str]:
                 n = 1
         else:
             n = 1
-        return f"TC-{year}-{n:05d}"
+        return f"TC-{year}-{n:06d}"
     except Exception as e:
         if "order_number" in str(e):
             logger.warning("order_number column missing — run supabase_schema_v3.sql")
@@ -2877,6 +2877,10 @@ async def admin_upload_featured_image(supplier_id: str, file: UploadFile = File(
     """Upload a feature-banner / logo for a supplier. Stored via the existing
     supplier-documents bucket and the public-ish signed URL is persisted in
     suppliers.business_logo. Sets is_featured=true atomically."""
+    # Validate supplier exists FIRST to avoid orphaned blobs
+    sup_row = sb_admin.table("suppliers").select("id").eq("id", supplier_id).maybe_single().execute()
+    if not sup_row or not sup_row.data:
+        raise HTTPException(404, "Supplier not found")
     try:
         raw = await file.read()
         if len(raw) > 5 * 1024 * 1024:

@@ -42,3 +42,38 @@
 **Migrations still needed (user runs):**
 - `supabase_schema_papers.sql` (paper_listings table)
 - `supabase_schema_admin_v2.sql` (suppliers.is_suspended, orders.tracking_number, site_config)
+
+### 2026-02-25 — Wave 4 batch (iteration_10: 18/18 v3 PASS, 21/21 wave3 regression PASS)
+
+**Implemented:**
+1. **Empty states everywhere** — Supplier dashboard orders (`seller-orders-empty`), earnings (already), papers (already). No fake numbers shown.
+2. **Suspend / unsuspend confirmation modal** in admin → fires dealer notification emails via `email_dealer_suspended` / `email_dealer_unsuspended` (`asyncio.create_task`, non-blocking).
+3. **Order numbering** — `_generate_order_number()` produces `TC-YYYY-NNNNNN` (zero-padded to 6 digits), written immediately after order insert. Gracefully no-ops until `supabase_schema_v3.sql` adds `orders.order_number`. Displayed in CustomerDashboard, Admin DealerDetail, Supplier Orders.
+4. **Featured supplier rework** — `POST /api/admin/suppliers/{id}/featured-image` (multipart, 5 MB cap, supplier-id validated before upload to prevent orphaned blobs). New AdminDashboard modal (`feature-upload-dialog`) with supplier picker + logo upload sets `is_featured=true` and persists the signed-URL path.
+5. **Supplier dashboard: My Stock vs Orders split** — Orders is now its own catalog tab (`#orders` URL hash routes to it). Header links work correctly.
+6. **About Us** — new `/about` route with hero, story, mission, Digital Edge Technologies parent block, Bangalore contact card. `data-testid="about-page"`.
+7. **Grievance Officer** — footer strip + `/contact` page yellow callout. Mr. Karthik Nair / grievance@tonerscart.com / 48-hour response.
+8. **Google sign-in loading** — already implemented in `Login.jsx` (`googleLoading` state, "Connecting to Google…" + spinner).
+9. **Dealer-agreement red error** — `data-testid="apply-agreement-error"` shows under the checkbox when step 4 + !agreed. Submit handler also blocks with toast.
+10. **Visitor analytics**:
+    - `POST /api/analytics/pageview` — public, accepts page/timezone/device_type/referrer, fires-and-forgets via `navigator.sendBeacon` from `VisitorTracker.jsx` on every public navigation. Admin routes are skipped.
+    - `page_views` table migration in `supabase_schema_v3.sql` (idempotent).
+    - `GET /api/admin/visitor-analytics` returns `{total, today, week, month, unique_estimate, top_pages, devices, referrers}` — empty buckets with valid structure when not migrated.
+11. **/api/landing-data** unified endpoint (stats + featured + popular_chips + marquee_brands) with **5-minute in-memory cache** (`_LANDING_CACHE`). Cache bust helper `_bust_landing_cache()` exposed.
+12. **Paper bulk stock + Duplicate** — `PUT /api/supplier/papers/{id}` (stock/price patch). Duplicate button copies all fields with stock=1.
+13. **Migration**: `supabase_schema_v3.sql` (idempotent ADD COLUMN IF NOT EXISTS) for orders.order_number, page_views table, listings spec columns, printer_listings spec columns, paper_listings spec columns, suppliers.is_featured/business_logo/is_suspended, users.totp_secret.
+
+**Deferred (called out for next batch):**
+- **Spec fields replace PDF brochure** in Add Toner / Add Printer / Add Paper forms + product-page Spec table — schema migration ready, but FE forms still use spec_pdf_url.
+- **Admin 2FA TOTP enrolment** UI (pyotp + users.totp_secret column ready, no QR-scan flow yet).
+- **server.py router refactor** to `routes/` modules (file is now 3004 lines; deferred).
+- **BackgroundTasks** migration for non-critical emails (order confirmation, application, quotation, MPS, featured) — only suspend/unsuspend converted to `asyncio.create_task` so far.
+- **Image compression** and **AI document check** moved to BackgroundTasks.
+
+**User-side migrations still required** (until they run, endpoints continue to degrade gracefully):
+- supabase_schema_papers.sql
+- supabase_schema_admin_v2.sql
+- supabase_schema_quotation_featured.sql
+- supabase_schema_logo.sql
+- supabase_schema_buyer_gst.sql
+- **NEW**: supabase_schema_v3.sql
