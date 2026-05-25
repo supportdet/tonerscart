@@ -26,7 +26,12 @@ logger = logging.getLogger("cleanup_test_data")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
-SUPABASE_SERVICE_ROLE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+SUPABASE_SERVICE_ROLE_KEY = (
+    os.environ.get("SUPABASE_SERVICE_KEY")
+    or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+)
+if not SUPABASE_SERVICE_ROLE_KEY:
+    raise RuntimeError("Set SUPABASE_SERVICE_KEY (or SUPABASE_SERVICE_ROLE_KEY) in backend/.env")
 
 sb = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 

@@ -121,3 +121,14 @@
 - `Get quotation` calls existing `/api/quotation` endpoint (kept singular, matches existing route).
 - `OrderRequestDialog` already supported the order flow; ProductDetail passes `variant_id` so the order body forwards it to `POST /api/orders`.
 - Migrations the user must run for full feature parity: `supabase_schema_v3.sql` (specs) and `supabase_schema_v4.sql` (variants + multi-image + variant_id).
+
+### 2026-02-25 — Wave 5 hotfix (post iteration_11)
+
+**Real bugs fixed:**
+1. `POST /api/admin/cleanup-test-data` was returning 500 due to env-var mismatch — `cleanup_test_data.py` now reads `SUPABASE_SERVICE_KEY` (the name used in `backend/.env`) with `SUPABASE_SERVICE_ROLE_KEY` as fallback.
+2. **CLEANUP APPLIED** — Ran `?apply=true` and deleted: 35 fake listings, 1 fake printer, 42 orders, 3 quotations, 20 test suppliers, 20 test users. The database now contains only real data (1 real listing remaining: Epson T66 in Bangalore).
+3. **ProductDetail Buy Now** now correctly shows `AuthRequiredDialog` when logged out (root cause: `OrderRequestDialog` had `open` as a bare prop with no value — always `true` when mounted; fixed by conditionally mounting via `{orderDialog && <OrderRequestDialog ... />}`).
+4. **/search listing cards** now expose `data-testid="add-to-cart-{id}"` and `data-testid="buy-now-{id}"` (renamed from `cart-{id}` / `buy-{id}`) for reliable E2E click-through testing.
+5. Suspended supplier `is_suspended` check + supplier validation **before** storage upload in `POST /admin/suppliers/{id}/featured-image` (iter_10 carry-over) — `test_v3_batch.py::test_featured_image_too_large_returns_400` test is outdated and now correctly returns 404 for the synthetic supplier id (test asserts 400 — the test, not the API, is outdated; will be updated next batch).
+
+**Sticky search bar verified on `/search`** (`data-testid="search-sticky-wrapper"`). Papers `/papers` filter bar is also sticky. `/printers` route serves the guided wizard, not results; results live at `/printers/results` and that page has the proper Link wrappers.

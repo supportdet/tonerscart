@@ -74,10 +74,16 @@ export default function ProductDetail({ kind = "toner" }) {
     }, [kind, productTitle]);
 
     const requireAuth = (intent) => {
-        if (user) return true;
+        if (user && user.id && user.email) return true;
         setAuthDialog({ intent });
         return false;
     };
+
+    // DEBUG: force a console trace if user shape differs from expectation in dev
+    if (typeof window !== "undefined" && window.__TC_DEBUG_AUTH__) {
+        // eslint-disable-next-line no-console
+        console.log("[ProductDetail] user state:", user, "authDialog:", authDialog);
+    }
 
     const onAddToCart = () => {
         if (!data) return;
@@ -309,24 +315,25 @@ export default function ProductDetail({ kind = "toner" }) {
                 </div>
             </div>
 
-            <OrderRequestDialog
-                open={orderDialog}
-                onClose={() => setOrderDialog(false)}
-                product={data ? {
-                    id: data.id,
-                    price: displayPrice,
-                    stock: displayStock,
-                    brand: data.brand,
-                    model_number: data.model_number || data.name,
-                    color: selectedVariant?.color || data.color,
-                    toner_type: data.toner_type,
-                    image_url: images[0] || data.image_url,
-                    supplier_name: data.supplier_name,
-                    supplier_city: data.supplier_city,
-                    variant_id: selectedVariant?.id || null,
-                } : null}
-                qty={qty}
-            />
+            {orderDialog && (
+                <OrderRequestDialog
+                    onClose={() => setOrderDialog(false)}
+                    product={data ? {
+                        id: data.id,
+                        price: displayPrice,
+                        stock: displayStock,
+                        brand: data.brand,
+                        model_number: data.model_number || data.name,
+                        color: selectedVariant?.color || data.color,
+                        toner_type: data.toner_type,
+                        image_url: images[0] || data.image_url,
+                        supplier_name: data.supplier_name,
+                        supplier_city: data.supplier_city,
+                        variant_id: selectedVariant?.id || null,
+                    } : null}
+                    initialQty={qty}
+                />
+            )}
 
             <AuthRequiredDialog
                 open={!!authDialog}

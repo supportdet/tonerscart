@@ -93,10 +93,10 @@ function ProductCard({ p, qty, setQty, onBuy, onCart }) {
                 </div>
 
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                    <button onClick={() => onCart(p, qty)} className="btn-light text-[12.5px] py-2" data-testid={`cart-${p.id}`}>
+                    <button onClick={() => onCart(p, qty)} className="btn-light text-[12.5px] py-2" data-testid={`add-to-cart-${p.id}`}>
                         <ShoppingCart size={13} className="inline mr-1" /> Add
                     </button>
-                    <button onClick={() => onBuy(p, qty)} className="btn-cta text-[12.5px] py-2" disabled={p.stock <= 0} data-testid={`buy-${p.id}`}>
+                    <button onClick={() => onBuy(p, qty)} className="btn-cta text-[12.5px] py-2" disabled={p.stock <= 0} data-testid={`buy-now-${p.id}`}>
                         {p.stock > 0 ? "Buy" : "Out of stock"}
                     </button>
                 </div>
