@@ -7,6 +7,7 @@ import TonerAnimation from "../components/TonerAnimation";
 import TonerCartridge from "../components/TonerCartridge";
 import { useCity } from "../context/CityContext";
 import useReveal from "../hooks/useReveal";
+import PageMeta from "../components/PageMeta";
 import { Skeleton } from "../components/ui/skeleton";
 
 // Hardcoded defaults removed — both marquee brands and popular chips
@@ -71,8 +72,43 @@ export default function Landing() {
         navigate(`/search?${params.toString()}`);
     };
 
+    const titleCity = city || "India";
+    const ldOrg = {
+        "@context": "https://schema.org",
+        "@graph": [
+            {
+                "@type": "Organization",
+                "name": "TonersCart",
+                "url": "https://www.tonerscart.com",
+                "logo": "https://www.tonerscart.com/logo.png",
+                "telephone": "+91-97422-70585",
+                "email": "support@tonerscart.com",
+                "sameAs": ["https://www.linkedin.com/company/tonerscart"],
+            },
+            {
+                "@type": "WebSite",
+                "url": "https://www.tonerscart.com",
+                "name": "TonersCart",
+                "potentialAction": {
+                    "@type": "SearchAction",
+                    "target": "https://www.tonerscart.com/search?q={search_term_string}",
+                    "query-input": "required name=search_term_string",
+                },
+            },
+        ],
+    };
+
     return (
         <div ref={rootRef} data-testid="landing-page">
+            <PageMeta
+                title={`TonersCart — Buy Printers & Toners Online B2B${city ? ` in ${city}` : ""} | Verified Suppliers ${titleCity}`}
+                description={city
+                    ? `Buy HP, Canon, Brother toner cartridges and printers from verified suppliers in ${city}. Compare prices, real stock, same-day dispatch available.`
+                    : "India's trusted B2B marketplace to buy printer toners and printers online. HP, Canon, Brother, Xerox toners from verified suppliers in Bangalore, Mumbai, Delhi, Chennai, Hyderabad and across India."}
+                keywords="buy toner cartridges online india, printer toner suppliers bangalore, b2b printer marketplace india, buy hp toner online, canon toner dealers india, compatible toner cartridges, original toner suppliers"
+                path="/"
+                jsonLd={ldOrg}
+            />
             {/* ============================== HERO ============================== */}
             <section className="tc-hero relative pt-8 pb-12 sm:pt-12 sm:pb-20 lg:pt-16 lg:pb-24">
                 <div className="tc-hero-grid" />

@@ -12,6 +12,8 @@ import TonerSearchInput from "../components/TonerSearchInput";
 import TonerCartridge from "../components/TonerCartridge";
 import WhatsAppEnquiry from "../components/WhatsAppEnquiry";
 import ProductActions from "../components/ProductActions";
+import RefilledWarningDialog from "../components/RefilledWarningDialog";
+import PageMeta from "../components/PageMeta";
 import useReveal from "../hooks/useReveal";
 
 const SidebarItem = ({ active, onClick, children, testid }) => (
@@ -94,6 +96,7 @@ export default function SearchPage() {
     const [brand, setBrand] = useState(params.get("brand") || "all");
     const [filterCity, setFilterCity] = useState(params.get("city") || "all");
     const [tonerType, setTonerType] = useState(params.get("toner_type") || "all");
+    const [refilledWarn, setRefilledWarn] = useState(false);
     const [facets, setFacets] = useState({ brands: [], cities: [] });
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -198,7 +201,17 @@ export default function SearchPage() {
                 </div>
                 <div className="space-y-0.5">
                     {["all", "Original", "Compatible", "Refilled"].map((t) => (
-                        <SidebarItem key={t} active={tonerType === t} onClick={() => setFilter("toner_type", t)} testid={`filter-type-${t}`}>{t === "all" ? "All types" : t}</SidebarItem>
+                        <SidebarItem
+                            key={t}
+                            active={tonerType === t}
+                            onClick={() => {
+                                if (t === "Refilled") { setRefilledWarn(true); return; }
+                                setFilter("toner_type", t);
+                            }}
+                            testid={`filter-type-${t}`}
+                        >
+                            {t === "all" ? "All types" : t}
+                        </SidebarItem>
                     ))}
                 </div>
             </div>
@@ -219,6 +232,15 @@ export default function SearchPage() {
 
     return (
         <div className="tc-container py-6 sm:py-10" ref={rootRef} data-testid="search-page">
+            <PageMeta
+                title={q ? `Buy ${q} Toner Cartridge Online India — TonersCart`
+                          : `Buy Printer Toner Cartridges Online${city ? ` in ${city}` : ""} — HP, Canon, Brother, Xerox | TonersCart`}
+                description={q ? `Compare prices for ${q} toner cartridge from verified suppliers across India. Original and compatible options available.`
+                                : city
+                                  ? `Buy HP, Canon, Brother toner cartridges from verified suppliers in ${city}. Compare prices, real stock, same-day dispatch available.`
+                                  : "Buy original and compatible printer toner cartridges online in India. Compare prices from verified suppliers. HP 88A, Canon 337, Brother TN-2365, Xerox toners and more."}
+                path="/search"
+            />
             <div className="tc-search-shell tc-search-light" data-testid="search-bar">
                 <TonerSearchInput value={q} onChange={setQ} onSubmit={apply} testId="search-input" placeholder="Search by brand or model number…" />
                 <button onClick={() => apply()} className="tc-search-go" data-testid="search-apply-btn">Search</button>
@@ -336,6 +358,7 @@ export default function SearchPage() {
             {orderProduct && (
                 <OrderRequestDialog product={orderProduct} initialQty={orderQty} onClose={() => setOrderProduct(null)} />
             )}
+            <RefilledWarningDialog open={refilledWarn} onClose={() => setRefilledWarn(false)} />
         </div>
     );
 }

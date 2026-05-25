@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle, Camera, Loader2, Package, ShoppingCart, Clock, Printer, FileText } from "lucide-react";
 import { supabase, PRODUCT_BUCKET } from "../lib/supabase";
+import RefilledWarningDialog from "../components/RefilledWarningDialog";
 import TonerCartridge from "../components/TonerCartridge";
 import PrinterListings from "../components/PrinterListings";
 import CommissionBanner from "../components/CommissionBanner";
@@ -105,6 +106,7 @@ export default function SupplierDashboard() {
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState("");
     const [brochureFile, setBrochureFile] = useState(null);
+    const [refilledWarning, setRefilledWarning] = useState(false);
 
     // Business logo
     const [logoUrl, setLogoUrl] = useState("");
@@ -511,7 +513,13 @@ export default function SupplierDashboard() {
                                     <button
                                         type="button"
                                         key={t}
-                                        onClick={() => setTonerType(t)}
+                                        onClick={() => {
+                                            if (t === "Refilled") {
+                                                setRefilledWarning(true);
+                                                return;
+                                            }
+                                            setTonerType(t);
+                                        }}
                                         className={`tc-pill ${tonerType === t ? "is-selected" : ""}`}
                                         data-testid={`listing-type-${t}`}
                                     >
@@ -614,6 +622,7 @@ export default function SupplierDashboard() {
                     </form>
                 </DialogContent>
             </Dialog>
+            <RefilledWarningDialog open={refilledWarning} onClose={() => setRefilledWarning(false)} />
             </div>
         </div>
     );

@@ -514,12 +514,14 @@ async def supplier_business_logo_upload(
     content = await file.read()
     if len(content) > 3 * 1024 * 1024:
         raise HTTPException(400, "Logo must be under 3 MB")
+    # Resize + JPEG re-encode for storage hygiene
+    content = compress_image(content, max_side=600, quality=88)
 
-    ext = (file.filename.split(".")[-1] if file.filename and "." in file.filename else "png").lower()
+    ext = "jpg"
     path = f"{user['id']}/business-logo-{uuid.uuid4().hex}.{ext}"
     try:
         sb_admin.storage.from_("supplier-documents").upload(
-            path, content, {"content-type": file.content_type, "upsert": "false"}
+            path, content, {"content-type": "image/jpeg", "upsert": "false"}
         )
     except Exception as e:
         logger.exception("business logo upload failed")
@@ -784,8 +786,8 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
     row = {
         "supplier_id": s["id"],
         "toner_id": t["id"],
-        "brand": t["brand"],
-        "model_number": t["model_number"],
+        "brand": sanitize(t["brand"], 80),
+        "model_number": sanitize(t["model_number"], 50),
         "search_norm": t.get("search_norm") or re.sub(r"[^a-z0-9]", "", f"{t['brand']}{t['model_number']}".lower()),
         "color": payload.color or t.get("color") or "Black",
         "toner_type": payload.toner_type,
@@ -1128,11 +1130,13 @@ async def upload_printer_image(file: UploadFile = File(...), user: dict = Depend
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(400, "Max 5 MB")
-    ext = (file.filename.split(".")[-1] if file.filename and "." in file.filename else "jpg").lower()
+    # Compress / resize so storage stays cheap and pages load fast
+    content = compress_image(content, max_side=1200, quality=85)
+    ext = "jpg"
     path = f"{user['id']}/{uuid.uuid4().hex}.{ext}"
     try:
         sb_admin.storage.from_("printer-images").upload(
-            path, content, {"content-type": file.content_type, "upsert": "false"}
+            path, content, {"content-type": "image/jpeg", "upsert": "false"}
         )
     except Exception as e:
         logger.exception("printer image upload failed")
@@ -2131,6 +2135,546 @@ def public_stats():
 def root():
     return {"service": "TonersCart API (Supabase)", "ok": True}
 
+
+
+
+# =============================================================================
+# Wave 3 — Finance, Papers, Pagination, Image compression, Rate limit, Sanitize
+# =============================================================================
+
+import re as _re  # noqa: E402
+import time as _time  # noqa: E402
+from io import BytesIO  # noqa: E402
+from collections import defaultdict as _dd  # noqa: E402
+
+
+# ---------- Input sanitizer ----------
+_HTML_TAG_RX = _re.compile(r"<[^>]+>")
+def sanitize(s: Optional[str], max_len: int = 2000) -> str:
+    if s is None:
+        return ""
+    s = _HTML_TAG_RX.sub("", str(s)).strip()
+    return s[:max_len]
+
+
+# ---------- Pillow image compression ----------
+def compress_image(content: bytes, *, max_side: int = 1200, quality: int = 85) -> bytes:
+    """Resize an image so the longest side ≤ max_side and re-encode as JPEG 85%.
+    Returns original bytes if Pillow can't handle the format (svg, etc.)."""
+    try:
+        from PIL import Image  # noqa: WPS433
+        im = Image.open(BytesIO(content))
+        im.load()
+        if im.mode in ("RGBA", "P", "LA"):
+            bg = Image.new("RGB", im.size, (255, 255, 255))
+            bg.paste(im, mask=im.split()[-1] if im.mode in ("RGBA", "LA") else None)
+            im = bg
+        else:
+            im = im.convert("RGB")
+        w, h = im.size
+        scale = max(w, h) / max_side
+        if scale > 1:
+            im = im.resize((int(w / scale), int(h / scale)), Image.LANCZOS)
+        out = BytesIO()
+        im.save(out, format="JPEG", quality=quality, optimize=True)
+        return out.getvalue()
+    except Exception as e:
+        logger.debug("compress_image fallback (returning original): %s", e)
+        return content
+
+
+# ---------- In-memory rate limiter ----------
+_RATE_BUCKETS: dict = _dd(list)
+_RATE_RULES = {
+    "/api/quotation":               (5, 3600),
+    "/api/mps/inquiry":             (10, 3600),
+    "/api/featured/apply":          (3, 3600),
+    "/api/chat":                    (30, 3600),
+    "/api/auth/signup-customer":    (10, 3600),
+    "/api/auth/signup-supplier":    (5, 3600),
+}
+
+
+def _client_ip(req: Request) -> str:
+    fwd = req.headers.get("x-forwarded-for", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return (req.client.host if req.client else "anon") or "anon"
+
+
+@app.middleware("http")
+async def _rate_limit_middleware(request: Request, call_next):
+    path = request.url.path
+    rule = _RATE_RULES.get(path)
+    if rule and request.method == "POST":
+        limit, window = rule
+        ip = _client_ip(request)
+        now = _time.time()
+        key = f"{ip}:{path}"
+        bucket = [t for t in _RATE_BUCKETS[key] if now - t < window]
+        if len(bucket) >= limit:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                {"detail": "Too many requests. Please try again in an hour."},
+                status_code=429,
+            )
+        bucket.append(now)
+        _RATE_BUCKETS[key] = bucket
+    return await call_next(request)
+
+
+# =============================================================================
+# Finance — admin views + dealer self-view
+# =============================================================================
+
+def _orders_with_listings(supplier_id: Optional[str] = None, limit: int = 10000):
+    qry = sb_admin.table("orders").select(
+        "*,listings(brand,model_number,toner_type)"
+    ).order("created_at", desc=True)
+    if supplier_id:
+        qry = qry.eq("supplier_id", supplier_id)
+    rows = qry.limit(limit).execute().data or []
+    for r in rows:
+        L = r.pop("listings", None) or {}
+        r["brand"] = L.get("brand")
+        r["model_number"] = L.get("model_number")
+        r["toner_type"] = L.get("toner_type")
+    return rows
+
+
+@api.get("/admin/finance/summary")
+def admin_finance_summary(user: dict = Depends(require_role("admin"))):
+    orders = _orders_with_listings()
+    buckets: dict = {}
+    for o in orders:
+        ts = o.get("created_at") or ""
+        if not ts:
+            continue
+        try:
+            d = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except Exception:
+            continue
+        key = d.strftime("%Y-%m")
+        b = buckets.setdefault(key, {"month": key, "orders": 0, "gmv": 0.0, "commission": 0.0, "payout": 0.0})
+        total = float(o.get("total") or 0)
+        c, p, _label = _commission_breakdown(total)
+        b["orders"] += 1
+        b["gmv"] += total
+        b["commission"] += float(c)
+        b["payout"] += float(p)
+    rows = sorted(buckets.values(), key=lambda r: r["month"], reverse=True)
+    for r in rows:
+        r["gmv"] = round(r["gmv"], 2)
+        r["commission"] = round(r["commission"], 2)
+        r["payout"] = round(r["payout"], 2)
+    return rows
+
+
+@api.get("/admin/finance/dealers")
+def admin_finance_dealers(user: dict = Depends(require_role("admin"))):
+    orders = _orders_with_listings()
+    suppliers = sb_admin.table("suppliers").select("id,business_name,city").execute().data or []
+    by_sid: dict = {s["id"]: {"id": s["id"], "name": s.get("business_name") or "—", "city": s.get("city") or "—",
+                                "orders": 0, "gmv": 0.0, "commission": 0.0, "payout": 0.0}
+                       for s in suppliers}
+    for o in orders:
+        sid = o.get("supplier_id")
+        if not sid or sid not in by_sid:
+            continue
+        total = float(o.get("total") or 0)
+        c, p, _label = _commission_breakdown(total)
+        by_sid[sid]["orders"] += 1
+        by_sid[sid]["gmv"] += total
+        by_sid[sid]["commission"] += float(c)
+        by_sid[sid]["payout"] += float(p)
+    rows = [r for r in by_sid.values() if r["orders"] > 0]
+    for r in rows:
+        r["gmv"] = round(r["gmv"], 2)
+        r["commission"] = round(r["commission"], 2)
+        r["payout"] = round(r["payout"], 2)
+    rows.sort(key=lambda r: r["gmv"], reverse=True)
+    return rows
+
+
+@api.get("/admin/finance/export")
+def admin_finance_export(user: dict = Depends(require_role("admin"))):
+    summary = admin_finance_summary(user)
+    buf = io.StringIO()
+    buf.write("\ufeff")
+    w = csv.writer(buf)
+    w.writerow(["Month", "Orders", "GMV (₹)", "Commission (₹)", "Dealer payouts (₹)"])
+    for r in summary:
+        w.writerow([r["month"], r["orders"], r["gmv"], r["commission"], r["payout"]])
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="tonerscart_monthly_report.csv"'},
+    )
+
+
+@api.get("/admin/finance/dealer-payouts/export")
+def admin_finance_dealers_export(user: dict = Depends(require_role("admin"))):
+    rows = admin_finance_dealers(user)
+    buf = io.StringIO()
+    buf.write("\ufeff")
+    w = csv.writer(buf)
+    w.writerow(["Dealer", "City", "Orders", "GMV (₹)", "Commission taken (₹)", "Net payout (₹)"])
+    for r in rows:
+        w.writerow([r["name"], r["city"], r["orders"], r["gmv"], r["commission"], r["payout"]])
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="tonerscart_dealer_payouts.csv"'},
+    )
+
+
+@api.get("/supplier/earnings")
+def supplier_earnings(user: dict = Depends(require_user)):
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved sellers can view earnings")
+    s = sb_admin.table("suppliers").select("id,business_name").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        raise HTTPException(403, "Supplier not approved yet")
+    orders = _orders_with_listings(supplier_id=s.data["id"])
+    items = []
+    total_gmv = 0.0
+    total_commission = 0.0
+    total_net = 0.0
+    for o in orders:
+        total = float(o.get("total") or 0)
+        c, p, label = _commission_breakdown(total)
+        total_gmv += total
+        total_commission += float(c)
+        total_net += float(p)
+        items.append({
+            "id": o.get("id"),
+            "brand": o.get("brand"),
+            "model_number": o.get("model_number"),
+            "qty": o.get("qty"),
+            "total": total,
+            "commission": c,
+            "commission_rate": label,
+            "payout": p,
+            "status": o.get("status"),
+            "created_at": o.get("created_at"),
+        })
+    return {
+        "stats": {
+            "total_gmv":        round(total_gmv, 2),
+            "total_commission": round(total_commission, 2),
+            "total_net":        round(total_net, 2),
+            "orders":           len(items),
+        },
+        "orders": items,
+    }
+
+
+# =============================================================================
+# Papers — buyer feed + supplier CRUD
+# =============================================================================
+
+class PaperCreate(BaseModel):
+    brand: str = Field(min_length=1, max_length=80)
+    size: str  # "A4" | "A3" | "A5" | "Letter"
+    gsm: int = Field(ge=40, le=400)
+    reams_per_box: int = Field(ge=1, le=200, default=10)
+    price_per_ream: float = Field(gt=0)
+    stock: int = Field(ge=0, default=0)
+    city: Optional[str] = None
+    image_url: Optional[str] = None
+
+
+@api.post("/supplier/papers")
+def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved sellers can list papers")
+    s = sb_admin.table("suppliers").select("id,city").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        raise HTTPException(403, "Supplier not approved yet")
+    row = {
+        "supplier_id": s.data["id"],
+        "brand": sanitize(payload.brand, 80),
+        "size": payload.size,
+        "gsm": int(payload.gsm),
+        "reams_per_box": int(payload.reams_per_box),
+        "price_per_ream": float(payload.price_per_ream),
+        "stock": int(payload.stock),
+        "city": payload.city or s.data.get("city"),
+        "image_url": payload.image_url or None,
+    }
+    try:
+        res = sb_admin.table("paper_listings").insert(row).execute()
+    except Exception as e:
+        logger.warning("create_paper failed: %s", e)
+        raise HTTPException(503, "paper_listings table not yet migrated — run supabase_schema_papers.sql") from e
+    return res.data[0] if res.data else row
+
+
+@api.get("/supplier/papers/mine")
+def my_papers(user: dict = Depends(require_user)):
+    if user.get("role") != "supplier":
+        return []
+    s = sb_admin.table("suppliers").select("id").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        return []
+    try:
+        rows = sb_admin.table("paper_listings").select("*").eq("supplier_id", s.data["id"]).order(
+            "created_at", desc=True
+        ).execute().data or []
+        return rows
+    except Exception:
+        return []
+
+
+@api.delete("/supplier/papers/{paper_id}")
+def delete_paper(paper_id: str, user: dict = Depends(require_user)):
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved sellers can delete papers")
+    s = sb_admin.table("suppliers").select("id").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        raise HTTPException(403, "Supplier not approved yet")
+    sb_admin.table("paper_listings").delete().eq("id", paper_id).eq("supplier_id", s.data["id"]).execute()
+    return {"ok": True}
+
+
+@api.get("/papers")
+def list_papers(brand: Optional[str] = None, size: Optional[str] = None,
+                 gsm: Optional[int] = None, city: Optional[str] = None,
+                 limit: int = 200):
+    try:
+        qry = sb_admin.table("paper_listings").select(
+            "*,suppliers(business_name,city,is_suspended)"
+        ).gt("stock", 0).order("created_at", desc=True).limit(limit)
+        if brand:
+            qry = qry.ilike("brand", f"%{brand}%")
+        if size:
+            qry = qry.eq("size", size)
+        if gsm:
+            qry = qry.eq("gsm", int(gsm))
+        if city:
+            qry = qry.eq("city", city)
+        rows = qry.execute().data or []
+    except Exception as e:
+        msg = str(e)
+        if "is_suspended" in msg or "paper_listings" in msg:
+            try:
+                qry = sb_admin.table("paper_listings").select(
+                    "*,suppliers(business_name,city)"
+                ).gt("stock", 0).order("created_at", desc=True).limit(limit)
+                if brand:
+                    qry = qry.ilike("brand", f"%{brand}%")
+                if size:
+                    qry = qry.eq("size", size)
+                if gsm:
+                    qry = qry.eq("gsm", int(gsm))
+                if city:
+                    qry = qry.eq("city", city)
+                rows = qry.execute().data or []
+            except Exception:
+                return []
+        else:
+            raise
+    out = []
+    for r in rows:
+        sup = r.pop("suppliers", None) or {}
+        if sup.get("is_suspended"):
+            continue
+        r["supplier_name"] = sup.get("business_name")
+        r["supplier_city"] = sup.get("city")
+        out.append(r)
+    return out
+
+
+# =============================================================================
+# Paginated search (additive)
+# =============================================================================
+
+@api.get("/listings/search/paginated")
+def search_listings_paginated(
+    q: Optional[str] = None, brand: Optional[str] = None,
+    city: Optional[str] = None, toner_type: Optional[str] = None,
+    page: int = 1, limit: int = 20,
+):
+    all_rows = search_listings(q=q, brand=brand, city=city, toner_type=toner_type, limit=2000)
+    total = len(all_rows)
+    page = max(1, page)
+    limit = max(1, min(limit, 100))
+    pages = max(1, (total + limit - 1) // limit)
+    start = (page - 1) * limit
+    return {
+        "results": all_rows[start:start + limit],
+        "total": total,
+        "page": page,
+        "pages": pages,
+        "limit": limit,
+    }
+
+
+# =============================================================================
+# Bulk stock + Duplicate listing endpoints
+# =============================================================================
+
+class ListingPatch(BaseModel):
+    stock: Optional[int] = None
+    price: Optional[float] = None
+
+
+@api.put("/supplier/listings/{listing_id}")
+def supplier_patch_listing(listing_id: str, payload: ListingPatch, user: dict = Depends(require_user)):
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved sellers can edit listings")
+    s = sb_admin.table("suppliers").select("id").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        raise HTTPException(403, "Supplier not approved yet")
+    upd = {}
+    if payload.stock is not None and payload.stock >= 0:
+        upd["stock"] = int(payload.stock)
+    if payload.price is not None and payload.price > 0:
+        upd["price"] = float(payload.price)
+    if not upd:
+        return {"ok": True, "updated": []}
+    sb_admin.table("listings").update(upd).eq("id", listing_id).eq("supplier_id", s.data["id"]).execute()
+    return {"ok": True, "updated": list(upd.keys())}
+
+
+@api.put("/supplier/printers/{printer_id}")
+def supplier_patch_printer(printer_id: str, payload: ListingPatch, user: dict = Depends(require_user)):
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved sellers can edit printers")
+    s = sb_admin.table("suppliers").select("id").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        raise HTTPException(403, "Supplier not approved yet")
+    upd = {}
+    if payload.stock is not None and payload.stock >= 0:
+        upd["stock"] = int(payload.stock)
+    if payload.price is not None and payload.price > 0:
+        upd["price"] = float(payload.price)
+    if not upd:
+        return {"ok": True, "updated": []}
+    sb_admin.table("printer_listings").update(upd).eq("id", printer_id).eq("supplier_id", s.data["id"]).execute()
+    return {"ok": True, "updated": list(upd.keys())}
+
+
+@api.post("/supplier/listings/{listing_id}/duplicate")
+def duplicate_listing(listing_id: str, user: dict = Depends(require_user)):
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved sellers can duplicate listings")
+    s = sb_admin.table("suppliers").select("id").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        raise HTTPException(403, "Supplier not approved yet")
+    src = sb_admin.table("listings").select("*").eq("id", listing_id).eq("supplier_id", s.data["id"]).maybe_single().execute()
+    if not src or not src.data:
+        raise HTTPException(404, "Listing not found")
+    row = {k: v for k, v in src.data.items() if k not in {"id", "created_at", "updated_at"}}
+    row["stock"] = 1
+    res = sb_admin.table("listings").insert(row).execute()
+    return res.data[0] if res.data else row
+
+
+@api.post("/supplier/printers/{printer_id}/duplicate")
+def duplicate_printer(printer_id: str, user: dict = Depends(require_user)):
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved sellers can duplicate printers")
+    s = sb_admin.table("suppliers").select("id").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        raise HTTPException(403, "Supplier not approved yet")
+    src = sb_admin.table("printer_listings").select("*").eq("id", printer_id).eq("supplier_id", s.data["id"]).maybe_single().execute()
+    if not src or not src.data:
+        raise HTTPException(404, "Printer not found")
+    row = {k: v for k, v in src.data.items() if k not in {"id", "created_at", "updated_at"}}
+    row["stock"] = 1
+    res = sb_admin.table("printer_listings").insert(row).execute()
+    return res.data[0] if res.data else row
+
+
+# =============================================================================
+# Listing existence check (for buyer one-click reorder)
+# =============================================================================
+
+@api.get("/listings/{listing_id}")
+def get_listing(listing_id: str):
+    r = sb_admin.table("listings").select(
+        "*,suppliers(business_name,city,is_suspended)"
+    ).eq("id", listing_id).maybe_single().execute()
+    if not r or not r.data:
+        raise HTTPException(404, "Listing not found")
+    data = r.data
+    sup = data.pop("suppliers", None) or {}
+    if sup.get("is_suspended"):
+        raise HTTPException(410, "This product is no longer available from this supplier")
+    if (data.get("stock") or 0) <= 0:
+        raise HTTPException(410, "Out of stock")
+    data["supplier_name"] = sup.get("business_name")
+    data["supplier_city"] = sup.get("city")
+    return data
+
+
+# =============================================================================
+# Sitemap + robots
+# =============================================================================
+
+_SITEMAP_CITIES = ["Bangalore", "Mumbai", "Delhi", "Chennai", "Hyderabad",
+                    "Pune", "Kolkata", "Ahmedabad", "Jaipur", "Surat"]
+
+
+@app.get("/robots.txt", include_in_schema=False)
+def robots_txt():
+    txt = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /admin\n"
+        "Sitemap: https://www.tonerscart.com/sitemap.xml\n"
+    )
+    return Response(content=txt, media_type="text/plain")
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def sitemap_xml():
+    base = "https://www.tonerscart.com"
+    static = [
+        ("/", "1.0"),
+        ("/search", "0.9"),
+        ("/printers", "0.9"),
+        ("/papers", "0.9"),
+        ("/mps", "0.8"),
+        ("/sell", "0.8"),
+        ("/get-featured", "0.8"),
+        ("/terms", "0.4"),
+        ("/privacy", "0.4"),
+        ("/contact", "0.6"),
+    ]
+    today = datetime.now(timezone.utc).date().isoformat()
+    parts = ['<?xml version="1.0" encoding="UTF-8"?>',
+              '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for path, prio in static:
+        parts.append(f"<url><loc>{base}{path}</loc><lastmod>{today}</lastmod><priority>{prio}</priority></url>")
+    for c in _SITEMAP_CITIES:
+        parts.append(f"<url><loc>{base}/search?city={c}</loc><lastmod>{today}</lastmod><priority>0.7</priority></url>")
+        parts.append(f"<url><loc>{base}/printers?city={c}</loc><lastmod>{today}</lastmod><priority>0.7</priority></url>")
+    parts.append("</urlset>")
+    return Response(content="\n".join(parts), media_type="application/xml")
+
+
+# =============================================================================
+# Password reset trigger (Supabase Auth)
+# =============================================================================
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+@api.post("/auth/password-reset")
+def password_reset(payload: PasswordResetRequest):
+    """Trigger Supabase Auth password-reset email."""
+    try:
+        sb_admin.auth.reset_password_for_email(
+            str(payload.email),
+            {"redirect_to": "https://www.tonerscart.com/reset-password"},
+        )
+    except Exception as e:
+        logger.warning("password reset failed: %s", e)
+        # Always return success-shaped response to avoid enumeration
+    return {"ok": True}
 
 app.include_router(api)
 

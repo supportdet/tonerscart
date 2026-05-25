@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import PhonePrefixInput from "../components/PhonePrefixInput";
+import PageMeta from "../components/PageMeta";
 
 // ============================================================
 // Question catalog
@@ -263,6 +264,11 @@ export default function PrintersGuide() {
 
     return (
         <div className="tc-hero relative pb-20" data-testid="printers-guide-page">
+            <PageMeta
+                title="Buy Printers Online B2B India — Laser, Inkjet, MFD | TonersCart"
+                description="Buy laser printers, inkjet printers, all-in-one MFDs for home and office in India. Compare prices from verified dealers in Bangalore, Mumbai, Delhi and across India."
+                path="/printers"
+            />
             <div className="tc-hero-grid" />
             <div className="tc-container relative pt-10 sm:pt-14 max-w-3xl">
                 <div className="flex items-center gap-3 mb-3">

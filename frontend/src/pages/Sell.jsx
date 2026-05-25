@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import SellerApplicationForm from "../components/SellerApplicationForm";
 import { Button } from "../components/ui/button";
 import { Hourglass, AlertTriangle, ArrowRight, RefreshCw, FileText } from "lucide-react";
+import PageMeta from "../components/PageMeta";
 
 export default function Sell() {
     const { user, loading } = useAuth();
@@ -32,6 +33,11 @@ export default function Sell() {
     if (!user) {
         return (
             <div className="tc-hero relative pb-16" data-testid="sell-guest">
+                <PageMeta
+                    title="Sell Toners & Printers Online — Become a TonersCart Supplier"
+                    description="List your printer toner cartridges and printers on TonersCart. Reach thousands of B2B buyers across India. Free listing, easy setup, real orders."
+                    path="/sell"
+                />
                 <div className="tc-hero-grid" />
                 <div className="tc-container relative pt-12 sm:pt-16 max-w-2xl">
                     <div className="flex items-center gap-3 mb-3">

@@ -971,6 +971,7 @@
     font-size: 15px;
     background: #fff;
     color: #0A0A0B;
+    font-family: 'Inter', sans-serif !important;
     transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 .tc-input-lg:focus,
@@ -984,6 +985,14 @@ textarea.tc-input-lg {
     min-height: 80px;
     padding: 12px 16px;
     line-height: 1.5;
+}
+
+/* Enforce Inter on every native form control + label + dialog body so
+   the JetBrains Mono never bleeds into typing UIs. (Mono stays opt-in
+   via .font-mono on order IDs / prices / model numbers.) */
+input, textarea, select, button, label,
+[role="dialog"] *:not(.font-mono):not(code):not(pre) {
+    font-family: 'Inter', sans-serif;
 }
 
 /* Large pill selectors */

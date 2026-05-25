@@ -252,20 +252,30 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
     buyer_name = buyer.get("name") or "Customer"
     buyer_email = buyer.get("email")
     buyer_phone = buyer.get("phone") or "—"
-    buyer_gst = buyer.get("gst") or "—"
+    raw_gst = (buyer.get("gst") or "").strip()
+    buyer_gst = raw_gst if raw_gst else "Not provided"
 
     brand = item.get("brand") or ""
     model = item.get("model_number") or ""
     color = item.get("color") or "—"
-    item_type = item.get("type") or item.get("listing_type") or "—"
+    # Pretty product-type label — toner_type for toners, category for printers
+    raw_type = (item.get("type") or item.get("listing_type") or "—")
+    if (item.get("listing_type") == "printer") and raw_type:
+        type_label = raw_type.title() if raw_type not in ("—",) else raw_type
+    else:
+        type_label = raw_type
     qty = int(item.get("qty") or 1)
     unit = float(item.get("unit_price") or 0)
     total = float(item.get("total") or (unit * qty))
 
     body = f"""
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px;">
+    <div style="border-top:4px solid #00B7C7;background:#FFFFFF;padding:24px 0 8px 0;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid #E5E5EA;">
       <div>
-        <div style="font-size:11px;letter-spacing:0.22em;text-transform:uppercase;font-weight:700;color:#86868B;">Quotation</div>
+        <div style="font-family:'Montserrat',sans-serif;font-size:22px;font-weight:700;letter-spacing:-0.02em;">
+          <span style="color:#0A0A0B;">Toners</span><span style="color:#F5C400;">Cart</span>
+        </div>
+        <div style="font-size:11px;letter-spacing:0.22em;text-transform:uppercase;font-weight:700;color:#00B7C7;margin-top:8px;">Quotation</div>
         <div style="font-family:monospace;font-size:15px;font-weight:700;color:#0A0A0B;margin-top:2px;">{quote_number}</div>
         <div style="font-size:12px;color:#6E6E73;margin-top:2px;">Issued: {today}</div>
       </div>
@@ -276,6 +286,7 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
         <div style="color:#6E6E73;">+91 97422 70585 · +91 89717 68796</div>
       </div>
     </div>
+    </div>
 
     <div style="display:flex;gap:18px;margin-bottom:18px;">
       <div style="flex:1;padding:12px 14px;background:#F5F5F7;border-radius:10px;">
@@ -283,7 +294,7 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
         <div style="font-size:14px;font-weight:600;color:#0A0A0B;margin-top:4px;">{buyer_name}</div>
         <div style="font-size:12.5px;color:#3a3a40;">{buyer_email or '—'}</div>
         <div style="font-size:12.5px;color:#3a3a40;">{buyer_phone}</div>
-        <div style="font-size:12px;color:#6E6E73;margin-top:2px;">GST: <strong>{buyer_gst}</strong></div>
+        <div style="font-size:12px;color:#6E6E73;margin-top:6px;">GST: <strong style="color:#0A0A0B;">{buyer_gst}</strong></div>
       </div>
       <div style="flex:1;padding:12px 14px;background:#F5F5F7;border-radius:10px;">
         <div style="font-size:10.5px;letter-spacing:0.18em;text-transform:uppercase;color:#86868B;font-weight:700;">Sold by</div>
@@ -294,19 +305,19 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
 
     <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #E5E5EA;border-radius:8px;overflow:hidden;">
       <thead>
-        <tr style="background:#0A0A0B;color:#fff;">
-          <th style="text-align:left;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Item</th>
-          <th style="text-align:left;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Type</th>
-          <th style="text-align:left;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Color</th>
-          <th style="text-align:right;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Unit</th>
-          <th style="text-align:right;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Qty</th>
-          <th style="text-align:right;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Total</th>
+        <tr style="background:#F5F5F7;color:#0A0A0B;">
+          <th style="text-align:left;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;">Item</th>
+          <th style="text-align:left;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;">Type</th>
+          <th style="text-align:left;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;">Color</th>
+          <th style="text-align:right;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;">Unit</th>
+          <th style="text-align:right;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;">Qty</th>
+          <th style="text-align:right;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;">Total</th>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td style="padding:12px;border-top:1px solid #E5E5EA;"><strong>{brand}</strong> · <span style="font-family:monospace;">{model}</span></td>
-          <td style="padding:12px;border-top:1px solid #E5E5EA;">{item_type}</td>
+          <td style="padding:12px;border-top:1px solid #E5E5EA;"><span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#FFFBEB;color:#8C6A00;border:1px solid #F5C400;font-size:11.5px;font-weight:600;">{type_label}</span></td>
           <td style="padding:12px;border-top:1px solid #E5E5EA;">{color}</td>
           <td style="padding:12px;border-top:1px solid #E5E5EA;text-align:right;">{_quote_money(unit)}</td>
           <td style="padding:12px;border-top:1px solid #E5E5EA;text-align:right;">{qty}</td>
