@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /customer
+Disallow: /supplier
+Disallow: /auth/
+Disallow: /reset-password
+Disallow: /forgot-password
+Sitemap: https://www.tonerscart.com/sitemap.xml

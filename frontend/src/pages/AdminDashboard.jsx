@@ -11,6 +11,7 @@ import AnalyticsTab from "./admin/AnalyticsTab";
 import DealersTab from "./admin/DealersTab";
 import OrdersTab from "./admin/OrdersTab";
 import ContentTab from "./admin/ContentTab";
+import FinanceTab from "./admin/FinanceTab";
 
 function aiSummary(application) {
     const ai = application?.ai_check || {};
@@ -154,6 +155,7 @@ export default function AdminDashboard() {
                     </TabsTrigger>
                     <TabsTrigger value="dealers" data-testid="tab-dealers">Dealers</TabsTrigger>
                     <TabsTrigger value="orders" data-testid="tab-orders">Orders</TabsTrigger>
+                    <TabsTrigger value="finance" data-testid="tab-finance">Finance</TabsTrigger>
                     <TabsTrigger value="featured" data-testid="tab-featured">
                         Featured {featured.filter((x) => x.status === "new").length > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-[#F5C400] text-[#0A0A0B] text-[10px] font-bold px-1.5">{featured.filter((x) => x.status === "new").length}</span>)}
                     </TabsTrigger>
@@ -170,6 +172,10 @@ export default function AdminDashboard() {
 
                 <TabsContent value="orders">
                     {tab === "orders" && <OrdersTab />}
+                </TabsContent>
+
+                <TabsContent value="finance">
+                    {tab === "finance" && <FinanceTab />}
                 </TabsContent>
 
                 <TabsContent value="content">

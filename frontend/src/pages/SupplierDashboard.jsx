@@ -11,9 +11,12 @@ import { supabase, PRODUCT_BUCKET } from "../lib/supabase";
 import RefilledWarningDialog from "../components/RefilledWarningDialog";
 import TonerCartridge from "../components/TonerCartridge";
 import PrinterListings from "../components/PrinterListings";
+import PaperListings from "../components/PaperListings";
+import SupplierEarnings from "../components/SupplierEarnings";
 import CommissionBanner from "../components/CommissionBanner";
 import CommissionCalculator from "../components/CommissionCalculator";
 import { commissionFor } from "../lib/commission";
+import { Copy, Check } from "lucide-react";
 
 const ORDER_STATUS = {
     requested: "Requested",
@@ -81,11 +84,46 @@ function TrackingInput({ onSubmit, testIdSuffix }) {
     );
 }
 
+function InlineStock({ stock, onSave, testId }) {
+    const [editing, setEditing] = React.useState(false);
+    const [val, setVal] = React.useState(stock);
+    React.useEffect(() => { setVal(stock); }, [stock]);
+    const commit = () => {
+        const n = Number(val);
+        if (Number.isNaN(n) || n < 0) { setVal(stock); setEditing(false); return; }
+        if (n !== Number(stock)) onSave(n);
+        setEditing(false);
+    };
+    if (!editing) {
+        return (
+            <button onClick={() => setEditing(true)} className="text-[12px] text-[#6E6E73] hover:text-[#00B7C7] transition" data-testid={testId}>
+                Stock: <span className="font-mono font-semibold text-[#0A0A0B]">{stock}</span> <span className="text-[#86868B] text-[10px]">· edit</span>
+            </button>
+        );
+    }
+    return (
+        <div className="inline-flex items-center gap-1.5">
+            <input
+                type="number" min="0" value={val} autoFocus
+                onChange={(e) => setVal(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } if (e.key === "Escape") { setVal(stock); setEditing(false); } }}
+                className="h-7 w-16 px-2 text-[12px] rounded border border-[#00B7C7] bg-white font-mono"
+                data-testid={`${testId}-input`}
+            />
+            <button onClick={commit} className="h-7 w-7 grid place-items-center rounded bg-emerald-600 text-white" data-testid={`${testId}-save`}>
+                <Check size={12} />
+            </button>
+        </div>
+    );
+}
+
+function _TrackingInputLegacy() { return null; }
+
 
 export default function SupplierDashboard() {
     const { user, refresh } = useAuth();
     const isApproved = user?.supplier_status === "approved";
-    const [catalog, setCatalog] = useState("toners"); // 'toners' | 'printers'
+    const [catalog, setCatalog] = useState("toners"); // 'toners' | 'printers' | 'papers' | 'earnings'
 
     const [listings, setListings] = useState([]);
     const [orders, setOrders] = useState([]);
@@ -229,6 +267,22 @@ export default function SupplierDashboard() {
         catch (e) { toast.error(formatApiError(e)); }
     };
 
+    const patchStock = async (id, newStock) => {
+        try {
+            await api.put(`/supplier/listings/${id}`, { stock: Number(newStock) });
+            toast.success("Stock updated");
+            load();
+        } catch (e) { toast.error(formatApiError(e)); }
+    };
+
+    const duplicateListing = async (id) => {
+        try {
+            await api.post(`/supplier/listings/${id}/duplicate`);
+            toast.success("Listing duplicated");
+            load();
+        } catch (e) { toast.error(formatApiError(e)); }
+    };
+
     const updateOrder = async (id, status, tracking_number) => {
         try {
             await api.put(`/orders/${id}/status`, { status, tracking_number });
@@ -315,22 +369,38 @@ export default function SupplierDashboard() {
                     <div className="inline-flex items-center rounded-full bg-black/[0.05] p-1" data-testid="catalog-tabs" style={{ fontFamily: "'Inter', sans-serif" }}>
                         <button onClick={() => setCatalog("toners")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "toners" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-toners">Toners</button>
                         <button onClick={() => setCatalog("printers")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "printers" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-printers">Printers</button>
+                        <button onClick={() => setCatalog("papers")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "papers" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-papers">Papers</button>
+                        <button onClick={() => setCatalog("earnings")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "earnings" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-earnings">My Earnings</button>
                     </div>
                     {catalog === "toners" ? (
                         <Button className="btn-cta inline-flex items-center gap-2" onClick={openDialog} data-testid="add-listing-btn">
                             <Plus size={16} /> Add toner
                         </Button>
-                    ) : (
+                    ) : catalog === "printers" ? (
                         <Button className="btn-cta inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-printer"))} data-testid="add-printer-cta-btn">
                             <Plus size={16} /> Add printer
                         </Button>
-                    )}
+                    ) : catalog === "papers" ? (
+                        <Button className="btn-cta inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-paper"))} data-testid="add-paper-cta-btn">
+                            <Plus size={16} /> Add paper
+                        </Button>
+                    ) : null}
                 </div>
 
                 {catalog === "printers" ? (
                     <>
                         <h2 id="printers" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your printers</h2>
                         <PrinterListings />
+                    </>
+                ) : catalog === "papers" ? (
+                    <>
+                        <h2 id="papers" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your papers</h2>
+                        <PaperListings />
+                    </>
+                ) : catalog === "earnings" ? (
+                    <>
+                        <h2 id="earnings" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>My earnings</h2>
+                        <SupplierEarnings />
                     </>
                 ) : (
                 <>
@@ -366,11 +436,16 @@ export default function SupplierDashboard() {
                                     <div className="text-[12px] text-[#6E6E73]">{l.brand} · {l.color}</div>
                                     <div className="mt-1 flex items-center justify-between">
                                         <div className="font-mono text-[18px] font-semibold text-[#0A0A0B]">₹{Number(l.price).toLocaleString("en-IN")}</div>
-                                        <div className="text-[12px] text-[#6E6E73]">Stock: <span className="font-mono font-semibold text-[#0A0A0B]">{l.stock}</span></div>
+                                        <InlineStock stock={l.stock} onSave={(v) => patchStock(l.id, v)} testId={`stock-edit-${l.id}`} />
                                     </div>
-                                    <button onClick={() => removeListing(l.id)} className="mt-2 text-[12px] text-red-600 hover:text-red-700 inline-flex items-center gap-1 self-start" data-testid={`remove-${l.id}`}>
-                                        <Trash2 size={12} /> Remove
-                                    </button>
+                                    <div className="mt-2 flex items-center gap-3">
+                                        <button onClick={() => duplicateListing(l.id)} className="text-[12px] text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`duplicate-${l.id}`}>
+                                            <Copy size={12} /> Duplicate
+                                        </button>
+                                        <button onClick={() => removeListing(l.id)} className="text-[12px] text-red-600 hover:text-red-700 inline-flex items-center gap-1" data-testid={`remove-${l.id}`}>
+                                            <Trash2 size={12} /> Remove
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         );

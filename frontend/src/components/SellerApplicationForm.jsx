@@ -176,6 +176,7 @@ export default function SellerApplicationForm() {
                 doc_pan: "",
                 doc_bank_proof: "",
                 doc_address_proof: "",
+                agreed_to_terms: agreed,
             });
 
             // 2. Upload files via backend (service role — bypasses storage RLS for non-supplier users)

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { useCart } from "../context/CartContext";
 import { Button } from "../components/ui/button";
 import { Skeleton } from "../components/ui/skeleton";
 import { toast } from "sonner";
-import { PackageSearch, CheckCircle2 } from "lucide-react";
+import { PackageSearch, CheckCircle2, RotateCcw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ReturnPolicyBox from "../components/ReturnPolicyBox";
 import BuyerGSTCard from "../components/BuyerGSTCard";
@@ -21,8 +22,10 @@ const STATUS_STYLE = {
 export default function CustomerDashboard() {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const { addItem } = useCart();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [reorderingId, setReorderingId] = useState(null);
 
     const load = async () => {
         try { const r = await api.get("/orders/mine"); setOrders(Array.isArray(r.data) ? r.data : []); }
@@ -38,6 +41,37 @@ export default function CustomerDashboard() {
             toast.success("Delivery confirmed — thank you!");
             load();
         } catch (e) { toast.error(formatApiError(e)); }
+    };
+
+    const reorder = async (order) => {
+        const listingId = order.listings?.id || order.listing_id;
+        if (!listingId) { toast.error("Cannot reorder — product not found"); return; }
+        setReorderingId(order.id);
+        try {
+            const { data } = await api.get(`/listings/${listingId}`);
+            const product = {
+                id: data.id,
+                price: data.price,
+                stock: data.stock,
+                brand: data.brand,
+                model_number: data.model_number,
+                color: data.color,
+                toner_type: data.toner_type,
+                image_url: data.image_url,
+                supplier_name: data.supplier_name,
+                supplier_city: data.supplier_city,
+            };
+            addItem(product, order.qty || 1);
+            toast.success("Added to cart");
+            navigate("/cart");
+        } catch (e) {
+            const status = e?.response?.status;
+            if (status === 404) toast.error("This product is no longer available");
+            else if (status === 410) toast.error(e?.response?.data?.detail || "Out of stock");
+            else toast.error(formatApiError(e));
+        } finally {
+            setReorderingId(null);
+        }
     };
 
     return (
@@ -137,6 +171,17 @@ export default function CustomerDashboard() {
                                     data-testid={`confirm-delivery-${o.id}`}
                                 >
                                     <CheckCircle2 size={15} /> Confirm Delivery
+                                </button>
+                            )}
+
+                            {(o.status === "delivered" || o.status === "cancelled") && (
+                                <button
+                                    onClick={() => reorder(o)}
+                                    disabled={reorderingId === o.id}
+                                    className="mt-3 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-white hover:bg-[#FFF8E0] text-[#0A0A0B] border border-[#F5C400] text-[13px] font-semibold transition disabled:opacity-60"
+                                    data-testid={`reorder-${o.id}`}
+                                >
+                                    <RotateCcw size={14} /> {reorderingId === o.id ? "Adding…" : "Reorder this product"}
                                 </button>
                             )}
                         </div>

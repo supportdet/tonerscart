@@ -153,6 +153,7 @@ class SellerApplication(BaseModel):
     doc_pan: Optional[str] = ""
     doc_bank_proof: Optional[str] = ""
     doc_address_proof: Optional[str] = ""
+    agreed_to_terms: bool = False
 
 
 class SignupSupplier(BaseModel):
@@ -401,6 +402,8 @@ async def apply_seller(payload: SellerApplication, user: dict = Depends(require_
         raise HTTPException(400, "You are already a seller")
     if user.get("role") == "admin":
         raise HTTPException(400, "Admins cannot apply as sellers")
+    if not payload.agreed_to_terms:
+        raise HTTPException(400, "You must accept the TonersCart Seller Terms to apply")
 
     application = {
         "user_id": user["id"],
@@ -2593,9 +2596,24 @@ def duplicate_printer(printer_id: str, user: dict = Depends(require_user)):
 
 @api.get("/listings/{listing_id}")
 def get_listing(listing_id: str):
-    r = sb_admin.table("listings").select(
-        "*,suppliers(business_name,city,is_suspended)"
-    ).eq("id", listing_id).maybe_single().execute()
+    """Single listing lookup for buyer one-click reorder. Falls back gracefully when
+    the optional `suppliers.is_suspended` column has not been migrated yet."""
+    try:
+        r = sb_admin.table("listings").select(
+            "*,suppliers(business_name,city,is_suspended)"
+        ).eq("id", listing_id).maybe_single().execute()
+    except Exception as e:
+        msg = str(e)
+        if "is_suspended" in msg:
+            try:
+                r = sb_admin.table("listings").select(
+                    "*,suppliers(business_name,city)"
+                ).eq("id", listing_id).maybe_single().execute()
+            except Exception:
+                r = None
+        else:
+            logger.warning("get_listing select failed: %s", e)
+            r = None
     if not r or not r.data:
         raise HTTPException(404, "Listing not found")
     data = r.data
