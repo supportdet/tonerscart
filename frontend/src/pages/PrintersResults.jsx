@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import api, { formatApiError } from "../lib/api";
@@ -30,13 +30,13 @@ function PrinterCard({ p, onRequest }) {
             <div className="absolute top-3 right-3 z-10">
                 <WhatsAppEnquiry brand={p.brand} model={p.model_number} />
             </div>
-            <div className="bg-black/[0.03] aspect-[4/3] grid place-items-center">
+            <Link to={`/printer/${p.id}`} className="block bg-black/[0.03] aspect-[4/3] grid place-items-center hover:opacity-95" data-testid={`printer-link-${p.id}`}>
                 {p.image_url ? (
                     <img src={p.image_url} alt={`${p.brand} ${p.model_number}`} className="w-full h-full object-contain" loading="lazy" />
                 ) : (
                     <PrinterIcon size={42} className="text-[#D2D2D7]" />
                 )}
-            </div>
+            </Link>
             <div className="p-4 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                     <span className={`text-[10px] tracking-[0.14em] uppercase font-semibold px-2 py-0.5 rounded-full ${p.condition === "new" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>

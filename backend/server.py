@@ -185,6 +185,13 @@ class SignupSupplier(BaseModel):
     doc_address_proof: Optional[str] = ""
 
 
+class ListingVariantIn(BaseModel):
+    color: str = Field(min_length=1, max_length=40)
+    price: float = Field(gt=0)
+    stock: int = Field(ge=0)
+    id: Optional[str] = None  # for updates
+
+
 class ListingCreate(BaseModel):
     # Either a toner_id from catalog, or brand+model_number for a new entry
     toner_id: Optional[str] = None
@@ -196,7 +203,15 @@ class ListingCreate(BaseModel):
     stock: int = Field(ge=0)
     toner_type: str  # "Original" | "Compatible" | "Refilled"
     image_url: Optional[str] = ""
+    image_urls: List[str] = Field(default_factory=list)
     spec_pdf_url: Optional[str] = None
+    variants: List[ListingVariantIn] = Field(default_factory=list)
+    # Structured specs (Wave 4 — degrade gracefully when columns missing)
+    compatible_models: Optional[str] = None
+    oem_part_number: Optional[str] = None
+    cartridge_weight: Optional[int] = None
+    pack_size: Optional[int] = None
+    warranty: Optional[str] = None
 
 
 class ListingUpdate(BaseModel):
@@ -204,6 +219,8 @@ class ListingUpdate(BaseModel):
     stock: Optional[int] = None
     toner_type: Optional[str] = None
     image_url: Optional[str] = None
+    image_urls: Optional[List[str]] = None
+    variants: Optional[List[ListingVariantIn]] = None
 
 
 class OrderCreate(BaseModel):
@@ -213,6 +230,7 @@ class OrderCreate(BaseModel):
     customer_phone: str
     delivery_address: str
     notes: Optional[str] = ""
+    variant_id: Optional[str] = None
 
 
 class OrderStatusUpdate(BaseModel):
@@ -695,6 +713,23 @@ def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
         r["supplier_name"] = s.get("business_name")
         r["supplier_city"] = s.get("city")
         out.append(r)
+    # Bulk attach variants for all returned listings (one round-trip)
+    if out:
+        try:
+            ids = [r["id"] for r in out if r.get("id")]
+            vrows = sb_admin.table("listing_variants").select("id,listing_id,color,price,stock").in_(
+                "listing_id", ids
+            ).execute().data or []
+            by_listing = {}
+            for v in vrows:
+                by_listing.setdefault(v["listing_id"], []).append(v)
+            for r in out:
+                r["variants"] = by_listing.get(r["id"], [])
+        except Exception as e:
+            if "listing_variants" not in str(e):
+                logger.warning("variant bulk attach failed: %s", e)
+            for r in out:
+                r["variants"] = []
     return out
 
 
@@ -798,20 +833,66 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
         "toner_type": payload.toner_type,
         "price": payload.price,
         "stock": payload.stock,
-        "image_url": payload.image_url or None,
+        "image_url": payload.image_url or (payload.image_urls[0] if payload.image_urls else None),
         "city": s["city"],
         "spec_pdf_url": payload.spec_pdf_url or None,
     }
-    try:
-        res = sb_admin.table("listings").insert(row).execute()
-    except Exception as e:
-        # Graceful fallback if spec_pdf_url column hasn't been migrated yet
-        if "spec_pdf_url" in str(e):
-            row.pop("spec_pdf_url", None)
+    # Structured specs + image_urls — gracefully degrade per-column when migration not run
+    optional_cols = {
+        "image_urls": payload.image_urls or None,
+        "compatible_models": payload.compatible_models,
+        "oem_part_number": payload.oem_part_number,
+        "cartridge_weight": payload.cartridge_weight,
+        "pack_size": payload.pack_size,
+        "warranty": payload.warranty,
+    }
+    for k, v in optional_cols.items():
+        if v is not None:
+            row[k] = v
+    listing_row = None
+    while True:
+        try:
             res = sb_admin.table("listings").insert(row).execute()
-        else:
-            raise
-    return res.data[0] if res.data else row
+            listing_row = res.data[0] if res.data else row
+            break
+        except Exception as e:
+            msg = str(e)
+            dropped = False
+            for k in ("spec_pdf_url", "image_urls", "compatible_models", "oem_part_number", "cartridge_weight", "pack_size", "warranty"):
+                if k in msg and k in row:
+                    row.pop(k, None)
+                    dropped = True
+                    break
+            if not dropped:
+                raise
+    # Variants — write each as its own row in listing_variants (best effort)
+    saved_variants = []
+    if payload.variants and listing_row and listing_row.get("id"):
+        try:
+            vrows = [
+                {"listing_id": listing_row["id"], "color": sanitize(v.color, 40), "price": float(v.price), "stock": int(v.stock)}
+                for v in payload.variants[:15]
+            ]
+            if vrows:
+                vres = sb_admin.table("listing_variants").insert(vrows).execute()
+                saved_variants = vres.data or vrows
+                # Sync top-level listing.price + stock with the cheapest variant for backward compatibility
+                cheapest = min(vrows, key=lambda x: x["price"])
+                total_stock = sum(int(v["stock"] or 0) for v in vrows)
+                try:
+                    sb_admin.table("listings").update({"price": cheapest["price"], "stock": total_stock}).eq("id", listing_row["id"]).execute()
+                    listing_row["price"] = cheapest["price"]
+                    listing_row["stock"] = total_stock
+                except Exception:
+                    pass
+        except Exception as e:
+            if "listing_variants" in str(e):
+                logger.warning("listing_variants table not migrated — variants ignored")
+            else:
+                logger.warning("variant insert failed: %s", e)
+    listing_row = dict(listing_row or {})
+    listing_row["variants"] = saved_variants
+    return listing_row
 
 
 @api.put("/supplier/listings/{listing_id}")
@@ -845,15 +926,30 @@ async def create_order(payload: OrderCreate, user: dict = Depends(require_user))
     if not lst or not lst.data:
         raise HTTPException(404, "Listing not found")
     L = lst.data
-    if payload.qty > (L.get("stock") or 0):
+
+    # Variant resolution — when buyer picked a colour swatch, deduct from the variant's stock
+    variant = None
+    if payload.variant_id:
+        try:
+            v = sb_admin.table("listing_variants").select("*").eq("id", payload.variant_id).maybe_single().execute()
+            if v and v.data and v.data.get("listing_id") == L["id"]:
+                variant = v.data
+        except Exception as e:
+            if "listing_variants" not in str(e):
+                logger.warning("variant lookup failed: %s", e)
+
+    available = int(variant["stock"] if variant else (L.get("stock") or 0))
+    if payload.qty > available:
         raise HTTPException(400, "Insufficient stock")
-    total = float(L["price"]) * payload.qty
+    unit_price = float(variant["price"]) if variant else float(L["price"])
+    total = unit_price * payload.qty
+
     row = {
         "customer_id": user["id"],
         "supplier_id": L["supplier_id"],
         "listing_id": L["id"],
         "qty": payload.qty,
-        "unit_price": L["price"],
+        "unit_price": unit_price,
         "total": total,
         "customer_name": payload.customer_name,
         "customer_phone": payload.customer_phone,
@@ -861,9 +957,30 @@ async def create_order(payload: OrderCreate, user: dict = Depends(require_user))
         "notes": payload.notes or None,
         "status": "requested",
     }
-    res = sb_admin.table("orders").insert(row).execute()
-    # Decrement stock (best effort)
-    sb_admin.table("listings").update({"stock": L["stock"] - payload.qty}).eq("id", L["id"]).execute()
+    if variant:
+        row["variant_id"] = variant["id"]
+    try:
+        res = sb_admin.table("orders").insert(row).execute()
+    except Exception as e:
+        if "variant_id" in str(e):
+            row.pop("variant_id", None)
+            res = sb_admin.table("orders").insert(row).execute()
+        else:
+            raise
+    # Decrement stock — variant if any, else listing
+    try:
+        if variant:
+            sb_admin.table("listing_variants").update({"stock": max(0, int(variant["stock"]) - payload.qty)}).eq("id", variant["id"]).execute()
+            # Also recompute total stock on parent listing
+            try:
+                allv = sb_admin.table("listing_variants").select("stock").eq("listing_id", L["id"]).execute().data or []
+                sb_admin.table("listings").update({"stock": sum(int(x.get("stock") or 0) for x in allv)}).eq("id", L["id"]).execute()
+            except Exception:
+                pass
+        else:
+            sb_admin.table("listings").update({"stock": max(0, int(L.get("stock") or 0) - payload.qty)}).eq("id", L["id"]).execute()
+    except Exception as e:
+        logger.warning("stock decrement failed: %s", e)
     created = res.data[0] if res.data else row
 
     # Generate TC-YYYY-NNNNN order_number (best effort — gracefully degrades if column missing)
@@ -1113,6 +1230,7 @@ class PrinterListingCreate(BaseModel):
     model_number: str
     description: Optional[str] = ""
     image_url: str
+    image_urls: List[str] = Field(default_factory=list)
     condition: str = "new"
     usage_type: str
     category: str
@@ -1126,6 +1244,13 @@ class PrinterListingCreate(BaseModel):
     price: float
     stock: int = 1
     spec_pdf_url: Optional[str] = None
+    # Structured specs
+    print_speed_ppm: Optional[int] = None
+    duty_cycle: Optional[int] = None
+    display_type: Optional[str] = None
+    dimensions: Optional[str] = None
+    weight_kg: Optional[float] = None
+    printer_warranty: Optional[str] = None
 
 
 def _supplier_id_for(user: dict) -> str:
@@ -1158,6 +1283,29 @@ async def upload_printer_image(file: UploadFile = File(...), user: dict = Depend
         raise HTTPException(500, f"Upload failed: {e}") from e
     public_url = sb_admin.storage.from_("printer-images").get_public_url(path)
     return {"url": public_url, "path": path}
+
+
+@api.post("/supplier/listing-image")
+async def upload_listing_image(file: UploadFile = File(...), user: dict = Depends(require_user)):
+    """Upload a toner / paper listing image via the backend (service role).
+    Stored in the `printer-images` bucket (re-used for all product imagery — has public read)."""
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved sellers can upload listing images")
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(400, "Only image files are allowed")
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Max 5 MB")
+    content = compress_image(content, max_side=1200, quality=85)
+    path = f"{user['id']}/{uuid.uuid4().hex}.jpg"
+    try:
+        sb_admin.storage.from_("printer-images").upload(
+            path, content, {"content-type": "image/jpeg", "upsert": "false"}
+        )
+    except Exception as e:
+        logger.exception("listing image upload failed")
+        raise HTTPException(500, f"Upload failed: {e}") from e
+    return {"url": sb_admin.storage.from_("printer-images").get_public_url(path), "path": path}
 
 
 
@@ -1199,14 +1347,32 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         "stock": int(payload.stock),
         "spec_pdf_url": payload.spec_pdf_url or None,
     }
-    try:
-        res = sb_admin.table("printer_listings").insert(row).execute()
-    except Exception as e:
-        if "spec_pdf_url" in str(e):
-            row.pop("spec_pdf_url", None)
+    optional_cols = {
+        "image_urls": payload.image_urls or None,
+        "print_speed_ppm": payload.print_speed_ppm,
+        "duty_cycle": payload.duty_cycle,
+        "display_type": payload.display_type,
+        "dimensions": payload.dimensions,
+        "weight_kg": payload.weight_kg,
+        "printer_warranty": payload.printer_warranty,
+    }
+    for k, v in optional_cols.items():
+        if v is not None:
+            row[k] = v
+    while True:
+        try:
             res = sb_admin.table("printer_listings").insert(row).execute()
-        else:
-            raise
+            break
+        except Exception as e:
+            msg = str(e)
+            dropped = False
+            for k in ("spec_pdf_url", "image_urls", "print_speed_ppm", "duty_cycle", "display_type", "dimensions", "weight_kg", "printer_warranty"):
+                if k in msg and k in row:
+                    row.pop(k, None)
+                    dropped = True
+                    break
+            if not dropped:
+                raise
     if not res.data:
         raise HTTPException(500, "Failed to insert printer")
     return {"id": res.data[0]["id"]}
@@ -2420,6 +2586,12 @@ class PaperCreate(BaseModel):
     stock: int = Field(ge=0, default=0)
     city: Optional[str] = None
     image_url: Optional[str] = None
+    image_urls: List[str] = Field(default_factory=list)
+    # Structured specs
+    brightness: Optional[int] = None
+    thickness_microns: Optional[int] = None
+    acid_free: Optional[bool] = None
+    suitable_for: List[str] = Field(default_factory=list)
 
 
 @api.post("/supplier/papers")
@@ -2438,14 +2610,34 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
         "price_per_ream": float(payload.price_per_ream),
         "stock": int(payload.stock),
         "city": payload.city or s.data.get("city"),
-        "image_url": payload.image_url or None,
+        "image_url": payload.image_url or (payload.image_urls[0] if payload.image_urls else None),
     }
-    try:
-        res = sb_admin.table("paper_listings").insert(row).execute()
-    except Exception as e:
-        logger.warning("create_paper failed: %s", e)
-        raise HTTPException(503, "paper_listings table not yet migrated — run supabase_schema_papers.sql") from e
-    return res.data[0] if res.data else row
+    optional_cols = {
+        "image_urls": payload.image_urls or None,
+        "brightness": payload.brightness,
+        "thickness_microns": payload.thickness_microns,
+        "acid_free": payload.acid_free,
+        "suitable_for": payload.suitable_for or None,
+    }
+    for k, v in optional_cols.items():
+        if v is not None:
+            row[k] = v
+    while True:
+        try:
+            res = sb_admin.table("paper_listings").insert(row).execute()
+            return res.data[0] if res.data else row
+        except Exception as e:
+            msg = str(e)
+            dropped = False
+            for k in ("image_urls", "brightness", "thickness_microns", "acid_free", "suitable_for"):
+                if k in msg and k in row:
+                    row.pop(k, None)
+                    dropped = True
+                    break
+            if dropped:
+                continue
+            logger.warning("create_paper failed: %s", e)
+            raise HTTPException(503, "paper_listings table not yet migrated — run supabase_schema_papers.sql") from e
 
 
 @api.get("/supplier/papers/mine")
@@ -2683,6 +2875,96 @@ def get_listing(listing_id: str):
         raise HTTPException(410, "Out of stock")
     data["supplier_name"] = sup.get("business_name")
     data["supplier_city"] = sup.get("city")
+    # Attach variants (best effort)
+    try:
+        v = sb_admin.table("listing_variants").select("*").eq("listing_id", data["id"]).order("price").execute()
+        data["variants"] = v.data or []
+    except Exception:
+        data["variants"] = []
+    return data
+
+
+@api.post("/admin/cleanup-test-data")
+def admin_cleanup_test_data(apply: bool = False, user: dict = Depends(require_role("admin"))):
+    """Find and (optionally) delete any test / seed / demo / dummy data from the database.
+
+    Pass `?apply=true` to actually delete. Without it, returns a dry-run preview.
+    """
+    try:
+        from cleanup_test_data import run as _run_cleanup
+        return _run_cleanup(apply=bool(apply))
+    except Exception as e:
+        logger.exception("cleanup_test_data failed")
+        raise HTTPException(500, f"Cleanup failed: {e}") from e
+
+
+@api.get("/listings/{listing_id}/public")
+def get_listing_public(listing_id: str):
+    """Viewable-without-login product page. Same shape as /listings/{id} but does NOT 410 on out-of-stock —
+    just attaches stock=0 so the UI can disable the Add to Cart / Buy Now buttons."""
+    try:
+        r = sb_admin.table("listings").select(
+            "*,suppliers(business_name,city,is_suspended)"
+        ).eq("id", listing_id).maybe_single().execute()
+    except Exception as e:
+        if "is_suspended" in str(e):
+            r = sb_admin.table("listings").select("*,suppliers(business_name,city)").eq("id", listing_id).maybe_single().execute()
+        else:
+            r = None
+    if not r or not r.data:
+        raise HTTPException(404, "Listing not found")
+    data = r.data
+    sup = data.pop("suppliers", None) or {}
+    data["supplier_name"] = sup.get("business_name")
+    data["supplier_city"] = sup.get("city")
+    data["supplier_suspended"] = bool(sup.get("is_suspended"))
+    try:
+        v = sb_admin.table("listing_variants").select("*").eq("listing_id", data["id"]).order("price").execute()
+        data["variants"] = v.data or []
+    except Exception:
+        data["variants"] = []
+    return data
+
+
+@api.get("/printers/{printer_id}/public")
+def get_printer_public(printer_id: str):
+    try:
+        r = sb_admin.table("printer_listings").select(
+            "*,suppliers(business_name,city,is_suspended)"
+        ).eq("id", printer_id).maybe_single().execute()
+    except Exception as e:
+        if "is_suspended" in str(e):
+            r = sb_admin.table("printer_listings").select("*,suppliers(business_name,city)").eq("id", printer_id).maybe_single().execute()
+        else:
+            r = None
+    if not r or not r.data:
+        raise HTTPException(404, "Printer not found")
+    data = r.data
+    sup = data.pop("suppliers", None) or {}
+    data["supplier_name"] = sup.get("business_name")
+    data["supplier_city"] = sup.get("city")
+    data["supplier_suspended"] = bool(sup.get("is_suspended"))
+    return data
+
+
+@api.get("/papers/{paper_id}/public")
+def get_paper_public(paper_id: str):
+    try:
+        r = sb_admin.table("paper_listings").select(
+            "*,suppliers(business_name,city,is_suspended)"
+        ).eq("id", paper_id).maybe_single().execute()
+    except Exception as e:
+        if "is_suspended" in str(e):
+            r = sb_admin.table("paper_listings").select("*,suppliers(business_name,city)").eq("id", paper_id).maybe_single().execute()
+        else:
+            r = None
+    if not r or not r.data:
+        raise HTTPException(404, "Paper not found")
+    data = r.data
+    sup = data.pop("suppliers", None) or {}
+    data["supplier_name"] = sup.get("business_name")
+    data["supplier_city"] = sup.get("city")
+    data["supplier_suspended"] = bool(sup.get("is_suspended"))
     return data
 
 

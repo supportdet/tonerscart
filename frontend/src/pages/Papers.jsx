@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Loader2, Package, Search, MapPin } from "lucide-react";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
@@ -64,8 +64,9 @@ export default function Papers() {
                     A4 / A3 papers from verified suppliers
                 </h1>
 
-                {/* Filters */}
-                <div className="mt-6 flex flex-wrap gap-3 items-center bg-white border border-black/[0.06] rounded-xl p-3 shadow-sm">
+                {/* Filters — sticky */}
+                <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-3 pb-3 mt-6 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-black/[0.04]" data-testid="papers-sticky-wrapper">
+                    <div className="flex flex-wrap gap-3 items-center bg-white border border-black/[0.06] rounded-xl p-3 shadow-sm">
                     <div className="relative flex-1 min-w-[180px]">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B]" />
                         <Input value={filters.brand} onChange={(e) => setFilters({ ...filters, brand: e.target.value })} placeholder="Brand…" className="pl-9" data-testid="papers-brand-input" />
@@ -83,6 +84,7 @@ export default function Papers() {
                         {KNOWN_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
                     </select>
                     <Button onClick={load} className="btn-cta" data-testid="papers-apply-btn">Apply</Button>
+                    </div>
                 </div>
 
                 {/* Results */}
@@ -109,28 +111,30 @@ export default function Papers() {
 function PaperCard({ p, onRequest }) {
     const pricePerBox = Number(p.price_per_ream) * Number(p.reams_per_box || 1);
     return (
-        <div className="bg-white border border-black/[0.06] rounded-2xl p-4 shadow-sm" data-testid={`paper-card-${p.id}`}>
-            <div className="flex items-start justify-between gap-2">
-                <div>
-                    <div className="text-[10.5px] tracking-[0.14em] uppercase font-semibold text-[#86868B]">{p.brand}</div>
-                    <div className="font-semibold text-[15px] text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>{p.size} · {p.gsm} GSM</div>
+        <div className="bg-white border border-black/[0.06] rounded-2xl p-4 shadow-sm hover:border-black/[0.15] transition" data-testid={`paper-card-${p.id}`}>
+            <Link to={`/paper/${p.id}`} className="block" data-testid={`paper-link-${p.id}`}>
+                <div className="flex items-start justify-between gap-2">
+                    <div>
+                        <div className="text-[10.5px] tracking-[0.14em] uppercase font-semibold text-[#86868B]">{p.brand}</div>
+                        <div className="font-semibold text-[15px] text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>{p.size} · {p.gsm} GSM</div>
+                    </div>
+                    <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">{p.stock} boxes</span>
                 </div>
-                <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">{p.stock} boxes</span>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-3 text-[12.5px]">
-                <div>
-                    <div className="text-[10.5px] uppercase tracking-wider text-[#86868B]">Per ream</div>
-                    <div className="font-mono font-semibold text-[#0A0A0B]">{fmtMoney(p.price_per_ream)}</div>
+                <div className="mt-3 grid grid-cols-2 gap-3 text-[12.5px]">
+                    <div>
+                        <div className="text-[10.5px] uppercase tracking-wider text-[#86868B]">Per ream</div>
+                        <div className="font-mono font-semibold text-[#0A0A0B]">{fmtMoney(p.price_per_ream)}</div>
+                    </div>
+                    <div>
+                        <div className="text-[10.5px] uppercase tracking-wider text-[#86868B]">Per box ({p.reams_per_box})</div>
+                        <div className="font-mono font-semibold text-[#0A0A0B]">{fmtMoney(pricePerBox)}</div>
+                    </div>
                 </div>
-                <div>
-                    <div className="text-[10.5px] uppercase tracking-wider text-[#86868B]">Per box ({p.reams_per_box})</div>
-                    <div className="font-mono font-semibold text-[#0A0A0B]">{fmtMoney(pricePerBox)}</div>
+                <div className="mt-3 flex items-center justify-between text-[11.5px] text-[#6E6E73]">
+                    <span className="inline-flex items-center gap-1"><MapPin size={11} /> {p.supplier_city || p.city || "—"}</span>
+                    <span>{p.supplier_name}</span>
                 </div>
-            </div>
-            <div className="mt-3 flex items-center justify-between text-[11.5px] text-[#6E6E73]">
-                <span className="inline-flex items-center gap-1"><MapPin size={11} /> {p.supplier_city || p.city || "—"}</span>
-                <span>{p.supplier_name}</span>
-            </div>
+            </Link>
             <Button onClick={() => onRequest(p)} className="btn-cta w-full mt-3 text-[13px]" data-testid={`paper-request-${p.id}`}>Request Order</Button>
         </div>
     );

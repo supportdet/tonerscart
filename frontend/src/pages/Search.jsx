@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { MapPin, Boxes, Plus, Minus, ShoppingCart, X, SlidersHorizontal } from "lucide-react";
 import { Skeleton } from "../components/ui/skeleton";
 import { toast } from "sonner";
@@ -15,6 +15,12 @@ import ProductActions from "../components/ProductActions";
 import RefilledWarningDialog from "../components/RefilledWarningDialog";
 import PageMeta from "../components/PageMeta";
 import useReveal from "../hooks/useReveal";
+import { colorSwatch } from "../lib/colors";
+
+const variantColorFromName = (name) => {
+    const v = colorSwatch(name);
+    return v.startsWith("linear") ? "#C8C8CD" : v;
+};
 
 const SidebarItem = ({ active, onClick, children, testid }) => (
     <button onClick={onClick} data-testid={testid}
@@ -31,19 +37,20 @@ function ProductCard({ p, qty, setQty, onBuy, onCart }) {
         : p.toner_type === "Compatible"
         ? "bg-blue-50 text-blue-700 border-blue-200"
         : "bg-amber-50 text-amber-700 border-amber-200";
+    const variants = Array.isArray(p.variants) ? p.variants : [];
     return (
         <div className="tc-product-card group relative" data-testid={`product-card-${p.id}`}>
             <div className="absolute top-3 right-3 z-10">
                 <WhatsAppEnquiry brand={p.brand} model={p.model_number} />
             </div>
-            <div className="tc-product-img">
+            <Link to={`/toner/${p.id}`} className="tc-product-img block hover:opacity-95 transition" data-testid={`product-link-${p.id}`}>
                 <span className="tc-product-img-label">{p.brand}</span>
                 {p.image_url ? (
                     <img src={p.image_url} alt={`${p.brand} ${p.model_number}`} className="w-full h-full object-cover" loading="lazy" />
                 ) : (
                     <TonerCartridge color={p.color || "Black"} brand={p.brand} model={p.model_number} type={p.toner_type || "Original"} />
                 )}
-            </div>
+            </Link>
             <div className="p-4 flex flex-col gap-2 flex-1">
                 <div className="flex items-center justify-between">
                     <div className="text-[10px] tracking-[0.16em] uppercase font-semibold text-[#6E6E73]">{p.brand}</div>
@@ -51,13 +58,27 @@ function ProductCard({ p, qty, setQty, onBuy, onCart }) {
                         {p.toner_type || "Original"}
                     </span>
                 </div>
-                <div className="font-mono text-[18px] font-semibold text-[#0A0A0B] tracking-tight">{p.model_number}</div>
+                <Link to={`/toner/${p.id}`} className="font-mono text-[18px] font-semibold text-[#0A0A0B] tracking-tight hover:text-[#00B7C7] transition">{p.model_number}</Link>
                 <div className="text-[13px] text-[#1D1D1F] truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
                     {p.supplier_name || "—"}
                 </div>
                 <div className="text-[12px] text-[#6E6E73] flex items-center gap-1">
                     <MapPin size={11} /> {p.city}
                 </div>
+
+                {variants.length > 0 && (
+                    <div className="flex items-center gap-1.5" data-testid={`card-variants-${p.id}`}>
+                        {variants.slice(0, 6).map((v) => (
+                            <span
+                                key={v.id}
+                                title={v.color}
+                                className="inline-block w-3.5 h-3.5 rounded-full border border-black/10"
+                                style={{ backgroundColor: variantColorFromName(v.color) }}
+                            />
+                        ))}
+                        <span className="text-[10.5px] text-[#86868B]">{variants.length} colour{variants.length === 1 ? "" : "s"}</span>
+                    </div>
+                )}
 
                 <div className="mt-2 pt-3 border-t border-black/[0.05] flex items-end justify-between gap-2">
                     <div>
@@ -270,9 +291,11 @@ export default function SearchPage() {
                                   : "Buy original and compatible printer toner cartridges online in India. Compare prices from verified suppliers. HP 88A, Canon 337, Brother TN-2365, Xerox toners and more."}
                 path="/search"
             />
-            <div className="tc-search-shell tc-search-light" data-testid="search-bar">
-                <TonerSearchInput value={q} onChange={setQ} onSubmit={apply} testId="search-input" placeholder="Search by brand or model number…" />
-                <button onClick={() => apply()} className="tc-search-go" data-testid="search-apply-btn">Search</button>
+            <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-2 pb-3 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-black/[0.04]" data-testid="search-sticky-wrapper">
+                <div className="tc-search-shell tc-search-light" data-testid="search-bar">
+                    <TonerSearchInput value={q} onChange={setQ} onSubmit={apply} testId="search-input" placeholder="Search by brand or model number…" />
+                    <button onClick={() => apply()} className="tc-search-go" data-testid="search-apply-btn">Search</button>
+                </div>
             </div>
 
             {/* Mobile filter trigger row */}

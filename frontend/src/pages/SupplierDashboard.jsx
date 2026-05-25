@@ -17,6 +17,12 @@ import CommissionBanner from "../components/CommissionBanner";
 import CommissionCalculator from "../components/CommissionCalculator";
 import { commissionFor } from "../lib/commission";
 import { Copy, Check } from "lucide-react";
+import { colorSwatch as _colorSwatch } from "../lib/colors";
+
+const colorSwatchHex = (name) => {
+    const v = _colorSwatch(name);
+    return v.startsWith("linear") ? "#C8C8CD" : v;
+};
 
 const ORDER_STATUS = {
     requested: "Requested",
@@ -156,10 +162,18 @@ export default function SupplierDashboard() {
     const [stock, setStock] = useState("");
     const [tonerType, setTonerType] = useState("Original");
     const [pageYield, setPageYield] = useState("");
-    const [imageFile, setImageFile] = useState(null);
-    const [imagePreview, setImagePreview] = useState("");
+    const [imageFiles, setImageFiles] = useState([]); // Array<File>, 1..3
+    const [imagePreviews, setImagePreviews] = useState([]);
     const [brochureFile, setBrochureFile] = useState(null);
     const [refilledWarning, setRefilledWarning] = useState(false);
+    // Structured specs (Wave 4)
+    const [compatibleModels, setCompatibleModels] = useState("");
+    const [oemPartNumber, setOemPartNumber] = useState("");
+    const [cartridgeWeight, setCartridgeWeight] = useState("");
+    const [packSize, setPackSize] = useState(1);
+    const [warranty, setWarranty] = useState("");
+    // Variants
+    const [variants, setVariants] = useState([{ color: "Black", price: "", stock: "" }]);
 
     // Business logo
     const [logoUrl, setLogoUrl] = useState("");
@@ -211,37 +225,76 @@ export default function SupplierDashboard() {
     const reset = () => {
         setBrand(""); setModelNumber(""); setColor("Black");
         setPrice(""); setStock(""); setTonerType("Original"); setPageYield("");
-        setImageFile(null); setImagePreview("");
+        setImageFiles([]); setImagePreviews([]);
         setBrochureFile(null);
+        setCompatibleModels(""); setOemPartNumber(""); setCartridgeWeight(""); setPackSize(1); setWarranty("");
+        setVariants([{ color: "Black", price: "", stock: "" }]);
     };
     const openDialog = () => { reset(); setOpen(true); };
 
     const onPickFile = (e) => {
-        const f = e.target.files?.[0];
-        if (!f) return;
-        if (f.size > 5 * 1024 * 1024) { toast.error("Image must be under 5 MB"); return; }
-        setImageFile(f);
-        setImagePreview(URL.createObjectURL(f));
+        const files = Array.from(e.target.files || []);
+        const merged = [...imageFiles];
+        for (const f of files) {
+            if (merged.length >= 3) break;
+            if (f.size > 5 * 1024 * 1024) { toast.error(`"${f.name}" exceeds 5 MB`); continue; }
+            if (!f.type.startsWith("image/")) { toast.error(`"${f.name}" is not an image`); continue; }
+            merged.push(f);
+        }
+        setImageFiles(merged);
+        setImagePreviews(merged.map((f) => URL.createObjectURL(f)));
+        e.target.value = "";
+    };
+    const removeImage = (idx) => {
+        const next = imageFiles.filter((_, i) => i !== idx);
+        setImageFiles(next);
+        setImagePreviews(next.map((f) => URL.createObjectURL(f)));
+    };
+
+    const addVariant = () => {
+        if (variants.length >= 15) { toast.error("Up to 15 colour variants are allowed"); return; }
+        setVariants([...variants, { color: "", price: "", stock: "" }]);
+    };
+    const updateVariant = (i, key, val) => {
+        const next = variants.slice();
+        next[i] = { ...next[i], [key]: val };
+        setVariants(next);
+    };
+    const removeVariant = (i) => {
+        if (variants.length <= 1) { toast.error("At least one colour variant is required"); return; }
+        setVariants(variants.filter((_, x) => x !== i));
     };
 
     const submit = async (e) => {
         e.preventDefault();
         if (!brand) { toast.error("Please select a brand"); return; }
         if (!modelNumber.trim()) { toast.error("Please enter a model number"); return; }
-        if (!price || !stock) { toast.error("Price and stock are required"); return; }
-        if (!imageFile) { toast.error("A product image is required"); return; }
+        if (imageFiles.length < 2) { toast.error("Please upload at least 2 product images (max 3)"); return; }
+        const cleanedVariants = variants
+            .map((v) => ({ color: (v.color || "").trim(), price: parseFloat(v.price), stock: parseInt(v.stock, 10) }))
+            .filter((v) => v.color && v.price > 0 && v.stock >= 0);
+        if (cleanedVariants.length === 0) {
+            toast.error("Add at least one colour variant with a colour name, price and stock");
+            return;
+        }
         if (brochureFile && brochureFile.size > 10 * 1024 * 1024) {
             toast.error("Brochure must be under 10 MB"); return;
         }
         setSaving(true);
         try {
-            // Upload image to Supabase Storage (mandatory)
-            const ext = imageFile.name.split(".").pop() || "jpg";
-            const path = `${user.id}/${Date.now()}.${ext}`;
-            const { error } = await supabase.storage.from(PRODUCT_BUCKET).upload(path, imageFile, { upsert: false });
-            if (error) throw new Error(error.message);
-            const { data: pub } = supabase.storage.from(PRODUCT_BUCKET).getPublicUrl(path);
-            const imageUrl = pub.publicUrl;
+            // Upload all images via backend service role (auto-compressed)
+            const uploadedUrls = [];
+            for (const file of imageFiles) {
+                const fd = new FormData();
+                fd.append("file", file);
+                const { data } = await api.post("/supplier/listing-image", fd);
+                if (data?.url) uploadedUrls.push(data.url);
+            }
+            if (uploadedUrls.length < 2) {
+                toast.error("Some images failed to upload — please retry");
+                setSaving(false);
+                return;
+            }
 
             // Optional brochure (PDF) via backend service role
             let brochurePath = null;
@@ -252,18 +305,28 @@ export default function SupplierDashboard() {
                 brochurePath = up?.path || null;
             }
 
+            // Top-level price/stock derived from cheapest variant for backward compatibility
+            const cheapest = cleanedVariants.reduce((a, b) => (a.price <= b.price ? a : b));
+            const totalStock = cleanedVariants.reduce((s, v) => s + v.stock, 0);
+
             const { data: created } = await api.post("/supplier/listings", {
                 brand,
                 model_number: modelNumber.trim(),
-                color,
-                price: parseFloat(price),
-                stock: parseInt(stock, 10),
+                color: cleanedVariants[0].color,
+                price: cheapest.price,
+                stock: totalStock,
                 toner_type: tonerType,
                 page_yield: pageYield ? parseInt(pageYield, 10) : null,
-                image_url: imageUrl,
+                image_url: uploadedUrls[0],
+                image_urls: uploadedUrls,
                 spec_pdf_url: brochurePath,
+                compatible_models: compatibleModels || null,
+                oem_part_number: oemPartNumber || null,
+                cartridge_weight: cartridgeWeight ? parseInt(cartridgeWeight, 10) : null,
+                pack_size: packSize ? parseInt(packSize, 10) : 1,
+                warranty: warranty || null,
+                variants: cleanedVariants,
             });
-            // Already attached at creation; nothing else to do.
             void created;
             toast.success("Listing added");
             setOpen(false);
@@ -578,30 +641,6 @@ export default function SupplierDashboard() {
                             </div>
                         </div>
 
-                        {/* Circular color swatches */}
-                        <div className="mt-4">
-                            <Label>Color</Label>
-                            <div className="flex items-center gap-3 mt-2" data-testid="listing-color-row">
-                                {[
-                                    { name: "Black",   hex: "#1A1A1A" },
-                                    { name: "Cyan",    hex: "#00B7C7" },
-                                    { name: "Magenta", hex: "#E6007E" },
-                                    { name: "Yellow",  hex: "#F5C400" },
-                                ].map((c) => (
-                                    <button
-                                        type="button"
-                                        key={c.name}
-                                        onClick={() => setColor(c.name)}
-                                        aria-label={c.name}
-                                        title={c.name}
-                                        className={`tc-swatch ${color === c.name ? "is-selected" : ""}`}
-                                        style={{ "--swatch": c.hex }}
-                                        data-testid={`listing-color-${c.name}`}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-
                         {/* Toner type — pill cards */}
                         <div className="mt-4">
                             <Label>Toner type<span className="text-red-500"> *</span></Label>
@@ -626,63 +665,84 @@ export default function SupplierDashboard() {
                             </div>
                         </div>
 
-                        <div className="tc-form-section">Pricing &amp; stock</div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <Label>Price (₹)<span className="text-red-500"> *</span></Label>
-                                <Input
-                                    type="number" min="0" step="1"
-                                    value={price}
-                                    onChange={(e) => setPrice(e.target.value)}
-                                    required
-                                    className="tc-input-lg"
-                                    data-testid="listing-price-input"
-                                />
-                            </div>
-                            <div>
-                                <Label>Stock<span className="text-red-500"> *</span></Label>
-                                <Input
-                                    type="number" min="0" step="1"
-                                    value={stock}
-                                    onChange={(e) => setStock(e.target.value)}
-                                    required
-                                    className="tc-input-lg"
-                                    data-testid="listing-stock-input"
-                                />
-                            </div>
+                        <div className="tc-form-section">Colours &amp; pricing</div>
+                        <div className="text-[12px] text-[#86868B] mb-2">Add at least one colour variant. Up to 15 colours allowed. Buyers will pick a colour on the product page; stock deducts from that specific variant.</div>
+                        <div className="space-y-2" data-testid="variant-list">
+                            {variants.map((v, i) => (
+                                <div key={i} className="grid grid-cols-12 gap-2 items-center bg-[#FAFAFB] border border-black/[0.06] rounded-lg p-2" data-testid={`variant-row-${i}`}>
+                                    <div className="col-span-5 sm:col-span-4 flex items-center gap-2">
+                                        <span className="inline-block w-5 h-5 rounded-full border border-black/10 shrink-0" style={{ backgroundColor: colorSwatchHex(v.color) }} />
+                                        <Input value={v.color} onChange={(e) => updateVariant(i, "color", e.target.value)} placeholder="Black / Cyan / Light Magenta…" className="tc-input-lg" data-testid={`variant-color-${i}`} />
+                                    </div>
+                                    <Input type="number" min="0" step="1" value={v.price} onChange={(e) => updateVariant(i, "price", e.target.value)} placeholder="Price ₹" className="tc-input-lg col-span-3 sm:col-span-3" data-testid={`variant-price-${i}`} />
+                                    <Input type="number" min="0" step="1" value={v.stock} onChange={(e) => updateVariant(i, "stock", e.target.value)} placeholder="Stock" className="tc-input-lg col-span-3 sm:col-span-3" data-testid={`variant-stock-${i}`} />
+                                    <button type="button" onClick={() => removeVariant(i)} className="col-span-1 sm:col-span-2 h-9 inline-flex items-center justify-center text-red-600 hover:bg-red-50 rounded-md" aria-label="Remove variant" data-testid={`variant-remove-${i}`}>
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
+                            ))}
+                            <button type="button" onClick={addVariant} className="inline-flex items-center gap-1.5 mt-1 text-[12.5px] text-[#00B7C7] hover:text-[#0096a3] font-semibold" data-testid="variant-add-btn">
+                                <Plus size={13} /> Add colour
+                            </button>
                         </div>
                         <CommissionBanner />
 
-                        <div className="mt-3">
-                            <Label>Page yield (sheets)</Label>
-                            <div className="tc-suffix-wrap">
-                                <Input
-                                    type="number"
-                                    min="0"
-                                    step="1"
-                                    value={pageYield}
-                                    onChange={(e) => setPageYield(e.target.value)}
-                                    placeholder="e.g. 2000"
-                                    className="tc-input-lg"
-                                    data-testid="listing-page-yield"
-                                />
-                                <span className="tc-suffix">sheets</span>
+                        <div className="tc-form-section">Specifications (optional)</div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <Label>Page yield (sheets)</Label>
+                                <Input type="number" min="0" step="1" value={pageYield} onChange={(e) => setPageYield(e.target.value)} placeholder="e.g. 2000" className="tc-input-lg" data-testid="listing-page-yield" />
                             </div>
-                            <div className="text-[11.5px] text-[#86868B] mt-1">e.g. 2000 for HP 88A. Helps buyers compare cost per page.</div>
+                            <div>
+                                <Label>OEM part number</Label>
+                                <Input value={oemPartNumber} onChange={(e) => setOemPartNumber(e.target.value)} placeholder="e.g. Q2612A" className="tc-input-lg" data-testid="listing-oem" />
+                            </div>
+                            <div className="col-span-2">
+                                <Label>Compatible printer models</Label>
+                                <Input value={compatibleModels} onChange={(e) => setCompatibleModels(e.target.value)} placeholder="e.g. HP LaserJet 1010, 1012, 1015" className="tc-input-lg" data-testid="listing-compatible-models" />
+                            </div>
+                            <div>
+                                <Label>Cartridge weight (g)</Label>
+                                <Input type="number" min="0" step="1" value={cartridgeWeight} onChange={(e) => setCartridgeWeight(e.target.value)} placeholder="e.g. 450" className="tc-input-lg" data-testid="listing-weight" />
+                            </div>
+                            <div>
+                                <Label>Pack size</Label>
+                                <select value={packSize} onChange={(e) => setPackSize(parseInt(e.target.value, 10))} className="tc-input-lg w-full" data-testid="listing-pack-size">
+                                    {[1, 2, 5, 10].map((n) => <option key={n} value={n}>{n} cartridge{n === 1 ? "" : "s"}</option>)}
+                                </select>
+                            </div>
+                            <div className="col-span-2">
+                                <Label>Warranty</Label>
+                                <select value={warranty} onChange={(e) => setWarranty(e.target.value)} className="tc-input-lg w-full" data-testid="listing-warranty">
+                                    <option value="">No warranty</option>
+                                    <option value="3 months">3 months</option>
+                                    <option value="6 months">6 months</option>
+                                    <option value="1 year">1 year</option>
+                                </select>
+                            </div>
                         </div>
 
-                        <div className="tc-form-section">Product image</div>
+                        <div className="tc-form-section">Product images <span className="text-red-500">*</span> <span className="text-[12px] text-[#86868B] font-normal">(2 to 3 photos)</span></div>
                         <label className="block cursor-pointer">
-                            <input type="file" accept="image/*" onChange={onPickFile} className="hidden" data-testid="listing-image-input" />
-                            <div className={`tc-image-drop ${imagePreview ? "has-image" : ""}`}>
-                                {imagePreview ? (
-                                    <img src={imagePreview} alt="preview" className="max-h-32 rounded-md" />
+                            <input type="file" accept="image/*" multiple onChange={onPickFile} className="hidden" data-testid="listing-image-input" disabled={imageFiles.length >= 3} />
+                            <div className={`tc-image-drop ${imagePreviews.length ? "has-image" : ""}`}>
+                                {imagePreviews.length ? (
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        {imagePreviews.map((src, i) => (
+                                            <div key={i} className="relative">
+                                                <img src={src} alt={`preview ${i + 1}`} className="h-24 w-24 object-cover rounded-md border border-black/10" />
+                                                <button type="button" onClick={(e) => { e.preventDefault(); removeImage(i); }} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white text-[11px] grid place-items-center" data-testid={`listing-image-remove-${i}`}>×</button>
+                                            </div>
+                                        ))}
+                                        {imageFiles.length < 3 && (
+                                            <div className="h-24 w-24 grid place-items-center rounded-md border-2 border-dashed border-[#D2D2D7] text-[#86868B] text-[11px]">+ add</div>
+                                        )}
+                                    </div>
                                 ) : (
                                     <>
                                         <Camera size={22} />
-                                        <span>Click to upload toner image</span>
-                                        <span className="text-[11px] text-[#86868B] font-normal">PNG / JPG, max 5 MB</span>
+                                        <span>Click to upload 2–3 toner images</span>
+                                        <span className="text-[11px] text-[#86868B] font-normal">PNG / JPG · max 5 MB each · automatically compressed</span>
                                     </>
                                 )}
                             </div>

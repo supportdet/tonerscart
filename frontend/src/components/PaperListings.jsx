@@ -15,7 +15,7 @@ const GSMS = [70, 75, 80, 90, 100, 120, 150];
 const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
 
 function emptyForm() {
-    return { brand: "JK Paper", size: "A4", gsm: 75, reams_per_box: 10, price_per_ream: "", stock: "" };
+    return { brand: "JK Paper", size: "A4", gsm: 75, reams_per_box: 10, price_per_ream: "", stock: "", brightness: "", thickness_microns: "", acid_free: false, suitable_for: [] };
 }
 
 export default function PaperListings() {
@@ -24,6 +24,27 @@ export default function PaperListings() {
     const [open, setOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState(emptyForm());
+    const [imageFiles, setImageFiles] = useState([]);
+    const [imagePreviews, setImagePreviews] = useState([]);
+
+    const onPickImages = (e) => {
+        const files = Array.from(e.target.files || []);
+        const merged = [...imageFiles];
+        for (const file of files) {
+            if (merged.length >= 3) break;
+            if (file.size > 5 * 1024 * 1024) { toast.error(`"${file.name}" exceeds 5 MB`); continue; }
+            if (!file.type.startsWith("image/")) { toast.error(`"${file.name}" is not an image`); continue; }
+            merged.push(file);
+        }
+        setImageFiles(merged);
+        setImagePreviews(merged.map((f) => URL.createObjectURL(f)));
+        e.target.value = "";
+    };
+    const removeImage = (idx) => {
+        const next = imageFiles.filter((_, i) => i !== idx);
+        setImageFiles(next);
+        setImagePreviews(next.map((f) => URL.createObjectURL(f)));
+    };
 
     const load = async () => {
         setLoading(true);
@@ -44,8 +65,18 @@ export default function PaperListings() {
     const submit = async (e) => {
         e.preventDefault();
         if (!form.price_per_ream || !form.stock) { toast.error("Price and stock are required"); return; }
+        if (imageFiles.length < 2) { toast.error("Please upload at least 2 paper images (max 3)"); return; }
         setSaving(true);
         try {
+            // Upload all images via backend service role (auto-compressed)
+            const uploadedUrls = [];
+            for (const file of imageFiles) {
+                const fd = new FormData();
+                fd.append("file", file);
+                const { data } = await api.post("/supplier/listing-image", fd);
+                if (data?.url) uploadedUrls.push(data.url);
+            }
+            if (uploadedUrls.length < 2) { toast.error("Some images failed to upload"); setSaving(false); return; }
             await api.post("/supplier/papers", {
                 brand: form.brand,
                 size: form.size,
@@ -53,10 +84,17 @@ export default function PaperListings() {
                 reams_per_box: Number(form.reams_per_box),
                 price_per_ream: Number(form.price_per_ream),
                 stock: Number(form.stock),
+                image_url: uploadedUrls[0],
+                image_urls: uploadedUrls,
+                brightness: form.brightness ? Number(form.brightness) : null,
+                thickness_microns: form.thickness_microns ? Number(form.thickness_microns) : null,
+                acid_free: !!form.acid_free,
+                suitable_for: form.suitable_for || [],
             });
             toast.success("Paper listing added");
             setOpen(false);
             setForm(emptyForm());
+            setImageFiles([]); setImagePreviews([]);
             load();
         } catch (e) { toast.error(formatApiError(e)); }
         finally { setSaving(false); }
@@ -168,6 +206,52 @@ export default function PaperListings() {
                             <div>
                                 <Label>Stock (boxes) <span className="text-red-500">*</span></Label>
                                 <Input type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} required className="tc-input-lg" data-testid="paper-stock-input" />
+                            </div>
+                        </div>
+
+                        <div className="text-[11px] tracking-[0.16em] uppercase font-semibold text-[#86868B] mt-2">Product images <span className="text-red-500">*</span> <span className="normal-case text-[#86868B] tracking-normal">(2–3 photos, auto-compressed)</span></div>
+                        <label className="block cursor-pointer">
+                            <input type="file" accept="image/*" multiple onChange={onPickImages} className="hidden" data-testid="paper-image-input" disabled={imageFiles.length >= 3} />
+                            <div className="border-2 border-dashed border-[#D2D2D7] rounded-xl p-3 hover:border-[#00B7C7] transition">
+                                {imagePreviews.length ? (
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        {imagePreviews.map((src, i) => (
+                                            <div key={i} className="relative">
+                                                <img src={src} alt={`preview ${i + 1}`} className="h-20 w-20 object-cover rounded-md border border-black/10" />
+                                                <button type="button" onClick={(e) => { e.preventDefault(); removeImage(i); }} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white text-[11px] grid place-items-center">×</button>
+                                            </div>
+                                        ))}
+                                        {imageFiles.length < 3 && <div className="h-20 w-20 grid place-items-center rounded-md border-2 border-dashed border-[#D2D2D7] text-[#86868B] text-[11px]">+ add</div>}
+                                    </div>
+                                ) : (
+                                    <div className="text-center text-[12.5px] text-[#86868B]">Click to upload 2–3 paper images · PNG / JPG · max 5 MB each</div>
+                                )}
+                            </div>
+                        </label>
+
+                        <div className="grid grid-cols-2 gap-3 mt-2">
+                            <div>
+                                <Label>Brightness</Label>
+                                <Input type="number" min="50" max="120" value={form.brightness} onChange={(e) => setForm({ ...form, brightness: e.target.value })} placeholder="e.g. 102" className="tc-input-lg" data-testid="paper-brightness" />
+                            </div>
+                            <div>
+                                <Label>Thickness (microns)</Label>
+                                <Input type="number" min="0" value={form.thickness_microns} onChange={(e) => setForm({ ...form, thickness_microns: e.target.value })} placeholder="e.g. 110" className="tc-input-lg" data-testid="paper-thickness" />
+                            </div>
+                        </div>
+                        <label className="inline-flex items-center gap-2 text-[13px] text-[#0A0A0B] cursor-pointer mt-1">
+                            <input type="checkbox" checked={!!form.acid_free} onChange={(e) => setForm({ ...form, acid_free: e.target.checked })} data-testid="paper-acid-free" />
+                            Acid-free paper
+                        </label>
+                        <div>
+                            <Label>Suitable for</Label>
+                            <div className="flex flex-wrap gap-2" data-testid="paper-suitable-for">
+                                {["Inkjet", "Laser", "Copier", "All"].map((k) => {
+                                    const active = (form.suitable_for || []).includes(k);
+                                    return (
+                                        <button key={k} type="button" onClick={() => setForm({ ...form, suitable_for: active ? form.suitable_for.filter((x) => x !== k) : [...form.suitable_for, k] })} className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border transition ${active ? "bg-[#0A0A0B] text-white border-[#0A0A0B]" : "bg-white text-[#0A0A0B] border-[#D2D2D7] hover:border-[#0A0A0B]"}`}>{k}</button>
+                                    );
+                                })}
                             </div>
                         </div>
                         <CommissionBanner />

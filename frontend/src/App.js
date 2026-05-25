@@ -34,6 +34,7 @@ import GetFeatured from "./pages/GetFeatured";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import About from "./pages/About";
+import ProductDetail from "./pages/ProductDetail";
 import NotFound from "./pages/NotFound";
 import ErrorBoundary from "./components/ErrorBoundary";
 import VisitorTracker from "./components/VisitorTracker";
@@ -70,6 +71,9 @@ function App() {
                                     <Route path="/contact" element={<Contact />} />
                                     <Route path="/get-featured" element={<GetFeatured />} />
                                     <Route path="/about" element={<About />} />
+                                    <Route path="/toner/:id" element={<ProductDetail kind="toner" />} />
+                                    <Route path="/printer/:id" element={<ProductDetail kind="printer" />} />
+                                    <Route path="/paper/:id" element={<ProductDetail kind="paper" />} />
                                     <Route path="/order-confirmed/:id" element={<OrderConfirmed />} />
                                     <Route path="/order-confirmed" element={<OrderConfirmed />} />
                                     <Route path="/customer" element={<ProtectedRoute roles={["customer"]}><CustomerDashboard /></ProtectedRoute>} />

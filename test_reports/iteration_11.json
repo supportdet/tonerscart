@@ -1,0 +1,64 @@
+{
+  "summary": "Iteration 11 — TonersCart Wave 5 full-batch test. Backend: wrote /app/backend/tests/test_wave5.py (15 cases, 14 PASS / 1 FAIL — real bug). Regression: /app/backend/tests/test_wave3.py + test_v3_batch.py → 38 PASS / 4 SKIP / 1 FAIL (outdated assertion that became correct after iter_10 hardening). Frontend: Product detail page /toner/:id RENDERS PERFECTLY — all 9 required data-testids (product-title, product-price, product-stock, product-specs, add-to-cart-btn, buy-now-btn, get-quotation-btn, breadcrumbs, back-button) verified. 48 /toner/:id Links on /search confirmed with sticky search bar. However 3 critical FE gaps: (1) AuthRequiredDialog NOT shown when logged-out user clicks Buy Now — OrderRequestDialog opens instead (inline-signup); (2) /papers cards render but NO <Link to=\"/paper/:id\"> wraps them at runtime (code grep finds Link in Papers.jsx but renders 0 anchors on /papers — likely behind an empty-result branch in current env data); (3) /printers same — 0 /printer/:id anchors at runtime. Carry-over hydration warning <span> inside <option> from App.js CartProvider still present (iter_9/10 carry-over). Real backend bug: POST /api/admin/cleanup-test-data → 500 due to env var name mismatch (cleanup_test_data.py reads SUPABASE_SERVICE_ROLE_KEY but backend/.env defines SUPABASE_SERVICE_KEY).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/admin/cleanup-test-data", "issue": "Returns 500 'Cleanup failed: SUPABASE_SERVICE_ROLE_KEY'. /app/backend/cleanup_test_data.py:29 reads os.environ['SUPABASE_SERVICE_ROLE_KEY'] but /app/backend/.env exposes SUPABASE_SERVICE_KEY (no _ROLE_). Either rename the env var in backend/.env, or change cleanup_test_data.py to read SUPABASE_SERVICE_KEY (consistent with server.py).", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/admin/suppliers/{id}/featured-image (size-cap test)", "issue": "Previously-existing test_v3_batch.py::TestFeaturedImage::test_featured_image_too_large_returns_400 now FAILS expecting 400 but gets 404 'Supplier not found'. This is the iter_10 recommended hardening landing (supplier_id validated before storage upload) — the test is outdated and should be re-written to seed a real supplier or accept 400/404."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ProductDetail Buy Now (logged out)", "issue": "Clicking [data-testid=buy-now-btn] without login opens OrderRequestDialog (inline signup form) instead of AuthRequiredDialog with Sign in / Create account CTAs. data-testid=auth-required-dialog count = 0 after Buy Now click. Likely cause: useAuth hydrates a stale Supabase session OR requireAuth runs after the OrderRequestDialog has already been triggered. Spec requires AuthRequiredDialog → /auth/login?next=<current>.", "selector": "[data-testid=auth-required-dialog]", "priority": "HIGH"},
+      {"component": "Papers.jsx", "issue": "Source has <Link to={`/paper/${p.id}`} data-testid={`paper-link-${p.id}`}> at line 115, but /papers route renders 0 <a href=\"/paper/\"> anchors. Likely the listing block requires data that isn't present in the current env (no paper_listings rows / 503 from /api/papers). Confirm fallback shows the cards as plain divs so the click-through to detail page is non-functional.", "selector": "[data-testid^=paper-link-]", "priority": "HIGH"},
+      {"component": "PrintersResults.jsx", "issue": "Source has <Link to={`/printer/${p.id}`} data-testid={`printer-link-${p.id}`}> at line 33, but /printers renders 0 anchors AND 0 printer-link-* testids. Same shape as the Papers issue — needs verifying once seeded data is present, or the grid is rendering a different code path.", "selector": "[data-testid^=printer-link-]", "priority": "HIGH"},
+      {"component": "Search.jsx listing card", "issue": "Add/Buy buttons render visually (text 'Add' / 'Buy') but the spec implies they should expose add-to-cart-{id} / buy-now-{id} data-testids — current cards only show plain buttons without testids. Makes E2E click-through brittle.", "selector": "button:has-text('Add')", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Buy now → Auth gate", "issue": "Logged-out Buy Now is supposed to trigger AuthRequiredDialog which routes to /auth/login?next=/toner/<id>. Current flow shows OrderRequestDialog instead, which has its own inline email/password — duplicates auth logic and bypasses /auth/login?next= contract.", "affected_selectors": ["[data-testid=buy-now-btn]","[data-testid=auth-required-dialog]"]}
+    ],
+    "design_issues": [
+      {"screen": "Global (CartProvider in App.js)", "issues": ["Hydration warning STILL fires every page load: '<span> cannot be a child of <option>' — carry-over from iter_9 + iter_10. The Bangalore city <select> renders <span> children inside <option> elements. Cosmetic but pollutes console & blocks clean E2E error-detection."]},
+      {"screen": "/toner/:id (OrderRequestDialog when logged out)", "issues": ["Dialog labels the section 'SIGN IN OR CREATE AN ACCOUNT' but spec requires a separate AuthRequiredDialog component — consolidate or split per spec."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave5.py",
+    "/app/test_reports/pytest/iteration_11_wave5.xml",
+    "/app/test_reports/pytest/iteration_11_regression.xml"
+  ],
+  "action_items": [
+    "(P0 BE) Fix env-var name mismatch in /app/backend/cleanup_test_data.py:29 — change SUPABASE_SERVICE_ROLE_KEY → SUPABASE_SERVICE_KEY (or rename in backend/.env). Currently the cleanup endpoint is 100% broken for admin users.",
+    "(P0 FE) ProductDetail Buy Now does NOT show AuthRequiredDialog when logged out. Investigate useAuth state at first render — requireAuth('buy') is being bypassed and OrderRequestDialog opens. Verify user state and that setAuthDialog actually mounts the dialog.",
+    "(P0 FE) /papers and /printers render 0 click-through links to /paper/:id and /printer/:id in current env. Cards must be wrapped in <Link> regardless of whether image/spec data exists; today there is no anchor element at all.",
+    "(P1 FE) Add data-testid=add-to-cart-{id} and buy-now-{id} on /search listing cards for reliable E2E click-through testing.",
+    "(P2 FE carry-over) Fix <span> inside <option> hydration warning in App.js CartProvider (Bangalore city picker). Cosmetic, carry-over from iter_9 + iter_10.",
+    "(P2 BE) Update test_v3_batch.py::test_featured_image_too_large_returns_400 to seed a real supplier or expect 400/404 — currently fails because supplier-existence is now validated before storage upload (the iter_10 recommended hardening landed)."
+  ],
+  "critical_code_review_comments": [
+    "cleanup_test_data.py reads a DIFFERENT env-var name (SUPABASE_SERVICE_ROLE_KEY) than the rest of the codebase (SUPABASE_SERVICE_KEY). Single source of truth required — pick one and standardise across server.py + all utility scripts.",
+    "ProductDetail.jsx onBuyNow path: requireAuth gates correctly in source, but live behaviour ships OrderRequestDialog when user is null. Either (a) useAuth resolves a stale session from localStorage on cold-load, or (b) the gating predicate is wrong. Add explicit `user === null` (not just falsy) check and a console.assert in dev.",
+    "OrderRequestDialog embedding its own inline-signup duplicates AuthRequiredDialog responsibility — two sources of truth for 'how does an anonymous buyer authenticate'. Pick ONE pattern across the app.",
+    "Papers.jsx + PrintersResults.jsx click-through Links are conditionally rendered inside list-item branches; if API returns 0 rows the test sees 0 anchors. Add an explicit empty-state with a clear data-testid so testing agents can distinguish 'no rows' vs 'broken Link'.",
+    "server.py now 3291 lines (vs 3004 in iter_10) — router split DEFERRED again. Strongly recommend extracting routers/admin.py, routers/listings_public.py, routers/supplier_listings.py before next wave.",
+    "get_listing_public / get_printer_public / get_paper_public share ~25 lines of near-identical try/except fallback + supplier-merge logic. Extract a _public_lookup(table, id) helper to dry up.",
+    "ListingVariantIn / variants[] insert in POST /supplier/listings has no transactional guarantee — if the variants insert fails after the listing row is created, the listing exists with no variants. Wrap in a Postgres transaction or rollback on error.",
+    "POST /orders variant_id flow decrements listing_variants.stock when valid, but if the variant row exists yet has stale stock=0 we may still race with parent listing stock decrement. Use a single atomic UPDATE … RETURNING stock check.",
+    "compress_image (Pillow) returns raw bytes silently on Pillow failure (carry-over iter_9 code review). Reject unrecognised formats explicitly.",
+    "_RATE_BUCKETS + _LANDING_CACHE in-memory per-pod; safe for single-pod preview but not multi-pod prod (carry-over)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_wave5.py"
+  ],
+  "success_rate": {
+    "backend": "Wave5 suite: 14/15 (93%). The 1 fail is a REAL bug (cleanup-test-data env var mismatch). Regression: 38/39 executed PASS, 4 SKIPPED, 1 FAIL (test_featured_image_too_large_returns_400 — outdated, server hardened to 404). Excluding outdated test: 38/38 = 100%.",
+    "frontend": "Product Detail /toner/:id: 100% testid coverage (9/9). /search sticky + 48 toner-link anchors: PASS. AuthRequiredDialog flow: FAIL. /papers and /printers click-through Links: FAIL (0 anchors). Console hydration warning: still present."
+  },
+  "test_credentials": "Admin admin@tonerscart.in / Admin@123 — Supabase Auth direct (POST {SUPABASE_URL}/auth/v1/token?grant_type=password). Buyer buyer1@test.com / Test@123 — same.",
+  "seed_data_creation": "None. test_wave5.py is read-only — only POST tests target invalid UUIDs and validate 4xx negative paths.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Wave 5 backend public-product endpoints all work as spec'd including variants[] field, graceful 404. The ONE backend bug (cleanup-test-data env var mismatch) is a 1-line fix. Frontend Product Detail page is excellent. Three frontend gaps to fix before retest: (1) AuthRequiredDialog must trigger on Buy Now when logged out; (2) /papers and /printers cards must wrap with <Link to=/paper/:id> / /printer/:id; (3) Add to cart / Buy now buttons on /search cards need testid prefixes (add-to-cart-{id}, buy-now-{id}). After fixes, re-run /app/backend/tests/test_wave5.py + /app/backend/tests/test_v3_batch.py + /app/backend/tests/test_wave3.py and confirm /papers + /printers render printer-link-* / paper-link-* testids ≥ 1 in a browser smoke. MOCKED APIS: Razorpay 'Pay Online' disabled (launching-soon tooltip), Twilio OTP NOT implemented — both flagged by main agent and not exercised.",
+  "rca of the issue": "Cleanup-test-data RCA: /app/backend/cleanup_test_data.py:29 uses `os.environ['SUPABASE_SERVICE_ROLE_KEY']` (KeyError → wrapped as 500 in server.py:2898 with the exact message 'Cleanup failed: SUPABASE_SERVICE_ROLE_KEY'). Backend .env exposes `SUPABASE_SERVICE_KEY` (line 10) — different name. Reproduction: login as admin@tonerscart.in → POST /api/admin/cleanup-test-data with Bearer token → 500 instead of 200 preview dict. Fix: change line 29 to `os.environ.get('SUPABASE_SERVICE_KEY') or os.environ['SUPABASE_SERVICE_ROLE_KEY']` to support both names (preferred, backward compatible)."
+}

@@ -77,3 +77,47 @@
 - supabase_schema_logo.sql
 - supabase_schema_buyer_gst.sql
 - **NEW**: supabase_schema_v3.sql
+
+### 2026-02-25 — Wave 5 batch (Product detail page, multi-images, variants, cleanup, sticky search)
+
+**Backend:**
+- `POST /api/admin/cleanup-test-data?apply=bool` — admin endpoint that detects fake/test/seed/demo/dummy suppliers + listings (model_number regex for random alphanumerics like `99992F5391`) and deletes everything in FK order (orders, quotations, listings, printers, papers, suppliers, users). Dry-run by default.
+- `backend/cleanup_test_data.py` — standalone script + `run(apply=bool)` import target.
+- `GET /api/listings/{id}/public`, `GET /api/printers/{id}/public`, `GET /api/papers/{id}/public` — browse-without-login product detail endpoints. Include `variants[]` for toners (graceful empty when migration not run).
+- `GET /api/listings/{id}` and `GET /api/listings/search` now attach `variants` array per listing (bulk-fetched).
+- `ListingCreate` extended with `variants: [{color, price, stock}]`, `image_urls: []`, and structured spec fields (compatible_models, oem_part_number, cartridge_weight, pack_size, warranty). All optional columns degrade gracefully when the v3/v4 migration hasn't been applied.
+- `OrderCreate` accepts `variant_id` — when present, stock is deducted from `listing_variants[variant_id]` instead of the parent listing, and `orders.variant_id` is persisted.
+- `PrinterListingCreate` extended with `image_urls`, `print_speed_ppm`, `duty_cycle`, `display_type`, `dimensions`, `weight_kg`, `printer_warranty`.
+- `PaperCreate` extended with `image_urls`, `brightness`, `thickness_microns`, `acid_free`, `suitable_for[]`.
+- New `POST /api/supplier/listing-image` — multi-purpose toner/paper image upload (service-role, auto-compressed to 1200px / quality 85, stored in `printer-images` bucket which has public read).
+- New migration `supabase_schema_v4.sql` — `listing_variants` table, `orders.variant_id`, `listings/printer_listings/paper_listings.image_urls`.
+
+**Frontend:**
+- `/toner/:id`, `/printer/:id`, `/paper/:id` — new `<ProductDetail />` page with:
+  - Sticky breadcrumbs + Back button (44 px tap target on mobile)
+  - 5-col / 7-col Apple-style grid (image gallery left, content right)
+  - Up to 3-image thumbnail gallery (active highlight)
+  - Toner-type badge, printer-condition badge, compatibility callout
+  - Colour-variant swatches (uses `lib/colors.js` palette: Black / Cyan / Magenta / Yellow / Red / Blue / Green / Orange / White / Gold / Silver / Tri-color gradient)
+  - Live price + stock that update with the selected variant
+  - Stock badge: green/orange/red thresholds (>5 / ≤5 / 0)
+  - Verified supplier badge
+  - Qty stepper, Add to cart (dark), Buy now (yellow), Get quotation (outline)
+  - Auto-decoded `Specifications` table — only shows rows the dealer filled in
+  - Browse-without-login: clicking Add/Buy/Quote triggers `<AuthRequiredDialog />` → routes to `/auth/login?next=<current>` → returns and auto-resumes the intent
+- `/search` sticky search bar (`position:sticky top-[64px]`)
+- `/papers` sticky filters
+- Toner cards on `/search` now link to `/toner/:id` (image + model_number clickable) + show colour-swatch row + "X colours" count
+- Printer cards on `/printers` link to `/printer/:id`
+- Paper cards on `/papers` link to `/paper/:id`
+- **Add Toner form** (`/supplier`): single-image picker + `Color` swatches replaced with:
+  - Multi-image picker (2 to 3 images, auto-compressed, with × remove and "+ add" tile)
+  - "Colours & pricing" variant editor: free-text colour name with auto-swatch preview, ₹ price, stock — `+ Add colour` up to 15, `×` to remove (min 1 required)
+  - Structured spec inputs: Page yield, OEM part number, Compatible printer models, Cartridge weight, Pack size (1/2/5/10), Warranty (None / 3 mo / 6 mo / 1 yr)
+- **Add Printer wizard** Step 1 also accepts 2–3 images (same UI pattern).
+- **Add Paper form** also accepts 2–3 images + Brightness, Thickness (microns), Acid-free toggle, Suitable-for multi-select.
+
+**Notes:**
+- `Get quotation` calls existing `/api/quotation` endpoint (kept singular, matches existing route).
+- `OrderRequestDialog` already supported the order flow; ProductDetail passes `variant_id` so the order body forwards it to `POST /api/orders`.
+- Migrations the user must run for full feature parity: `supabase_schema_v3.sql` (specs) and `supabase_schema_v4.sql` (variants + multi-image + variant_id).

@@ -186,8 +186,8 @@ export default function PrinterListings() {
 function AddPrinterWizard({ open, onClose, onSaved }) {
     const [step, setStep] = useState(1);
     const [f, setF] = useState(EMPTY);
-    const [imageFile, setImageFile] = useState(null);
-    const [imagePreview, setImagePreview] = useState("");
+    const [imageFiles, setImageFiles] = useState([]);
+    const [imagePreviews, setImagePreviews] = useState([]);
     const [brochureFile, setBrochureFile] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -197,8 +197,8 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
         if (open) {
             setStep(1);
             setF(EMPTY);
-            setImageFile(null);
-            setImagePreview("");
+            setImageFiles([]);
+            setImagePreviews([]);
             setBrochureFile(null);
         }
     }, [open]);
@@ -212,21 +212,36 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
 
     // ---------- Step 1: Basic info ----------
     const onPickFile = (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        if (file.size > 5 * 1024 * 1024) { toast.error("Max 5 MB"); return; }
-        setImageFile(file);
-        setImagePreview(URL.createObjectURL(file));
+        const files = Array.from(e.target.files || []);
+        const merged = [...imageFiles];
+        for (const file of files) {
+            if (merged.length >= 3) break;
+            if (file.size > 5 * 1024 * 1024) { toast.error(`"${file.name}" exceeds 5 MB`); continue; }
+            if (!file.type.startsWith("image/")) { toast.error(`"${file.name}" is not an image`); continue; }
+            merged.push(file);
+        }
+        setImageFiles(merged);
+        setImagePreviews(merged.map((f) => URL.createObjectURL(f)));
+        e.target.value = "";
+    };
+    const removeImage = (idx) => {
+        const next = imageFiles.filter((_, i) => i !== idx);
+        setImageFiles(next);
+        setImagePreviews(next.map((f) => URL.createObjectURL(f)));
     };
 
-    const uploadImage = async () => {
-        if (!imageFile) return f.image_url;
+    const uploadImages = async () => {
+        if (!imageFiles.length) return f.image_urls || [];
         setUploading(true);
         try {
-            const fd = new FormData();
-            fd.append("file", imageFile);
-            const { data: up } = await api.post("/supplier/printer-image", fd);
-            return up.url;
+            const out = [];
+            for (const file of imageFiles) {
+                const fd = new FormData();
+                fd.append("file", file);
+                const { data: up } = await api.post("/supplier/printer-image", fd);
+                if (up?.url) out.push(up.url);
+            }
+            return out;
         } finally {
             setUploading(false);
         }
@@ -237,7 +252,8 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
         if (step === 1) {
             if (!f.brand.trim()) return false;
             if (!f.model_number.trim()) return false;
-            if (!imageFile && !f.image_url) return false;
+            const haveImages = imageFiles.length >= 2 || (Array.isArray(f.image_urls) && f.image_urls.length >= 2);
+            if (!haveImages) return false;
             return true;
         }
         if (step === 2) {
@@ -260,11 +276,12 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
     };
 
     const goNext = async () => {
-        if (!canNext()) { toast.error("Please complete all required fields"); return; }
-        if (step === 1 && imageFile && !f.image_url) {
+        if (!canNext()) { toast.error("Please complete all required fields (min 2 images for printers)"); return; }
+        if (step === 1 && imageFiles.length > 0 && (!f.image_urls || f.image_urls.length === 0)) {
             try {
-                const url = await uploadImage();
-                setF((cur) => ({ ...cur, image_url: url }));
+                const urls = await uploadImages();
+                if (urls.length < 2) { toast.error("Need at least 2 successfully uploaded images"); return; }
+                setF((cur) => ({ ...cur, image_url: urls[0], image_urls: urls }));
             } catch (err) {
                 toast.error(formatApiError(err) || "Image upload failed");
                 return;
@@ -299,6 +316,7 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
                 model_number: f.model_number.trim(),
                 description: f.description.trim(),
                 image_url: f.image_url,
+                image_urls: f.image_urls || [],
                 condition: f.condition,
                 usage_type: f.usage_type,
                 category: f.category,
@@ -351,19 +369,27 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
                         <div className="tc-form-section">Basic info</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="sm:col-span-2">
-                                <Label>Product image <span className="text-red-500">*</span></Label>
+                                <Label>Product images <span className="text-red-500">*</span> <span className="text-[12px] text-[#86868B] font-normal">(2 to 3 photos)</span></Label>
                                 <label className="block mt-1 cursor-pointer">
-                                    <input type="file" accept="image/*" onChange={onPickFile} className="hidden" data-testid="wizard-image-input" />
-                                    <div className={`tc-image-drop ${imagePreview ? "has-image" : ""}`}>
-                                        {imagePreview
-                                            ? <img src={imagePreview} alt="preview" className="max-h-32 rounded-md" />
-                                            : (
-                                                <>
-                                                    <ImageIcon size={22} />
-                                                    <span>Click to upload printer image</span>
-                                                    <span className="text-[11px] text-[#86868B] font-normal">PNG / JPG, max 5 MB</span>
-                                                </>
-                                            )}
+                                    <input type="file" accept="image/*" multiple onChange={onPickFile} className="hidden" data-testid="wizard-image-input" disabled={imageFiles.length >= 3} />
+                                    <div className={`tc-image-drop ${imagePreviews.length ? "has-image" : ""}`}>
+                                        {imagePreviews.length ? (
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                {imagePreviews.map((src, i) => (
+                                                    <div key={i} className="relative">
+                                                        <img src={src} alt={`preview ${i + 1}`} className="h-24 w-24 object-cover rounded-md border border-black/10" />
+                                                        <button type="button" onClick={(e) => { e.preventDefault(); removeImage(i); }} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white text-[11px] grid place-items-center">×</button>
+                                                    </div>
+                                                ))}
+                                                {imageFiles.length < 3 && (<div className="h-24 w-24 grid place-items-center rounded-md border-2 border-dashed border-[#D2D2D7] text-[#86868B] text-[11px]">+ add</div>)}
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <ImageIcon size={22} />
+                                                <span>Click to upload 2–3 printer images</span>
+                                                <span className="text-[11px] text-[#86868B] font-normal">PNG / JPG · max 5 MB each · auto-compressed</span>
+                                            </>
+                                        )}
                                     </div>
                                 </label>
                             </div>
