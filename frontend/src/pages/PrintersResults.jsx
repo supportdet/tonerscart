@@ -32,7 +32,7 @@ function PrinterCard({ p, onRequest }) {
             </div>
             <div className="bg-black/[0.03] aspect-[4/3] grid place-items-center">
                 {p.image_url ? (
-                    <img src={p.image_url} alt={`${p.brand} ${p.model_number}`} className="w-full h-full object-contain" />
+                    <img src={p.image_url} alt={`${p.brand} ${p.model_number}`} className="w-full h-full object-contain" loading="lazy" />
                 ) : (
                     <PrinterIcon size={42} className="text-[#D2D2D7]" />
                 )}

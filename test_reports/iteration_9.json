@@ -1,0 +1,48 @@
+{
+  "summary": "Wave 3 finalisation retest (iteration 9). ALL 3 P0 BLOCKERS FROM ITERATION_8 ARE FIXED. Backend wave3 suite: 21/21 executed PASS, 4 supplier-only SKIPPED (no approved-supplier seed in this env, expected). Critical fixes verified: (1) GET /api/listings/{nonexistent_uuid} → 404 (was 500 due to is_suspended column join), (2) GET /sitemap.xml at the public ingress now serves the real XML (urlset with /papers + Bangalore-aware URLs) instead of React HTML — verified via curl: `<?xml version=...><urlset...>` — content is correct because /app/frontend/public/sitemap.xml is served by CRA static, (3) GET /robots.txt returns 200 and is reachable — the response body in this preview env is the platform-injected content-signals robots (acknowledged in brief as known preview-only behaviour; on production tonerscart.com the static /app/frontend/public/robots.txt will be served). Finance/Earnings/Papers/Reorder/Paginated-search/Duplicate/Apply-seller all green at backend. Frontend smoke (admin) confirmed: Admin Finance tab loads summary (Total GMV ₹1,72,942, Commission ₹12,740, Dealer Payouts ₹1,60,202, Active Dealers 10), Monthly summary table + Export CSV, Dealer payouts table + Export CSV — 2 download buttons present and clickable. Buyer dashboard loads 19 orders correctly (all REQUESTED → Reorder buttons gated correctly to delivered/cancelled, code exists at CustomerDashboard.jsx:46-184 with data-testid=`reorder-{order.id}`). Public routes /, /search (Load More button present), /papers, /forgot-password (email input present), /reset-password all render without crash. Supplier dashboard UI deferred (no approved-supplier seed credentials available — same constraint as iteration_8).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/supplier/papers, POST /api/supplier/papers/{id}/listings", "issue": "Returns 503 with hardcoded message referencing supabase_schema_papers.sql until the user runs the migration. Graceful degrade is per-spec; acceptable until migration is applied."},
+      {"endpoint": "GET /robots.txt at public ingress", "issue": "Preview ingress injects platform content-signals robots.txt body INSTEAD of /app/frontend/public/robots.txt. Acknowledged by main agent as a preview-environment-only behaviour; production tonerscart.com will serve the correct static file. Not a code defect."},
+      {"endpoint": "POST /api/auth/password-reset", "issue": "Always returns {ok:true} even if downstream email send fails — no observability. Carry-over from iter_8 (out of wave-3 scope)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin → Finance → Dealer payouts table", "issues": ["Duplicate rows showing for 'TEST BizA' (Mumbai) across multiple rows with identical city/dealer name but different stats — likely separate dealer_ids sharing a business_name. Consider grouping or showing dealer_id/business_id suffix for disambiguation. Not a blocker."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave3.py",
+    "/app/test_reports/pytest/iteration_9.xml"
+  ],
+  "action_items": [
+    "(USER ACTION, not code) Run supabase_schema_papers.sql + supabase_schema_admin_v2.sql + remaining 3 SQL migrations against Supabase to flip /api/papers POST, /api/supplier/papers/{id}/listings, and the is_suspended-column-dependent paths from 503/graceful-empty to fully live.",
+    "(OPTIONAL) Seed an approved supplier user (TEST_SUPPLIER_EMAIL / TEST_SUPPLIER_PASSWORD env vars or extend seed_supabase.py) to unblock the 4 supplier-only backend tests AND enable end-to-end UI testing of Supplier dashboard (Toners/Printers/Papers/Earnings tabs, Inline stock edit, Duplicate listing button).",
+    "(MINOR UI) De-duplicate or label dealer rows on Admin → Finance → Dealer payouts when business_name collides across different supplier_ids."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 2705+ lines — strongly recommend splitting into routers/finance.py, routers/papers.py, routers/listings_paginated.py, routers/supplier_listings.py before any further wave lands. Carry-over from iter_8.",
+    "_RATE_BUCKETS in-memory dict has no eviction and is per-pod — under multi-pod k8s the limit is per-pod not global. Document for ops, target Redis for production.",
+    "/api/listings/search/paginated still slices an in-memory 2000-row cap from search_listings() — pages count becomes incorrect once active listings exceed 2000. Switch to PostgREST count+range before catalogue scales.",
+    "PUT /api/supplier/listings/{id} with no valid fields silently returns {ok:true, updated:[]} — callers cannot distinguish 'row missing' vs 'payload had nothing useful'. Should 400 on empty patch.",
+    "compress_image swallows Pillow exceptions and returns raw bytes — if a crafted payload bypasses Pillow we may persist the unmodified blob. Log at WARNING and reject unrecognised formats.",
+    "duplicate_listing copies ALL non-id columns including any future sku/slug uniques — defend by stripping unique fields explicitly.",
+    "sitemap_xml hardcodes base='https://www.tonerscart.com'; pull from env (SITEMAP_BASE_URL) so dev previews don't emit production canonicals if crawled.",
+    "Frontend hydration warning in console: '<span> cannot be a child of <option>' from the Bangalore city picker — fix the option structure in App.js (line ~45 CartProvider area). Cosmetic React hydration noise but should be cleaned."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% on executable wave3 suite (21/21 pass, 4 skipped due to no approved-supplier seed). 0 failures.",
+    "frontend": "Smoke 100% on 8 public/admin/buyer routes. Supplier UI not exercised (no seed credentials)."
+  },
+  "test_credentials": "Admin admin@tonerscart.in / Admin@123 — login verified at https://toners-marketplace.preview.emergentagent.com/login → /admin. Buyer buyer1@test.com / Test@123 — login verified → /customer (19 orders visible).",
+  "seed_data_creation": "11 mps_inquiries rows may be created during rate-limit probe. Buyer auto-signup fallback if buyer1@test.com missing.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All wave-3 P0/P1 deliverables are green. Next testing agent should focus on: (a) supplier dashboard UI flow (Inline stock edit, Duplicate listing, Earnings tab) once TEST_SUPPLIER_EMAIL/PASSWORD seed is added, (b) end-to-end Reorder click on a buyer account that has at least one DELIVERED order — none exist for buyer1@test.com today (all 19 orders are in REQUESTED status), (c) run-after-migration retest to flip the 503 papers create endpoints to 200. Backend regression suites at /app/backend/tests/test_admin_v2.py and test_polish_patch.py were not re-run (no diff touched those endpoints).",
+  "rca of the issue": "N/A — iteration_8 RCAs were addressed by main agent: (1) get_listing now has try/except fallback to select without is_suspended, returning 404 cleanly when the row is missing. (2)+(3) Static sitemap.xml/robots.txt placed in /app/frontend/public/ are served by CRA via the frontend container; ingress no longer needs a backend rule. Sitemap content verified as proper XML; robots.txt body in this preview env is overridden by platform content-signals robots — known preview-only constraint, production unaffected."
+}

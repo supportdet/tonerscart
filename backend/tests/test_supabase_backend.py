@@ -349,13 +349,16 @@ class TestOrders:
                          headers=H(tok), json={"status": "shipped"}, timeout=15)
         assert r.status_code == 200
 
-    def test_customer_cannot_change_to_delivered(self):
+    def test_customer_can_confirm_delivered_on_shipped(self):
+        # admin v2 spec: buyer can now mark a shipped order delivered (Confirm Delivery flow)
         tok = state["customer_token"]
         r = requests.put(f"{API}/orders/{state['order_id']}/status",
                          headers=H(tok), json={"status": "delivered"}, timeout=15)
-        assert r.status_code == 403
+        assert r.status_code == 200, r.text
 
     def test_supplier_delivers(self):
+        # Order already delivered by buyer in previous test; supplier re-asserting delivered
+        # must still 200 (idempotent transition).
         tok = state["sup_approve_token"]
         r = requests.put(f"{API}/orders/{state['order_id']}/status",
                          headers=H(tok), json={"status": "delivered"}, timeout=15)

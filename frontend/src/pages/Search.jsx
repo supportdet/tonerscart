@@ -12,6 +12,8 @@ import TonerSearchInput from "../components/TonerSearchInput";
 import TonerCartridge from "../components/TonerCartridge";
 import WhatsAppEnquiry from "../components/WhatsAppEnquiry";
 import ProductActions from "../components/ProductActions";
+import RefilledWarningDialog from "../components/RefilledWarningDialog";
+import PageMeta from "../components/PageMeta";
 import useReveal from "../hooks/useReveal";
 
 const SidebarItem = ({ active, onClick, children, testid }) => (
@@ -94,9 +96,13 @@ export default function SearchPage() {
     const [brand, setBrand] = useState(params.get("brand") || "all");
     const [filterCity, setFilterCity] = useState(params.get("city") || "all");
     const [tonerType, setTonerType] = useState(params.get("toner_type") || "all");
+    const [refilledWarn, setRefilledWarn] = useState(false);
     const [facets, setFacets] = useState({ brands: [], cities: [] });
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
     const [orderProduct, setOrderProduct] = useState(null);
     const [orderQty, setOrderQty] = useState(1);
     const [qtyMap, setQtyMap] = useState({});
@@ -109,25 +115,51 @@ export default function SearchPage() {
             .catch(() => setFacets({}));
     }, []);
 
+    const buildParams = () => {
+        const qp = {};
+        if (params.get("q")) qp.q = params.get("q");
+        if (params.get("brand")) qp.brand = params.get("brand");
+        if (params.get("city") && params.get("city") !== "all") qp.city = params.get("city");
+        if (params.get("toner_type") && params.get("toner_type") !== "all") qp.toner_type = params.get("toner_type");
+        return qp;
+    };
+
     useEffect(() => {
         const fetch = async () => {
             setLoading(true);
-            const qp = {};
-            if (params.get("q")) qp.q = params.get("q");
-            if (params.get("brand")) qp.brand = params.get("brand");
-            if (params.get("city") && params.get("city") !== "all") qp.city = params.get("city");
-            if (params.get("toner_type") && params.get("toner_type") !== "all") qp.toner_type = params.get("toner_type");
+            setPage(1);
             try {
-                const r = await api.get("/listings/search", { params: { ...qp, limit: 500 } });
-                const items = Array.isArray(r.data) ? [...r.data] : [];
+                const r = await api.get("/listings/search/paginated", { params: { ...buildParams(), page: 1, limit: 24 } });
+                const items = Array.isArray(r.data?.results) ? [...r.data.results] : [];
                 items.sort((a, b) => (a?.price ?? 0) - (b?.price ?? 0));
                 setProducts(items);
+                setTotalPages(r.data?.pages || 1);
             } catch {
                 setProducts([]);
+                setTotalPages(1);
             } finally { setLoading(false); }
         };
         fetch();
     }, [params]);
+
+    const loadMore = async () => {
+        if (loadingMore || page >= totalPages) return;
+        setLoadingMore(true);
+        try {
+            const next = page + 1;
+            const r = await api.get("/listings/search/paginated", { params: { ...buildParams(), page: next, limit: 24 } });
+            const newRows = Array.isArray(r.data?.results) ? r.data.results : [];
+            setProducts((prev) => {
+                const seen = new Set(prev.map((x) => x.id));
+                const merged = [...prev, ...newRows.filter((x) => !seen.has(x.id))];
+                merged.sort((a, b) => (a?.price ?? 0) - (b?.price ?? 0));
+                return merged;
+            });
+            setPage(next);
+            setTotalPages(r.data?.pages || totalPages);
+        } catch { /* silent */ }
+        finally { setLoadingMore(false); }
+    };
 
     const apply = (override) => {
         const useQ = override?.query ?? q;
@@ -198,7 +230,17 @@ export default function SearchPage() {
                 </div>
                 <div className="space-y-0.5">
                     {["all", "Original", "Compatible", "Refilled"].map((t) => (
-                        <SidebarItem key={t} active={tonerType === t} onClick={() => setFilter("toner_type", t)} testid={`filter-type-${t}`}>{t === "all" ? "All types" : t}</SidebarItem>
+                        <SidebarItem
+                            key={t}
+                            active={tonerType === t}
+                            onClick={() => {
+                                if (t === "Refilled") { setRefilledWarn(true); return; }
+                                setFilter("toner_type", t);
+                            }}
+                            testid={`filter-type-${t}`}
+                        >
+                            {t === "all" ? "All types" : t}
+                        </SidebarItem>
                     ))}
                 </div>
             </div>
@@ -219,6 +261,15 @@ export default function SearchPage() {
 
     return (
         <div className="tc-container py-6 sm:py-10" ref={rootRef} data-testid="search-page">
+            <PageMeta
+                title={q ? `Buy ${q} Toner Cartridge Online India — TonersCart`
+                          : `Buy Printer Toner Cartridges Online${city ? ` in ${city}` : ""} — HP, Canon, Brother, Xerox | TonersCart`}
+                description={q ? `Compare prices for ${q} toner cartridge from verified suppliers across India. Original and compatible options available.`
+                                : city
+                                  ? `Buy HP, Canon, Brother toner cartridges from verified suppliers in ${city}. Compare prices, real stock, same-day dispatch available.`
+                                  : "Buy original and compatible printer toner cartridges online in India. Compare prices from verified suppliers. HP 88A, Canon 337, Brother TN-2365, Xerox toners and more."}
+                path="/search"
+            />
             <div className="tc-search-shell tc-search-light" data-testid="search-bar">
                 <TonerSearchInput value={q} onChange={setQ} onSubmit={apply} testId="search-input" placeholder="Search by brand or model number…" />
                 <button onClick={() => apply()} className="tc-search-go" data-testid="search-apply-btn">Search</button>
@@ -307,6 +358,19 @@ export default function SearchPage() {
                             </div>
                         ))}
                     </div>
+
+                    {!loading && products.length > 0 && page < totalPages && (
+                        <div className="mt-8 flex items-center justify-center">
+                            <button
+                                onClick={loadMore}
+                                disabled={loadingMore}
+                                className="btn-light px-8 py-3 text-[13px] font-semibold disabled:opacity-60"
+                                data-testid="search-load-more-btn"
+                            >
+                                {loadingMore ? "Loading more…" : `Load more (page ${page + 1}/${totalPages})`}
+                            </button>
+                        </div>
+                    )}
                 </main>
             </div>
 
@@ -336,6 +400,7 @@ export default function SearchPage() {
             {orderProduct && (
                 <OrderRequestDialog product={orderProduct} initialQty={orderQty} onClose={() => setOrderProduct(null)} />
             )}
+            <RefilledWarningDialog open={refilledWarn} onClose={() => setRefilledWarn(false)} />
         </div>
     );
 }

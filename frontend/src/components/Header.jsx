@@ -3,7 +3,7 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import { useCart } from "../context/CartContext";
-import { LogOut, MapPin, ChevronDown, Menu, X, ShoppingCart } from "lucide-react";
+import { LogOut, MapPin, ChevronDown, Menu, X, ShoppingCart, Loader2 } from "lucide-react";
 
 const navLink = ({ isActive }) =>
     `text-[14px] font-medium px-3.5 py-2 rounded-md transition-colors ${
@@ -30,8 +30,10 @@ export default function Header() {
     const isBuyer = !!user && !isSeller && !isAdmin;
 
     const closeMobile = () => setMobileOpen(false);
+    const [loggingOut, setLoggingOut] = React.useState(false);
 
     const handleLogout = async () => {
+        setLoggingOut(true);
         try { await logout(); } catch { /* ignore */ }
         try { localStorage.clear(); sessionStorage.clear(); } catch { /* ignore */ }
         // Hard reload to clear any in-memory state including cached token
@@ -71,6 +73,7 @@ export default function Header() {
                                 <div className="w-44 bg-white rounded-xl shadow-xl border border-black/[0.08] py-1.5">
                                     <Link to="/search" onClick={() => setBuyOpen(false)} className="block px-3.5 py-2 text-[13.5px] text-[#1D1D1F] hover:bg-black/[0.04]" data-testid="nav-buy-toners">Toners</Link>
                                     <Link to="/printers" onClick={() => setBuyOpen(false)} className="block px-3.5 py-2 text-[13.5px] text-[#1D1D1F] hover:bg-black/[0.04]" data-testid="nav-buy-printers">Printers</Link>
+                                    <Link to="/papers" onClick={() => setBuyOpen(false)} className="block px-3.5 py-2 text-[13.5px] text-[#1D1D1F] hover:bg-black/[0.04]" data-testid="nav-buy-papers">Papers</Link>
                                     <Link to="/mps" onClick={() => setBuyOpen(false)} className="block px-3.5 py-2 text-[13.5px] text-[#1D1D1F] hover:bg-black/[0.04]" data-testid="nav-buy-mps">MPS</Link>
                                 </div>
                             </div>
@@ -232,6 +235,14 @@ export default function Header() {
                                 </button>
                             )}
                         </div>
+                    </div>
+                </div>
+            )}
+            {loggingOut && (
+                <div className="fixed inset-0 z-[3000] bg-[#0A0A0B]/70 backdrop-blur-sm flex items-center justify-center" role="alertdialog" aria-busy="true" data-testid="logout-overlay">
+                    <div className="bg-white rounded-2xl px-6 py-5 shadow-2xl flex items-center gap-3">
+                        <Loader2 size={18} className="animate-spin text-[#00B7C7]" />
+                        <div className="text-[14px] font-semibold text-[#0A0A0B]">Logging out…</div>
                     </div>
                 </div>
             )}

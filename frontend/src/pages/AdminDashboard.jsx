@@ -7,6 +7,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "../components/ui/textarea";
 import { toast } from "sonner";
 import { CheckCircle2, XCircle, MapPin, Building2, Phone, Mail, FileText, IndianRupee, Sparkles, AlertTriangle, MinusCircle, Star } from "lucide-react";
+import AnalyticsTab from "./admin/AnalyticsTab";
+import DealersTab from "./admin/DealersTab";
+import OrdersTab from "./admin/OrdersTab";
+import ContentTab from "./admin/ContentTab";
+import FinanceTab from "./admin/FinanceTab";
 
 function aiSummary(application) {
     const ai = application?.ai_check || {};
@@ -46,7 +51,7 @@ export default function AdminDashboard() {
     const [pending, setPending] = useState([]);
     const [approved, setApproved] = useState([]);
     const [featured, setFeatured] = useState([]);
-    const [tab, setTab] = useState("pending");
+    const [tab, setTab] = useState("analytics");
     const [reviewing, setReviewing] = useState(null);
     const [rejecting, setRejecting] = useState(null);
     const [reason, setReason] = useState("");
@@ -143,15 +148,39 @@ export default function AdminDashboard() {
             </div>
 
             <Tabs value={tab} onValueChange={setTab}>
-                <TabsList className="mb-5">
+                <TabsList className="mb-5 flex-wrap">
+                    <TabsTrigger value="analytics" data-testid="tab-analytics">Analytics</TabsTrigger>
                     <TabsTrigger value="pending" data-testid="tab-pending">
-                        Pending approval {pending.length > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5">{pending.length}</span>)}
+                        Pending {pending.length > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5">{pending.length}</span>)}
                     </TabsTrigger>
-                    <TabsTrigger value="approved" data-testid="tab-approved">Approved suppliers ({approved.length})</TabsTrigger>
+                    <TabsTrigger value="dealers" data-testid="tab-dealers">Dealers</TabsTrigger>
+                    <TabsTrigger value="orders" data-testid="tab-orders">Orders</TabsTrigger>
+                    <TabsTrigger value="finance" data-testid="tab-finance">Finance</TabsTrigger>
                     <TabsTrigger value="featured" data-testid="tab-featured">
                         Featured {featured.filter((x) => x.status === "new").length > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-[#F5C400] text-[#0A0A0B] text-[10px] font-bold px-1.5">{featured.filter((x) => x.status === "new").length}</span>)}
                     </TabsTrigger>
+                    <TabsTrigger value="content" data-testid="tab-content">Content</TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="analytics">
+                    {tab === "analytics" && <AnalyticsTab />}
+                </TabsContent>
+
+                <TabsContent value="dealers">
+                    {tab === "dealers" && <DealersTab />}
+                </TabsContent>
+
+                <TabsContent value="orders">
+                    {tab === "orders" && <OrdersTab />}
+                </TabsContent>
+
+                <TabsContent value="finance">
+                    {tab === "finance" && <FinanceTab />}
+                </TabsContent>
+
+                <TabsContent value="content">
+                    {tab === "content" && <ContentTab />}
+                </TabsContent>
 
                 <TabsContent value="pending">
                     {pending.length === 0 ? (

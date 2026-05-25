@@ -1,6 +1,7 @@
 import React from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { HelmetProvider } from "react-helmet-async";
 import { Toaster } from "sonner";
 import { AuthProvider } from "./context/AuthContext";
 import { CityProvider } from "./context/CityContext";
@@ -9,6 +10,7 @@ import Header from "./components/Header";
 import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AIChatWidget from "./components/AIChatWidget";
+import CookieConsent from "./components/CookieConsent";
 import Landing from "./pages/Landing";
 import SearchPage from "./pages/Search";
 import Login from "./pages/Login";
@@ -17,6 +19,7 @@ import Sell from "./pages/Sell";
 import MPS from "./pages/MPS";
 import PrintersGuide from "./pages/PrintersGuide";
 import PrintersResults from "./pages/PrintersResults";
+import Papers from "./pages/Papers";
 import CustomerDashboard from "./pages/CustomerDashboard";
 import SupplierDashboard from "./pages/SupplierDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -28,11 +31,14 @@ import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import Contact from "./pages/Contact";
 import GetFeatured from "./pages/GetFeatured";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 function App() {
     return (
+        <HelmetProvider>
         <div className="App min-h-screen flex flex-col">
             <BrowserRouter>
                 <CityProvider>
@@ -46,6 +52,8 @@ function App() {
                                     <Route path="/search" element={<SearchPage />} />
                                     <Route path="/login" element={<Login />} />
                                     <Route path="/register" element={<Register />} />
+                                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                                    <Route path="/reset-password" element={<ResetPassword />} />
                                     <Route path="/auth/callback" element={<OAuthCallback />} />
                                     <Route path="/cart" element={<Cart />} />
                                     <Route path="/checkout" element={<Checkout />} />
@@ -53,6 +61,7 @@ function App() {
                                     <Route path="/mps" element={<MPS />} />
                                     <Route path="/printers" element={<PrintersGuide />} />
                                     <Route path="/printers/results" element={<PrintersResults />} />
+                                    <Route path="/papers" element={<Papers />} />
                                     <Route path="/terms" element={<Terms />} />
                                     <Route path="/privacy" element={<Privacy />} />
                                     <Route path="/contact" element={<Contact />} />
@@ -68,12 +77,14 @@ function App() {
                             </main>
                             <Footer />
                             <AIChatWidget />
+                            <CookieConsent />
                             <Toaster richColors position="top-right" />
                         </AuthProvider>
                     </CartProvider>
                 </CityProvider>
             </BrowserRouter>
         </div>
+        </HelmetProvider>
     );
 }
 

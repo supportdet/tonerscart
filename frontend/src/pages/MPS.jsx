@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
 import { CheckCircle2, Phone, Mail, Headphones } from "lucide-react";
 import PhonePrefixInput from "../components/PhonePrefixInput";
+import PageMeta from "../components/PageMeta";
 
 export default function MPS() {
     const [form, setForm] = useState({
@@ -44,6 +45,11 @@ export default function MPS() {
 
     return (
         <div className="tc-hero relative pb-20" data-testid="mps-page">
+            <PageMeta
+                title="Managed Print Services India — TonersCart MPS Solutions"
+                description="End-to-end managed print services for businesses across India. Toner supply, printer maintenance, fleet management. Contact us for a custom MPS quote."
+                path="/mps"
+            />
             <div className="tc-hero-grid" />
             <div className="tc-container relative pt-10 sm:pt-14 max-w-5xl">
                 <div className="flex items-center gap-3 mb-3">

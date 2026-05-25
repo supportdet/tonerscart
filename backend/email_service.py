@@ -252,20 +252,30 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
     buyer_name = buyer.get("name") or "Customer"
     buyer_email = buyer.get("email")
     buyer_phone = buyer.get("phone") or "—"
-    buyer_gst = buyer.get("gst") or "—"
+    raw_gst = (buyer.get("gst") or "").strip()
+    buyer_gst = raw_gst if raw_gst else "Not provided"
 
     brand = item.get("brand") or ""
     model = item.get("model_number") or ""
     color = item.get("color") or "—"
-    item_type = item.get("type") or item.get("listing_type") or "—"
+    # Pretty product-type label — toner_type for toners, category for printers
+    raw_type = (item.get("type") or item.get("listing_type") or "—")
+    if (item.get("listing_type") == "printer") and raw_type:
+        type_label = raw_type.title() if raw_type not in ("—",) else raw_type
+    else:
+        type_label = raw_type
     qty = int(item.get("qty") or 1)
     unit = float(item.get("unit_price") or 0)
     total = float(item.get("total") or (unit * qty))
 
     body = f"""
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px;">
+    <div style="border-top:4px solid #00B7C7;background:#FFFFFF;padding:24px 0 8px 0;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid #E5E5EA;">
       <div>
-        <div style="font-size:11px;letter-spacing:0.22em;text-transform:uppercase;font-weight:700;color:#86868B;">Quotation</div>
+        <div style="font-family:'Montserrat',sans-serif;font-size:22px;font-weight:700;letter-spacing:-0.02em;">
+          <span style="color:#0A0A0B;">Toners</span><span style="color:#F5C400;">Cart</span>
+        </div>
+        <div style="font-size:11px;letter-spacing:0.22em;text-transform:uppercase;font-weight:700;color:#00B7C7;margin-top:8px;">Quotation</div>
         <div style="font-family:monospace;font-size:15px;font-weight:700;color:#0A0A0B;margin-top:2px;">{quote_number}</div>
         <div style="font-size:12px;color:#6E6E73;margin-top:2px;">Issued: {today}</div>
       </div>
@@ -276,6 +286,7 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
         <div style="color:#6E6E73;">+91 97422 70585 · +91 89717 68796</div>
       </div>
     </div>
+    </div>
 
     <div style="display:flex;gap:18px;margin-bottom:18px;">
       <div style="flex:1;padding:12px 14px;background:#F5F5F7;border-radius:10px;">
@@ -283,7 +294,7 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
         <div style="font-size:14px;font-weight:600;color:#0A0A0B;margin-top:4px;">{buyer_name}</div>
         <div style="font-size:12.5px;color:#3a3a40;">{buyer_email or '—'}</div>
         <div style="font-size:12.5px;color:#3a3a40;">{buyer_phone}</div>
-        <div style="font-size:12px;color:#6E6E73;margin-top:2px;">GST: <strong>{buyer_gst}</strong></div>
+        <div style="font-size:12px;color:#6E6E73;margin-top:6px;">GST: <strong style="color:#0A0A0B;">{buyer_gst}</strong></div>
       </div>
       <div style="flex:1;padding:12px 14px;background:#F5F5F7;border-radius:10px;">
         <div style="font-size:10.5px;letter-spacing:0.18em;text-transform:uppercase;color:#86868B;font-weight:700;">Sold by</div>
@@ -294,19 +305,19 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
 
     <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #E5E5EA;border-radius:8px;overflow:hidden;">
       <thead>
-        <tr style="background:#0A0A0B;color:#fff;">
-          <th style="text-align:left;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Item</th>
-          <th style="text-align:left;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Type</th>
-          <th style="text-align:left;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Color</th>
-          <th style="text-align:right;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Unit</th>
-          <th style="text-align:right;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Qty</th>
-          <th style="text-align:right;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Total</th>
+        <tr style="background:#F5F5F7;color:#0A0A0B;">
+          <th style="text-align:left;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;">Item</th>
+          <th style="text-align:left;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;">Type</th>
+          <th style="text-align:left;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;">Color</th>
+          <th style="text-align:right;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;">Unit</th>
+          <th style="text-align:right;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;">Qty</th>
+          <th style="text-align:right;padding:10px 12px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;">Total</th>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td style="padding:12px;border-top:1px solid #E5E5EA;"><strong>{brand}</strong> · <span style="font-family:monospace;">{model}</span></td>
-          <td style="padding:12px;border-top:1px solid #E5E5EA;">{item_type}</td>
+          <td style="padding:12px;border-top:1px solid #E5E5EA;"><span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#FFFBEB;color:#8C6A00;border:1px solid #F5C400;font-size:11.5px;font-weight:600;">{type_label}</span></td>
           <td style="padding:12px;border-top:1px solid #E5E5EA;">{color}</td>
           <td style="padding:12px;border-top:1px solid #E5E5EA;text-align:right;">{_quote_money(unit)}</td>
           <td style="padding:12px;border-top:1px solid #E5E5EA;text-align:right;">{qty}</td>
@@ -479,3 +490,73 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
         </p>
         """
         await _send(seller_email, f"New order received — {brand} {model}", seller_html)
+
+
+
+async def email_order_shipped(order: dict, listing: dict, buyer: dict):
+    """Notify buyer that their order has shipped — includes tracking number,
+    product details, and a WhatsApp support link."""
+    short_id = str(order.get("id", ""))[:8].upper()
+    brand = (listing or {}).get("brand") or ""
+    model = (listing or {}).get("model_number") or ""
+    tracking = (order or {}).get("tracking_number") or "—"
+    buyer_email = (buyer or {}).get("email")
+    buyer_name = (buyer or {}).get("name") or order.get("customer_name") or "there"
+    if not buyer_email:
+        return
+    qty = order.get("qty", 1)
+    total = order.get("total", 0)
+
+    body = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;">Your TonersCart order is on its way</h2>
+    <p style="color:#3a3a40;">Hi {buyer_name}, good news — your order has been dispatched.</p>
+
+    <div style="margin:14px 0;padding:14px 16px;background:#F5F5F7;border-radius:10px;font-size:13.5px;">
+      <div style="font-size:10.5px;letter-spacing:0.16em;text-transform:uppercase;color:#86868B;font-weight:700;">Tracking</div>
+      <div style="font-family:monospace;font-size:18px;font-weight:700;color:#0A0A0B;margin-top:4px;letter-spacing:0.04em;">{tracking}</div>
+      <div style="margin-top:6px;font-size:11.5px;color:#6E6E73;">Use this number with the courier&apos;s tracking page.</div>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;">
+      <tr><td style='padding:4px 12px;color:#86868B;'>Order</td><td style='padding:4px 12px;font-family:monospace;'><strong>#{short_id}</strong></td></tr>
+      <tr><td style='padding:4px 12px;color:#86868B;'>Product</td><td style='padding:4px 12px;'><strong>{brand} {model}</strong></td></tr>
+      <tr><td style='padding:4px 12px;color:#86868B;'>Quantity</td><td style='padding:4px 12px;'>{qty}</td></tr>
+      <tr><td style='padding:4px 12px;color:#86868B;'>Total</td><td style='padding:4px 12px;'><strong>{_money(total)}</strong></td></tr>
+    </table>
+
+    <p style="margin-top:18px;">
+      Once you receive it, please confirm delivery in your
+      <a href="https://tonerscart.com/dashboard" style="color:#0A0A0B;font-weight:600;">TonersCart dashboard</a>.
+    </p>
+
+    <p style="margin-top:16px;font-size:12.5px;color:#3a3a40;">
+      Need help? Chat with us on
+      <a href="https://wa.me/919742270585" style="color:#0A0A0B;font-weight:600;">WhatsApp +91 97422 70585</a>
+      or email <a href="mailto:support@tonerscart.com" style="color:#0A0A0B;font-weight:600;">support@tonerscart.com</a>.
+    </p>
+    <p style="margin-top:22px;color:#86868B;font-size:11.5px;">— Team TonersCart</p>
+    """
+    await _send(buyer_email, f"Your order #{short_id} has been shipped", body)
+
+
+async def email_order_delivered_support(order: dict, listing: dict, supplier: dict, buyer: dict):
+    """Notify the support inbox that a buyer marked an order delivered so we can release payout."""
+    short_id = str(order.get("id", ""))[:8].upper()
+    brand = (listing or {}).get("brand") or "—"
+    model = (listing or {}).get("model_number") or "—"
+    seller = (supplier or {}).get("business_name") or "—"
+    buyer_name = (buyer or {}).get("name") or order.get("customer_name") or "Buyer"
+    commission, payout, rate_label = _commission_breakdown(order.get("total") or 0)
+    html = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;">Order delivered — release payout</h2>
+    <p style="color:#3a3a40;">Buyer <strong>{buyer_name}</strong> has confirmed delivery for order
+    <strong>#{short_id}</strong>.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <tr><td style='padding:4px 12px;color:#86868B;'>Product</td><td style='padding:4px 12px;'>{brand} {model}</td></tr>
+      <tr><td style='padding:4px 12px;color:#86868B;'>Dealer</td><td style='padding:4px 12px;'>{seller}</td></tr>
+      <tr><td style='padding:4px 12px;color:#86868B;'>Total</td><td style='padding:4px 12px;'><strong>{_money(order.get('total') or 0)}</strong></td></tr>
+      <tr><td style='padding:4px 12px;color:#86868B;'>Commission ({rate_label})</td><td style='padding:4px 12px;'>{_money(commission)}</td></tr>
+      <tr><td style='padding:4px 12px;color:#86868B;'>Payout to dealer</td><td style='padding:4px 12px;'><strong>{_money(payout)}</strong></td></tr>
+    </table>
+    """
+    await _send(SUPPORT_INBOX, f"Payout ready — order #{short_id} delivered", html)

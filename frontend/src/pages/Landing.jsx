@@ -7,50 +7,12 @@ import TonerAnimation from "../components/TonerAnimation";
 import TonerCartridge from "../components/TonerCartridge";
 import { useCity } from "../context/CityContext";
 import useReveal from "../hooks/useReveal";
+import PageMeta from "../components/PageMeta";
 import { Skeleton } from "../components/ui/skeleton";
 
-// Brand text styled like logos — each gets its official color in the marquee
-const MARQUEE_BRANDS = [
-    { name: "HP",       color: "#0096D6" },
-    { name: "Canon",    color: "#CC0000" },
-    { name: "Brother",  color: "#003087" },
-    { name: "Epson",    color: "#1A1A8C" },
-    { name: "Ricoh",    color: "#00A0AF" },
-    { name: "Xerox",    color: "#FF0000" },
-    { name: "Kyocera",  color: "#1A1A1A" },
-    { name: "Samsung",  color: "#1428A0" },
-];
-
-// Curated popular models — 4 different brands buyers search the most
-const POPULAR_CHIPS = [
-    { label: "HP 88A",       q: "88A" },
-    { label: "Canon 337",    q: "337" },
-    { label: "Brother TN-2365", q: "TN-2365" },
-    { label: "Xerox 3020",   q: "3020" },
-];
-
-// Placeholder featured suppliers — fallback when no real featured suppliers
-// exist yet. Real ones come from /api/featured/suppliers.
-const FEATURED_SUPPLIERS = [
-    {
-        id: "fs-1",
-        name: "PrintZone Trading Co.",
-        city: "Mumbai, Maharashtra",
-        tagline: "Original HP & Canon — same-day dispatch.",
-    },
-    {
-        id: "fs-2",
-        name: "Toner Hub India",
-        city: "Bangalore, Karnataka",
-        tagline: "Bulk compatibles · 30-day replacement guarantee.",
-    },
-    {
-        id: "fs-3",
-        name: "Digital Office Solutions",
-        city: "Delhi NCR",
-        tagline: "Enterprise MPS contracts · pan-India delivery.",
-    },
-];
+// Hardcoded defaults removed — both marquee brands and popular chips
+// now come from /api/config/<key>. The backend ships sane defaults so the
+// frontend never needs its own fallback array.
 
 export default function Landing() {
     const navigate = useNavigate();
@@ -60,6 +22,9 @@ export default function Landing() {
     const [grouped, setGrouped] = useState([]);
     const [groupedLoading, setGroupedLoading] = useState(true);
     const [featured, setFeatured] = useState([]);
+    const [marqueeBrands, setMarqueeBrands] = useState([]);
+    const [popularChips, setPopularChips] = useState([]);
+    const [publicStats, setPublicStats] = useState(null);
     const rootRef = useReveal([grouped.length, city]);
 
     useEffect(() => {
@@ -72,6 +37,15 @@ export default function Landing() {
         api.get("/featured/suppliers", { params: { limit: 6 } })
             .then((r) => setFeatured(Array.isArray(r.data) ? r.data : []))
             .catch(() => setFeatured([]));
+        api.get("/config/marquee_brands")
+            .then((r) => setMarqueeBrands(Array.isArray(r.data?.value) ? r.data.value : []))
+            .catch(() => setMarqueeBrands([]));
+        api.get("/config/popular_chips")
+            .then((r) => setPopularChips(Array.isArray(r.data?.value) ? r.data.value : []))
+            .catch(() => setPopularChips([]));
+        api.get("/stats/public")
+            .then((r) => setPublicStats(r.data || null))
+            .catch(() => setPublicStats(null));
     }, []);
 
     useEffect(() => {
@@ -98,8 +72,43 @@ export default function Landing() {
         navigate(`/search?${params.toString()}`);
     };
 
+    const titleCity = city || "India";
+    const ldOrg = {
+        "@context": "https://schema.org",
+        "@graph": [
+            {
+                "@type": "Organization",
+                "name": "TonersCart",
+                "url": "https://www.tonerscart.com",
+                "logo": "https://www.tonerscart.com/logo.png",
+                "telephone": "+91-97422-70585",
+                "email": "support@tonerscart.com",
+                "sameAs": ["https://www.linkedin.com/company/tonerscart"],
+            },
+            {
+                "@type": "WebSite",
+                "url": "https://www.tonerscart.com",
+                "name": "TonersCart",
+                "potentialAction": {
+                    "@type": "SearchAction",
+                    "target": "https://www.tonerscart.com/search?q={search_term_string}",
+                    "query-input": "required name=search_term_string",
+                },
+            },
+        ],
+    };
+
     return (
         <div ref={rootRef} data-testid="landing-page">
+            <PageMeta
+                title={`TonersCart — Buy Printers & Toners Online B2B${city ? ` in ${city}` : ""} | Verified Suppliers ${titleCity}`}
+                description={city
+                    ? `Buy HP, Canon, Brother toner cartridges and printers from verified suppliers in ${city}. Compare prices, real stock, same-day dispatch available.`
+                    : "India's trusted B2B marketplace to buy printer toners and printers online. HP, Canon, Brother, Xerox toners from verified suppliers in Bangalore, Mumbai, Delhi, Chennai, Hyderabad and across India."}
+                keywords="buy toner cartridges online india, printer toner suppliers bangalore, b2b printer marketplace india, buy hp toner online, canon toner dealers india, compatible toner cartridges, original toner suppliers"
+                path="/"
+                jsonLd={ldOrg}
+            />
             {/* ============================== HERO ============================== */}
             <section className="tc-hero relative pt-8 pb-12 sm:pt-12 sm:pb-20 lg:pt-16 lg:pb-24">
                 <div className="tc-hero-grid" />
@@ -117,19 +126,21 @@ export default function Landing() {
                     </div>
 
                     {/* Popular model chips */}
-                    <div className="mt-4 flex flex-wrap items-center gap-2 tc-fade-up tc-fade-up-2" data-testid="popular-chips">
-                        <span className="text-[10px] sm:text-[11px] tracking-[0.22em] uppercase font-semibold text-white/45 mr-1">Popular:</span>
-                        {POPULAR_CHIPS.map((c) => (
-                            <button
-                                key={c.q}
-                                onClick={() => submit({ query: c.q })}
-                                className="tc-chip"
-                                data-testid={`popular-chip-${c.q}`}
-                            >
-                                {c.label}
-                            </button>
-                        ))}
-                    </div>
+                    {popularChips.length > 0 && (
+                        <div className="mt-4 flex flex-wrap items-center gap-2 tc-fade-up tc-fade-up-2" data-testid="popular-chips">
+                            <span className="text-[10px] sm:text-[11px] tracking-[0.22em] uppercase font-semibold text-white/45 mr-1">Popular:</span>
+                            {popularChips.map((c) => (
+                                <button
+                                    key={c.query}
+                                    onClick={() => submit({ query: c.query })}
+                                    className="tc-chip"
+                                    data-testid={`popular-chip-${c.query}`}
+                                >
+                                    {c.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
 
                     {/* Hero content split */}
                     <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-center mt-10 lg:mt-16">
@@ -160,27 +171,30 @@ export default function Landing() {
             </section>
 
             {/* ============ BRANDS MARQUEE — colored logo-style text ============ */}
-            <section className="tc-brand-marquee" data-testid="brand-marquee">
-                <div className="tc-container flex items-center gap-6">
-                    <span className="text-[10px] tracking-[0.22em] uppercase font-semibold text-[#F5C400] shrink-0">Brands on TonersCart</span>
-                    <div className="tc-marquee-mask flex-1">
-                        <div className="tc-marquee-track">
-                            {[...MARQUEE_BRANDS, ...MARQUEE_BRANDS, ...MARQUEE_BRANDS].map((b, i) => (
-                                <span
-                                    key={`${b.name}-${i}`}
-                                    className="tc-marquee-logo"
-                                    style={{ color: b.color }}
-                                    data-testid={`marquee-${b.name}`}
-                                >
-                                    {b.name}
-                                </span>
-                            ))}
+            {marqueeBrands.length > 0 && (
+                <section className="tc-brand-marquee" data-testid="brand-marquee">
+                    <div className="tc-container flex items-center gap-6">
+                        <span className="text-[10px] tracking-[0.22em] uppercase font-semibold text-[#F5C400] shrink-0">Brands on TonersCart</span>
+                        <div className="tc-marquee-mask flex-1">
+                            <div className="tc-marquee-track">
+                                {[...marqueeBrands, ...marqueeBrands, ...marqueeBrands].map((b, i) => (
+                                    <span
+                                        key={`${b.name}-${i}`}
+                                        className="tc-marquee-logo"
+                                        style={{ color: b.color }}
+                                        data-testid={`marquee-${b.name}`}
+                                    >
+                                        {b.name}
+                                    </span>
+                                ))}
+                            </div>
                         </div>
                     </div>
-                </div>
-            </section>
+                </section>
+            )}
 
             {/* ============ FEATURED SUPPLIERS ============ */}
+            {featured.length > 0 && (
             <section className="bg-[#0A0A0B] py-12 sm:py-16" data-testid="featured-suppliers">
                 <div className="tc-container">
                     <div className="flex items-end justify-between mb-7 gap-4">
@@ -195,16 +209,13 @@ export default function Landing() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
-                        {(featured.length > 0
-                            ? featured.map((s) => ({
-                                  id: s.id,
-                                  name: s.business_name || "Verified Supplier",
-                                  city: [s.city, s.state].filter(Boolean).join(", "),
-                                  tagline: (s.seller_types || []).slice(0, 3).join(" · ") || "Verified TonersCart supplier",
-                                  logo_url: s.logo_url || null,
-                              }))
-                            : FEATURED_SUPPLIERS
-                        ).map((s, i) => (
+                        {featured.map((s) => ({
+                            id: s.id,
+                            name: s.business_name || "Verified Supplier",
+                            city: [s.city, s.state].filter(Boolean).join(", "),
+                            tagline: (s.seller_types || []).slice(0, 3).join(" · ") || "Verified TonersCart supplier",
+                            logo_url: s.logo_url || null,
+                        })).map((s, i) => (
                             <div
                                 key={s.id}
                                 className="tc-featured-card tc-reveal"
@@ -249,14 +260,19 @@ export default function Landing() {
                             </div>
                         ))}
                     </div>
+                </div>
+            </section>
+            )}
 
-                    {/* "Get featured" CTA banner */}
+            {/* "Get featured" CTA — always visible, public-facing */}
+            <section className="bg-[#0A0A0B] pb-12 sm:pb-16">
+                <div className="tc-container">
                     <div
-                        className="mt-7 sm:mt-9 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl bg-gradient-to-r from-[#1A1B1F] via-[#23252B] to-[#1A1B1F] border border-white/10 p-5 sm:px-6 sm:py-5"
+                        className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl bg-gradient-to-r from-[#1A1B1F] via-[#23252B] to-[#1A1B1F] border border-white/10 p-5 sm:px-6 sm:py-5"
                         data-testid="get-featured-banner"
                     >
                         <div className="flex items-start sm:items-center gap-3">
-                            <span className="text-[20px] leading-none">🌟</span>
+                            <Sparkles size={18} className="text-[#F5C400] shrink-0 mt-0.5 sm:mt-0" />
                             <div>
                                 <div className="text-white text-[14.5px] sm:text-[15.5px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>
                                     Get your brand featured here
@@ -275,16 +291,18 @@ export default function Landing() {
                 </div>
             </section>
 
-            {/* ====== STATS STRIP ====== */}
+            {/* ====== STATS STRIP — live counts from /api/stats/public ====== */}
             <section className="bg-white border-b border-black/[0.06]">
                 <div className="tc-container py-6 sm:py-8 grid grid-cols-3 gap-4 sm:gap-6" data-testid="stats-strip">
                     {[
-                        { v: "250+", k: "Verified suppliers", testid: "stat-suppliers" },
-                        { v: "15+",  k: "Cities served",      testid: "stat-cities" },
-                        { v: "10+",  k: "Brands listed",      testid: "stat-brands" },
+                        { v: publicStats?.suppliers, k: "Verified suppliers", testid: "stat-suppliers" },
+                        { v: publicStats?.cities,    k: "Cities served",      testid: "stat-cities" },
+                        { v: publicStats?.brands,    k: "Brands listed",      testid: "stat-brands" },
                     ].map((s, i) => (
                         <div key={s.k} className="tc-reveal text-center sm:text-left" style={{ transitionDelay: `${i * 80}ms` }} data-testid={s.testid}>
-                            <div className="font-mono text-2xl sm:text-3xl lg:text-4xl font-semibold text-[#0A0A0B] tracking-tight">{s.v}</div>
+                            <div className="font-mono text-2xl sm:text-3xl lg:text-4xl font-semibold text-[#0A0A0B] tracking-tight">
+                                {publicStats == null ? "—" : `${s.v ?? 0}+`}
+                            </div>
                             <div className="text-[10px] sm:text-[11px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73] mt-1.5 sm:mt-2">{s.k}</div>
                         </div>
                     ))}

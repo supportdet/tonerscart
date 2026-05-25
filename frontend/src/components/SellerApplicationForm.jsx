@@ -134,6 +134,8 @@ export default function SellerApplicationForm() {
             return true;
         }
         if (step === 3) {
+            const hasProductLine = s.seller_types.some((t) => ["Toners", "Printers", "Both"].includes(t));
+            if (!hasProductLine) return false;
             if (s.seller_types.length < 1) return false;
             if (s.seller_types.includes("Compatible") && s.compatible_brands.length === 0) return false;
             return true;
@@ -174,6 +176,7 @@ export default function SellerApplicationForm() {
                 doc_pan: "",
                 doc_bank_proof: "",
                 doc_address_proof: "",
+                agreed_to_terms: agreed,
             });
 
             // 2. Upload files via backend (service role — bypasses storage RLS for non-supplier users)
@@ -306,6 +309,38 @@ export default function SellerApplicationForm() {
 
             {step === 3 && (
                 <div className="space-y-4" data-testid="apply-step-3">
+                    <div>
+                        <Label>What do you sell? <span className="text-red-500">*</span></Label>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
+                            {[
+                                { id: "Toners", label: "Toner Cartridges & Consumables", sub: "Original / Compatible toners" },
+                                { id: "Printers", label: "Printers & MFDs", sub: "Inkjet / Laser / Multi-function" },
+                                { id: "Both", label: "Both", sub: "Toners + Printers" },
+                            ].map((opt) => {
+                                const selected = s.seller_types.includes(opt.id);
+                                return (
+                                    <button
+                                        key={opt.id}
+                                        type="button"
+                                        onClick={() => setS((prev) => {
+                                            // Mutually exclusive between the three product-line options
+                                            const cleared = prev.seller_types.filter((t) => !["Toners", "Printers", "Both"].includes(t));
+                                            return { ...prev, seller_types: [...cleared, opt.id] };
+                                        })}
+                                        className={`p-4 rounded-lg border text-left transition ${selected ? "border-[#F5C400] bg-[#FFFBEB] text-[#0A0A0B]" : "border-[#D2D2D7] bg-white text-[#1D1D1F] hover:border-[#86868B]"}`}
+                                        data-testid={`product-line-${opt.id}`}
+                                    >
+                                        <div className="text-[14px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>{opt.label}</div>
+                                        <div className="text-[11.5px] mt-1 opacity-80">{opt.sub}</div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        {!s.seller_types.some((t) => ["Toners", "Printers", "Both"].includes(t)) && (
+                            <div className="text-[11px] text-red-600 mt-1">Pick one to continue.</div>
+                        )}
+                    </div>
+
                     <div>
                         <Label>What kind of seller are you? <span className="text-[#86868B] font-normal">(choose up to 2)</span></Label>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">

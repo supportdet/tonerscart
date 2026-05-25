@@ -6,7 +6,7 @@ import { Label } from "../components/ui/label";
 import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
-import { ArrowRight, Mail, Lock } from "lucide-react";
+import { ArrowRight, Mail, Lock, Loader2 } from "lucide-react";
 
 const GoogleIcon = (props) => (
     <svg viewBox="0 0 48 48" width="18" height="18" {...props}>
@@ -25,6 +25,7 @@ export default function Login() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
 
     const submit = async (e) => {
         e.preventDefault();
@@ -44,8 +45,10 @@ export default function Login() {
     };
 
     const onGoogle = async () => {
+        setGoogleLoading(true);
         try { await signInWithGoogle(next || undefined); }
-        catch (e) { toast.error(e.message || "Google sign-in unavailable"); }
+        catch (e) { toast.error(e.message || "Google sign-in unavailable"); setGoogleLoading(false); }
+        // Note: Google OAuth redirects away — no cleanup needed on success path
     };
 
     return (
@@ -87,8 +90,8 @@ export default function Login() {
                             </h2>
                             <p className="text-[13px] text-[#6E6E73] mt-1">Buyers, suppliers and admin sign in here.</p>
 
-                            <button onClick={onGoogle} type="button" className="mt-5 w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-full border border-[#D2D2D7] bg-white hover:bg-black/[0.03] text-[#0A0A0B] font-semibold text-[13.5px]" data-testid="login-google-btn">
-                                <GoogleIcon /> Continue with Google
+                            <button onClick={onGoogle} type="button" disabled={googleLoading || loading} className="mt-5 w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-full border border-[#D2D2D7] bg-white hover:bg-black/[0.03] text-[#0A0A0B] font-semibold text-[13.5px] disabled:opacity-60 disabled:cursor-not-allowed" data-testid="login-google-btn">
+                                {googleLoading ? <><Loader2 size={14} className="animate-spin" /> Connecting to Google…</> : <><GoogleIcon /> Continue with Google</>}
                             </button>
 
                             <div className="my-5 flex items-center gap-3">
@@ -112,10 +115,14 @@ export default function Login() {
                                         <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="pl-9" data-testid="login-password-input" />
                                     </div>
                                 </div>
-                                <Button type="submit" className="btn-cta w-full inline-flex items-center justify-center gap-2" disabled={loading} data-testid="login-submit-btn">
-                                    {loading ? "Signing in…" : <>Sign in <ArrowRight size={14} /></>}
+                                <Button type="submit" className="btn-cta w-full inline-flex items-center justify-center gap-2" disabled={loading || googleLoading} data-testid="login-submit-btn">
+                                    {loading ? <><Loader2 size={14} className="animate-spin" /> Signing in…</> : <>Sign in <ArrowRight size={14} /></>}
                                 </Button>
                             </form>
+
+                            <div className="text-[12.5px] text-center mt-3">
+                                <Link to="/forgot-password" className="text-[#6E6E73] hover:text-[#0A0A0B] hover:underline" data-testid="login-forgot-link">Forgot password?</Link>
+                            </div>
 
                             <div className="text-[13px] text-[#6E6E73] text-center mt-5">
                                 No account yet? <Link to="/register" className="text-[#00B7C7] font-semibold hover:underline" data-testid="login-to-register-link">Create one</Link>
