@@ -160,6 +160,10 @@ export default function SellerApplicationForm() {
             toast.error("All required documents must be uploaded before submitting");
             return;
         }
+        if (!agreed) {
+            toast.error("You must agree to the TonersCart Seller Terms to continue");
+            return;
+        }
         setLoading(true);
         try {
             // 1. Submit application (no role change yet)
@@ -439,6 +443,11 @@ export default function SellerApplicationForm() {
                     I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-[#00B7C7] hover:underline font-semibold">TonersCart Seller Terms</a> operated by <strong>Digital Edge Technologies</strong>.
                 </label>
             </div>
+            {step === 4 && !agreed && (
+                <div className="mt-2 text-[12px] text-red-600 font-semibold" data-testid="apply-agreement-error">
+                    You must agree to the terms to continue
+                </div>
+            )}
 
             <div className="mt-6 flex items-center justify-between">
                 <Button type="button" variant="outline" disabled={step === 1 || loading} onClick={() => setStep(Math.max(1, step - 1))} data-testid="apply-back-btn">

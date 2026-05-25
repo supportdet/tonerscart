@@ -33,8 +33,10 @@ import Contact from "./pages/Contact";
 import GetFeatured from "./pages/GetFeatured";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import About from "./pages/About";
 import NotFound from "./pages/NotFound";
 import ErrorBoundary from "./components/ErrorBoundary";
+import VisitorTracker from "./components/VisitorTracker";
 
 function App() {
     return (
@@ -45,6 +47,7 @@ function App() {
                     <CartProvider>
                         <AuthProvider>
                             <Header />
+                            <VisitorTracker />
                             <main className="flex-1">
                                 <ErrorBoundary>
                                 <Routes>
@@ -66,6 +69,7 @@ function App() {
                                     <Route path="/privacy" element={<Privacy />} />
                                     <Route path="/contact" element={<Contact />} />
                                     <Route path="/get-featured" element={<GetFeatured />} />
+                                    <Route path="/about" element={<About />} />
                                     <Route path="/order-confirmed/:id" element={<OrderConfirmed />} />
                                     <Route path="/order-confirmed" element={<OrderConfirmed />} />
                                     <Route path="/customer" element={<ProtectedRoute roles={["customer"]}><CustomerDashboard /></ProtectedRoute>} />

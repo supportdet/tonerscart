@@ -135,6 +135,7 @@ export default function CustomerDashboard() {
                         <div key={o.id} className="tc-card-flat p-4 sm:p-5" data-testid={`customer-order-row-${o.id}`}>
                             <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div className="min-w-0">
+                                    <div className="text-[10.5px] tracking-[0.16em] uppercase font-semibold text-[#86868B]" data-testid={`order-number-${o.id}`}>{o.order_number || `Order #${(o.id || "").slice(0, 8).toUpperCase()}`}</div>
                                     <div className="font-mono font-semibold text-[#0A0A0B] text-[15px]">{o.listings?.brand} · {o.listings?.model_number || "—"}</div>
                                     <div className="text-[11.5px] text-[#86868B] mt-0.5">{o.listings?.toner_type || ""} · Qty {o.qty}</div>
                                     <div className="text-[12px] text-[#3a3a40] mt-1">Seller: <span className="font-semibold text-[#0A0A0B]">{o.suppliers?.business_name || "—"}</span>{o.suppliers?.city ? ` · ${o.suppliers.city}` : ""}</div>

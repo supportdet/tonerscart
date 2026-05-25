@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { Textarea } from "../components/ui/textarea";
 import { toast } from "sonner";
-import { CheckCircle2, XCircle, MapPin, Building2, Phone, Mail, FileText, IndianRupee, Sparkles, AlertTriangle, MinusCircle, Star } from "lucide-react";
+import { CheckCircle2, XCircle, MapPin, Building2, Phone, Mail, FileText, IndianRupee, Sparkles, AlertTriangle, MinusCircle, Star, Upload, Loader2 } from "lucide-react";
 import AnalyticsTab from "./admin/AnalyticsTab";
 import DealersTab from "./admin/DealersTab";
 import OrdersTab from "./admin/OrdersTab";
@@ -108,6 +108,39 @@ export default function AdminDashboard() {
 
     const [docs, setDocs] = useState({ urls: {}, ai: {} });
     const [docsLoading, setDocsLoading] = useState(false);
+    const [featureModal, setFeatureModal] = useState(null); // {application}
+    const [featureLogo, setFeatureLogo] = useState(null);
+    const [featureSupplierId, setFeatureSupplierId] = useState("");
+    const [featuring, setFeaturing] = useState(false);
+
+    const openFeatureModal = (application) => {
+        setFeatureModal(application);
+        setFeatureLogo(null);
+        // Try to find existing supplier whose business name matches the application company
+        const match = approved.find((s) => (s.business_name || "").toLowerCase() === (application.company || "").toLowerCase());
+        setFeatureSupplierId(match?.id || "");
+    };
+
+    const confirmFeature = async () => {
+        if (!featureSupplierId) { toast.error("Pick a supplier from the dropdown first"); return; }
+        if (!featureLogo) { toast.error("Please upload a logo or banner image"); return; }
+        setFeaturing(true);
+        try {
+            const fd = new FormData();
+            fd.append("file", featureLogo);
+            await api.post(`/admin/suppliers/${featureSupplierId}/featured-image`, fd);
+            // Also mark the application active
+            if (featureModal?.id) {
+                try { await api.put(`/admin/featured/applications/${featureModal.id}/status`, { status: "active" }); } catch { /* non-fatal */ }
+            }
+            toast.success("Company is now featured on the landing page");
+            setFeatureModal(null);
+            setFeatureLogo(null);
+            setFeatureSupplierId("");
+            load();
+        } catch (e) { toast.error(formatApiError(e)); }
+        finally { setFeaturing(false); }
+    };
 
     const openReview = async (p) => {
         setReviewing(p);
@@ -307,6 +340,13 @@ export default function AdminDashboard() {
                                                     <option value="active">Active</option>
                                                     <option value="rejected">Rejected</option>
                                                 </select>
+                                                <button
+                                                    onClick={() => openFeatureModal(a)}
+                                                    className="ml-2 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#FFFBEB] border border-[#F5C400] text-[#8C6A00] text-[11.5px] font-semibold hover:bg-[#FFF7D6]"
+                                                    data-testid={`feature-company-btn-${a.id}`}
+                                                >
+                                                    <Star size={11} /> Feature this company
+                                                </button>
                                             </td>
                                         </tr>
                                     ))}
@@ -424,6 +464,59 @@ export default function AdminDashboard() {
                             </DialogFooter>
                         </>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Feature this company — admin uploads logo + selects supplier */}
+            <Dialog open={!!featureModal} onOpenChange={(o) => !o && setFeatureModal(null)}>
+                <DialogContent className="max-w-md" data-testid="feature-upload-dialog">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2"><Star size={16} className="text-[#F5C400]" /> Feature {featureModal?.company}</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 text-[13px]">
+                        <p className="text-[#6E6E73]">Upload the company&apos;s logo or banner image. Then pick which approved supplier this featured placement maps to.</p>
+                        <div>
+                            <label className="text-[10.5px] tracking-[0.18em] uppercase font-semibold text-[#86868B]">Map to approved supplier</label>
+                            <select
+                                value={featureSupplierId}
+                                onChange={(e) => setFeatureSupplierId(e.target.value)}
+                                className="mt-1 h-10 w-full px-3 rounded-md border border-[#D2D2D7] bg-white text-[13px]"
+                                data-testid="feature-supplier-select"
+                            >
+                                <option value="">— select —</option>
+                                {approved.map((s) => (<option key={s.id} value={s.id}>{s.business_name} · {s.city || ""}</option>))}
+                            </select>
+                        </div>
+                        <label className="block cursor-pointer">
+                            <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                onChange={(e) => setFeatureLogo(e.target.files?.[0] || null)}
+                                className="hidden"
+                                data-testid="feature-logo-input"
+                            />
+                            <div className="border-2 border-dashed border-[#D2D2D7] rounded-xl p-5 text-center hover:border-[#F5C400] transition">
+                                {featureLogo ? (
+                                    <>
+                                        <img src={URL.createObjectURL(featureLogo)} alt="preview" className="max-h-24 mx-auto rounded" />
+                                        <div className="mt-2 text-[12px] text-[#6E6E73]">{featureLogo.name}</div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Upload size={20} className="mx-auto text-[#86868B]" />
+                                        <div className="mt-2 text-[13px] font-semibold">Upload logo / banner</div>
+                                        <div className="text-[11px] text-[#86868B]">PNG / JPG / WEBP · max 5 MB</div>
+                                    </>
+                                )}
+                            </div>
+                        </label>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setFeatureModal(null)} disabled={featuring}>Cancel</Button>
+                        <Button onClick={confirmFeature} disabled={featuring} className="btn-cta" data-testid="feature-confirm-btn">
+                            {featuring ? <><Loader2 size={13} className="animate-spin mr-1.5" /> Featuring…</> : "Confirm & feature"}
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 

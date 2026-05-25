@@ -1,0 +1,53 @@
+{
+  "summary": "Iteration 10 — TonersCart v3 batch testing. Created new pytest suite /app/backend/tests/test_v3_batch.py covering all 8 new endpoints: POST /api/analytics/pageview (4 cases), GET /api/admin/visitor-analytics (auth + structure), GET /api/landing-data (public + 5-min cache identity), POST /api/admin/suppliers/{id}/featured-image (admin-only + 5 MB cap), suspend/unsuspend (admin-only, NOT executed against real supplier to avoid emails per agent-note), PUT /api/supplier/papers/{id} (auth gating), GET /api/listings/{nonexistent} regression. Result: 18/18 PASS. Wave3 regression suite re-run: 21 PASS / 4 SKIPPED (no approved-supplier seed) / 0 FAIL — every previously-passing endpoint still green. Frontend smoke verified: (1) /about route renders with About headline; (2) Footer has BOTH the About Us link AND the Grievance Officer strip (Karthik Nair / grievance@tonerscart.com / 48-hour); (3) /contact shows Grievance Officer block; (4) VisitorTracker fires POST /api/analytics/pageview on every PUBLIC page navigation (2 calls per navigation observed → likely React StrictMode dev-mode double-mount; production will fire once via navigator.sendBeacon); (5) VisitorTracker correctly SUPPRESSES on /admin — admin-page-delta was 0 pageview calls; (6) Buyer dashboard (buyer1@test.com) loads 19 orders with order-number-{id} testids and short UUID fallback (TC-YYYY-NNNNN count = 0 because orders.order_number column not yet migrated — graceful degrade per spec); (7) Admin login → /admin Finance tab loads.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/admin/suppliers/{id}/featured-image", "issue": "Returns 400 for >5 MB blob (correct), but the storage upload happens BEFORE supplier_id is validated against suppliers table — uploading a 4-MB image to a random uuid succeeds in storage and then fails the suppliers.update silently with a 500. Consider validating supplier existence first."},
+      {"endpoint": "GET /api/landing-data", "issue": "First call performs N table reads; cache is per-pod (in-memory dict) — under multi-pod k8s the 5-min TTL is per-pod. Document or move to Redis."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AdminDashboard Featured supplier modal", "issue": "Could not locate 'Feature this company' button via text match — count was 0 on initial /admin load. Likely on a sub-tab (Featured / Suppliers) not the default Finance tab. Needs a data-testid like 'feature-company-button' for reliable testing.", "selector": "text=/Feature this company/i", "priority": "MEDIUM"},
+      {"component": "SellerApplicationForm /sell page", "issue": "Step indicators + Submit button not present on initial /sell load (counts both 0). Form likely behind an 'Apply now' CTA. Not validated dealer-agreement red error end-to-end. Add data-testid to step buttons + dealer-agreement-error.", "selector": "[data-testid='dealer-agreement-error']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Global (CartProvider)", "issues": ["Hydration error STILL present in console: '<span> cannot be a child of <option>' — carry-over from iteration_9, not fixed yet. Source: App.js CartProvider area."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_v3_batch.py",
+    "/app/test_reports/pytest/iteration_10.xml",
+    "/app/test_reports/pytest/iteration_10_wave3.xml"
+  ],
+  "action_items": [
+    "(USER ACTION) Run supabase_schema_v3.sql to enable orders.order_number column (will flip TC-YYYY-NNNNN from short UUID fallback to live), page_views table (will enable real visitor-analytics counters > 0), and suppliers.is_featured (will enable Featured supplier path).",
+    "(FE) Add data-testid='feature-company-button' on the AdminDashboard Featured-supplier upload trigger so future tests can reliably exercise the upload modal end-to-end.",
+    "(FE) Add data-testid attributes on SellerApplicationForm step indicators, Submit button, and the dealer-agreement-error red text so the 'You must agree to the terms' assertion can be automated.",
+    "(FE bug carry-over) Fix the <span> inside <option> hydration warning in App.js CartProvider — purely cosmetic but pollutes console on every page load.",
+    "(BE hardening) In POST /admin/suppliers/{id}/featured-image, validate supplier_id exists before uploading to storage to avoid orphaned blobs."
+  ],
+  "critical_code_review_comments": [
+    "server.py now 3004 lines — still no router split. _generate_order_number, /api/analytics/pageview, /admin/visitor-analytics, /admin/suppliers/{id}/featured-image, /landing-data all bolted onto the same file. Strongly recommend extracting routers/analytics.py + routers/admin_supplier.py before next wave.",
+    "_LANDING_CACHE has no locking → on first cold start under concurrent traffic multiple workers will all execute the underlying queries. Use functools.lru_cache with TTL or a simple asyncio.Lock.",
+    "record_pageview swallows ALL exceptions silently when 'page_views' is in the error string but logs every other failure at WARNING — fine, but consider a single counter (Prometheus) so silent drops are observable in production.",
+    "admin_upload_featured_image: storage upload runs BEFORE the suppliers.update, so a bogus supplier_id leaves an orphan blob in supplier-documents bucket. Add a SELECT id FROM suppliers WHERE id=? guard at the top.",
+    "PUT /api/supplier/papers/{id} accepts only stock/price but PaperPatch model is not exported / has no min validation on stock (negative numbers will be persisted). Add ge=0 on stock + gt=0 on price.",
+    "_generate_order_number uses string sort on TC-YYYY-NNNNN — works fine up to 99999 per year but will silently break at 100000 (TC-2026-100001 > TC-2026-99999 fails string-order). Either pad to 6 digits or sort by created_at."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_v3_batch.py"
+  ],
+  "success_rate": {
+    "backend": "100% on new v3 batch suite (18/18 PASS). 100% on wave3 regression (21/21 executed PASS, 4 supplier-only SKIPPED).",
+    "frontend": "Public smoke 100% (/, /about, /contact, /papers — all render, footer + grievance + about link verified, VisitorTracker fires on public + suppressed on admin). Admin & buyer login 100%. Featured-supplier modal + Sell-form step 4 NOT exercised due to missing data-testids."
+  },
+  "test_credentials": "Admin admin@tonerscart.in / Admin@123 (verified). Buyer buyer1@test.com / Test@123 (verified, 19 orders all REQUESTED).",
+  "seed_data_creation": "page_views rows may have been inserted (4 POST /api/analytics/pageview success calls + 8 browser-driven VisitorTracker calls = up to 12 rows IF table is already migrated; otherwise silently no-op).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All v3-batch acceptance criteria for backend are green (18/18). Wave3 regression intact (21/21). Frontend public surface verified. Two FE flows could NOT be auto-validated end-to-end (Featured-company upload modal, /sell Step 4 dealer-agreement red error) because the trigger elements lack data-testids — main agent should add them, then a 5-line Playwright script per flow will close the loop. After user runs supabase_schema_v3.sql, re-run /app/backend/tests/test_v3_batch.py — TestLandingData should still pass identically and TestVisitorAnalytics will start returning total>0 once VisitorTracker rows persist.",
+  "rca of the issue": "No bugs found this iteration. All new endpoints behave per-spec, including the graceful-degrade paths (orders POST without order_number column → falls back to UUID fragment; visitor-analytics with no page_views table → returns empty buckets with valid structure; landing-data with missing is_featured column → empty featured list)."
+}

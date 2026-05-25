@@ -34,6 +34,8 @@ from email_service import (
     email_quotation,
     email_order_shipped,
     email_order_delivered_support,
+    email_dealer_suspended,
+    email_dealer_unsuspended,
     _commission_breakdown,
 )
 from ai_check import check_documents
@@ -863,6 +865,16 @@ async def create_order(payload: OrderCreate, user: dict = Depends(require_user))
     # Decrement stock (best effort)
     sb_admin.table("listings").update({"stock": L["stock"] - payload.qty}).eq("id", L["id"]).execute()
     created = res.data[0] if res.data else row
+
+    # Generate TC-YYYY-NNNNN order_number (best effort — gracefully degrades if column missing)
+    try:
+        order_number = _generate_order_number()
+        if order_number and created.get("id"):
+            upd = sb_admin.table("orders").update({"order_number": order_number}).eq("id", created["id"]).execute()
+            if upd and upd.data:
+                created["order_number"] = order_number
+    except Exception:
+        logger.exception("order_number generation skipped")
 
     # Fire confirmation emails (best effort — never block the order)
     try:
@@ -1914,14 +1926,37 @@ def _set_suspended(supplier_id: str, value: bool):
 
 
 @api.post("/admin/suppliers/{supplier_id}/suspend")
-def admin_suspend_supplier(supplier_id: str, user: dict = Depends(require_role("admin"))):
+async def admin_suspend_supplier(supplier_id: str, user: dict = Depends(require_role("admin"))):
     _set_suspended(supplier_id, True)
+    try:
+        sup = sb_admin.table("suppliers").select("business_name,city,email,contact_person,user_id").eq("id", supplier_id).maybe_single().execute()
+        if sup and sup.data:
+            sd = dict(sup.data)
+            # Fall back to users.email if suppliers row has no email
+            if not sd.get("email") and sd.get("user_id"):
+                u = sb_admin.table("users").select("email").eq("id", sd["user_id"]).maybe_single().execute()
+                if u and u.data:
+                    sd["email"] = u.data.get("email")
+            asyncio.create_task(email_dealer_suspended(sd))
+    except Exception as e:
+        logger.warning("suspend email skipped: %s", e)
     return {"ok": True, "is_suspended": True}
 
 
 @api.post("/admin/suppliers/{supplier_id}/unsuspend")
-def admin_unsuspend_supplier(supplier_id: str, user: dict = Depends(require_role("admin"))):
+async def admin_unsuspend_supplier(supplier_id: str, user: dict = Depends(require_role("admin"))):
     _set_suspended(supplier_id, False)
+    try:
+        sup = sb_admin.table("suppliers").select("business_name,city,email,contact_person,user_id").eq("id", supplier_id).maybe_single().execute()
+        if sup and sup.data:
+            sd = dict(sup.data)
+            if not sd.get("email") and sd.get("user_id"):
+                u = sb_admin.table("users").select("email").eq("id", sd["user_id"]).maybe_single().execute()
+                if u and u.data:
+                    sd["email"] = u.data.get("email")
+            asyncio.create_task(email_dealer_unsuspended(sd))
+    except Exception as e:
+        logger.warning("unsuspend email skipped: %s", e)
     return {"ok": True, "is_suspended": False}
 
 
@@ -2590,6 +2625,30 @@ def duplicate_printer(printer_id: str, user: dict = Depends(require_user)):
     return res.data[0] if res.data else row
 
 
+@api.put("/supplier/papers/{paper_id}")
+def patch_paper(paper_id: str, payload: ListingPatch, user: dict = Depends(require_user)):
+    """Bulk stock / price inline edit for paper listings."""
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved sellers can edit papers")
+    s = sb_admin.table("suppliers").select("id").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        raise HTTPException(403, "Supplier not approved yet")
+    upd = {}
+    if payload.stock is not None and payload.stock >= 0:
+        upd["stock"] = int(payload.stock)
+    if payload.price is not None and payload.price > 0:
+        upd["price_per_ream"] = float(payload.price)
+    if not upd:
+        return {"ok": True, "updated": []}
+    try:
+        sb_admin.table("paper_listings").update(upd).eq("id", paper_id).eq("supplier_id", s.data["id"]).execute()
+    except Exception as e:
+        if "paper_listings" in str(e):
+            raise HTTPException(503, "paper_listings table not yet migrated") from e
+        raise
+    return {"ok": True, "updated": list(upd.keys())}
+
+
 # =============================================================================
 # Listing existence check (for buyer one-click reorder)
 # =============================================================================
@@ -2694,7 +2753,230 @@ def password_reset(payload: PasswordResetRequest):
         # Always return success-shaped response to avoid enumeration
     return {"ok": True}
 
+
+# CORS sentinel — see end of file for the actual middleware install.
+
+def _generate_order_number() -> Optional[str]:
+    year = datetime.now(timezone.utc).year
+    try:
+        # Find the highest existing order_number for the year
+        res = sb_admin.table("orders").select("order_number").like("order_number", f"TC-{year}-%").order(
+            "order_number", desc=True
+        ).limit(1).execute()
+        rows = res.data or []
+        if rows and rows[0].get("order_number"):
+            last = rows[0]["order_number"]
+            try:
+                n = int(last.split("-")[-1]) + 1
+            except Exception:
+                n = 1
+        else:
+            n = 1
+        return f"TC-{year}-{n:05d}"
+    except Exception as e:
+        if "order_number" in str(e):
+            logger.warning("order_number column missing — run supabase_schema_v3.sql")
+            return None
+        logger.warning("order_number generation failed: %s", e)
+        return None
+
+
+# =============================================================================
+# Visitor analytics — anonymous page_views
+# =============================================================================
+
+class PageView(BaseModel):
+    page: str = Field(min_length=1, max_length=512)
+    timezone: Optional[str] = Field(default=None, max_length=80)
+    device_type: Optional[str] = Field(default="desktop", max_length=20)
+    referrer: Optional[str] = Field(default=None, max_length=200)
+
+
+@app.post("/api/analytics/pageview", include_in_schema=False)
+async def record_pageview(payload: PageView, request: Request):
+    """Anonymous page view tracking — fire-and-forget. Returns 200 immediately
+    even when the page_views table has not been migrated yet."""
+    try:
+        # Categorise referrer
+        ref = (payload.referrer or "").lower()
+        if not ref:
+            ref_cat = "Direct"
+        elif "google" in ref:
+            ref_cat = "Google"
+        elif "whatsapp" in ref or "wa.me" in ref:
+            ref_cat = "WhatsApp"
+        elif "instagram" in ref or "instagr.am" in ref:
+            ref_cat = "Instagram"
+        elif "facebook" in ref or "fb.com" in ref:
+            ref_cat = "Facebook"
+        else:
+            ref_cat = "Other"
+
+        ip = None
+        try:
+            ip = request.client.host if request.client else None
+            xff = request.headers.get("x-forwarded-for")
+            if xff:
+                ip = xff.split(",")[0].strip()
+        except Exception:
+            pass
+
+        sb_admin.table("page_views").insert({
+            "page": (payload.page or "/")[:512],
+            "timezone": (payload.timezone or "")[:80],
+            "device_type": (payload.device_type or "desktop")[:20],
+            "referrer": ref_cat,
+            "ip_hash": (str(hash((ip or "") + datetime.now(timezone.utc).strftime("%Y-%m-%d"))) if ip else None),
+        }).execute()
+    except Exception as e:
+        if "page_views" not in str(e):
+            logger.warning("pageview insert failed: %s", e)
+    return {"ok": True}
+
+
+@api.get("/admin/visitor-analytics")
+def admin_visitor_analytics(user: dict = Depends(require_role("admin"))):
+    """Aggregated page_views — never errors out, returns empty bucket if migration not run."""
+    try:
+        rows = sb_admin.table("page_views").select("page,device_type,referrer,ip_hash,created_at").order(
+            "created_at", desc=True
+        ).limit(20000).execute().data or []
+    except Exception:
+        rows = []
+    today = datetime.now(timezone.utc).date()
+    today_iso = today.isoformat()
+    week_start = today - _td(days=7)
+    week_iso = week_start.isoformat()
+    month_start = today - _td(days=30)
+    month_iso = month_start.isoformat()
+    today_count = sum(1 for r in rows if (r.get("created_at") or "").startswith(today_iso))
+    week_count = sum(1 for r in rows if (r.get("created_at") or "") >= week_iso)
+    month_count = sum(1 for r in rows if (r.get("created_at") or "") >= month_iso)
+    pages = Counter([r.get("page") or "/" for r in rows])
+    devices = Counter([r.get("device_type") or "desktop" for r in rows])
+    refs = Counter([r.get("referrer") or "Direct" for r in rows])
+    unique = len({r.get("ip_hash") for r in rows if r.get("ip_hash")})
+    return {
+        "total": len(rows),
+        "today": today_count,
+        "week": week_count,
+        "month": month_count,
+        "unique_estimate": unique,
+        "top_pages": [{"page": p, "views": c} for p, c in pages.most_common(5)],
+        "devices": [{"name": k, "value": v} for k, v in devices.items()],
+        "referrers": [{"name": k, "value": v} for k, v in refs.items()],
+    }
+
+
+# =============================================================================
+# Featured supplier — admin image upload endpoint (matched to FE)
+# =============================================================================
+
+@api.post("/admin/suppliers/{supplier_id}/featured-image")
+async def admin_upload_featured_image(supplier_id: str, file: UploadFile = File(...), user: dict = Depends(require_role("admin"))):
+    """Upload a feature-banner / logo for a supplier. Stored via the existing
+    supplier-documents bucket and the public-ish signed URL is persisted in
+    suppliers.business_logo. Sets is_featured=true atomically."""
+    try:
+        raw = await file.read()
+        if len(raw) > 5 * 1024 * 1024:
+            raise HTTPException(400, "Image too large (max 5 MB)")
+        ext = (file.filename or "logo.png").rsplit(".", 1)[-1].lower()
+        if ext not in ("png", "jpg", "jpeg", "webp"):
+            ext = "png"
+        path = f"{supplier_id}/featured-logo-{int(datetime.now(timezone.utc).timestamp())}.{ext}"
+        sb_admin.storage.from_("supplier-documents").upload(path, raw, {"content-type": file.content_type or f"image/{ext}", "upsert": "true"})
+        signed = sb_admin.storage.from_("supplier-documents").create_signed_url(path, 60 * 60 * 24 * 365)
+        url = signed.get("signedURL") or signed.get("signed_url")
+        try:
+            sb_admin.table("suppliers").update({"business_logo": path, "is_featured": True}).eq("id", supplier_id).execute()
+        except Exception as e:
+            if "is_featured" in str(e):
+                sb_admin.table("suppliers").update({"business_logo": path}).eq("id", supplier_id).execute()
+            else:
+                raise
+        return {"ok": True, "path": path, "url": url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("upload featured image failed")
+        raise HTTPException(500, f"Failed to upload featured image: {e}") from e
+
+
+# =============================================================================
+# Unified landing-data endpoint with in-memory cache (5 min TTL)
+# =============================================================================
+
+_LANDING_CACHE: dict = {"data": None, "ts": 0.0}
+_LANDING_TTL_SECS = 300
+
+
+@api.get("/landing-data")
+def landing_data():
+    now = _time.time()
+    if _LANDING_CACHE["data"] is not None and (now - _LANDING_CACHE["ts"]) < _LANDING_TTL_SECS:
+        return _LANDING_CACHE["data"]
+    # Stats
+    try:
+        suppliers_n = len(sb_admin.table("suppliers").select("id").execute().data or [])
+    except Exception:
+        suppliers_n = 0
+    try:
+        listings_n = len(sb_admin.table("listings").select("id").gt("stock", 0).execute().data or [])
+    except Exception:
+        listings_n = 0
+    try:
+        cities = list({(r.get("city") or "").strip() for r in (sb_admin.table("suppliers").select("city").execute().data or []) if r.get("city")})
+        cities_n = len([c for c in cities if c])
+    except Exception:
+        cities_n = 0
+    # Featured suppliers — fall back to empty when column missing
+    featured = []
+    try:
+        rows = sb_admin.table("suppliers").select(
+            "id,business_name,city,business_logo"
+        ).eq("is_featured", True).limit(8).execute().data or []
+        for r in rows:
+            logo_url = None
+            if r.get("business_logo"):
+                try:
+                    s = sb_admin.storage.from_("supplier-documents").create_signed_url(r["business_logo"], 3600)
+                    logo_url = s.get("signedURL") or s.get("signed_url")
+                except Exception:
+                    logo_url = None
+            featured.append({"id": r["id"], "business_name": r.get("business_name"), "city": r.get("city"), "logo_url": logo_url})
+    except Exception:
+        featured = []
+    # Site config: chips + marquee
+    chips = []
+    marquee = []
+    try:
+        cfg = sb_admin.table("site_config").select("key,value").in_("key", ["popular_chips", "marquee_brands"]).execute().data or []
+        for row in cfg:
+            if row.get("key") == "popular_chips":
+                chips = row.get("value") or []
+            elif row.get("key") == "marquee_brands":
+                marquee = row.get("value") or []
+    except Exception:
+        pass
+    payload = {
+        "stats": {"suppliers": suppliers_n, "listings": listings_n, "cities": cities_n},
+        "featured": featured,
+        "popular_chips": chips,
+        "marquee_brands": marquee,
+    }
+    _LANDING_CACHE["data"] = payload
+    _LANDING_CACHE["ts"] = now
+    return payload
+
+
+def _bust_landing_cache():
+    _LANDING_CACHE["data"] = None
+    _LANDING_CACHE["ts"] = 0.0
+
+
 app.include_router(api)
+
 
 # CORS — explicit origin list (browsers reject the wildcard "*" combined with allow_credentials=True,
 # which silently strips the Access-Control-Allow-Origin header on the response).

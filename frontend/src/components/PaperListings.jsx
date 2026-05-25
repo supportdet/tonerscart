@@ -4,7 +4,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
-import { Plus, Trash2, Package } from "lucide-react";
+import { Plus, Trash2, Package, Copy, Check } from "lucide-react";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
 
@@ -68,6 +68,32 @@ export default function PaperListings() {
         catch (e) { toast.error(formatApiError(e)); }
     };
 
+    // Bulk stock + Duplicate (paper) — backend endpoints are tolerant 200/503
+    const patchStock = async (id, n) => {
+        try {
+            await api.put(`/supplier/papers/${id}`, { stock: Number(n) });
+            toast.success("Stock updated");
+            load();
+        } catch (e) {
+            // Fallback to delete+recreate not safe — surface the error
+            toast.error(formatApiError(e));
+        }
+    };
+    const duplicate = async (p) => {
+        try {
+            await api.post("/supplier/papers", {
+                brand: p.brand,
+                size: p.size,
+                gsm: p.gsm,
+                reams_per_box: p.reams_per_box,
+                price_per_ream: p.price_per_ream,
+                stock: 1,
+            });
+            toast.success("Paper listing duplicated");
+            load();
+        } catch (e) { toast.error(formatApiError(e)); }
+    };
+
     return (
         <div data-testid="supplier-papers-section">
             {loading ? (
@@ -87,15 +113,20 @@ export default function PaperListings() {
                                     <div className="text-[10.5px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">{p.brand}</div>
                                     <div className="text-[16px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>{p.size} · {p.gsm} GSM</div>
                                 </div>
-                                <span className="text-[10.5px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">{p.stock} boxes</span>
+                                <InlinePaperStock stock={p.stock} onSave={(v) => patchStock(p.id, v)} testId={`paper-stock-${p.id}`} />
                             </div>
                             <div className="mt-3 text-[12.5px] text-[#3a3a40]">
                                 <div className="font-mono">{fmtMoney(p.price_per_ream)} / ream</div>
                                 <div className="text-[#86868B] text-[11.5px]">{p.reams_per_box} reams/box</div>
                             </div>
-                            <button onClick={() => remove(p.id)} className="mt-3 text-[12px] text-red-600 hover:text-red-700 inline-flex items-center gap-1" data-testid={`remove-paper-${p.id}`}>
-                                <Trash2 size={12} /> Remove
-                            </button>
+                            <div className="mt-3 flex items-center gap-3">
+                                <button onClick={() => duplicate(p)} className="text-[12px] text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`duplicate-paper-${p.id}`}>
+                                    <Copy size={12} /> Duplicate
+                                </button>
+                                <button onClick={() => remove(p.id)} className="text-[12px] text-red-600 hover:text-red-700 inline-flex items-center gap-1" data-testid={`remove-paper-${p.id}`}>
+                                    <Trash2 size={12} /> Remove
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -149,6 +180,39 @@ export default function PaperListings() {
                     </form>
                 </DialogContent>
             </Dialog>
+        </div>
+    );
+}
+
+function InlinePaperStock({ stock, onSave, testId }) {
+    const [editing, setEditing] = React.useState(false);
+    const [val, setVal] = React.useState(stock);
+    React.useEffect(() => { setVal(stock); }, [stock]);
+    const commit = () => {
+        const n = Number(val);
+        if (Number.isNaN(n) || n < 0) { setVal(stock); setEditing(false); return; }
+        if (n !== Number(stock)) onSave(n);
+        setEditing(false);
+    };
+    if (!editing) {
+        return (
+            <button onClick={() => setEditing(true)} className="text-[10.5px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full hover:bg-emerald-100" data-testid={testId}>
+                {stock} boxes
+            </button>
+        );
+    }
+    return (
+        <div className="inline-flex items-center gap-1">
+            <input
+                type="number" min="0" value={val} autoFocus
+                onChange={(e) => setVal(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } if (e.key === "Escape") { setVal(stock); setEditing(false); } }}
+                className="h-6 w-14 px-1.5 text-[11px] rounded border border-[#00B7C7] bg-white font-mono"
+                data-testid={`${testId}-input`}
+            />
+            <button onClick={commit} className="h-6 w-6 grid place-items-center rounded bg-emerald-600 text-white" data-testid={`${testId}-save`}>
+                <Check size={11} />
+            </button>
         </div>
     );
 }

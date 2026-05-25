@@ -38,12 +38,21 @@ export default function Footer() {
                     <div data-testid="footer-company">
                         <div className="text-[10px] tracking-[0.22em] uppercase font-semibold text-white/45 mb-3">Company</div>
                         <ul className="space-y-2 text-[13.5px]">
+                            <li><Link to="/about"   className="text-white/85 hover:text-[#F5C400] transition" data-testid="footer-link-about">About Us</Link></li>
                             <li><Link to="/terms"   className="text-white/85 hover:text-[#F5C400] transition" data-testid="footer-link-terms">Terms of Service</Link></li>
                             <li><Link to="/privacy" className="text-white/85 hover:text-[#F5C400] transition" data-testid="footer-link-privacy">Privacy Policy</Link></li>
                             <li><Link to="/contact" className="text-white/85 hover:text-[#F5C400] transition" data-testid="footer-link-contact">Contact Us</Link></li>
                             <li><Link to="/admin"   className="text-white/85 hover:text-[#F5C400] transition" data-testid="footer-link-admin">Admin</Link></li>
                         </ul>
                     </div>
+                </div>
+
+                {/* Grievance Officer strip */}
+                <div className="mt-10 pt-6 border-t border-white/[0.1] text-[12px] text-white/60 leading-relaxed" data-testid="footer-grievance">
+                    <span className="font-semibold text-white/80">Grievance Officer:</span> Mr. Karthik Nair
+                    {" · "}<a href="mailto:grievance@tonerscart.com" className="text-white/80 hover:text-[#F5C400] transition">grievance@tonerscart.com</a>
+                    {" · "}Digital Edge Technologies, Bangalore
+                    {" · "}Response within 48 hours
                 </div>
             </div>
             {/* CMYK print marks — absolute last element */}

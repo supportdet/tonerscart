@@ -100,8 +100,8 @@ export default function Header() {
                     {/* Approved seller */}
                     {isSeller && (
                         <>
-                            <NavLink to="/supplier#listings" className={navLink} data-testid="nav-stock">My stock</NavLink>
-                            <NavLink to="/supplier#orders" className={navLink} data-testid="nav-seller-orders">Orders</NavLink>
+                            <NavLink to="/supplier#listings" className={navLink} data-testid="nav-stock" end>My stock</NavLink>
+                            <NavLink to="/supplier#orders" className={navLink} data-testid="nav-seller-orders" end>Orders</NavLink>
                         </>
                     )}
 

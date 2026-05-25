@@ -560,3 +560,51 @@ async def email_order_delivered_support(order: dict, listing: dict, supplier: di
     </table>
     """
     await _send(SUPPORT_INBOX, f"Payout ready — order #{short_id} delivered", html)
+
+
+async def email_dealer_suspended(supplier: dict, reason: str | None = None):
+    """Notify a dealer their TonersCart account has been suspended."""
+    to = (supplier or {}).get("email") or (supplier or {}).get("contact_email")
+    biz = (supplier or {}).get("business_name") or "Dealer"
+    name = (supplier or {}).get("contact_person") or "there"
+    if not to:
+        return
+    reason_block = (
+        f"<div style='margin:14px 0;padding:12px 16px;background:#FFF5F5;border-left:3px solid #FF3B30;border-radius:6px;'>"
+        f"<div style='font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#86868B;'>Reason</div>"
+        f"<div style='margin-top:4px;'>{reason}</div></div>"
+        if reason else ""
+    )
+    html = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;color:#B91C1C;">Your TonersCart account has been suspended</h2>
+    <p>Hi {name},</p>
+    <p>Your dealer account for <strong>{biz}</strong> has been temporarily suspended on TonersCart.
+    Your listings are now hidden from buyers while the matter is reviewed.</p>
+    {reason_block}
+    <p>Please contact us at <a href="mailto:support@tonerscart.com" style="color:#0A0A0B;font-weight:600;">support@tonerscart.com</a>
+    to resolve this. We&apos;ll do our best to help you reinstate your account quickly.</p>
+    <p style="margin-top:22px;color:#86868B;font-size:12.5px;">— Team TonersCart</p>
+    """
+    await _send(to, "Your TonersCart account has been suspended", html)
+
+
+async def email_dealer_unsuspended(supplier: dict):
+    to = (supplier or {}).get("email") or (supplier or {}).get("contact_email")
+    biz = (supplier or {}).get("business_name") or "Dealer"
+    name = (supplier or {}).get("contact_person") or "there"
+    if not to:
+        return
+    html = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;color:#0A8754;">Your TonersCart account has been reinstated</h2>
+    <p>Hi {name},</p>
+    <p>Good news — your dealer account for <strong>{biz}</strong> is active again on TonersCart.
+    You can now list products and receive orders as usual.</p>
+    <p style="margin:18px 0;">
+      <a href="https://www.tonerscart.com/supplier"
+         style="display:inline-block;padding:12px 22px;background:#F7C600;color:#0A0A0B;border-radius:10px;font-weight:600;text-decoration:none;">
+        Open my dashboard
+      </a>
+    </p>
+    <p style="color:#6E6E73;font-size:12.5px;">If you have any questions, just reply to this email.</p>
+    """
+    await _send(to, "Your TonersCart account has been reinstated", html)

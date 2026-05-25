@@ -123,7 +123,22 @@ function _TrackingInputLegacy() { return null; }
 export default function SupplierDashboard() {
     const { user, refresh } = useAuth();
     const isApproved = user?.supplier_status === "approved";
-    const [catalog, setCatalog] = useState("toners"); // 'toners' | 'printers' | 'papers' | 'earnings'
+    const [catalog, setCatalog] = useState("toners"); // 'toners' | 'printers' | 'papers' | 'earnings' | 'orders'
+
+    // Sync catalog tab from URL hash so the header "My stock" vs "Orders" pills route correctly.
+    React.useEffect(() => {
+        const sync = () => {
+            const h = (window.location.hash || "").replace("#", "").toLowerCase();
+            if (h === "orders") setCatalog("orders");
+            else if (h === "listings" || h === "toners") setCatalog("toners");
+            else if (h === "printers") setCatalog("printers");
+            else if (h === "papers") setCatalog("papers");
+            else if (h === "earnings") setCatalog("earnings");
+        };
+        sync();
+        window.addEventListener("hashchange", sync);
+        return () => window.removeEventListener("hashchange", sync);
+    }, []);
 
     const [listings, setListings] = useState([]);
     const [orders, setOrders] = useState([]);
@@ -370,6 +385,7 @@ export default function SupplierDashboard() {
                         <button onClick={() => setCatalog("toners")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "toners" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-toners">Toners</button>
                         <button onClick={() => setCatalog("printers")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "printers" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-printers">Printers</button>
                         <button onClick={() => setCatalog("papers")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "papers" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-papers">Papers</button>
+                        <button onClick={() => setCatalog("orders")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "orders" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-orders">Orders</button>
                         <button onClick={() => setCatalog("earnings")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "earnings" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-earnings">My Earnings</button>
                     </div>
                     {catalog === "toners" ? (
@@ -401,6 +417,63 @@ export default function SupplierDashboard() {
                     <>
                         <h2 id="earnings" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>My earnings</h2>
                         <SupplierEarnings />
+                    </>
+                ) : catalog === "orders" ? (
+                    <>
+                        <h2 id="orders" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Incoming orders</h2>
+                        {orders.length === 0 ? (
+                            <div className="tc-card-flat p-10 text-center text-[#6E6E73]" data-testid="seller-orders-empty">
+                                No orders yet. Once buyers place orders against your listings, they will appear here for you to accept, reject, ship and track.
+                            </div>
+                        ) : (
+                            <div className="tc-card-flat p-0 overflow-x-auto">
+                                <table className="w-full text-[13px]">
+                                    <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">
+                                        <tr><th className="text-left p-3">Order #</th><th className="text-left p-3">Product</th><th className="text-left p-3">Customer</th><th className="text-left p-3">Qty</th><th className="text-left p-3">Total</th><th className="text-left p-3">Status</th><th className="text-left p-3">Action</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {orders.map((o) => (
+                                            <tr key={o.id} className="border-t border-black/[0.05]">
+                                                <td className="p-3 font-mono text-[11.5px] text-[#0A0A0B]">{o.order_number || `#${(o.id||"").slice(0,8).toUpperCase()}`}</td>
+                                                <td className="p-3 font-mono">{o.listings?.brand} {o.listings?.model_number || "—"}</td>
+                                                <td className="p-3">{o.customer_name}<div className="text-[11px] text-[#86868B]">{o.customer_phone}</div></td>
+                                                <td className="p-3 font-mono">{o.qty}</td>
+                                                <td className="p-3 font-mono">
+                                                    ₹{Number(o.total).toLocaleString("en-IN")}
+                                                    {(() => {
+                                                        const c = commissionFor(o.total);
+                                                        if (!c || c.commission === null) {
+                                                            return <div className="text-[10.5px] text-[#86868B] mt-0.5">Deal basis · contact team</div>;
+                                                        }
+                                                        return (
+                                                            <div className="mt-0.5 leading-tight" data-testid={`order-payout-${o.id}`}>
+                                                                <div className="text-[10.5px] text-[#86868B]">Commission ({c.rateLabel}): −₹{c.commission.toLocaleString("en-IN")}</div>
+                                                                <div className="text-[11px] text-emerald-700 font-semibold">Payout: ₹{c.payout.toLocaleString("en-IN")}</div>
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </td>
+                                                <td className="p-3 text-[11px] uppercase font-semibold tracking-[0.1em] text-[#0A0A0B]">{ORDER_STATUS[o.status]}</td>
+                                                <td className="p-3">
+                                                    {o.status === "requested" && (
+                                                        <div className="flex gap-1">
+                                                            <button onClick={() => updateOrder(o.id, "accepted")} className="text-[11px] px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200" data-testid={`accept-order-${o.id}`}>Accept</button>
+                                                            <button onClick={() => updateOrder(o.id, "rejected")} className="text-[11px] px-2 py-1 rounded bg-red-50 text-red-700 border border-red-200" data-testid={`reject-order-${o.id}`}>Reject</button>
+                                                        </div>
+                                                    )}
+                                                    {o.status === "accepted" && (
+                                                        <TrackingInput onSubmit={(t) => updateOrder(o.id, "shipped", t)} testIdSuffix={o.id} />
+                                                    )}
+                                                    {o.status === "shipped" && (
+                                                        <div className="text-[10.5px] text-[#6E6E73]">Awaiting buyer confirmation…<div className="font-mono text-[#0A0A0B]">Tracking: {o.tracking_number || "—"}</div></div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </>
                 ) : (
                 <>
@@ -453,58 +526,7 @@ export default function SupplierDashboard() {
                 </div>
             )}
 
-            {/* Orders */}
-            {orders.length > 0 && (
-                <>
-                    <h2 id="orders" className="text-[#0A0A0B] mt-12 mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Recent orders</h2>
-                    <div className="tc-card-flat p-0 overflow-x-auto">
-                        <table className="w-full text-[13px]">
-                            <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">
-                                <tr><th className="text-left p-3">Toner</th><th className="text-left p-3">Customer</th><th className="text-left p-3">Qty</th><th className="text-left p-3">Total</th><th className="text-left p-3">Status</th><th className="text-left p-3">Action</th></tr>
-                            </thead>
-                            <tbody>
-                                {orders.map((o) => (
-                                    <tr key={o.id} className="border-t border-black/[0.05]">
-                                        <td className="p-3 font-mono">{o.listings?.model_number || "—"}</td>
-                                        <td className="p-3">{o.customer_name}<div className="text-[11px] text-[#86868B]">{o.customer_phone}</div></td>
-                                        <td className="p-3 font-mono">{o.qty}</td>
-                                        <td className="p-3 font-mono">
-                                            ₹{Number(o.total).toLocaleString("en-IN")}
-                                            {(() => {
-                                                const c = commissionFor(o.total);
-                                                if (!c || c.commission === null) {
-                                                    return <div className="text-[10.5px] text-[#86868B] mt-0.5">Deal basis · contact team</div>;
-                                                }
-                                                return (
-                                                    <div className="mt-0.5 leading-tight" data-testid={`order-payout-${o.id}`}>
-                                                        <div className="text-[10.5px] text-[#86868B]">Commission ({c.rateLabel}): −₹{c.commission.toLocaleString("en-IN")}</div>
-                                                        <div className="text-[11px] text-emerald-700 font-semibold">Payout: ₹{c.payout.toLocaleString("en-IN")}</div>
-                                                    </div>
-                                                );
-                                            })()}
-                                        </td>
-                                        <td className="p-3 text-[11px] uppercase font-semibold tracking-[0.1em] text-[#0A0A0B]">{ORDER_STATUS[o.status]}</td>
-                                        <td className="p-3">
-                                            {o.status === "requested" && (
-                                                <div className="flex gap-1">
-                                                    <button onClick={() => updateOrder(o.id, "accepted")} className="text-[11px] px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200" data-testid={`accept-order-${o.id}`}>Accept</button>
-                                                    <button onClick={() => updateOrder(o.id, "rejected")} className="text-[11px] px-2 py-1 rounded bg-red-50 text-red-700 border border-red-200" data-testid={`reject-order-${o.id}`}>Reject</button>
-                                                </div>
-                                            )}
-                                            {o.status === "accepted" && (
-                                                <TrackingInput onSubmit={(t) => updateOrder(o.id, "shipped", t)} testIdSuffix={o.id} />
-                                            )}
-                                            {o.status === "shipped" && (
-                                                <div className="text-[10.5px] text-[#6E6E73]">Awaiting buyer confirmation…<div className="font-mono text-[#0A0A0B]">Tracking: {o.tracking_number || "—"}</div></div>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </>
-            )}
+            {/* Orders moved to dedicated 'Orders' tab in catalog tabs above */}
                 </>
                 )}
 

@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import api, { formatApiError } from "../../lib/api";
 import { toast } from "sonner";
-import { Search, Loader2, Trash2, PauseCircle, PlayCircle, Pencil, Check, X } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
+import { Search, Loader2, Trash2, PauseCircle, PlayCircle, Pencil, Check, X, AlertTriangle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 
@@ -14,6 +14,8 @@ export default function DealersTab() {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState("");
     const [activeId, setActiveId] = useState(null);
+    const [confirming, setConfirming] = useState(null); // {dealer, action: 'suspend' | 'unsuspend'}
+    const [busyConfirm, setBusyConfirm] = useState(false);
 
     const load = async () => {
         setLoading(true);
@@ -51,13 +53,21 @@ export default function DealersTab() {
         );
     }, [dealers, filter]);
 
-    const toggleSuspend = async (d) => {
-        const path = d.is_suspended ? "unsuspend" : "suspend";
+    const toggleSuspend = (d) => {
+        setConfirming({ dealer: d, action: d.is_suspended ? "unsuspend" : "suspend" });
+    };
+
+    const doConfirm = async () => {
+        if (!confirming) return;
+        const { dealer: d, action } = confirming;
+        setBusyConfirm(true);
         try {
-            await api.post(`/admin/suppliers/${d.id}/${path}`);
-            toast.success(d.is_suspended ? "Dealer unsuspended" : "Dealer suspended");
+            await api.post(`/admin/suppliers/${d.id}/${action}`);
+            toast.success(action === "suspend" ? "Dealer suspended — notification email sent" : "Dealer reinstated — notification email sent");
+            setConfirming(null);
             load();
         } catch (e) { toast.error(formatApiError(e)); }
+        finally { setBusyConfirm(false); }
     };
 
     return (
@@ -138,6 +148,33 @@ export default function DealersTab() {
                 onClose={() => setActiveId(null)}
                 onChanged={load}
             />
+
+            <Dialog open={!!confirming} onOpenChange={(o) => !o && setConfirming(null)}>
+                <DialogContent className="max-w-md" data-testid="suspend-confirm-dialog">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <AlertTriangle size={18} className={confirming?.action === "suspend" ? "text-red-600" : "text-emerald-600"} />
+                            {confirming?.action === "suspend" ? "Suspend dealer?" : "Restore dealer?"}
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="text-[13.5px] text-[#3a3a40] leading-relaxed">
+                        {confirming?.action === "suspend"
+                            ? <>Are you sure you want to suspend <strong>{confirming?.dealer?.business_name}</strong>? Their listings will be hidden from buyers immediately and a notification email will be sent to the dealer.</>
+                            : <>Restore <strong>{confirming?.dealer?.business_name}</strong>? Their listings will become visible again and a notification email will be sent.</>}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setConfirming(null)} disabled={busyConfirm} data-testid="suspend-cancel-btn">Cancel</Button>
+                        <Button
+                            onClick={doConfirm}
+                            disabled={busyConfirm}
+                            className={confirming?.action === "suspend" ? "bg-red-600 hover:bg-red-700 text-white" : "bg-emerald-600 hover:bg-emerald-700 text-white"}
+                            data-testid="suspend-confirm-btn"
+                        >
+                            {busyConfirm ? <><Loader2 size={13} className="animate-spin mr-1.5" /> Working…</> : (confirming?.action === "suspend" ? "Confirm suspension" : "Reinstate dealer")}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
@@ -248,7 +285,7 @@ function DealerDetailDrawer({ supplierId, open, onClose, onChanged }) {
                                 <div className="space-y-1.5">
                                     {detail.orders.slice(0, 50).map((o) => (
                                         <div key={o.id} className="flex items-center justify-between text-[12.5px] py-1.5 border-b border-black/[0.04]">
-                                            <span className="font-mono text-[11.5px] text-[#6E6E73]">#{o.id.slice(0, 8).toUpperCase()}</span>
+                                            <span className="font-mono text-[11.5px] text-[#6E6E73]">{o.order_number || `#${(o.id || "").slice(0, 8).toUpperCase()}`}</span>
                                             <span>{o.brand} {o.model_number}</span>
                                             <span className="text-[11px] uppercase tracking-wider font-semibold text-[#6E6E73]">{o.status}</span>
                                             <span className="font-mono font-semibold">{fmtMoney(o.total)}</span>
