@@ -388,3 +388,38 @@ Replaced the single-page dialog with a clean 4-step wizard:
 **5. Browser tab + favicon** — `public/index.html` `<title>` updated to "TonersCart — Buy Better. Print Smarter." Added three favicon links pointing to `/logo.png` (`icon`, `apple-touch-icon`, `shortcut icon`) — works on every browser as a PNG until a proper `.ico` is added.
 
 **Verified** in preview: 0 pageerrors, header_logo_img + footer_logo_img elements present, all three attribution lines render, title set, favicon link added. **Logo image itself will only render once `frontend/public/logo.png` is also placed in the Emergent workspace** (current preview shows a broken-image placeholder because the file lives only in user's GitHub repo). On the production build it renders correctly.
+
+
+### 2026-02-25 — Wave 3 finalisation ✅ (iteration_9: 21/21 backend pass, smoke green on 8 routes)
+**P0 fixes** (carried from iteration_8):
+1. `GET /api/listings/{id}` 500 → 404. `server.py:get_listing` wraps the `suppliers(business_name,city,is_suspended)` join in try/except and falls back to the no-`is_suspended` join when the admin_v2 migration hasn't been applied.
+2. Static `/sitemap.xml` and `/robots.txt` placed in `/app/frontend/public/` so the k8s ingress (which only routes `/api/*` to backend) falls through to CRA's static handler. Backend dynamic endpoints kept as fallback.
+3. Server-side dealer agreement enforcement: `SellerApplication.agreed_to_terms: bool = False`, raise 400 if false in `/api/auth/apply-seller`.
+
+**Frontend additions:**
+- `pages/admin/FinanceTab.jsx` — Monthly summary + Dealer payouts tables + CSV downloads for both. Wired into AdminDashboard between Orders and Featured tabs.
+- `components/PaperListings.jsx` — Supplier-side paper SKU add/list (brand/size/GSM/reams-per-box/₹-per-ream/stock). Triggered via `tc-open-add-paper` window event mirroring the printer pattern.
+- `components/SupplierEarnings.jsx` — 4 KPI cards (Total GMV, Commission deducted, Net payout, Orders) + per-order table from `/api/supplier/earnings`.
+- SupplierDashboard catalog tabs expanded to 4: Toners / Printers / Papers / My Earnings.
+- Inline stock editor (click-to-edit, Enter to save) + Duplicate button on every toner card → `PUT /supplier/listings/{id}` and `POST /supplier/listings/{id}/duplicate`.
+- CustomerDashboard: "Reorder this product" button on delivered/cancelled orders → `GET /listings/{id}` + cart add + navigate to `/cart`. Graceful 404/410 toasts.
+- Search.jsx: switched to paginated `/listings/search/paginated` (limit=24), Load more button at the bottom.
+- SellerApplicationForm.jsx: sends `agreed_to_terms`.
+
+**Backend test report**: `/app/test_reports/iteration_9.json` — 21/21 wave3 PASS, 4 supplier-only SKIPPED (no approved-supplier seed). 0 failures.
+
+**Frontend smoke** (testing_agent_v3_fork, iteration_9): `/`, `/search` (Load more visible), `/papers`, `/customer` (19 orders + Reorder gating), `/admin` (Finance tab: ₹1,72,942 GMV / ₹12,740 commission / ₹1,60,202 payout / 10 dealers; 2 CSV download buttons), `/forgot-password`, `/reset-password` — all render without errors.
+
+**Still pending / Backlog** (P1/P2):
+- Admin 2FA TOTP setup/verify UI (pyotp installed, no enrolment flow yet).
+- Twilio OTP phone login.
+- Bulk CSV upload for dealer products.
+- Supplier ratings/reviews.
+- Refactor `server.py` (2716 lines) into `routes/`.
+
+**User-side migrations to run** (until then, endpoints degrade gracefully — no 500s):
+- `backend/supabase_schema_papers.sql`
+- `backend/supabase_schema_admin_v2.sql`
+- `backend/supabase_schema_quotation_featured.sql`
+- `backend/supabase_schema_logo.sql`
+- `backend/supabase_schema_buyer_gst.sql`
