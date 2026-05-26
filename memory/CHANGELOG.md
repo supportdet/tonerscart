@@ -197,3 +197,37 @@ Closed every "deferred to next batch" item from Wave 6.
 
 **Migration status** — `supabase_schema_shipping.sql` (intercity_delivery_charge + structured order columns) is the only schema delta required for Wave 7. All endpoints degrade gracefully if the column is missing.
 
+
+
+
+## 2026-02 — Wave 8 — UX polish + Featured E2E + Test data wipe
+
+**Frontend**
+- **ProductDetail.jsx** — Title + price font swapped to `Roboto, Helvetica, Arial, sans-serif` (weight 700). JetBrains Mono / Montserrat retained elsewhere.
+- **PrintersResults.jsx** — Replaced "Request" CTA with the toner-card pattern: **Add to cart** (outline) + **Buy now** (CTA). New `data-testid="printer-add-to-cart-{id}"` / `printer-buy-now-{id}`. Cards push to cart and route to `/checkout` directly.
+- **Header.jsx** — Removed standalone "Orders" link for suppliers (the dashboard already has an Orders tab).
+- **Landing.jsx** — Stats strip now hardcoded: **500+ Dealers / 10+ Cities / 15+ Brands** (real volume data isn't there yet). Featured Suppliers section already hidden when `featured.length === 0` (verified). Featured card now renders `featured_image_url` (banner) when present, falls back to logo, falls back to camera icon. "View Listings →" routes to `/search?supplier_id={id}`.
+- **GetFeatured.jsx** — Added 16:9 banner image upload with dashed-border preview + `×` removal. Uploads to `/api/featured/apply-image` before submitting the application; storage path attached to `featured_applications.image_path`.
+- **AdminDashboard.jsx — Featured tab** — New Image column showing applicant-uploaded thumbnail. "Feature this company" modal previews the applicant's banner, lets admin pick the mapped supplier, and (when the applicant uploaded an image) feature via the new endpoint that copies the image straight onto the supplier record. Optional override upload supported.
+- **Search.jsx** — Reads `supplier_id` from query params and forwards to `/listings/search/paginated`.
+- **Login.jsx / Register.jsx — Google sign-in** — Wrapped state update in `flushSync` so the spinner paints **before** the OAuth redirect fires. Added a full-screen `Connecting to Google…` overlay (z-3000) — identical UX to the existing logout overlay. `data-testid="google-signin-overlay"`.
+
+**Backend**
+- New `GET/POST` endpoints:
+  - `POST /api/featured/apply-image` (public) — applicant uploads a banner; returns storage path (used by the Get Featured form).
+  - `POST /api/admin/featured/feature-from-application` (admin) — flips `is_featured=true` on a chosen supplier and copies `image_path → featured_image_url`, `description → tagline`. Application status auto-promotes to `active`. Gracefully degrades column-by-column if the migration hasn't been applied yet.
+- **GET /api/featured/suppliers** — surfaces `featured_image_url` (signed URL) + `tagline`. Falls back if `featured_image_url` or `tagline` columns are missing.
+- **GET /api/admin/featured/applications** — now returns a signed `image_url` for each application's banner.
+- **GET /api/listings/search** + **GET /api/listings/search/paginated** + **GET /api/printers** — all accept new `supplier_id` filter.
+- **FeaturedAppCreate** model — accepts optional `image_path` from the public form.
+
+**Database**
+- New migration `/app/backend/supabase_schema_featured_v2.sql` — adds `suppliers.featured_image_url`, `suppliers.tagline`, `featured_applications.image_path`. All `ADD COLUMN IF NOT EXISTS`. Backend degrades gracefully until applied.
+
+**Test data wiped (production preview)**
+- Ran `cleanup_test_data --apply`: **7 suppliers, 7 users, 5 listings, 3 printers, 6 papers, 4 orders** deleted.
+- Manual sweep: dropped 3 printer listings with placeholder model numbers (`6666`, `m111`, `M4100`).
+- Remaining live data: 3 real toner listings (DET + rohit ent), 0 printers, 0 papers, 1 featured supplier (Digital Edge Technologies).
+
+**Migrations still pending for full feature surfacing**
+`supabase_schema_papers.sql`, `supabase_schema_admin_v2.sql`, `supabase_schema_quotation_featured.sql`, `supabase_schema_v3.sql`, `supabase_schema_v4.sql`, `supabase_schema_shipping.sql`, **NEW** `supabase_schema_featured_v2.sql`.

@@ -12,7 +12,7 @@ export default function PageMeta({
     description,
     keywords,
     path = "/",
-    image = "/logo.png",
+    image = "/TONERSCART-bg.png",
     jsonLd,
 }) {
     const base = "https://www.tonerscart.com";

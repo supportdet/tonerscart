@@ -230,7 +230,7 @@ export default function ProductDetail({ kind = "toner" }) {
                             <span className="inline-block text-[10.5px] tracking-[0.16em] uppercase font-semibold px-2.5 py-1 rounded-full border bg-[#FFF8E0] border-[#F5E5A6] text-[#8C6A00]" data-testid="product-condition-badge">{data.condition}</span>
                         )}
 
-                        <h1 className="mt-3 text-[#0A0A0B] leading-[1.05] tracking-[-0.02em]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: "clamp(22px, 3vw, 32px)" }} data-testid="product-title">
+                        <h1 className="mt-3 text-[#0A0A0B] leading-[1.05] tracking-[-0.02em]" style={{ fontFamily: "'Roboto', Helvetica, Arial, sans-serif", fontWeight: 700, fontSize: "clamp(22px, 3vw, 32px)" }} data-testid="product-title">
                             <span className="text-[#86868B]">{data.brand}</span> <span className="text-[#0A0A0B]">{kind === "paper" ? `${data.size} · ${data.gsm} GSM` : (data.model_number || data.name)}</span>
                         </h1>
 
@@ -271,7 +271,7 @@ export default function ProductDetail({ kind = "toner" }) {
 
                         {/* Price + stock */}
                         <div className="mt-6 flex items-end gap-4">
-                            <div className="text-[#0A0A0B] leading-none" style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: "clamp(24px, 3vw, 36px)" }} data-testid="product-price">{fmtMoney(displayPrice)}</div>
+                            <div className="text-[#0A0A0B] leading-none" style={{ fontFamily: "'Roboto', Helvetica, Arial, sans-serif", fontWeight: 700, fontSize: "clamp(24px, 3vw, 36px)" }} data-testid="product-price">{fmtMoney(displayPrice)}</div>
                             <span className={`text-[11.5px] font-semibold px-2.5 py-1 rounded-full border ${stockLabel.cls}`} data-testid="product-stock">{stockLabel.txt}</span>
                         </div>
 

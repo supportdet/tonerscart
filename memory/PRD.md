@@ -1,6 +1,26 @@
 # TonersCart — Product Requirements (Supabase edition)
 
 
+## Latest changelog (2026-02 Wave 8 — UX polish + Featured E2E + Test wipe)
+
+- **Product detail title + price** — font swapped to Roboto / Helvetica / Arial stack (weight 700). Roboto-Mono retained on cards.
+- **Printer listing cards** — "Request" replaced with **Add to cart** + **Buy now** matching toner cards (data-testid `printer-add-to-cart-{id}`, `printer-buy-now-{id}`).
+- **Supplier header** — Orders link removed from top navbar (still in dashboard tabs).
+- **Landing stats strip** — hardcoded to `500+ Dealers / 10+ Cities / 15+ Brands` until live numbers are real.
+- **Featured Suppliers section** — Auto-hides entire black-strip section when zero featured (verified). "Get featured" CTA stays visible always.
+- **Featured end-to-end pipeline shipped**:
+  - `/get-featured` form now accepts a 16:9 banner image (≤5 MB, PNG/JPG/WEBP).
+  - Admin Featured tab shows thumbnail + "Feature this company" modal that previews the applicant's banner and assigns it to an approved supplier with one click via `POST /api/admin/featured/feature-from-application`.
+  - Featured card on Landing renders `featured_image_url`, name, city, tagline + **"View Listings →"** that routes to `/search?supplier_id={id}` showing only that dealer's stock.
+  - `GET /api/listings/search` (+ paginated) and `GET /api/printers` accept `supplier_id` filter.
+  - Public cards never expose phone or email.
+- **Google sign-in** — Now uses `flushSync` + full-screen overlay (`google-signin-overlay`) — identical UX to the logout button; spinner paints instantly on click, no perceived delay.
+- **Test data wipe** — Ran `cleanup_test_data --apply` (7 suppliers / 7 users / 5 listings / 3 printers / 6 papers / 4 orders) plus a manual sweep of 3 placeholder printers (model `6666` / `m111` / `M4100`).
+- **New migration** — `supabase_schema_featured_v2.sql` (adds `suppliers.featured_image_url`, `suppliers.tagline`, `featured_applications.image_path`). User must run manually. Backend degrades gracefully until then.
+
+---
+
+
 ## Latest changelog (2026-02 Wave 7 — UI completion batch)
 
 Closed every "deferred to next batch" item from Wave 6. Full details in `/app/memory/CHANGELOG.md` (Wave 7 section).

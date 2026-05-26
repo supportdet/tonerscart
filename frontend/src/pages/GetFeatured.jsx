@@ -4,7 +4,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { toast } from "sonner";
-import { CheckCircle2, Sparkles } from "lucide-react";
+import { CheckCircle2, Sparkles, Camera, X as XIcon, Loader2 } from "lucide-react";
 import api, { formatApiError } from "../lib/api";
 import { useCity } from "../context/CityContext";
 import { KNOWN_CITIES } from "../context/CityContext";
@@ -28,7 +28,22 @@ export default function GetFeatured() {
     });
     const [loading, setLoading] = useState(false);
     const [done, setDone] = useState(false);
+    const [imageFile, setImageFile] = useState(null);
+    const [imagePreview, setImagePreview] = useState("");
+    const [imageUploading, setImageUploading] = useState(false);
     const upd = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+    const onPickImage = (e) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        if (!f.type.startsWith("image/")) { toast.error("Please choose an image file"); e.target.value = ""; return; }
+        if (f.size > 5 * 1024 * 1024) { toast.error("Image too large (max 5 MB)"); e.target.value = ""; return; }
+        setImageFile(f);
+        setImagePreview(URL.createObjectURL(f));
+        e.target.value = "";
+    };
+
+    const removeImage = () => { setImageFile(null); setImagePreview(""); };
 
     const submit = async (e) => {
         e.preventDefault();
@@ -40,6 +55,16 @@ export default function GetFeatured() {
         if (!/^[1-9][0-9]{5}$/.test(form.pincode)) { toast.error("Enter a valid 6-digit pincode"); return; }
         setLoading(true);
         try {
+            // Upload optional banner image first
+            let imagePath = null;
+            if (imageFile) {
+                setImageUploading(true);
+                const fd = new FormData();
+                fd.append("file", imageFile);
+                const { data: up } = await api.post("/featured/apply-image", fd);
+                imagePath = up?.path || null;
+                setImageUploading(false);
+            }
             await api.post("/featured/apply", {
                 company: form.company.trim(),
                 contact_person: form.contact_person.trim(),
@@ -49,11 +74,13 @@ export default function GetFeatured() {
                 pincode: form.pincode,
                 business_type: form.business_type,
                 description: form.description.trim(),
+                image_path: imagePath,
             });
             setDone(true);
         } catch (err) {
             toast.error(formatApiError(err));
         } finally {
+            setImageUploading(false);
             setLoading(false);
         }
     };
@@ -143,6 +170,34 @@ export default function GetFeatured() {
                                 </div>
                             </div>
                             <div className="sm:col-span-2">
+                                <Label>Brand banner image <span className="text-[12px] text-[#86868B] font-normal">(optional — displayed on featured card if approved)</span></Label>
+                                <label className="block cursor-pointer mt-1" data-testid="featured-image-box">
+                                    <input type="file" accept="image/*" onChange={onPickImage} className="hidden" data-testid="featured-image-input" />
+                                    <div className="relative aspect-[16/9] rounded-xl border-2 border-dashed border-[#D2D2D7] hover:border-[#0A0A0B] bg-white grid place-items-center overflow-hidden transition max-w-md">
+                                        {imagePreview ? (
+                                            <>
+                                                <img src={imagePreview} alt="banner preview" className="w-full h-full object-cover" />
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.preventDefault(); removeImage(); }}
+                                                    className="absolute top-2 right-2 w-6 h-6 rounded-full bg-red-600 text-white grid place-items-center shadow-sm hover:bg-red-700"
+                                                    data-testid="featured-image-remove"
+                                                    aria-label="Remove image"
+                                                >
+                                                    <XIcon size={13} />
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <div className="flex flex-col items-center gap-1.5 text-[#86868B]">
+                                                <Camera size={22} />
+                                                <span className="text-[12px] font-semibold">Upload banner image</span>
+                                                <span className="text-[10px]">PNG / JPG · max 5 MB · 16:9</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </label>
+                            </div>
+                            <div className="sm:col-span-2">
                                 <Label>Brief description of your products</Label>
                                 <Textarea
                                     rows={4}
@@ -154,8 +209,8 @@ export default function GetFeatured() {
                                 />
                             </div>
                         </div>
-                        <Button type="submit" className="btn-cta w-full" disabled={loading} data-testid="featured-submit">
-                            {loading ? "Sending…" : "Submit application"}
+                        <Button type="submit" className="btn-cta w-full inline-flex items-center justify-center gap-2" disabled={loading} data-testid="featured-submit">
+                            {loading ? <><Loader2 size={14} className="animate-spin" /> {imageUploading ? "Uploading image…" : "Sending…"}</> : "Submit application"}
                         </Button>
                     </form>
                 )}

@@ -96,12 +96,9 @@ src="/TONERSCART-bg.png"                        alt="TonersCart"
                         <NavLink to="/customer" className={navLink} data-testid="nav-orders">Orders</NavLink>
                     )}
 
-                    {/* Approved seller */}
+                    {/* Approved seller — Orders link removed from header (accessible via dashboard tabs) */}
                     {isSeller && (
-                        <>
-                            <NavLink to="/supplier#listings" className={navLink} data-testid="nav-stock" end>My stock</NavLink>
-                            <NavLink to="/supplier#orders" className={navLink} data-testid="nav-seller-orders" end>Orders</NavLink>
-                        </>
+                        <NavLink to="/supplier#listings" className={navLink} data-testid="nav-stock" end>My stock</NavLink>
                     )}
 
                     {/* Admin */}
