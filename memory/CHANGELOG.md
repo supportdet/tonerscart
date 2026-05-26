@@ -166,3 +166,34 @@
 
 **User migrations still pending** (in order):
 `supabase_schema_papers.sql`, `supabase_schema_admin_v2.sql`, `supabase_schema_quotation_featured.sql`, `supabase_schema_v3.sql`, `supabase_schema_v4.sql`, **NEW** `supabase_schema_shipping.sql`. Backend degrades gracefully until then.
+
+
+## 2026-02 — Wave 7 — Batch UI completion (Feb 2026)
+
+Closed every "deferred to next batch" item from Wave 6.
+
+**Frontend**
+- **Checkout.jsx** — full rewrite. Two-step flow: (Step 1) 5-field structured address (street, area, city, state, pincode) + Quick Sign-in; (Step 2) order summary with per-item delivery breakdown (free / intercity charge / orange warning), GST note, bold total, **disabled "Proceed to Payment"** (lock icon + tooltip "Online payments coming soon"), active **"Place Order Request"**. POSTs structured fields + per-item delivery_charge to `/api/orders`.
+- **OrderRequestDialog.jsx** — replaced single textarea with 5 structured fields. Adds live delivery preview banner (✅ free / 🚚 intercity / ⚠️ only within dealer city). Sends structured fields + delivery_charge.
+- **SupplierDashboard.jsx (Add Toner)** — Replaced multi-image picker with **3 dashed-border upload boxes** (Box 1 required, 2–3 optional) each with delete `×`. Added `openEditDialog(listing)` that prefills full form (brand, model, type, variants, specs, warranty/Other-months, intercity_charge, image_urls) and saves via PUT. **Edit pencil** added to every toner card alongside Duplicate/Remove.
+- **PrinterListings.jsx** — Removed PDF brochure upload from Step 1. Added structured spec inputs in Step 2: print speed (PPM), monthly recommended volume, monthly duty cycle, **connectivity multi-pill** (USB / WiFi / Ethernet / Bluetooth / Wi-Fi Direct / NFC), max print resolution, **paper sizes multi-pill** (A4/A3/A5/Letter/Legal/Custom), **mobile printing multi-pill** (AirPrint/Mopria/Wi-Fi Direct/None), intercity delivery charge. Converted image upload to **3 dashed-border boxes** with `×` removal. New `editing` prop prefills the wizard from an existing listing; submit dispatches PUT `/supplier/printers/{id}`. Edit pencil button on every printer card.
+- **PaperListings.jsx** — Added Edit pencil that prefills the dialog. Save uses PUT `/supplier/papers/{id}` accepting price_per_ream, brightness, thickness_microns (float→int), acid_free, suitable_for, intercity_delivery_charge.
+- **PrintersGuide.jsx + PrintersResults.jsx** — Sticky search bar at top (sticky below navbar, `data-testid="printers-sticky-search"`). Submitting routes to `/printers/results?q=…&city=…`. ProductActions block removed from listing cards (no more Brochure/Quotation on listing grids).
+- **Login.jsx** — 5-second timer shows muted "This is taking longer than usual…" hint below sign-in spinner.
+- **About.jsx** — `grievance@tonerscart.com` link removed. New muted line: "For grievances: support@tonerscart.com · response within 48 hours".
+- **Landing.jsx + index.css** — Featured supplier logo placeholder changed from circle to **square 1:1, 12px radius**. Removed "Upload logo" caption from public card. Featured cards remain phone/email-free.
+
+**Backend**
+- **ListingPatch model** (server.py) expanded to ~40 optional fields covering every editable toner / printer / paper attribute.
+- **PUT /supplier/listings/{id}** — single canonical handler. Validates `toner_type ∈ {Original, Compatible, Refilled}` (400 otherwise), writes `updated_at`, and gracefully degrades column-by-column if a Supabase column is missing. Returns `{ok, updated: [keys…]}`. Removed the duplicate older route from line 909.
+- **PUT /supplier/printers/{id}** — accepts the full structured printer spec set (print_speed_ppm, duty_cycle, monthly_volume_*, connectivity, paper_sizes, mobile_printing, max_resolution, intercity_delivery_charge, image_urls, …).
+- **PUT /supplier/papers/{id}** — accepts price_per_ream/price (either), gsm, brightness, thickness_microns (float-tolerant), acid_free, suitable_for, reams_per_box, intercity_delivery_charge.
+- **email_service.py — email_order_placed** — now resolves a **structured delivery_full** from `street_address / area / order_city / pincode / order_state` (falls back to legacy single-line). Adds **delivery_charge** row when > 0. Buyer and seller emails both end with an amber notice — intercity message when buyer city ≠ seller city, otherwise "Free delivery within {city}…" copy.
+
+**Testing**
+- `/app/backend/tests/test_wave6_batch.py` — 11/11 green: extended PUT toner/printer/paper, invalid toner_type→400, GET /listings/{id}/public reflects updates, structured-address POST /orders, intercity_delivery_charge surfacing in public endpoints.
+- iter-12 caught a route-shadowing bug → fixed in iter-13 (route uniqueness + per-field column-missing fallback). iter-13 = 100% green.
+- Manual click-through on production preview: Toner Edit dialog opens with all prefilled values (brand HP, model W7-cf61d246, type Original, variant black/1100/5, OEM CF258A, compatible M404n, warranty Other → 12). Confirmed via screenshot.
+
+**Migration status** — `supabase_schema_shipping.sql` (intercity_delivery_charge + structured order columns) is the only schema delta required for Wave 7. All endpoints degrade gracefully if the column is missing.
+
