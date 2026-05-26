@@ -132,3 +132,37 @@
 5. Suspended supplier `is_suspended` check + supplier validation **before** storage upload in `POST /admin/suppliers/{id}/featured-image` (iter_10 carry-over) — `test_v3_batch.py::test_featured_image_too_large_returns_400` test is outdated and now correctly returns 404 for the synthetic supplier id (test asserts 400 — the test, not the API, is outdated; will be updated next batch).
 
 **Sticky search bar verified on `/search`** (`data-testid="search-sticky-wrapper"`). Papers `/papers` filter bar is also sticky. `/printers` route serves the guided wizard, not results; results live at `/printers/results` and that page has the proper Link wrappers.
+
+### 2026-02-26 — Wave 6 batch (Shipping + structured-address foundations, ProductDetail polish, listing-card cleanup)
+
+**Shipped (backend):**
+- `supabase_schema_shipping.sql` (NEW migration): `intercity_delivery_charge` on listings + printer_listings + paper_listings, `street_address / area / order_city / order_state / pincode / delivery_charge` on orders, `print_technology` on listings, `max_resolution / mobile_printing / monthly_volume_recommended` on printer_listings.
+- `ListingCreate` accepts `print_technology` + `intercity_delivery_charge`; `PrinterListingCreate` accepts `max_resolution / mobile_printing / monthly_volume_recommended / intercity_delivery_charge`; `PaperCreate` accepts `intercity_delivery_charge`. All optional cols degrade gracefully — drop-and-retry loop continues to ignore unknown columns.
+- `OrderCreate` accepts structured address fields (street_address, area, order_city, order_state, pincode, delivery_charge). Falls back to legacy `delivery_address` column when migration not yet run.
+
+**Shipped (frontend):**
+- **Footer + /contact Grievance Officer** — Mr. Karthik Nair and grievance@tonerscart.com removed. Now reads "For grievances contact: support@tonerscart.com · Digital Edge Technologies, Bangalore · Response within 48 hours" (verified by screenshot).
+- **ProductDetail page**:
+  - Title font: Montserrat 700, `font-size:clamp(22px,3vw,32px)`, `letter-spacing:-0.02em`, color #0A0A0B (verified via getComputedStyle).
+  - Price font: JetBrains Mono 700, `font-size:clamp(24px,3vw,36px)`, color #0A0A0B.
+  - Grid changed from 5/7 to **45% / 55%** explicit columns (left-aligned image, left-aligned content).
+  - Spec table restyled: Inter 500 muted label / Inter 600 dark value, 12 px radius container, 1px #E8E8EC dividers.
+  - **Download Brochure button removed entirely** from detail page.
+  - New `DeliveryInfo` component: ✅ green "Free delivery to {city}" when buyer/dealer cities match, 🚚 muted intercity charge, ⚠️ orange warning when intercity unavailable. Uses `useCity()` from CityContext + `data.intercity_delivery_charge`.
+  - New small note below CTAs: "Delivery within city included. Intercity delivery charges to be confirmed by supplier before dispatch." (`data-testid="delivery-note"`).
+- **Listing cards on /search** — Removed `ProductActions` block (Get quotation / Download brochure / WhatsApp). Cards now show ONLY Add to cart + Buy now (verified by screenshot: 0 quote/brochure buttons remaining).
+- **Add Toner form** — Removed PDF brochure upload + Pack Size field. Added Print technology dropdown (Laser/Inkjet/Thermal/Dot Matrix). Warranty dropdown gets "Other" option revealing a custom months input. New Intercity delivery charge field with helper copy ("Delivery within your city is free…"). All new fields wired through to POST /supplier/listings.
+- (Multi-image picker 1-required/2-3-max + multi-color variant editor were already shipped in Wave 5.)
+
+**Explicitly deferred to next batch** (called out so nothing is hidden):
+1. **Edit listing button** on supplier cards — backend PUTs already exist. The FE modal would be a 200-line addition; deferred.
+2. **Admin "View Details" dealer modal** — full-screen profile (toners, printers, papers, orders, GMV, payouts) — deferred.
+3. **Featured supplier logo square + hide phone/email on public card** — partial: admin upload modal exists from Wave 4; the public-card hide-PII + square aspect ratio still TODO.
+4. **Structured address rollout** on every form (OrderRequestDialog, Checkout, MPS inquiry, Contact, Dealer reg) — backend accepts the fields, FE forms still use single textarea.
+5. **Checkout summary page** with delivery breakdown + locked "Proceed to Payment" + "Place Order Request" — deferred.
+6. **Sign-in loading animation** — already mostly wired in `Login.jsx` (`busy` state + "Signing in…" + Google "Connecting to Google…"). Verified.
+7. **Email templates** updated with structured address + intercity note — deferred.
+8. **/printers/results sticky search** — only `/search` and `/papers` are sticky so far.
+
+**User migrations still pending** (in order):
+`supabase_schema_papers.sql`, `supabase_schema_admin_v2.sql`, `supabase_schema_quotation_featured.sql`, `supabase_schema_v3.sql`, `supabase_schema_v4.sql`, **NEW** `supabase_schema_shipping.sql`. Backend degrades gracefully until then.

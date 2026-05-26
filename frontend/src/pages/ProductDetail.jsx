@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
-import { ArrowLeft, ChevronRight, ShoppingCart, Zap, FileText, Shield, CheckCircle2, MapPin, Loader2, Quote } from "lucide-react";
+import { ArrowLeft, ChevronRight, ShoppingCart, Zap, Shield, CheckCircle2, MapPin, Loader2, Quote } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { Skeleton } from "../components/ui/skeleton";
@@ -10,6 +10,7 @@ import PageMeta from "../components/PageMeta";
 import OrderRequestDialog from "../components/OrderRequestDialog";
 import AuthRequiredDialog from "../components/AuthRequiredDialog";
 import { colorSwatch, isLightSwatch } from "../lib/colors";
+import { useCity } from "../context/CityContext";
 
 const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
 
@@ -144,9 +145,9 @@ export default function ProductDetail({ kind = "toner" }) {
             <div className="bg-white min-h-screen">
                 <div className="tc-container py-8" data-testid="product-detail-loading">
                     <Skeleton className="h-4 w-64 mb-4" />
-                    <div className="grid lg:grid-cols-12 gap-10">
-                        <div className="lg:col-span-5"><Skeleton className="aspect-square w-full rounded-2xl" /></div>
-                        <div className="lg:col-span-7 space-y-4">
+                    <div className="grid lg:grid-cols-[45%_55%] gap-10">
+                        <div><Skeleton className="aspect-square w-full rounded-2xl" /></div>
+                        <div className="space-y-4">
                             <Skeleton className="h-6 w-2/3" /><Skeleton className="h-10 w-1/3" /><Skeleton className="h-32 w-full" />
                         </div>
                     </div>
@@ -192,9 +193,9 @@ export default function ProductDetail({ kind = "toner" }) {
             </div>
 
             <div className="tc-container pt-4 pb-16">
-                <div className="grid lg:grid-cols-12 gap-10">
-                    {/* LEFT — Image gallery */}
-                    <div className="lg:col-span-5">
+                <div className="grid lg:grid-cols-[45%_55%] gap-10">
+                    {/* LEFT — Image gallery (45%) */}
+                    <div>
                         <div className="aspect-square w-full rounded-2xl border border-black/[0.07] bg-[#FAFAFB] overflow-hidden grid place-items-center" data-testid="product-image-main">
                             {images[activeImg] ? (
                                 <img src={images[activeImg]} alt={productTitle} className="w-full h-full object-contain" />
@@ -218,8 +219,8 @@ export default function ProductDetail({ kind = "toner" }) {
                         )}
                     </div>
 
-                    {/* RIGHT — content */}
-                    <div className="lg:col-span-7">
+                    {/* RIGHT — content (55%) */}
+                    <div>
                         {data.toner_type && (
                             <span className={`inline-block text-[10.5px] tracking-[0.16em] uppercase font-semibold px-2.5 py-1 rounded-full border ${data.toner_type === "Original" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : data.toner_type === "Refilled" ? "bg-orange-50 border-orange-200 text-orange-700" : "bg-blue-50 border-blue-200 text-blue-700"}`} data-testid="product-type-badge">
                                 {data.toner_type}
@@ -229,7 +230,7 @@ export default function ProductDetail({ kind = "toner" }) {
                             <span className="inline-block text-[10.5px] tracking-[0.16em] uppercase font-semibold px-2.5 py-1 rounded-full border bg-[#FFF8E0] border-[#F5E5A6] text-[#8C6A00]" data-testid="product-condition-badge">{data.condition}</span>
                         )}
 
-                        <h1 className="mt-3 text-[#0A0A0B] text-[26px] sm:text-[32px] leading-[1.1] tracking-[-0.02em]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }} data-testid="product-title">
+                        <h1 className="mt-3 text-[#0A0A0B] leading-[1.05] tracking-[-0.02em]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, fontSize: "clamp(22px, 3vw, 32px)" }} data-testid="product-title">
                             <span className="text-[#86868B]">{data.brand}</span> <span className="text-[#0A0A0B]">{kind === "paper" ? `${data.size} · ${data.gsm} GSM` : (data.model_number || data.name)}</span>
                         </h1>
 
@@ -270,9 +271,12 @@ export default function ProductDetail({ kind = "toner" }) {
 
                         {/* Price + stock */}
                         <div className="mt-6 flex items-end gap-4">
-                            <div className="font-mono text-[#0A0A0B] text-[34px] leading-none font-semibold" data-testid="product-price">{fmtMoney(displayPrice)}</div>
+                            <div className="text-[#0A0A0B] leading-none" style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: "clamp(24px, 3vw, 36px)" }} data-testid="product-price">{fmtMoney(displayPrice)}</div>
                             <span className={`text-[11.5px] font-semibold px-2.5 py-1 rounded-full border ${stockLabel.cls}`} data-testid="product-stock">{stockLabel.txt}</span>
                         </div>
+
+                        {/* Delivery info */}
+                        <DeliveryInfo data={data} />
 
                         {/* Supplier */}
                         <div className="mt-4 flex items-center gap-2 text-[13px] text-[#3a3a40]" data-testid="product-supplier">
@@ -302,11 +306,10 @@ export default function ProductDetail({ kind = "toner" }) {
                             <button onClick={onQuotation} disabled={quoting} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full border border-[#D2D2D7] text-[12.5px] font-semibold text-[#0A0A0B] hover:bg-black/[0.03] disabled:opacity-50 transition" data-testid="get-quotation-btn">
                                 {quoting ? <Loader2 size={13} className="animate-spin" /> : <Quote size={13} />} Get quotation
                             </button>
-                            {data.spec_pdf_url && (
-                                <a href={data.spec_pdf_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[12.5px] text-[#0A0A0B] hover:text-[#00B7C7] underline" data-testid="brochure-btn">
-                                    <FileText size={13} /> Download brochure
-                                </a>
-                            )}
+                        </div>
+
+                        <div className="mt-3 text-[11.5px] text-[#86868B] leading-snug" data-testid="delivery-note">
+                            Delivery within city included. Intercity delivery charges to be confirmed by supplier before dispatch.
                         </div>
 
                         {/* Specs */}
@@ -342,6 +345,22 @@ export default function ProductDetail({ kind = "toner" }) {
             />
         </div>
     );
+}
+
+function DeliveryInfo({ data }) {
+    const { city: buyerCity } = useCity();
+    const dealerCity = (data.supplier_city || data.city || "").trim();
+    const buyer = (buyerCity || "").trim();
+    const charge = Number(data.intercity_delivery_charge || 0);
+    if (!dealerCity) return null;
+    const same = buyer && dealerCity && buyer.toLowerCase() === dealerCity.toLowerCase();
+    if (same) {
+        return (<div className="mt-2 text-[12.5px] font-semibold text-emerald-700 inline-flex items-center gap-1" data-testid="delivery-same-city">✅ Free delivery to {dealerCity}</div>);
+    }
+    if (charge > 0) {
+        return (<div className="mt-2 text-[12.5px] text-[#6E6E73]" data-testid="delivery-intercity">🚚 Intercity delivery to {buyer || "your city"}: +₹{charge.toLocaleString("en-IN")}</div>);
+    }
+    return (<div className="mt-2 text-[12.5px] text-orange-700" data-testid="delivery-warning">⚠️ Delivery only within {dealerCity}</div>);
 }
 
 function SpecsBlock({ kind, data, selectedVariant }) {
@@ -386,12 +405,12 @@ function SpecsBlock({ kind, data, selectedVariant }) {
     return (
         <section className="mt-10" data-testid="product-specs">
             <h2 className="text-[#0A0A0B] text-[16px] mb-3" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 600 }}>Product specifications</h2>
-            <div className="bg-white border border-black/[0.06] rounded-2xl overflow-hidden">
-                <dl className="divide-y divide-black/[0.06]">
-                    {visible.map(([k, v]) => (
-                        <div key={k} className="grid grid-cols-12 px-4 py-2.5" data-testid={`spec-row-${k.toLowerCase().replace(/\s+/g, "-")}`}>
-                            <dt className="col-span-5 sm:col-span-4 text-[12.5px] text-[#86868B]">{k}</dt>
-                            <dd className="col-span-7 sm:col-span-8 text-[13px] text-[#0A0A0B]">{v}</dd>
+            <div className="bg-white border border-[#E8E8EC] rounded-[12px] overflow-hidden">
+                <dl>
+                    {visible.map(([k, v], i) => (
+                        <div key={k} className={`grid grid-cols-12 px-4 py-3 ${i > 0 ? "border-t border-[#E8E8EC]" : ""}`} data-testid={`spec-row-${k.toLowerCase().replace(/\s+/g, "-")}`} style={{ fontFamily: "'Inter', sans-serif" }}>
+                            <dt className="col-span-5 sm:col-span-4 text-[13px] text-[#6E6E73]" style={{ fontWeight: 500 }}>{k}</dt>
+                            <dd className="col-span-7 sm:col-span-8 text-[13px] text-[#0A0A0B]" style={{ fontWeight: 600 }}>{v}</dd>
                         </div>
                     ))}
                 </dl>

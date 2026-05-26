@@ -49,8 +49,8 @@ export default function Footer() {
 
                 {/* Grievance Officer strip */}
                 <div className="mt-10 pt-6 border-t border-white/[0.1] text-[12px] text-white/60 leading-relaxed" data-testid="footer-grievance">
-                    <span className="font-semibold text-white/80">Grievance Officer:</span> Mr. Karthik Nair
-                    {" · "}<a href="mailto:grievance@tonerscart.com" className="text-white/80 hover:text-[#F5C400] transition">grievance@tonerscart.com</a>
+                    <span className="font-semibold text-white/80">For grievances contact:</span>{" "}
+                    <a href="mailto:support@tonerscart.com" className="text-white/80 hover:text-[#F5C400] transition">support@tonerscart.com</a>
                     {" · "}Digital Edge Technologies, Bangalore
                     {" · "}Response within 48 hours
                 </div>

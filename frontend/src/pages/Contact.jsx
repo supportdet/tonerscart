@@ -72,9 +72,8 @@ export default function Contact() {
                             <div className="mt-1 text-[15.5px] font-semibold text-[#0A0A0B]">support@tonerscart.com</div>
                         </a>
                         <div className="bg-[#FFFBEB] border border-[#F5E5A6] rounded-2xl p-5 text-[12.5px] text-[#5C4A00]" data-testid="contact-grievance">
-                            <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#8C6A00] mb-1">Grievance Officer</div>
-                            <div className="text-[14px] font-semibold text-[#0A0A0B]">Mr. Karthik Nair</div>
-                            <a href="mailto:grievance@tonerscart.com" className="block mt-0.5 text-[13px] text-[#0A0A0B] hover:underline">grievance@tonerscart.com</a>
+                            <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#8C6A00] mb-1">Grievances</div>
+                            <div className="text-[13.5px] text-[#0A0A0B]">For grievances contact: <a href="mailto:support@tonerscart.com" className="font-semibold hover:underline">support@tonerscart.com</a></div>
                             <div className="text-[11.5px] text-[#6E6E73] mt-1">Digital Edge Technologies, Bangalore · response within 48 hours</div>
                         </div>
                         <div className="bg-[#F4F4F6] rounded-2xl p-5 inline-flex items-center gap-2 text-[12.5px] text-[#3a3a40]" data-testid="contact-hours">
