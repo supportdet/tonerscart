@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { flushSync } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
@@ -51,15 +52,28 @@ export default function Login() {
         finally { setLoading(false); }
     };
 
-    const onGoogle = async () => {
-        setGoogleLoading(true);
-        try { await signInWithGoogle(next || undefined); }
-        catch (e) { toast.error(e.message || "Google sign-in unavailable"); setGoogleLoading(false); }
-        // Note: Google OAuth redirects away — no cleanup needed on success path
+    const onGoogle = () => {
+        // Identical UX to logout button — flush state synchronously so the
+        // overlay paints before we kick off the network call.
+        flushSync(() => setGoogleLoading(true));
+        (async () => {
+            try { await signInWithGoogle(next || undefined); }
+            catch (e) { toast.error(e.message || "Google sign-in unavailable"); setGoogleLoading(false); }
+            // Note: Google OAuth redirects away — no cleanup needed on success path
+        })();
     };
 
     return (
         <div className="tc-hero relative pb-16" data-testid="login-page">
+            {/* Full-screen overlay — same UX as the logout flow */}
+            {googleLoading && (
+                <div className="fixed inset-0 z-[3000] bg-[#0A0A0B]/70 backdrop-blur-sm flex items-center justify-center" role="alertdialog" aria-busy="true" data-testid="google-signin-overlay">
+                    <div className="bg-white rounded-2xl px-6 py-5 inline-flex items-center gap-3 shadow-2xl">
+                        <Loader2 size={18} className="animate-spin text-[#0A0A0B]" />
+                        <div className="text-[14px] font-semibold text-[#0A0A0B]">Connecting to Google…</div>
+                    </div>
+                </div>
+            )}
             <div className="tc-hero-grid" />
             <div className="tc-container relative pt-12 sm:pt-16">
                 <div className="grid lg:grid-cols-12 gap-8 lg:gap-14 items-start">

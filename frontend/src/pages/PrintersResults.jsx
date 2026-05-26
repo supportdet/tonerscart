@@ -4,9 +4,10 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
-import { Printer as PrinterIcon, X, SlidersHorizontal, Search as SearchIcon, Sparkles } from "lucide-react";
+import { Printer as PrinterIcon, X, SlidersHorizontal, Search as SearchIcon, Sparkles, ShoppingCart } from "lucide-react";
 import { useCity } from "../context/CityContext";
 import WhatsAppEnquiry from "../components/WhatsAppEnquiry";
+import { useCart } from "../context/CartContext";
 
 const CONDITIONS = [
     { id: "new", label: "Brand New" },
@@ -23,7 +24,19 @@ const LABELS = {
 
 function fmt(v) { return LABELS[v] || v; }
 
-function PrinterCard({ p, onRequest }) {
+function PrinterCard({ p }) {
+    const navigate = useNavigate();
+    const { add } = useCart();
+    const onAdd = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        add(p, 1);
+        toast.success(`Added ${p.brand} ${p.model_number} to cart`);
+    };
+    const onBuyNow = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        add(p, 1);
+        navigate("/checkout");
+    };
     return (
         <div className="bg-white border border-black/[0.06] rounded-2xl overflow-hidden transition hover:shadow-xl group relative" data-testid={`printer-card-${p.id}`}>
             <div className="absolute top-3 right-3 z-10">
@@ -52,11 +65,16 @@ function PrinterCard({ p, onRequest }) {
                     {p.connectivity?.length > 0 && <span>· {p.connectivity.slice(0, 2).join(" / ")}</span>}
                 </div>
                 <div className="text-[11px] text-[#86868B]">{p.supplier_name}{p.city ? ` · ${p.city}` : ""}</div>
-                <div className="flex items-center justify-between mt-2">
-                    <div className="font-mono text-[18px] font-bold text-[#0A0A0B]">₹{Number(p.price).toLocaleString("en-IN")}</div>
-                    <Button size="sm" className="btn-cta" onClick={() => onRequest(p)} data-testid={`printer-request-${p.id}`}>Request</Button>
-                </div>
+                <div className="font-mono text-[18px] font-bold text-[#0A0A0B] mt-2">₹{Number(p.price).toLocaleString("en-IN")}</div>
                 <div className="text-[10.5px] text-emerald-700 font-semibold">{p.stock} in stock</div>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                    <Button size="sm" variant="outline" className="text-[12px] h-9 gap-1.5" onClick={onAdd} data-testid={`printer-add-to-cart-${p.id}`}>
+                        <ShoppingCart size={13} /> Add to cart
+                    </Button>
+                    <Button size="sm" className="btn-cta text-[12px] h-9" onClick={onBuyNow} data-testid={`printer-buy-now-${p.id}`}>
+                        Buy now
+                    </Button>
+                </div>
             </div>
         </div>
     );
@@ -106,9 +124,7 @@ export default function Printers() {
 
     const submitQ = (e) => { e.preventDefault(); load(); };
 
-    const onRequest = (p) => {
-        toast.success(`Request noted for ${p.brand} ${p.model_number} — ${p.supplier_name} will reach out. For now please call +91 9742270585.`);
-    };
+
 
     return (
         <div className="relative pb-16" data-testid="printers-page">
@@ -195,7 +211,7 @@ export default function Printers() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="printers-grid">
-                        {listings.map((p) => <PrinterCard key={p.id} p={p} onRequest={onRequest} />)}
+                        {listings.map((p) => <PrinterCard key={p.id} p={p} />)}
                     </div>
                 )}
             </div>

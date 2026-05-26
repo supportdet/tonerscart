@@ -138,6 +138,7 @@ export default function SearchPage() {
         if (params.get("brand")) qp.brand = params.get("brand");
         if (params.get("city") && params.get("city") !== "all") qp.city = params.get("city");
         if (params.get("toner_type") && params.get("toner_type") !== "all") qp.toner_type = params.get("toner_type");
+        if (params.get("supplier_id")) qp.supplier_id = params.get("supplier_id");
         return qp;
     };
 

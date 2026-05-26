@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { flushSync } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
@@ -6,7 +7,7 @@ import { Label } from "../components/ui/label";
 import { useAuth } from "../context/AuthContext";
 import { formatApiError } from "../lib/api";
 import { toast } from "sonner";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import PhonePrefixInput from "../components/PhonePrefixInput";
 
 const GoogleIcon = (props) => (
@@ -25,6 +26,7 @@ export default function Register() {
     const next = params.get("next") || "/search";
     const [c, setC] = useState({ email: "", password: "", name: "", phone: "", city: "" });
     const [loading, setLoading] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
     const upd = (k) => (e) => setC({ ...c, [k]: e.target.value });
 
     const submit = async (e) => {
@@ -45,13 +47,24 @@ export default function Register() {
         } finally { setLoading(false); }
     };
 
-    const onGoogle = async () => {
-        try { await signInWithGoogle(next); }
-        catch (e) { toast.error(e?.message || "Google sign-in unavailable"); }
+    const onGoogle = () => {
+        flushSync(() => setGoogleLoading(true));
+        (async () => {
+            try { await signInWithGoogle(next); }
+            catch (e) { toast.error(e?.message || "Google sign-in unavailable"); setGoogleLoading(false); }
+        })();
     };
 
     return (
         <div className="tc-hero relative pb-16" data-testid="register-page">
+            {googleLoading && (
+                <div className="fixed inset-0 z-[3000] bg-[#0A0A0B]/70 backdrop-blur-sm flex items-center justify-center" role="alertdialog" aria-busy="true" data-testid="google-signin-overlay">
+                    <div className="bg-white rounded-2xl px-6 py-5 inline-flex items-center gap-3 shadow-2xl">
+                        <Loader2 size={18} className="animate-spin text-[#0A0A0B]" />
+                        <div className="text-[14px] font-semibold text-[#0A0A0B]">Connecting to Google…</div>
+                    </div>
+                </div>
+            )}
             <div className="tc-hero-grid" />
             <div className="tc-container relative pt-10 sm:pt-14 max-w-md">
                 <div className="flex items-center gap-3 mb-3">
@@ -64,8 +77,8 @@ export default function Register() {
                 <p className="text-white/65 mt-3 text-[14px]">One account for buying and selling. Want to sell? Sign up first, then click <span className="text-[#00B7C7] font-semibold">Sell</span> in the navbar.</p>
 
                 <div className="mt-6 bg-white border border-black/[0.06] rounded-2xl shadow-2xl p-5 sm:p-6 text-[#0A0A0B]">
-                    <button onClick={onGoogle} type="button" className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-full border border-[#D2D2D7] bg-white hover:bg-black/[0.03] text-[#0A0A0B] font-semibold text-[13.5px]" data-testid="register-google-btn">
-                        <GoogleIcon /> Continue with Google
+                    <button onClick={onGoogle} type="button" disabled={googleLoading} className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-full border border-[#D2D2D7] bg-white hover:bg-black/[0.03] text-[#0A0A0B] font-semibold text-[13.5px] disabled:opacity-60 disabled:cursor-not-allowed" data-testid="register-google-btn">
+                        {googleLoading ? <><Loader2 size={14} className="animate-spin" /> Connecting to Google…</> : <><GoogleIcon /> Continue with Google</>}
                     </button>
                     <div className="my-4 flex items-center gap-3">
                         <div className="h-px flex-1 bg-black/[0.08]" />

@@ -213,8 +213,9 @@ export default function Landing() {
                             id: s.id,
                             name: s.business_name || "Verified Supplier",
                             city: [s.city, s.state].filter(Boolean).join(", "),
-                            tagline: (s.seller_types || []).slice(0, 3).join(" · ") || "Verified TonersCart supplier",
+                            tagline: s.tagline || (s.seller_types || []).slice(0, 3).join(" · ") || "Verified TonersCart supplier",
                             logo_url: s.logo_url || null,
+                            featured_image_url: s.featured_image_url || null,
                         })).map((s, i) => (
                             <div
                                 key={s.id}
@@ -222,10 +223,12 @@ export default function Landing() {
                                 style={{ transitionDelay: `${i * 80}ms` }}
                                 data-testid={`featured-card-${s.id}`}
                             >
-                                {/* Logo — square 1:1 */}
+                                {/* Banner image — square 1:1 */}
                                 <div className="flex flex-col items-center">
                                     <div className="tc-featured-logo-ph" data-testid={`featured-logo-${s.id}`}>
-                                        {s.logo_url ? (
+                                        {s.featured_image_url ? (
+                                            <img src={s.featured_image_url} alt={s.name} className="w-full h-full object-cover" />
+                                        ) : s.logo_url ? (
                                             <img src={s.logo_url} alt={s.name} className="w-full h-full object-cover" />
                                         ) : (
                                             <Camera size={28} className="text-white/45" strokeWidth={1.6} />
@@ -246,7 +249,7 @@ export default function Landing() {
                                 </div>
 
                                 <button
-                                    onClick={() => navigate("/search")}
+                                    onClick={() => navigate(`/search?supplier_id=${s.id}`)}
                                     className="mt-5 w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#F5C400] hover:bg-[#FFD119] text-[#0A0A0B] text-[13px] font-semibold py-2.5 transition"
                                     data-testid={`featured-cta-${s.id}`}
                                 >
@@ -286,17 +289,17 @@ export default function Landing() {
                 </div>
             </section>
 
-            {/* ====== STATS STRIP — live counts from /api/stats/public ====== */}
+            {/* ====== STATS STRIP — hardcoded display values (real data not yet there) ====== */}
             <section className="bg-white border-b border-black/[0.06]">
                 <div className="tc-container py-6 sm:py-8 grid grid-cols-3 gap-4 sm:gap-6" data-testid="stats-strip">
                     {[
-                        { v: publicStats?.suppliers, k: "Verified suppliers", testid: "stat-suppliers" },
-                        { v: publicStats?.cities,    k: "Cities served",      testid: "stat-cities" },
-                        { v: publicStats?.brands,    k: "Brands listed",      testid: "stat-brands" },
+                        { v: "500+", k: "Dealers", testid: "stat-suppliers" },
+                        { v: "10+",  k: "Cities",  testid: "stat-cities" },
+                        { v: "15+",  k: "Brands",  testid: "stat-brands" },
                     ].map((s, i) => (
                         <div key={s.k} className="tc-reveal text-center sm:text-left" style={{ transitionDelay: `${i * 80}ms` }} data-testid={s.testid}>
                             <div className="font-mono text-2xl sm:text-3xl lg:text-4xl font-semibold text-[#0A0A0B] tracking-tight">
-                                {publicStats == null ? "—" : `${s.v ?? 0}+`}
+                                {s.v}
                             </div>
                             <div className="text-[10px] sm:text-[11px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73] mt-1.5 sm:mt-2">{s.k}</div>
                         </div>

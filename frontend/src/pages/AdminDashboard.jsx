@@ -123,15 +123,25 @@ export default function AdminDashboard() {
 
     const confirmFeature = async () => {
         if (!featureSupplierId) { toast.error("Pick a supplier from the dropdown first"); return; }
-        if (!featureLogo) { toast.error("Please upload a logo or banner image"); return; }
         setFeaturing(true);
         try {
-            const fd = new FormData();
-            fd.append("file", featureLogo);
-            await api.post(`/admin/suppliers/${featureSupplierId}/featured-image`, fd);
-            // Also mark the application active
-            if (featureModal?.id) {
-                try { await api.put(`/admin/featured/applications/${featureModal.id}/status`, { status: "active" }); } catch { /* non-fatal */ }
+            // Preferred path — use the applicant-uploaded image stored on the application
+            if (featureModal?.image_url && !featureLogo) {
+                await api.post("/admin/featured/feature-from-application", {
+                    application_id: featureModal.id,
+                    supplier_id: featureSupplierId,
+                });
+            } else if (featureLogo) {
+                const fd = new FormData();
+                fd.append("file", featureLogo);
+                await api.post(`/admin/suppliers/${featureSupplierId}/featured-image`, fd);
+                if (featureModal?.id) {
+                    try { await api.put(`/admin/featured/applications/${featureModal.id}/status`, { status: "active" }); } catch { /* non-fatal */ }
+                }
+            } else {
+                toast.error("No image attached — applicant uploaded none. Please upload a banner image.");
+                setFeaturing(false);
+                return;
             }
             toast.success("Company is now featured on the landing page");
             setFeatureModal(null);
@@ -308,6 +318,7 @@ export default function AdminDashboard() {
                             <table className="w-full text-[13px]">
                                 <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">
                                     <tr>
+                                        <th className="text-left p-3 w-[80px]">Image</th>
                                         <th className="text-left p-3">Company</th>
                                         <th className="text-left p-3">Contact</th>
                                         <th className="text-left p-3">City</th>
@@ -319,6 +330,13 @@ export default function AdminDashboard() {
                                 <tbody>
                                     {featured.map((a) => (
                                         <tr key={a.id} className="border-t border-black/[0.05]" data-testid={`featured-row-${a.id}`}>
+                                            <td className="p-3">
+                                                {a.image_url ? (
+                                                    <img src={a.image_url} alt={a.company} className="w-16 h-16 object-cover rounded-md border border-black/[0.06]" data-testid={`featured-thumb-${a.id}`} />
+                                                ) : (
+                                                    <div className="w-16 h-16 rounded-md bg-black/[0.04] grid place-items-center text-[10px] text-[#86868B]" data-testid={`featured-thumb-empty-${a.id}`}>No image</div>
+                                                )}
+                                            </td>
                                             <td className="p-3 font-semibold">{a.company}</td>
                                             <td className="p-3">
                                                 {a.contact_person}

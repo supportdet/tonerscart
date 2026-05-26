@@ -9,6 +9,7 @@ a thin /api layer that:
   - Hosts the Claude AI chat endpoint (TonerBot)
 """
 import os
+import secrets
 import re
 import uuid
 import asyncio
@@ -266,6 +267,7 @@ class FeaturedAppCreate(BaseModel):
     pincode: Optional[str] = ""
     business_type: Optional[str] = "dealer"
     description: Optional[str] = ""
+    image_path: Optional[str] = None
 
 
 class FeaturedStatusUpdate(BaseModel):
@@ -683,6 +685,7 @@ def toner_master_brands():
 @api.get("/listings/search")
 def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
                     city: Optional[str] = None, toner_type: Optional[str] = None,
+                    supplier_id: Optional[str] = None,
                     limit: int = 200):
     qry = sb_admin.table("listings").select(
         "*,suppliers!inner(business_name,city,is_suspended)"
@@ -695,6 +698,8 @@ def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
         qry = qry.eq("city", city)
     if toner_type and toner_type != "all":
         qry = qry.eq("toner_type", toner_type)
+    if supplier_id:
+        qry = qry.eq("supplier_id", supplier_id)
     try:
         rows = qry.execute().data or []
     except Exception as e:
@@ -711,6 +716,8 @@ def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
                 qry = qry.eq("city", city)
             if toner_type and toner_type != "all":
                 qry = qry.eq("toner_type", toner_type)
+            if supplier_id:
+                qry = qry.eq("supplier_id", supplier_id)
             rows = qry.execute().data or []
         else:
             raise
@@ -1428,6 +1435,7 @@ def list_printers(
     max_volume: Optional[int] = None,
     city: Optional[str] = None,
     brand: Optional[str] = None,
+    supplier_id: Optional[str] = None,
     q: Optional[str] = None,
 ):
     """Public browse endpoint with optional filters from the MPS flow."""
@@ -1467,6 +1475,8 @@ def list_printers(
             qry = qry.lte("monthly_volume_min", max_volume)
         if brand:
             qry = qry.ilike("brand", f"%{brand}%")
+        if supplier_id:
+            qry = qry.eq("supplier_id", supplier_id)
         if q:
             qry = qry.or_(f"brand.ilike.%{q}%,model_number.ilike.%{q}%,description.ilike.%{q}%")
         return qry.order("created_at", desc=True).limit(200)
@@ -1565,12 +1575,20 @@ async def featured_apply(payload: FeaturedAppCreate):
         "pincode": (payload.pincode or "").strip() or None,
         "business_type": (payload.business_type or "dealer").strip() or "dealer",
         "description": (payload.description or "").strip() or None,
+        "image_path": (payload.image_path or "").strip() or None,
         "status": "new",
     }
     try:
         sb_admin.table("featured_applications").insert(row).execute()
     except Exception as e:
-        logger.warning("featured_applications insert skipped (migration pending?): %s", e)
+        if "image_path" in str(e):
+            row.pop("image_path", None)
+            try:
+                sb_admin.table("featured_applications").insert(row).execute()
+            except Exception as e2:
+                logger.warning("featured_applications insert skipped (migration pending?): %s", e2)
+        else:
+            logger.warning("featured_applications insert skipped (migration pending?): %s", e)
 
     # Notify support inbox (reuse the MPS inquiry helper for consistency)
     try:
@@ -1600,17 +1618,60 @@ async def featured_apply(payload: FeaturedAppCreate):
     return {"ok": True}
 
 
+@api.post("/featured/apply-image")
+async def featured_apply_image(file: UploadFile = File(...)):
+    """Public — applicant uploads a banner image while filling the Get Featured form.
+    Stored in supplier-documents/featured-applications/. Returns storage path that
+    the client posts back in the application payload."""
+    raw = await file.read()
+    if len(raw) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Image too large (max 5 MB)")
+    ext = (file.filename or "banner.png").rsplit(".", 1)[-1].lower()
+    if ext not in ("png", "jpg", "jpeg", "webp"):
+        raise HTTPException(400, "Only PNG, JPG or WEBP images accepted")
+    safe = secrets.token_hex(8)
+    path = f"featured-applications/{int(datetime.now(timezone.utc).timestamp())}-{safe}.{ext}"
+    try:
+        sb_admin.storage.from_("supplier-documents").upload(
+            path, raw, {"content-type": file.content_type or f"image/{ext}", "upsert": "true"}
+        )
+    except Exception as e:
+        logger.exception("featured apply image upload failed")
+        raise HTTPException(503, f"Image upload failed: {e}") from e
+    try:
+        signed = sb_admin.storage.from_("supplier-documents").create_signed_url(path, 60 * 60)
+        preview = signed.get("signedURL") or signed.get("signed_url")
+    except Exception:
+        preview = None
+    return {"path": path, "preview_url": preview}
+
+
+class FeaturedFromApplication(BaseModel):
+    application_id: str
+    supplier_id: str
+
+
 @api.get("/featured/suppliers")
 def featured_suppliers_public(limit: int = 6):
-    """Public — return suppliers where is_featured = true, with signed logo URLs.
+    """Public — return suppliers where is_featured = true, with signed logo + banner URLs.
     Returns [] gracefully if the migration has not been run yet."""
     try:
         rows = sb_admin.table("suppliers").select(
-            "id,business_name,city,state,business_logo,is_featured,seller_types"
+            "id,business_name,city,state,business_logo,is_featured,seller_types,featured_image_url,tagline"
         ).eq("is_featured", True).limit(limit).execute().data or []
     except Exception as e:
-        logger.warning("featured_suppliers (column likely missing): %s", e)
-        return []
+        # Retry without new columns if featured_image_url/tagline not migrated yet
+        if "featured_image_url" in str(e) or "tagline" in str(e):
+            try:
+                rows = sb_admin.table("suppliers").select(
+                    "id,business_name,city,state,business_logo,is_featured,seller_types"
+                ).eq("is_featured", True).limit(limit).execute().data or []
+            except Exception as e2:
+                logger.warning("featured_suppliers (column likely missing): %s", e2)
+                return []
+        else:
+            logger.warning("featured_suppliers (column likely missing): %s", e)
+            return []
     out = []
     for s in rows:
         item = {
@@ -1619,8 +1680,11 @@ def featured_suppliers_public(limit: int = 6):
             "city": s.get("city"),
             "state": s.get("state"),
             "seller_types": s.get("seller_types") or [],
+            "tagline": s.get("tagline") or None,
             "logo_url": None,
+            "featured_image_url": None,
         }
+        # Surface logo (legacy field)
         if s.get("business_logo"):
             try:
                 signed = sb_admin.storage.from_("supplier-documents").create_signed_url(
@@ -1629,6 +1693,17 @@ def featured_suppliers_public(limit: int = 6):
                 item["logo_url"] = signed.get("signedURL") or signed.get("signed_url")
             except Exception:
                 item["logo_url"] = None
+        # Surface featured banner image
+        fp = s.get("featured_image_url")
+        if fp:
+            if fp.startswith("http://") or fp.startswith("https://"):
+                item["featured_image_url"] = fp
+            else:
+                try:
+                    signed = sb_admin.storage.from_("supplier-documents").create_signed_url(fp, 60 * 60)
+                    item["featured_image_url"] = signed.get("signedURL") or signed.get("signed_url")
+                except Exception:
+                    item["featured_image_url"] = None
         out.append(item)
     return out
 
@@ -1639,10 +1714,63 @@ def admin_featured_applications(user: dict = Depends(require_role("admin"))):
         rows = sb_admin.table("featured_applications").select("*").order(
             "created_at", desc=True
         ).limit(500).execute().data or []
-        return rows
     except Exception as e:
         logger.warning("featured_applications table missing: %s", e)
         return []
+    # Surface a signed URL for any uploaded banner image
+    for r in rows:
+        path = r.get("image_path")
+        if path:
+            try:
+                signed = sb_admin.storage.from_("supplier-documents").create_signed_url(path, 60 * 60)
+                r["image_url"] = signed.get("signedURL") or signed.get("signed_url")
+            except Exception:
+                r["image_url"] = None
+        else:
+            r["image_url"] = None
+    return rows
+
+
+@api.post("/admin/featured/feature-from-application")
+def admin_feature_from_application(payload: FeaturedFromApplication,
+                                    user: dict = Depends(require_role("admin"))):
+    """Admin clicks "Feature this company" on an application.
+    Marks the chosen supplier is_featured=true, copies the application's
+    company tagline (description) into suppliers.tagline, and stores the
+    application's image_path as the supplier's featured_image_url."""
+    app_row = sb_admin.table("featured_applications").select("*").eq(
+        "id", payload.application_id
+    ).maybe_single().execute()
+    if not app_row or not app_row.data:
+        raise HTTPException(404, "Application not found")
+    sup_row = sb_admin.table("suppliers").select("id").eq("id", payload.supplier_id).maybe_single().execute()
+    if not sup_row or not sup_row.data:
+        raise HTTPException(404, "Supplier not found")
+    a = app_row.data
+    upd = {"is_featured": True}
+    if a.get("image_path"):
+        upd["featured_image_url"] = a["image_path"]
+    if a.get("description"):
+        upd["tagline"] = a["description"][:280]
+    try:
+        sb_admin.table("suppliers").update(upd).eq("id", payload.supplier_id).execute()
+    except Exception as e:
+        msg = str(e)
+        # Drop missing columns and retry
+        retry = {k: v for k, v in upd.items() if k not in msg}
+        if retry:
+            sb_admin.table("suppliers").update(retry).eq("id", payload.supplier_id).execute()
+        else:
+            raise HTTPException(503, f"Featuring failed — missing column: {msg}") from e
+    # Move application to 'active' status
+    try:
+        sb_admin.table("featured_applications").update({
+            "status": "active",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", payload.application_id).execute()
+    except Exception as e:
+        logger.warning("featured_applications status update failed: %s", e)
+    return {"ok": True, "supplier_id": payload.supplier_id, "featured": True}
 
 
 @api.put("/admin/featured/applications/{app_id}/status")
@@ -2747,9 +2875,10 @@ def list_papers(brand: Optional[str] = None, size: Optional[str] = None,
 def search_listings_paginated(
     q: Optional[str] = None, brand: Optional[str] = None,
     city: Optional[str] = None, toner_type: Optional[str] = None,
+    supplier_id: Optional[str] = None,
     page: int = 1, limit: int = 20,
 ):
-    all_rows = search_listings(q=q, brand=brand, city=city, toner_type=toner_type, limit=2000)
+    all_rows = search_listings(q=q, brand=brand, city=city, toner_type=toner_type, supplier_id=supplier_id, limit=2000)
     total = len(all_rows)
     page = max(1, page)
     limit = max(1, min(limit, 100))
