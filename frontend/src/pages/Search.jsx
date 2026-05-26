@@ -126,6 +126,21 @@ export default function SearchPage() {
     const { items: cartItems, addItem } = useCart();
     const rootRef = useReveal([products.length]);
 
+    // Wave 9 — Universal 3-section results: only when q is set and no filters applied
+    const [universal, setUniversal] = useState(null);
+    useEffect(() => {
+        const qq = (params.get("q") || "").trim();
+        if (!qq) { setUniversal(null); return; }
+        let cancelled = false;
+        (async () => {
+            try {
+                const r = await api.get("/search/universal", { params: { q: qq, limit_per_type: 6 } });
+                if (!cancelled) setUniversal(r.data || null);
+            } catch { if (!cancelled) setUniversal(null); }
+        })();
+        return () => { cancelled = true; };
+    }, [params]);
+
     useEffect(() => {
         api.get("/listings/facets")
             .then((r) => setFacets(r.data || {}))
@@ -290,10 +305,88 @@ export default function SearchPage() {
             />
             <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-2 pb-3 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-black/[0.04]" data-testid="search-sticky-wrapper">
                 <div className="tc-search-shell tc-search-light" data-testid="search-bar">
-                    <TonerSearchInput value={q} onChange={setQ} onSubmit={apply} testId="search-input" placeholder="Search by brand or model number…" />
+                    <TonerSearchInput value={q} onChange={setQ} onSubmit={apply} testId="search-input" placeholder="Search toners, printers, papers — brand or model…" />
                     <button onClick={() => apply()} className="tc-search-go" data-testid="search-apply-btn">Search</button>
                 </div>
             </div>
+
+            {/* Universal 3-section results — shown above filter-driven toner grid when q is set */}
+            {universal && (universal.counts?.toners + universal.counts?.printers + universal.counts?.papers) > 0 && (
+                <div className="mt-6 space-y-8" data-testid="universal-results">
+                    {universal.counts.toners > 0 && (
+                        <section data-testid="universal-section-toners">
+                            <div className="flex items-baseline justify-between mb-3">
+                                <h2 className="text-[18px] font-semibold tracking-tight text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                                    Toners <span className="text-[13px] font-normal text-[#86868B]">· {universal.counts.toners} found</span>
+                                </h2>
+                                <button onClick={() => navigate(`/search?q=${encodeURIComponent(universal.q)}`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-toners">View all →</button>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {universal.toners.map((t) => (
+                                    <Link key={t.id} to={`/toner/${t.id}`} className="block bg-white border border-black/[0.06] rounded-xl overflow-hidden hover:shadow-md transition" data-testid={`universal-toner-${t.id}`}>
+                                        <div className="aspect-square bg-black/[0.03] grid place-items-center">
+                                            {t.image_url ? <img src={t.image_url} alt={`${t.brand} ${t.model_number}`} className="w-full h-full object-cover" loading="lazy" /> : <Boxes size={28} className="text-[#D2D2D7]" />}
+                                        </div>
+                                        <div className="p-2.5">
+                                            <div className="text-[11px] text-[#86868B] uppercase tracking-wider truncate">{t.brand}</div>
+                                            <div className="text-[12.5px] font-semibold text-[#0A0A0B] truncate">{t.model_number}</div>
+                                            <div className="text-[13px] font-mono text-[#0A0A0B] mt-1">₹{Number(t.price || 0).toLocaleString("en-IN")}</div>
+                                        </div>
+                                    </Link>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+                    {universal.counts.printers > 0 && (
+                        <section data-testid="universal-section-printers">
+                            <div className="flex items-baseline justify-between mb-3">
+                                <h2 className="text-[18px] font-semibold tracking-tight text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                                    Printers <span className="text-[13px] font-normal text-[#86868B]">· {universal.counts.printers} found</span>
+                                </h2>
+                                <button onClick={() => navigate(`/printers/results?q=${encodeURIComponent(universal.q)}`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-printers">View all →</button>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {universal.printers.map((p) => (
+                                    <Link key={p.id} to={`/printer/${p.id}`} className="block bg-white border border-black/[0.06] rounded-xl overflow-hidden hover:shadow-md transition" data-testid={`universal-printer-${p.id}`}>
+                                        <div className="aspect-[4/3] bg-black/[0.03] grid place-items-center">
+                                            {p.image_url ? <img src={p.image_url} alt={`${p.brand} ${p.model_number}`} className="w-full h-full object-contain" loading="lazy" /> : <Boxes size={28} className="text-[#D2D2D7]" />}
+                                        </div>
+                                        <div className="p-2.5">
+                                            <div className="text-[11px] text-[#86868B] uppercase tracking-wider truncate">{p.brand}</div>
+                                            <div className="text-[12.5px] font-semibold text-[#0A0A0B] truncate">{p.model_number}</div>
+                                            <div className="text-[13px] font-mono text-[#0A0A0B] mt-1">₹{Number(p.price || 0).toLocaleString("en-IN")}</div>
+                                        </div>
+                                    </Link>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+                    {universal.counts.papers > 0 && (
+                        <section data-testid="universal-section-papers">
+                            <div className="flex items-baseline justify-between mb-3">
+                                <h2 className="text-[18px] font-semibold tracking-tight text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                                    Papers <span className="text-[13px] font-normal text-[#86868B]">· {universal.counts.papers} found</span>
+                                </h2>
+                                <button onClick={() => navigate(`/papers?q=${encodeURIComponent(universal.q)}`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-papers">View all →</button>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {universal.papers.map((p) => (
+                                    <Link key={p.id} to={`/paper/${p.id}`} className="block bg-white border border-black/[0.06] rounded-xl overflow-hidden hover:shadow-md transition" data-testid={`universal-paper-${p.id}`}>
+                                        <div className="aspect-square bg-black/[0.03] grid place-items-center">
+                                            {p.image_url ? <img src={p.image_url} alt={`${p.brand} ${p.size}`} className="w-full h-full object-cover" loading="lazy" /> : <Boxes size={28} className="text-[#D2D2D7]" />}
+                                        </div>
+                                        <div className="p-2.5">
+                                            <div className="text-[11px] text-[#86868B] uppercase tracking-wider truncate">{p.brand}</div>
+                                            <div className="text-[12.5px] font-semibold text-[#0A0A0B] truncate">{p.size} · {p.gsm} GSM</div>
+                                            <div className="text-[13px] font-mono text-[#0A0A0B] mt-1">₹{Number(p.price_per_ream || 0).toLocaleString("en-IN")}/ream</div>
+                                        </div>
+                                    </Link>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+                </div>
+            )}
 
             {/* Mobile filter trigger row */}
             <div className="lg:hidden flex items-center justify-between mt-4 gap-3">

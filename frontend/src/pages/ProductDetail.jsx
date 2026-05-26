@@ -219,8 +219,8 @@ export default function ProductDetail({ kind = "toner" }) {
                         )}
                     </div>
 
-                    {/* RIGHT — content (55%) */}
-                    <div>
+                    {/* RIGHT — content (55%, vertically + horizontally centered, balanced spacing) */}
+                    <div className="flex flex-col items-center text-center justify-center min-h-[460px]">
                         {data.toner_type && (
                             <span className={`inline-block text-[10.5px] tracking-[0.16em] uppercase font-semibold px-2.5 py-1 rounded-full border ${data.toner_type === "Original" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : data.toner_type === "Refilled" ? "bg-orange-50 border-orange-200 text-orange-700" : "bg-blue-50 border-blue-200 text-blue-700"}`} data-testid="product-type-badge">
                                 {data.toner_type}
@@ -230,8 +230,9 @@ export default function ProductDetail({ kind = "toner" }) {
                             <span className="inline-block text-[10.5px] tracking-[0.16em] uppercase font-semibold px-2.5 py-1 rounded-full border bg-[#FFF8E0] border-[#F5E5A6] text-[#8C6A00]" data-testid="product-condition-badge">{data.condition}</span>
                         )}
 
-                        <h1 className="mt-3 text-[#0A0A0B] leading-[1.05] tracking-[-0.02em]" style={{ fontFamily: "'Roboto', Helvetica, Arial, sans-serif", fontWeight: 700, fontSize: "clamp(22px, 3vw, 32px)" }} data-testid="product-title">
-                            <span className="text-[#86868B]">{data.brand}</span> <span className="text-[#0A0A0B]">{kind === "paper" ? `${data.size} · ${data.gsm} GSM` : (data.model_number || data.name)}</span>
+                        <h1 className="mt-4 text-[#0A0A0B] leading-[1.1] tracking-[-0.02em]" style={{ fontFamily: "'Roboto', Helvetica, Arial, sans-serif", fontWeight: 700, fontSize: "clamp(22px, 3vw, 32px)" }} data-testid="product-title">
+                            <span className="text-[#86868B] block text-[14px] font-medium tracking-[0.18em] uppercase mb-1">{data.brand}</span>
+                            <span className="text-[#0A0A0B]">{kind === "paper" ? `${data.size} · ${data.gsm} GSM` : (data.model_number || data.name)}</span>
                         </h1>
 
                         {/* Compatibility shoutout (toners) */}
@@ -269,11 +270,16 @@ export default function ProductDetail({ kind = "toner" }) {
                             </div>
                         )}
 
-                        {/* Price + stock */}
-                        <div className="mt-6 flex items-end gap-4">
+                        {/* Price + stock — centered, balanced spacing */}
+                        <div className="mt-6 flex items-end justify-center gap-4">
                             <div className="text-[#0A0A0B] leading-none" style={{ fontFamily: "'Roboto', Helvetica, Arial, sans-serif", fontWeight: 700, fontSize: "clamp(24px, 3vw, 36px)" }} data-testid="product-price">{fmtMoney(displayPrice)}</div>
                             <span className={`text-[11.5px] font-semibold px-2.5 py-1 rounded-full border ${stockLabel.cls}`} data-testid="product-stock">{stockLabel.txt}</span>
                         </div>
+                        {(data.gst_rate ?? 18) > 0 && (
+                            <div className="text-[11.5px] text-[#86868B] mt-1.5" data-testid="product-gst-hint">
+                                + {data.gst_rate ?? 18}% GST applied at checkout
+                            </div>
+                        )}
 
                         {/* Delivery info */}
                         <DeliveryInfo data={data} />
@@ -286,7 +292,7 @@ export default function ProductDetail({ kind = "toner" }) {
                         </div>
 
                         {/* Qty stepper */}
-                        <div className="mt-6 flex items-center gap-3">
+                        <div className="mt-6 flex items-center justify-center gap-3">
                             <div className="text-[11px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">Quantity</div>
                             <div className="inline-flex items-center bg-white border border-[#D2D2D7] rounded-full overflow-hidden">
                                 <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="w-9 h-9 grid place-items-center hover:bg-black/5 text-[15px]" data-testid="qty-decrement">−</button>
@@ -296,7 +302,7 @@ export default function ProductDetail({ kind = "toner" }) {
                         </div>
 
                         {/* CTAs */}
-                        <div className="mt-5 flex flex-wrap items-center gap-3">
+                        <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
                             <button onClick={onAddToCart} disabled={displayStock <= 0} className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-[#0A0A0B] text-white text-[13.5px] font-semibold hover:bg-[#1D1D1F] disabled:opacity-40 disabled:cursor-not-allowed transition" data-testid="add-to-cart-btn">
                                 <ShoppingCart size={15} /> Add to cart
                             </button>
@@ -308,12 +314,14 @@ export default function ProductDetail({ kind = "toner" }) {
                             </button>
                         </div>
 
-                        <div className="mt-3 text-[11.5px] text-[#86868B] leading-snug" data-testid="delivery-note">
+                        <div className="mt-3 text-[11.5px] text-[#86868B] leading-snug text-center max-w-[480px]" data-testid="delivery-note">
                             Delivery within city included. Intercity delivery charges to be confirmed by supplier before dispatch.
                         </div>
 
-                        {/* Specs */}
-                        <SpecsBlock kind={kind} data={data} selectedVariant={selectedVariant} />
+                        {/* Specs (left-aligned for readability) */}
+                        <div className="w-full mt-8 text-left">
+                            <SpecsBlock kind={kind} data={data} selectedVariant={selectedVariant} />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -382,10 +390,19 @@ function SpecsBlock({ kind, data, selectedVariant }) {
         if (data.condition) rows.push(["Condition", data.condition]);
         if (data.color) rows.push(["Print colour", data.color]);
         if (data.category) rows.push(["Category", data.category]);
-        if (data.usage_type) rows.push(["Best for", data.usage_type]);
+        const usages = Array.isArray(data.usage_types) && data.usage_types.length > 0
+            ? data.usage_types
+            : (data.usage_type ? [data.usage_type] : []);
+        if (usages.length) rows.push(["Best for", usages.join(" · ")]);
         if (data.print_speed_ppm) rows.push(["Print speed", `${data.print_speed_ppm} PPM`]);
         if (data.duty_cycle) rows.push(["Monthly duty cycle", `${data.duty_cycle} pages`]);
+        if (data.monthly_volume_recommended) rows.push(["Recommended volume", `Up to ${Number(data.monthly_volume_recommended).toLocaleString("en-IN")} pages`]);
+        if (data.monthly_volume_min || data.monthly_volume_max) rows.push(["Volume capacity", `${data.monthly_volume_min || 0} – ${data.monthly_volume_max || 0} pages / month`]);
+        if (data.max_resolution) rows.push(["Max print resolution", data.max_resolution]);
         if (data.connectivity?.length) rows.push(["Connectivity", (Array.isArray(data.connectivity) ? data.connectivity : [data.connectivity]).join(" · ")]);
+        if (data.paper_sizes?.length) rows.push(["Paper sizes", (Array.isArray(data.paper_sizes) ? data.paper_sizes : [data.paper_sizes]).join(" · ")]);
+        if (data.mobile_printing?.length) rows.push(["Mobile printing", (Array.isArray(data.mobile_printing) ? data.mobile_printing : [data.mobile_printing]).join(" · ")]);
+        if (data.special_features?.length) rows.push(["Special features", (Array.isArray(data.special_features) ? data.special_features : [data.special_features]).join(" · ")]);
         if (data.display_type) rows.push(["Display", data.display_type]);
         if (data.dimensions) rows.push(["Dimensions (L×W×H)", data.dimensions]);
         if (data.weight_kg) rows.push(["Weight", `${data.weight_kg} kg`]);

@@ -7,6 +7,7 @@ import { Button } from "../components/ui/button";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
+import { INDIAN_STATES } from "../lib/listingConstants";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
 import { CheckCircle2, ShoppingBag, Lock, ArrowRight, ChevronLeft } from "lucide-react";
@@ -31,7 +32,7 @@ export default function Checkout() {
     const [authPassword, setAuthPassword] = useState("");
     const [loading, setLoading] = useState(false);
 
-    // Compute per-item delivery charge: 0 if same city, else listing.intercity_delivery_charge
+    // Compute per-item delivery + GST: delivery 0 if same city else listing.intercity_delivery_charge
     const deliveryBreakdown = useMemo(() => {
         const buyerCity = (orderCity || "").trim().toLowerCase();
         return items.map((it) => {
@@ -39,11 +40,15 @@ export default function Checkout() {
             const intercity = Number(it.product?.intercity_delivery_charge || 0);
             const sameCity = buyerCity && dealerCity && buyerCity === dealerCity;
             const charge = sameCity ? 0 : intercity;
-            return { id: it.id, sameCity, intercity, charge, dealerCity: it.product?.city || "" };
+            const rate = Number(it.product?.gst_rate ?? 18);
+            const lineBase = Number(it.product?.price || 0) * it.qty;
+            const lineGst = Math.round((lineBase * rate) / 100);
+            return { id: it.id, sameCity, intercity, charge, dealerCity: it.product?.city || "", rate, lineBase, lineGst };
         });
     }, [items, orderCity]);
     const totalDelivery = useMemo(() => deliveryBreakdown.reduce((s, d) => s + Number(d.charge || 0), 0), [deliveryBreakdown]);
-    const grandTotal = subtotal + totalDelivery;
+    const totalGst = useMemo(() => deliveryBreakdown.reduce((s, d) => s + Number(d.lineGst || 0), 0), [deliveryBreakdown]);
+    const grandTotal = subtotal + totalGst + totalDelivery;
 
     const fullAddress = [streetAddress, area, orderCity && pincode ? `${orderCity} - ${pincode}` : (orderCity || pincode), orderState].filter(Boolean).join(", ");
 
@@ -104,6 +109,8 @@ export default function Checkout() {
                     order_state: orderState,
                     pincode,
                     delivery_charge: Number(breakdown?.charge || 0),
+                    gst_rate: Number(breakdown?.rate ?? 18),
+                    gst_amount: Number(breakdown?.lineGst || 0),
                 });
                 if (created) createdOrders.push({ created, product: it.product });
             }
@@ -188,7 +195,10 @@ export default function Checkout() {
                                     </div>
                                     <div>
                                         <Label>State</Label>
-                                        <Input value={orderState} onChange={(e) => setOrderState(e.target.value)} required placeholder="Karnataka" data-testid="checkout-state" />
+                                        <Input list="ck-states" value={orderState} onChange={(e) => setOrderState(e.target.value)} required placeholder="Karnataka" data-testid="checkout-state" />
+                                        <datalist id="ck-states">
+                                            {INDIAN_STATES.map((s) => <option key={s} value={s} />)}
+                                        </datalist>
                                     </div>
                                     <div>
                                         <Label>Pincode</Label>
@@ -264,12 +274,16 @@ export default function Checkout() {
 
                             <div className="border-t border-black/[0.06] pt-4 space-y-1.5">
                                 <div className="flex items-center justify-between text-[13px]">
-                                    <span className="text-[#6E6E73]">Items subtotal</span>
-                                    <span className="font-mono text-[#0A0A0B]">₹{subtotal.toLocaleString("en-IN")}</span>
+                                    <span className="text-[#6E6E73]">Items subtotal (base)</span>
+                                    <span className="font-mono text-[#0A0A0B]" data-testid="summary-base">₹{subtotal.toLocaleString("en-IN")}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-[13px]">
+                                    <span className="text-[#6E6E73]">GST</span>
+                                    <span className="font-mono text-[#0A0A0B]" data-testid="summary-gst">₹{totalGst.toLocaleString("en-IN")}</span>
                                 </div>
                                 <div className="flex items-center justify-between text-[13px]">
                                     <span className="text-[#6E6E73]">Delivery charges</span>
-                                    <span className="font-mono text-[#0A0A0B]">{totalDelivery > 0 ? `₹${totalDelivery.toLocaleString("en-IN")}` : "Free"}</span>
+                                    <span className="font-mono text-[#0A0A0B]" data-testid="summary-delivery">{totalDelivery > 0 ? `₹${totalDelivery.toLocaleString("en-IN")}` : "Free"}</span>
                                 </div>
                                 <div className="text-[11.5px] text-[#86868B]">GST invoice issued by supplier on delivery</div>
                                 <div className="flex items-center justify-between pt-2 border-t border-black/[0.06]">

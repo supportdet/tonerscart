@@ -7,6 +7,7 @@ import { Label } from "../components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
 import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle, Camera, Loader2, Package, ShoppingCart, Clock, Printer, FileText, Pencil, X as XIcon } from "lucide-react";
+import { GST_RATES, gstAmount, formatINR } from "../lib/listingConstants";
 import { supabase, PRODUCT_BUCKET } from "../lib/supabase";
 import RefilledWarningDialog from "../components/RefilledWarningDialog";
 import TonerCartridge from "../components/TonerCartridge";
@@ -176,6 +177,7 @@ export default function SupplierDashboard() {
     const [warrantyOther, setWarrantyOther] = useState("");
     const [printTechnology, setPrintTechnology] = useState("Laser");
     const [intercityCharge, setIntercityCharge] = useState("0");
+    const [gstRate, setGstRate] = useState(18);
     // Variants
     const [variants, setVariants] = useState([{ color: "Black", price: "", stock: "" }]);
 
@@ -231,7 +233,7 @@ export default function SupplierDashboard() {
         setPrice(""); setStock(""); setTonerType("Original"); setPageYield("");
         setImageFiles([]); setImagePreviews([]);
         setBrochureFile(null);
-        setCompatibleModels(""); setOemPartNumber(""); setCartridgeWeight(""); setWarranty(""); setWarrantyOther(""); setPrintTechnology("Laser"); setIntercityCharge("0");
+        setCompatibleModels(""); setOemPartNumber(""); setCartridgeWeight(""); setWarranty(""); setWarrantyOther(""); setPrintTechnology("Laser"); setIntercityCharge("0"); setGstRate(18);
         setVariants([{ color: "Black", price: "", stock: "" }]);
         setEditingId(null);
         setExistingImages([]);
@@ -264,6 +266,7 @@ export default function SupplierDashboard() {
         }
         setPrintTechnology(l.print_technology || "Laser");
         setIntercityCharge(String(l.intercity_delivery_charge ?? 0));
+        setGstRate(Number(l.gst_rate ?? 18));
         // Variants
         if (Array.isArray(l.variants) && l.variants.length > 0) {
             setVariants(l.variants.map((v) => ({
@@ -391,6 +394,7 @@ export default function SupplierDashboard() {
                 warranty: warrantyValue,
                 print_technology: printTechnology || null,
                 intercity_delivery_charge: parseFloat(intercityCharge || 0) || 0,
+                gst_rate: Number(gstRate) || 0,
             };
 
             if (editingId) {
@@ -800,6 +804,32 @@ export default function SupplierDashboard() {
                                 {warranty === "Other" && (
                                     <Input value={warrantyOther} onChange={(e) => setWarrantyOther(e.target.value)} placeholder="Enter months (e.g. 18)" className="tc-input-lg mt-2" data-testid="listing-warranty-other" />
                                 )}
+                            </div>
+                            <div className="col-span-2">
+                                <Label>GST rate (%)</Label>
+                                <select
+                                    value={gstRate}
+                                    onChange={(e) => setGstRate(Number(e.target.value))}
+                                    className="tc-input-lg w-full"
+                                    data-testid="listing-gst-rate"
+                                >
+                                    {GST_RATES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+                                </select>
+                                {(() => {
+                                    const cheapest = variants.reduce((a, b) => {
+                                        const pa = parseFloat(a.price || 0); const pb = parseFloat(b.price || 0);
+                                        if (!pa) return b; if (!pb) return a; return pa <= pb ? a : b;
+                                    }, variants[0]);
+                                    const base = parseFloat(cheapest?.price || 0);
+                                    if (!base) return null;
+                                    const gst = gstAmount(base, gstRate);
+                                    return (
+                                        <div className="text-[12px] text-[#0A0A0B] bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 mt-2" data-testid="listing-gst-preview">
+                                            Base price: <strong>{formatINR(base)}</strong> + GST ({gstRate}%): <strong>{formatINR(gst)}</strong> = Total: <strong>{formatINR(base + gst)}</strong>
+                                        </div>
+                                    );
+                                })()}
+                                <div className="text-[11px] text-[#86868B] mt-1">Buyer sees only the base price on listing cards. GST is added on the checkout summary.</div>
                             </div>
                             <div className="col-span-2">
                                 <Label>Intercity delivery charge (₹)</Label>
