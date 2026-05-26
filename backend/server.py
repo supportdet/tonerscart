@@ -3307,7 +3307,7 @@ app.include_router(api)
 _default_origins = [
     "https://www.tonerscart.com",
     "https://tonerscart.com",
-    "https://toners-marketplace.preview.emergentagent.com",
+    "https://b2b-checkout-2.preview.emergentagent.com",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
