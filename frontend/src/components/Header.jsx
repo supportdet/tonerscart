@@ -45,7 +45,7 @@ export default function Header() {
             <div className="tc-container flex items-center justify-between h-16 gap-3">
                 <Link to="/" className="flex items-center self-center shrink-0 group" data-testid="logo-home-link" onClick={closeMobile} aria-label="TonersCart home">
                     <img
-                        src="/logo.png"
+                        src="/TONERSCART-bg.png"
                         alt="TonersCart"
                         className="block h-9 w-auto transition-transform group-hover:scale-[1.03]"
                         style={{ alignSelf: "center" }}
