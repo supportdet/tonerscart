@@ -87,7 +87,7 @@ export default function About() {
                             <Mail size={18} className="text-[#E6007E]" />
                             <div className="text-[10px] tracking-[0.22em] uppercase font-semibold text-[#86868B] mt-3">Email</div>
                             <a href="mailto:support@tonerscart.com" className="block text-[14.5px] font-semibold text-[#0A0A0B] mt-1 hover:underline" data-testid="about-email">support@tonerscart.com</a>
-                            <a href="mailto:grievance@tonerscart.com" className="block text-[13px] text-[#6E6E73] mt-0.5 hover:underline">grievance@tonerscart.com</a>
+                            <div className="block text-[12px] text-[#6E6E73] mt-1.5">For grievances: <a href="mailto:support@tonerscart.com" className="font-semibold hover:underline">support@tonerscart.com</a> · response within 48 hours</div>
                         </div>
                         <div className="bg-white border border-black/[0.06] rounded-2xl p-5">
                             <Phone size={18} className="text-[#F5C400]" />

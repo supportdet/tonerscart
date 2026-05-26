@@ -6,7 +6,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle, Camera, Loader2, Package, ShoppingCart, Clock, Printer, FileText } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle, Camera, Loader2, Package, ShoppingCart, Clock, Printer, FileText, Pencil, X as XIcon } from "lucide-react";
 import { supabase, PRODUCT_BUCKET } from "../lib/supabase";
 import RefilledWarningDialog from "../components/RefilledWarningDialog";
 import TonerCartridge from "../components/TonerCartridge";
@@ -150,6 +150,8 @@ export default function SupplierDashboard() {
     const [orders, setOrders] = useState([]);
     const [open, setOpen] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [editingId, setEditingId] = useState(null);
+    const [existingImages, setExistingImages] = useState([]); // urls already saved on this listing
 
     // Brand dropdown + free-text model
     const [brands, setBrands] = useState([]);
@@ -164,7 +166,7 @@ export default function SupplierDashboard() {
     const [pageYield, setPageYield] = useState("");
     const [imageFiles, setImageFiles] = useState([]); // Array<File>, 1..3
     const [imagePreviews, setImagePreviews] = useState([]);
-    const [brochureFile, setBrochureFile] = useState(null);
+    const [brochureFile, setBrochureFile] = useState(null); void brochureFile; void setBrochureFile;
     const [refilledWarning, setRefilledWarning] = useState(false);
     // Structured specs (Wave 4)
     const [compatibleModels, setCompatibleModels] = useState("");
@@ -231,12 +233,81 @@ export default function SupplierDashboard() {
         setBrochureFile(null);
         setCompatibleModels(""); setOemPartNumber(""); setCartridgeWeight(""); setWarranty(""); setWarrantyOther(""); setPrintTechnology("Laser"); setIntercityCharge("0");
         setVariants([{ color: "Black", price: "", stock: "" }]);
+        setEditingId(null);
+        setExistingImages([]);
     };
     const openDialog = () => { reset(); setOpen(true); };
 
+    const openEditDialog = (l) => {
+        reset();
+        setEditingId(l.id);
+        setBrand(l.brand || "");
+        setModelNumber(l.model_number || "");
+        setColor(l.color || "Black");
+        setPrice(String(l.price ?? ""));
+        setStock(String(l.stock ?? ""));
+        setTonerType(l.toner_type || "Original");
+        setPageYield(l.page_yield ? String(l.page_yield) : "");
+        setCompatibleModels(l.compatible_models || "");
+        setOemPartNumber(l.oem_part_number || "");
+        setCartridgeWeight(l.cartridge_weight ? String(l.cartridge_weight) : "");
+        // Warranty: if matches preset use preset, else "Other"
+        const wPresets = ["3 months", "6 months", "1 year"];
+        if (l.warranty && wPresets.includes(l.warranty)) {
+            setWarranty(l.warranty);
+            setWarrantyOther("");
+        } else if (l.warranty) {
+            setWarranty("Other");
+            setWarrantyOther(l.warranty.replace(/\s*months?/i, "").trim());
+        } else {
+            setWarranty("");
+        }
+        setPrintTechnology(l.print_technology || "Laser");
+        setIntercityCharge(String(l.intercity_delivery_charge ?? 0));
+        // Variants
+        if (Array.isArray(l.variants) && l.variants.length > 0) {
+            setVariants(l.variants.map((v) => ({
+                color: v.color || "",
+                price: String(v.price ?? ""),
+                stock: String(v.stock ?? ""),
+            })));
+        } else {
+            setVariants([{ color: l.color || "Black", price: String(l.price ?? ""), stock: String(l.stock ?? "") }]);
+        }
+        // Existing images
+        const imgs = Array.isArray(l.image_urls) ? l.image_urls.filter(Boolean) : (l.image_url ? [l.image_url] : []);
+        setExistingImages(imgs);
+        setOpen(true);
+    };
+
+    const onPickFileAt = (idx, e) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        if (f.size > 5 * 1024 * 1024) { toast.error(`"${f.name}" exceeds 5 MB`); e.target.value = ""; return; }
+        if (!f.type.startsWith("image/")) { toast.error(`"${f.name}" is not an image`); e.target.value = ""; return; }
+        const nextFiles = [...imageFiles];
+        const nextPrev = [...imagePreviews];
+        nextFiles[idx] = f;
+        nextPrev[idx] = URL.createObjectURL(f);
+        setImageFiles(nextFiles);
+        setImagePreviews(nextPrev);
+        e.target.value = "";
+    };
+    const removeImageAt = (idx) => {
+        const nextFiles = imageFiles.slice();
+        const nextPrev = imagePreviews.slice();
+        nextFiles[idx] = undefined;
+        nextPrev[idx] = undefined;
+        setImageFiles(nextFiles);
+        setImagePreviews(nextPrev);
+    };
+    const removeExistingImage = (idx) => {
+        setExistingImages(existingImages.filter((_, i) => i !== idx));
+    };
+
     const onPickFile = (e) => {
         const files = Array.from(e.target.files || []);
-        const merged = [...imageFiles];
+        const merged = imageFiles.filter(Boolean);
         for (const f of files) {
             if (merged.length >= 3) break;
             if (f.size > 5 * 1024 * 1024) { toast.error(`"${f.name}" exceeds 5 MB`); continue; }
@@ -252,6 +323,7 @@ export default function SupplierDashboard() {
         setImageFiles(next);
         setImagePreviews(next.map((f) => URL.createObjectURL(f)));
     };
+    void removeImage; void onPickFile;
 
     const addVariant = () => {
         if (variants.length >= 15) { toast.error("Up to 15 colour variants are allowed"); return; }
@@ -271,7 +343,9 @@ export default function SupplierDashboard() {
         e.preventDefault();
         if (!brand) { toast.error("Please select a brand"); return; }
         if (!modelNumber.trim()) { toast.error("Please enter a model number"); return; }
-        if (imageFiles.length < 2) { toast.error("Please upload at least 2 product images (max 3)"); return; }
+        const newFilesCount = imageFiles.filter(Boolean).length;
+        const totalImages = newFilesCount + existingImages.length;
+        if (totalImages < 1) { toast.error("Please upload at least 1 product image (max 3)"); return; }
         const cleanedVariants = variants
             .map((v) => ({ color: (v.color || "").trim(), price: parseFloat(v.price), stock: parseInt(v.stock, 10) }))
             .filter((v) => v.color && v.price > 0 && v.stock >= 0);
@@ -279,39 +353,29 @@ export default function SupplierDashboard() {
             toast.error("Add at least one colour variant with a colour name, price and stock");
             return;
         }
-        if (brochureFile && brochureFile.size > 10 * 1024 * 1024) {
-            toast.error("Brochure must be under 10 MB"); return;
-        }
         setSaving(true);
         try {
-            // Upload all images via backend service role (auto-compressed)
+            // Upload new images via backend service role
             const uploadedUrls = [];
-            for (const file of imageFiles) {
+            for (const file of imageFiles.filter(Boolean)) {
                 const fd = new FormData();
                 fd.append("file", file);
                 const { data } = await api.post("/supplier/listing-image", fd);
                 if (data?.url) uploadedUrls.push(data.url);
             }
-            if (uploadedUrls.length < 2) {
+            const finalImageUrls = [...existingImages, ...uploadedUrls];
+            if (finalImageUrls.length < 1) {
                 toast.error("Some images failed to upload — please retry");
                 setSaving(false);
                 return;
             }
 
-            // Optional brochure (PDF) via backend service role
-            let brochurePath = null;
-            if (brochureFile) {
-                const fd = new FormData();
-                fd.append("file", brochureFile);
-                const { data: up } = await api.post("/supplier/spec-pdf", fd);
-                brochurePath = up?.path || null;
-            }
-
             // Top-level price/stock derived from cheapest variant for backward compatibility
             const cheapest = cleanedVariants.reduce((a, b) => (a.price <= b.price ? a : b));
             const totalStock = cleanedVariants.reduce((s, v) => s + v.stock, 0);
+            const warrantyValue = warranty === "Other" ? (warrantyOther.trim() ? `${warrantyOther.trim()} months` : null) : (warranty || null);
 
-            const { data: created } = await api.post("/supplier/listings", {
+            const payload = {
                 brand,
                 model_number: modelNumber.trim(),
                 color: cleanedVariants[0].color,
@@ -319,19 +383,23 @@ export default function SupplierDashboard() {
                 stock: totalStock,
                 toner_type: tonerType,
                 page_yield: pageYield ? parseInt(pageYield, 10) : null,
-                image_url: uploadedUrls[0],
-                image_urls: uploadedUrls,
-                spec_pdf_url: brochurePath,
+                image_url: finalImageUrls[0],
+                image_urls: finalImageUrls,
                 compatible_models: compatibleModels || null,
                 oem_part_number: oemPartNumber || null,
                 cartridge_weight: cartridgeWeight ? parseInt(cartridgeWeight, 10) : null,
-                warranty: warranty === "Other" ? (warrantyOther.trim() ? `${warrantyOther.trim()} months` : null) : (warranty || null),
+                warranty: warrantyValue,
                 print_technology: printTechnology || null,
                 intercity_delivery_charge: parseFloat(intercityCharge || 0) || 0,
-                variants: cleanedVariants,
-            });
-            void created;
-            toast.success("Listing added");
+            };
+
+            if (editingId) {
+                await api.put(`/supplier/listings/${editingId}`, payload);
+                toast.success("Listing updated");
+            } else {
+                await api.post("/supplier/listings", { ...payload, variants: cleanedVariants });
+                toast.success("Listing added");
+            }
             setOpen(false);
             reset();
             load();
@@ -578,6 +646,9 @@ export default function SupplierDashboard() {
                                         <InlineStock stock={l.stock} onSave={(v) => patchStock(l.id, v)} testId={`stock-edit-${l.id}`} />
                                     </div>
                                     <div className="mt-2 flex items-center gap-3">
+                                        <button onClick={() => openEditDialog(l)} className="text-[12px] text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`edit-${l.id}`}>
+                                            <Pencil size={12} /> Edit
+                                        </button>
                                         <button onClick={() => duplicateListing(l.id)} className="text-[12px] text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`duplicate-${l.id}`}>
                                             <Copy size={12} /> Duplicate
                                         </button>
@@ -607,7 +678,7 @@ export default function SupplierDashboard() {
                 <DialogContent className="max-w-[680px] max-h-[92vh] overflow-y-auto p-8 rounded-[20px] tc-shadow-lg" data-testid="add-listing-dialog">
                     <DialogHeader>
                         <DialogTitle className="text-[22px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500, letterSpacing: "-0.01em" }}>
-                            Add a toner
+                            {editingId ? "Edit toner listing" : "Add a toner"}
                         </DialogTitle>
                     </DialogHeader>
                     <form onSubmit={submit} className="mt-2">
@@ -737,38 +808,53 @@ export default function SupplierDashboard() {
                             </div>
                         </div>
 
-                        <div className="tc-form-section">Product images <span className="text-red-500">*</span> <span className="text-[12px] text-[#86868B] font-normal">(2 to 3 photos)</span></div>
-                        <label className="block cursor-pointer">
-                            <input type="file" accept="image/*" multiple onChange={onPickFile} className="hidden" data-testid="listing-image-input" disabled={imageFiles.length >= 3} />
-                            <div className={`tc-image-drop ${imagePreviews.length ? "has-image" : ""}`}>
-                                {imagePreviews.length ? (
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        {imagePreviews.map((src, i) => (
-                                            <div key={i} className="relative">
-                                                <img src={src} alt={`preview ${i + 1}`} className="h-24 w-24 object-cover rounded-md border border-black/10" />
-                                                <button type="button" onClick={(e) => { e.preventDefault(); removeImage(i); }} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white text-[11px] grid place-items-center" data-testid={`listing-image-remove-${i}`}>×</button>
-                                            </div>
-                                        ))}
-                                        {imageFiles.length < 3 && (
-                                            <div className="h-24 w-24 grid place-items-center rounded-md border-2 border-dashed border-[#D2D2D7] text-[#86868B] text-[11px]">+ add</div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <>
-                                        <Camera size={22} />
-                                        <span>Click to upload 2–3 toner images</span>
-                                        <span className="text-[11px] text-[#86868B] font-normal">PNG / JPG · max 5 MB each · automatically compressed</span>
-                                    </>
-                                )}
-                            </div>
-                        </label>
-
-                        {/* Brochure removed in v5 — replaced by structured specs above */}
+                        <div className="tc-form-section">Product images <span className="text-red-500">*</span> <span className="text-[12px] text-[#86868B] font-normal">(1 required, up to 3)</span></div>
+                        <div className="grid grid-cols-3 gap-3" data-testid="image-box-grid">
+                            {[0, 1, 2].map((idx) => {
+                                const newPrev = imagePreviews[idx];
+                                const newFile = imageFiles[idx];
+                                const existing = existingImages[idx];
+                                const src = newPrev || existing;
+                                const isRequired = idx === 0 && !src;
+                                return (
+                                    <label key={idx} className="block cursor-pointer" data-testid={`image-box-${idx}`}>
+                                        <input type="file" accept="image/*" onChange={(e) => onPickFileAt(idx, e)} className="hidden" data-testid={`image-input-${idx}`} />
+                                        <div className={`relative aspect-square rounded-xl border-2 ${src ? "border-solid border-[#D2D2D7]" : "border-dashed border-[#D2D2D7] hover:border-[#0A0A0B]"} bg-white grid place-items-center overflow-hidden transition`}>
+                                            {src ? (
+                                                <>
+                                                    <img src={src} alt={`Product ${idx + 1}`} className="w-full h-full object-cover" />
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            if (newFile) removeImageAt(idx);
+                                                            else if (existing) removeExistingImage(idx);
+                                                        }}
+                                                        className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-600 text-white grid place-items-center shadow-sm hover:bg-red-700"
+                                                        data-testid={`image-remove-${idx}`}
+                                                        aria-label="Remove image"
+                                                    >
+                                                        <XIcon size={13} />
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <div className="flex flex-col items-center gap-1.5 text-[#86868B]">
+                                                    <Camera size={20} />
+                                                    <span className="text-[11px] font-semibold">{idx === 0 ? "Add photo *" : "Add photo"}</span>
+                                                    {isRequired && <span className="text-[10px] text-red-500">Required</span>}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </label>
+                                );
+                            })}
+                        </div>
+                        <div className="text-[11px] text-[#86868B] mt-1.5">PNG / JPG · max 5 MB each · automatically compressed. First image is the cover.</div>
 
                         <DialogFooter className="mt-6">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
                             <Button type="submit" className="btn-pill-cta" disabled={saving} data-testid="listing-save-btn">
-                                {saving ? "Publishing…" : "Publish listing"}
+                                {saving ? (editingId ? "Updating…" : "Publishing…") : (editingId ? "Save changes" : "Publish listing")}
                             </Button>
                         </DialogFooter>
                     </form>

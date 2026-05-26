@@ -222,20 +222,15 @@ export default function Landing() {
                                 style={{ transitionDelay: `${i * 80}ms` }}
                                 data-testid={`featured-card-${s.id}`}
                             >
-                                {/* Logo — circular */}
+                                {/* Logo — square 1:1 */}
                                 <div className="flex flex-col items-center">
                                     <div className="tc-featured-logo-ph" data-testid={`featured-logo-${s.id}`}>
                                         {s.logo_url ? (
-                                            <img src={s.logo_url} alt={s.name} className="w-full h-full object-cover rounded-full" />
+                                            <img src={s.logo_url} alt={s.name} className="w-full h-full object-cover" />
                                         ) : (
-                                            <Camera size={24} className="text-white/45" strokeWidth={1.6} />
+                                            <Camera size={28} className="text-white/45" strokeWidth={1.6} />
                                         )}
                                     </div>
-                                    {!s.logo_url && (
-                                        <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-white/35 mt-2">
-                                            Upload Logo
-                                        </div>
-                                    )}
                                 </div>
 
                                 <div className="mt-5 text-center">

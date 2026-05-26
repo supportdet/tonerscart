@@ -2,22 +2,28 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "./ui/dialog";
 import { Input } from "./ui/input";
-import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import { Lock, Minus, Plus } from "lucide-react";
 import PhonePrefixInput from "./PhonePrefixInput";
 
 export default function OrderRequestDialog({ product, initialQty = 1, onClose }) {
     const navigate = useNavigate();
     const { user, login, signupCustomer } = useAuth();
+    const { city: appCity } = useCity();
     const [qty, setQty] = useState(initialQty);
     const [name, setName] = useState(user?.name || "");
-    const [address, setAddress] = useState("");
     const [phone, setPhone] = useState(user?.phone || "");
+    // Structured address
+    const [streetAddress, setStreetAddress] = useState("");
+    const [area, setArea] = useState("");
+    const [orderCity, setOrderCity] = useState(appCity || "");
+    const [orderState, setOrderState] = useState("");
+    const [pincode, setPincode] = useState("");
     const [notes, setNotes] = useState("");
     const [authEmail, setAuthEmail] = useState("");
     const [authPassword, setAuthPassword] = useState("");
@@ -27,29 +33,35 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
         if (user) return;
         try {
             await signupCustomer({
-                email: authEmail.trim(),
-                password: authPassword,
-                name: name.trim(),
-                phone: phone.trim(),
-                city: "",
+                email: authEmail.trim(), password: authPassword,
+                name: name.trim(), phone: phone.trim(), city: orderCity || "",
             });
         } catch (err) {
             const msg = (err?.response?.data?.detail || err?.message || "").toLowerCase();
             if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
                 await login(authEmail.trim(), authPassword);
-            } else {
-                throw err;
-            }
+            } else { throw err; }
         }
     };
 
+    // Delivery preview
+    const buyerCity = (orderCity || "").trim().toLowerCase();
+    const dealerCity = (product?.city || "").trim().toLowerCase();
+    const sameCity = buyerCity && dealerCity && buyerCity === dealerCity;
+    const intercityCharge = Number(product?.intercity_delivery_charge || 0);
+    const deliveryCharge = sameCity ? 0 : intercityCharge;
+    const fullAddress = [streetAddress, area, orderCity && pincode ? `${orderCity} - ${pincode}` : (orderCity || pincode), orderState].filter(Boolean).join(", ");
+
     const submit = async () => {
-        if (!name.trim() || !address.trim() || !phone.trim()) { toast.error("Name, phone and delivery address are required"); return; }
+        if (!name.trim() || !phone.trim()) { toast.error("Name and phone are required"); return; }
+        if (!streetAddress.trim() || !area.trim() || !orderCity.trim() || !orderState.trim() || !pincode.trim()) {
+            toast.error("All address fields are required"); return;
+        }
+        if (!/^\d{6}$/.test(pincode.trim())) { toast.error("Enter a valid 6-digit pincode"); return; }
         if (qty < 1 || qty > product.stock) { toast.error(`Quantity must be between 1 and ${product.stock}`); return; }
         if (user && user.role === "admin") { toast.error("Admins cannot place orders"); return; }
         if (!user && (!authEmail.trim() || !authPassword || authPassword.length < 6)) {
-            toast.error("Email and a 6+ character password are required to place the order");
-            return;
+            toast.error("Email and a 6+ character password are required to place the order"); return;
         }
         const phoneRaw = phone.replace(/^\+?91[\s-]?/, "").replace(/\D/g, "");
         if (phoneRaw.length !== 10) { toast.error("Enter a valid 10-digit phone"); return; }
@@ -62,12 +74,17 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
                 qty: Number(qty),
                 customer_name: name,
                 customer_phone: phoneFull,
-                delivery_address: address,
+                delivery_address: fullAddress,
                 notes,
+                street_address: streetAddress,
+                area,
+                order_city: orderCity,
+                order_state: orderState,
+                pincode,
+                delivery_charge: deliveryCharge,
             });
             toast.success("Order request sent to supplier");
             onClose?.();
-            // Enrich with the joined fields the OrderConfirmed page expects
             const enriched = {
                 ...created,
                 listings: {
@@ -90,7 +107,8 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
 
     const dec = () => setQty((q) => Math.max(1, Number(q) - 1));
     const inc = () => setQty((q) => Math.min(product.stock, Number(q) + 1));
-    const total = (Number(qty) * Number(product.price)).toLocaleString("en-IN");
+    const lineTotal = Number(qty) * Number(product.price);
+    const total = (lineTotal + deliveryCharge).toLocaleString("en-IN");
 
     return (
         <Dialog open onOpenChange={(o) => !o && onClose?.()}>
@@ -123,19 +141,51 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
                         </div>
                         <div>
                             <Label className="text-[12px]">Phone</Label>
-                            <PhonePrefixInput
-                                value={phone}
-                                onChange={setPhone}
-                                size="sm"
-                                required
-                                testId="order-phone-input"
-                            />
+                            <PhonePrefixInput value={phone} onChange={setPhone} size="sm" required testId="order-phone-input" />
                         </div>
                     </div>
-                    <div>
-                        <Label className="text-[12px]">Delivery address</Label>
-                        <Textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} required placeholder="Full address with PIN code" data-testid="order-address-input" className="text-[13px]" />
+
+                    <div className="space-y-2">
+                        <div>
+                            <Label className="text-[12px]">Street address / House no.</Label>
+                            <Input value={streetAddress} onChange={(e) => setStreetAddress(e.target.value)} required placeholder="#245, 12th Cross" className="h-9 text-[13px]" data-testid="order-street-input" />
+                        </div>
+                        <div>
+                            <Label className="text-[12px]">Area / Locality</Label>
+                            <Input value={area} onChange={(e) => setArea(e.target.value)} required placeholder="HSR Layout Sector 7" className="h-9 text-[13px]" data-testid="order-area-input" />
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                            <div>
+                                <Label className="text-[12px]">City</Label>
+                                <Input list="ord-cities" value={orderCity} onChange={(e) => setOrderCity(e.target.value)} required placeholder="Bangalore" className="h-9 text-[13px]" data-testid="order-city-input" />
+                                <datalist id="ord-cities">
+                                    {KNOWN_CITIES.map((c) => <option key={c} value={c} />)}
+                                </datalist>
+                            </div>
+                            <div>
+                                <Label className="text-[12px]">State</Label>
+                                <Input value={orderState} onChange={(e) => setOrderState(e.target.value)} required placeholder="Karnataka" className="h-9 text-[13px]" data-testid="order-state-input" />
+                            </div>
+                            <div>
+                                <Label className="text-[12px]">Pincode</Label>
+                                <Input value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} required inputMode="numeric" maxLength={6} placeholder="560034" className="h-9 text-[13px]" data-testid="order-pincode-input" />
+                            </div>
+                        </div>
                     </div>
+
+                    {/* Delivery preview */}
+                    {orderCity && (
+                        <div className="text-[12px] rounded-md px-3 py-2 border" data-testid="order-delivery-preview">
+                            {sameCity ? (
+                                <span className="text-emerald-700 font-semibold">✅ Free delivery within {product.city}</span>
+                            ) : intercityCharge > 0 ? (
+                                <span className="text-[#0A0A0B]">🚚 Intercity delivery: <strong>+₹{intercityCharge.toLocaleString("en-IN")}</strong></span>
+                            ) : (
+                                <span className="text-orange-700">⚠️ Delivery only within {product.city || "dealer city"} — confirm with supplier</span>
+                            )}
+                        </div>
+                    )}
+
                     <div>
                         <Label className="text-[12px]">Notes (optional)</Label>
                         <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special instructions" data-testid="order-notes-input" className="h-9 text-[13px]" />

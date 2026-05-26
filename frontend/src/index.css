@@ -856,9 +856,11 @@
         0 32px 60px -28px rgba(0,0,0,0.85);
 }
 .tc-featured-logo-ph {
-    width: 84px;
-    height: 84px;
-    border-radius: 999px;
+    width: 120px;
+    height: 120px;
+    aspect-ratio: 1 / 1;
+    border-radius: 12px;
+    overflow: hidden;
     background:
         radial-gradient(circle at 30% 30%, rgba(255,255,255,0.10) 0%, transparent 60%),
         linear-gradient(180deg, #2A2C32 0%, #1E2024 100%);
