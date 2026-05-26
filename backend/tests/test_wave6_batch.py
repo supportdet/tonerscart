@@ -182,6 +182,13 @@ class TestSupplierListingsExtendedPut:
             "intercity_delivery_charge": 120.0,
             "warranty": "24 months",
             "compatible_models": "M404, M428",
+            "oem_part_number": "CF258A-UPD",
+            "cartridge_weight": 850,
+            "print_technology": "laser",
+            "brand": "HP",
+            "color": "black",
+            "page_yield": 2600,
+            "image_urls": ["https://example.com/u1.jpg", "https://example.com/u2.jpg"],
         }
         r = requests.put(
             f"{BASE_URL}/api/supplier/listings/{lid}",
@@ -192,11 +199,43 @@ class TestSupplierListingsExtendedPut:
         assert r.status_code == 200, f"{r.status_code} {r.text[:200]}"
         out = r.json()
         assert out.get("ok") is True
-        assert "updated" in out and isinstance(out["updated"], list)
+        assert "updated" in out and isinstance(out["updated"], list), f"missing 'updated' list: {out}"
         upd = set(out["updated"])
-        # core fields must be in updated; intercity may be dropped gracefully
         assert "price" in upd
         assert "stock" in upd
+        _state["toner_updated_fields"] = upd
+
+    def test_put_toner_invalid_toner_type_returns_400(self, supplier_session):
+        lid = _state.get("listing_id")
+        if not lid:
+            pytest.skip("no listing created")
+        r = requests.put(
+            f"{BASE_URL}/api/supplier/listings/{lid}",
+            json={"toner_type": "Junk"},
+            headers=_auth(supplier_session["token"]),
+            timeout=30,
+        )
+        assert r.status_code == 400, f"expected 400, got {r.status_code} {r.text[:200]}"
+        msg = (r.json().get("detail") or "").lower()
+        assert "original" in msg and "compatible" in msg and "refilled" in msg, msg
+
+    def test_get_listing_public_reflects_updated_values(self):
+        lid = _state.get("listing_id")
+        if not lid:
+            pytest.skip("no listing created")
+        r = requests.get(f"{BASE_URL}/api/listings/{lid}/public", timeout=30)
+        assert r.status_code == 200, f"{r.status_code} {r.text[:200]}"
+        d = r.json()
+        # Verify the PUT values are now visible via public endpoint
+        upd = _state.get("toner_updated_fields") or set()
+        if "price" in upd:
+            assert float(d.get("price") or 0) == 1399.5, f"price not reflected: {d.get('price')}"
+        if "stock" in upd:
+            assert int(d.get("stock") or 0) == 12, f"stock not reflected: {d.get('stock')}"
+        if "warranty" in upd:
+            assert d.get("warranty") == "24 months", f"warranty not reflected: {d.get('warranty')}"
+        if "compatible_models" in upd:
+            assert d.get("compatible_models") == "M404, M428", f"compatible_models not reflected: {d.get('compatible_models')}"
 
     def test_get_listing_public_has_intercity_and_city(self):
         lid = _state.get("listing_id")
@@ -333,6 +372,7 @@ class TestSupplierPapersExtendedPut:
             "price_per_ream": 349.0,
             "stock": 80,
             "brightness": 98,
+            "thickness_microns": 115.5,  # float — should be int-cast by backend
             "acid_free": False,
             "suitable_for": ["laser"],
             "intercity_delivery_charge": 99.0,
@@ -345,7 +385,7 @@ class TestSupplierPapersExtendedPut:
             headers=_auth(supplier_session["token"]),
             timeout=40,
         )
-        assert r.status_code == 200, f"{r.status_code} {r.text[:200]}"
+        assert r.status_code == 200, f"thickness float should be accepted: {r.status_code} {r.text[:200]}"
         out = r.json()
         assert out.get("ok") is True
         upd = set(out.get("updated") or [])

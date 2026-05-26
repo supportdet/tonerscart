@@ -906,20 +906,6 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
     return listing_row
 
 
-@api.put("/supplier/listings/{listing_id}")
-def update_listing(listing_id: str, payload: ListingUpdate, user: dict = Depends(require_role("supplier"))):
-    s = _approved_supplier(user)
-    existing = sb_admin.table("listings").select("supplier_id").eq("id", listing_id).maybe_single().execute()
-    if not existing or not existing.data or existing.data["supplier_id"] != s["id"]:
-        raise HTTPException(404, "Listing not found")
-    upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
-    if "toner_type" in upd and upd["toner_type"] not in ("Original", "Compatible", "Refilled"):
-        raise HTTPException(400, "toner_type must be Original, Compatible or Refilled")
-    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
-    sb_admin.table("listings").update(upd).eq("id", listing_id).execute()
-    return {"ok": True}
-
-
 @api.delete("/supplier/listings/{listing_id}")
 def delete_listing(listing_id: str, user: dict = Depends(require_role("supplier"))):
     s = _approved_supplier(user)
@@ -2850,8 +2836,11 @@ def supplier_patch_listing(listing_id: str, payload: ListingPatch, user: dict = 
         v = getattr(payload, k, None)
         if v is not None:
             upd[k] = v
+    if "toner_type" in upd and upd["toner_type"] not in ("Original", "Compatible", "Refilled"):
+        raise HTTPException(400, "toner_type must be Original, Compatible or Refilled")
     if not upd:
         return {"ok": True, "updated": []}
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
     # Best-effort: drop columns that may not exist (degrade gracefully)
     try:
         sb_admin.table("listings").update(upd).eq("id", listing_id).eq("supplier_id", s.data["id"]).execute()
@@ -2957,7 +2946,7 @@ def patch_paper(paper_id: str, payload: ListingPatch, user: dict = Depends(requi
     if payload.brightness is not None:
         upd["brightness"] = int(payload.brightness)
     if payload.thickness_microns is not None:
-        upd["thickness_microns"] = float(payload.thickness_microns)
+        upd["thickness_microns"] = int(round(float(payload.thickness_microns)))
     if payload.acid_free is not None:
         upd["acid_free"] = bool(payload.acid_free)
     if payload.reams_per_box is not None:
