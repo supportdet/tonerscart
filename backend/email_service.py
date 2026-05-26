@@ -103,7 +103,7 @@ async def email_application_received(application: dict):
     )
     admin_html = f"""
     <h2 style="margin:0 0 6px 0;font-size:18px;">New supplier application</h2>
-    <p style="margin:0 0 18px 0;color:#6E6E73;">Review at <a href="https://toners-marketplace.preview.emergentagent.com/admin">/admin</a>.</p>
+    <p style="margin:0 0 18px 0;color:#6E6E73;">Review at <a href="https://b2b-checkout-2.preview.emergentagent.com/admin">/admin</a>.</p>
     <table style="width:100%;border-collapse:collapse;font-size:13px;">{rows}</table>
     """
     await _send(SUPPORT_INBOX, f"[TonersCart] New supplier application — {biz}", admin_html, reply_to=email_to_applicant)
@@ -113,7 +113,7 @@ async def email_application_received(application: dict):
         applicant_html = f"""
         <h2 style="margin:0 0 6px 0;font-size:18px;">Thanks {name or 'there'} — we&apos;ve got your application</h2>
         <p>Your business <strong>{biz}</strong> is now in TonersCart&apos;s review queue. Our team typically reviews applications within 1–2 working days.</p>
-        <p>You can sign in at <a href="https://toners-marketplace.preview.emergentagent.com/login">tonerscart</a> any time to track approval status.</p>
+        <p>You can sign in at <a href="https://b2b-checkout-2.preview.emergentagent.com/login">tonerscart</a> any time to track approval status.</p>
         <p style="margin-top:22px;color:#86868B;font-size:12.5px;">Questions? Just reply to this email.</p>
         """
         await _send(email_to_applicant, "Your TonersCart supplier application is in review", applicant_html)
@@ -131,7 +131,7 @@ async def email_application_approved(application: dict):
     <p>Great news — your application for <strong>{biz}</strong> has been approved on TonersCart.
     You can now sign in and start listing your toner products.</p>
     <p style="margin:22px 0;">
-      <a href="https://toners-marketplace.preview.emergentagent.com/supplier"
+      <a href="https://b2b-checkout-2.preview.emergentagent.com/supplier"
          style="display:inline-block;padding:12px 22px;background:#F7C600;color:#0A0A0B;border-radius:10px;font-weight:600;text-decoration:none;">
         Go to my dashboard
       </a>
@@ -399,7 +399,37 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
     delivery_address = order.get("delivery_address") or "—"
     delivery_city = order.get("delivery_city") or ""
     delivery_pin = order.get("delivery_pincode") or ""
-    delivery_full = f"{delivery_address}{', ' + delivery_city if delivery_city else ''}{' - ' + delivery_pin if delivery_pin else ''}"
+    # Structured address (new shipping flow) — overrides legacy single-line if present
+    street = order.get("street_address") or ""
+    area = order.get("area") or ""
+    order_city = order.get("order_city") or ""
+    order_state = order.get("order_state") or ""
+    order_pin = order.get("pincode") or ""
+    if street or area or order_city or order_pin:
+        parts = [p for p in [street, area] if p]
+        loc = f"{order_city} - {order_pin}" if order_city and order_pin else (order_city or order_pin)
+        if loc:
+            parts.append(loc)
+        if order_state:
+            parts.append(order_state)
+        delivery_full = ", ".join(parts)
+    else:
+        delivery_full = f"{delivery_address}{', ' + delivery_city if delivery_city else ''}{' - ' + delivery_pin if delivery_pin else ''}"
+    delivery_charge = float(order.get("delivery_charge") or 0)
+    # Determine intercity vs intra-city note
+    seller_city_norm = (seller_city or "").strip().lower()
+    buyer_city_norm = (order_city or delivery_city or "").strip().lower()
+    is_intercity = bool(buyer_city_norm and seller_city_norm and buyer_city_norm != seller_city_norm)
+    delivery_note_buyer = (
+        "Intercity delivery — dealer to arrange courier and confirm dispatch timeline with you."
+        if is_intercity
+        else f"Free delivery within {seller_city or 'dealer city'}. Intercity delivery charges to be confirmed by supplier before dispatch."
+    )
+    delivery_note_seller = (
+        "Intercity delivery — please arrange courier and confirm dispatch timeline with the buyer."
+        if is_intercity
+        else "Please confirm delivery charges with the buyer for intercity orders before dispatching."
+    )
     customer_name = order.get("customer_name") or (buyer or {}).get("name") or "Buyer"
     customer_phone = order.get("customer_phone") or "—"
 
@@ -431,8 +461,12 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
           <tr><td style='padding:4px 12px;color:#86868B;'>Unit price</td><td style='padding:4px 12px;'>{_money(unit_price)}</td></tr>
           <tr><td style='padding:4px 12px;color:#86868B;'>Total <span style="font-weight:400;color:#86868B;">(locked)</span></td><td style='padding:4px 12px;'><strong>{_money(total)}</strong></td></tr>
           <tr><td style='padding:4px 12px;color:#86868B;'>Delivery</td><td style='padding:4px 12px;'>{delivery_full}</td></tr>
+          {("<tr><td style='padding:4px 12px;color:#86868B;'>Delivery charge</td><td style='padding:4px 12px;'><strong>" + _money(delivery_charge) + "</strong></td></tr>") if delivery_charge > 0 else ""}
           <tr><td style='padding:4px 12px;color:#86868B;'>Seller</td><td style='padding:4px 12px;'><strong>{seller_biz}</strong>{f' · {seller_city}' if seller_city else ''}</td></tr>
         </table>
+        <div style="margin:14px 0;padding:12px 14px;background:#FFFBEB;border:1px solid #F5E5A6;border-radius:10px;font-size:12.5px;color:#8C6A00;">
+          {delivery_note_buyer}
+        </div>
         {gst_block_b}
         <p style="margin:18px 0 4px 0;">Seller will dispatch within <strong>2 business days</strong>. You&apos;ll receive tracking once shipped.</p>
         <p style="margin:18px 0;">
@@ -479,11 +513,15 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
           {payout_line}
           <tr><td style='padding:4px 12px;color:#86868B;'>Buyer</td><td style='padding:4px 12px;'>{customer_name}{f' · {customer_phone}' if customer_phone else ''}</td></tr>
           <tr><td style='padding:4px 12px;color:#86868B;'>Delivery</td><td style='padding:4px 12px;'>{delivery_full}</td></tr>
+          {("<tr><td style='padding:4px 12px;color:#86868B;'>Delivery charge</td><td style='padding:4px 12px;'><strong>" + _money(delivery_charge) + "</strong></td></tr>") if delivery_charge > 0 else ""}
         </table>
+        <div style="margin:14px 0;padding:12px 14px;background:#FFFBEB;border:1px solid #F5E5A6;border-radius:10px;font-size:12.5px;color:#8C6A00;">
+          {delivery_note_seller}
+        </div>
         {gst_block_s}
         <p style="margin:18px 0 4px 0;"><strong>Please dispatch within 2 business days</strong> and update tracking in your dashboard.</p>
         <p style="margin:18px 0;">
-          <a href="https://toners-marketplace.preview.emergentagent.com/supplier"
+          <a href="https://b2b-checkout-2.preview.emergentagent.com/supplier"
              style="display:inline-block;padding:12px 22px;background:#F7C600;color:#0A0A0B;border-radius:10px;font-weight:600;text-decoration:none;">
             Open my dashboard
           </a>
@@ -608,3 +646,4 @@ async def email_dealer_unsuspended(supplier: dict):
     <p style="color:#6E6E73;font-size:12.5px;">If you have any questions, just reply to this email.</p>
     """
     await _send(to, "Your TonersCart account has been reinstated", html)
+

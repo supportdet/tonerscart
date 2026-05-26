@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -6,80 +6,109 @@ import { Textarea } from "../components/ui/textarea";
 import { Button } from "../components/ui/button";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
+import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
-import { CheckCircle2, ShoppingBag, Lock } from "lucide-react";
+import { CheckCircle2, ShoppingBag, Lock, ArrowRight, ChevronLeft } from "lucide-react";
 import PhonePrefixInput from "../components/PhonePrefixInput";
 
 export default function Checkout() {
     const { user, login, signupCustomer } = useAuth();
     const { items, subtotal, count, clear } = useCart();
+    const { city: appCity } = useCity();
     const navigate = useNavigate();
+    const [step, setStep] = useState(1); // 1 = details, 2 = summary
     const [name, setName] = useState(user?.name || "");
     const [phone, setPhone] = useState((user?.phone || "").replace(/^\+?91[\s-]?/, "").replace(/\D/g, ""));
-    const [address, setAddress] = useState("");
+    // Structured address
+    const [streetAddress, setStreetAddress] = useState("");
+    const [area, setArea] = useState("");
+    const [orderCity, setOrderCity] = useState(appCity || "");
+    const [orderState, setOrderState] = useState("");
+    const [pincode, setPincode] = useState("");
     const [notes, setNotes] = useState("");
     const [authEmail, setAuthEmail] = useState("");
     const [authPassword, setAuthPassword] = useState("");
     const [loading, setLoading] = useState(false);
 
+    // Compute per-item delivery charge: 0 if same city, else listing.intercity_delivery_charge
+    const deliveryBreakdown = useMemo(() => {
+        const buyerCity = (orderCity || "").trim().toLowerCase();
+        return items.map((it) => {
+            const dealerCity = (it.product?.city || "").trim().toLowerCase();
+            const intercity = Number(it.product?.intercity_delivery_charge || 0);
+            const sameCity = buyerCity && dealerCity && buyerCity === dealerCity;
+            const charge = sameCity ? 0 : intercity;
+            return { id: it.id, sameCity, intercity, charge, dealerCity: it.product?.city || "" };
+        });
+    }, [items, orderCity]);
+    const totalDelivery = useMemo(() => deliveryBreakdown.reduce((s, d) => s + Number(d.charge || 0), 0), [deliveryBreakdown]);
+    const grandTotal = subtotal + totalDelivery;
+
+    const fullAddress = [streetAddress, area, orderCity && pincode ? `${orderCity} - ${pincode}` : (orderCity || pincode), orderState].filter(Boolean).join(", ");
+
+    const validateStep1 = () => {
+        if (items.length === 0) { toast.error("Cart is empty"); return false; }
+        if (!name.trim() || !phone) { toast.error("Name and phone are required"); return false; }
+        if (phone.length !== 10) { toast.error("Enter a valid 10-digit phone"); return false; }
+        if (!streetAddress.trim() || !area.trim() || !orderCity.trim() || !orderState.trim() || !pincode.trim()) {
+            toast.error("All address fields are required");
+            return false;
+        }
+        if (!/^\d{6}$/.test(pincode.trim())) { toast.error("Enter a valid 6-digit pincode"); return false; }
+        if (user && user.role && user.role !== "customer") {
+            toast.error("Sign in with a buyer account to place order requests");
+            return false;
+        }
+        if (!user && (!authEmail.trim() || !authPassword || authPassword.length < 6)) {
+            toast.error("Email and a 6+ character password are required to place the order");
+            return false;
+        }
+        return true;
+    };
+
     const ensureAuth = async () => {
         if (user) return;
         const phoneFull = phone ? `+91 ${phone}` : "";
-        // Quick sign-up; if email already exists, fall through to sign-in.
         try {
             await signupCustomer({
-                email: authEmail.trim(),
-                password: authPassword,
-                name: name.trim(),
-                phone: phoneFull,
-                city: "",
+                email: authEmail.trim(), password: authPassword,
+                name: name.trim(), phone: phoneFull, city: orderCity || "",
             });
         } catch (err) {
             const msg = (err?.response?.data?.detail || err?.message || "").toLowerCase();
             if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
                 await login(authEmail.trim(), authPassword);
-            } else {
-                throw err;
-            }
+            } else { throw err; }
         }
     };
 
-    const submit = async (e) => {
-        e.preventDefault();
-        if (items.length === 0) { toast.error("Cart is empty"); return; }
-        if (!name.trim() || !phone || !address.trim()) {
-            toast.error("Name, phone and delivery address are required");
-            return;
-        }
-        if (phone.length !== 10) { toast.error("Enter a valid 10-digit phone"); return; }
-        if (user && user.role && user.role !== "customer") {
-            toast.error("Sign in with a buyer account to place order requests");
-            return;
-        }
-        if (!user && (!authEmail.trim() || !authPassword || authPassword.length < 6)) {
-            toast.error("Email and a 6+ character password are required to place the order");
-            return;
-        }
-        const phoneFull = `+91 ${phone}`;
+    const placeOrder = async () => {
         setLoading(true);
         try {
             await ensureAuth();
+            const phoneFull = `+91 ${phone}`;
             const createdOrders = [];
             for (const it of items) {
+                const breakdown = deliveryBreakdown.find((d) => d.id === it.id);
                 const { data: created } = await api.post("/orders", {
                     listing_id: it.id,
                     qty: it.qty,
                     customer_name: name,
                     customer_phone: phoneFull,
-                    delivery_address: address,
+                    delivery_address: fullAddress,
                     notes,
+                    street_address: streetAddress,
+                    area,
+                    order_city: orderCity,
+                    order_state: orderState,
+                    pincode,
+                    delivery_charge: Number(breakdown?.charge || 0),
                 });
                 if (created) createdOrders.push({ created, product: it.product });
             }
             clear();
             toast.success(`${items.length} order ${items.length === 1 ? "request" : "requests"} sent to suppliers`);
-            // If single-line checkout — go to dedicated confirmation page; else customer dashboard
             if (createdOrders.length === 1) {
                 const { created, product } = createdOrders[0];
                 const enriched = {
@@ -98,6 +127,11 @@ export default function Checkout() {
         } finally { setLoading(false); }
     };
 
+    const proceedToSummary = (e) => {
+        e.preventDefault();
+        if (validateStep1()) setStep(2);
+    };
+
     if (items.length === 0) {
         return (
             <div className="tc-container py-16 text-center" data-testid="checkout-empty">
@@ -114,46 +148,160 @@ export default function Checkout() {
             <div className="tc-container relative pt-10 sm:pt-14">
                 <div className="flex items-center gap-3 mb-3">
                     <span className="tc-strip" />
-                    <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-white/60">Checkout</span>
+                    <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-white/60">Checkout · Step {step} of 2</span>
                 </div>
                 <h1 className="text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(28px, 4vw, 52px)", lineHeight: 1.12, letterSpacing: "-0.025em", fontWeight: 300 }}>
-                    Confirm delivery details
+                    {step === 1 ? "Confirm delivery details" : "Review your order"}
                 </h1>
                 <p className="text-white/65 mt-3 max-w-lg text-[14px]">
-                    Suppliers receive your request and confirm pricing and delivery directly with you. No payment is taken online.
+                    {step === 1
+                        ? "Suppliers receive your request and confirm pricing and delivery directly with you. No payment is taken online."
+                        : "Verify your items, delivery and total. You can place the order request now — online payments coming soon."}
                 </p>
 
                 <div className="grid lg:grid-cols-12 gap-6 mt-8 text-[#0A0A0B]">
-                    <form onSubmit={submit} className="lg:col-span-7 bg-white border border-black/[0.06] rounded-2xl p-5 sm:p-7 space-y-4">
-                        <div className="text-[12px] font-semibold uppercase tracking-wider text-[#0A0A0B]">Buyer details</div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div><Label>Your name</Label><Input value={name} onChange={(e) => setName(e.target.value)} required data-testid="checkout-name" /></div>
-                            <div><Label>Contact phone</Label><PhonePrefixInput value={phone} onChange={setPhone} required testId="checkout-phone" /></div>
-                        </div>
-                        <div><Label>Delivery address</Label><Textarea rows={3} value={address} onChange={(e) => setAddress(e.target.value)} required placeholder="Full address with PIN code" data-testid="checkout-address" /></div>
-                        <div><Label>Notes for suppliers (optional)</Label><Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special instructions" data-testid="checkout-notes" /></div>
-
-                        {!user && (
-                            <div className="pt-3 border-t border-black/[0.06]">
-                                <div className="text-[12px] font-semibold uppercase tracking-wider text-[#0A0A0B] flex items-center gap-2">
-                                    <Lock size={12} /> Quick sign-in
-                                </div>
-                                <p className="text-[12px] text-[#6E6E73] mt-1">We create a buyer account in one tap so suppliers can reach you. No OTP, no friction.</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                                    <div><Label>Email</Label><Input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} required placeholder="you@company.com" data-testid="checkout-auth-email" /></div>
-                                    <div><Label>Password</Label><Input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required minLength={6} placeholder="6+ characters" data-testid="checkout-auth-password" /></div>
-                                </div>
-                                <p className="text-[11px] text-[#86868B] mt-2">Already have an account? Use the same email & password — we&apos;ll sign you in automatically.</p>
+                    {step === 1 ? (
+                        <form onSubmit={proceedToSummary} className="lg:col-span-7 bg-white border border-black/[0.06] rounded-2xl p-5 sm:p-7 space-y-4">
+                            <div className="text-[12px] font-semibold uppercase tracking-wider text-[#0A0A0B]">Buyer details</div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div><Label>Your name</Label><Input value={name} onChange={(e) => setName(e.target.value)} required data-testid="checkout-name" /></div>
+                                <div><Label>Contact phone</Label><PhonePrefixInput value={phone} onChange={setPhone} required testId="checkout-phone" /></div>
                             </div>
-                        )}
 
-                        <div className="flex items-center gap-2 text-[12.5px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md p-2.5">
-                            <CheckCircle2 size={14} className="shrink-0" /> One request will be sent per supplier. They confirm and ship directly.
+                            <div className="text-[12px] font-semibold uppercase tracking-wider text-[#0A0A0B] pt-2">Delivery address</div>
+                            <div className="grid grid-cols-1 gap-3">
+                                <div>
+                                    <Label>Street address / House no.</Label>
+                                    <Input value={streetAddress} onChange={(e) => setStreetAddress(e.target.value)} required placeholder="e.g. #245, 12th Cross, Indiranagar" data-testid="checkout-street" />
+                                </div>
+                                <div>
+                                    <Label>Area / Locality</Label>
+                                    <Input value={area} onChange={(e) => setArea(e.target.value)} required placeholder="e.g. HSR Layout Sector 7" data-testid="checkout-area" />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div>
+                                        <Label>City</Label>
+                                        <Input list="ck-cities" value={orderCity} onChange={(e) => setOrderCity(e.target.value)} required placeholder="Bangalore" data-testid="checkout-city" />
+                                        <datalist id="ck-cities">
+                                            {KNOWN_CITIES.map((c) => <option key={c} value={c} />)}
+                                        </datalist>
+                                    </div>
+                                    <div>
+                                        <Label>State</Label>
+                                        <Input value={orderState} onChange={(e) => setOrderState(e.target.value)} required placeholder="Karnataka" data-testid="checkout-state" />
+                                    </div>
+                                    <div>
+                                        <Label>Pincode</Label>
+                                        <Input value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} required inputMode="numeric" maxLength={6} placeholder="560034" data-testid="checkout-pincode" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div><Label>Notes for suppliers (optional)</Label><Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special instructions" data-testid="checkout-notes" /></div>
+
+                            {!user && (
+                                <div className="pt-3 border-t border-black/[0.06]">
+                                    <div className="text-[12px] font-semibold uppercase tracking-wider text-[#0A0A0B] flex items-center gap-2">
+                                        <Lock size={12} /> Quick sign-in
+                                    </div>
+                                    <p className="text-[12px] text-[#6E6E73] mt-1">We create a buyer account in one tap so suppliers can reach you. No OTP, no friction.</p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                                        <div><Label>Email</Label><Input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} required placeholder="you@company.com" data-testid="checkout-auth-email" /></div>
+                                        <div><Label>Password</Label><Input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required minLength={6} placeholder="6+ characters" data-testid="checkout-auth-password" /></div>
+                                    </div>
+                                    <p className="text-[11px] text-[#86868B] mt-2">Already have an account? Use the same email & password — we&apos;ll sign you in automatically.</p>
+                                </div>
+                            )}
+
+                            <div className="flex items-center gap-2 text-[12.5px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md p-2.5">
+                                <CheckCircle2 size={14} className="shrink-0" /> Next: review your order summary, then confirm.
+                            </div>
+                            <Button type="submit" className="btn-cta w-full inline-flex items-center justify-center gap-2" data-testid="checkout-continue-btn">
+                                Continue to review <ArrowRight size={14} />
+                            </Button>
+                        </form>
+                    ) : (
+                        <div className="lg:col-span-7 bg-white border border-black/[0.06] rounded-2xl p-5 sm:p-7 space-y-4" data-testid="checkout-summary">
+                            <button type="button" onClick={() => setStep(1)} className="inline-flex items-center gap-1 text-[12px] text-[#6E6E73] hover:text-[#0A0A0B]" data-testid="checkout-back-btn">
+                                <ChevronLeft size={13} /> Edit details
+                            </button>
+
+                            <div>
+                                <div className="text-[12px] font-semibold uppercase tracking-wider text-[#0A0A0B]">Shipping to</div>
+                                <div className="text-[14px] text-[#0A0A0B] mt-1" data-testid="summary-address">{fullAddress}</div>
+                                <div className="text-[12px] text-[#6E6E73] mt-0.5">{name} · +91 {phone}</div>
+                            </div>
+
+                            <div className="border-t border-black/[0.06] pt-4">
+                                <div className="text-[12px] font-semibold uppercase tracking-wider text-[#0A0A0B] mb-2">Items</div>
+                                <div className="divide-y divide-black/[0.06]">
+                                    {items.map((it) => {
+                                        const br = deliveryBreakdown.find((d) => d.id === it.id);
+                                        const lineTotal = Number(it.product.price) * it.qty;
+                                        return (
+                                            <div key={it.id} className="py-3" data-testid={`summary-item-${it.id}`}>
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <div className="font-mono text-[13.5px] font-semibold text-[#0A0A0B] truncate">{it.product.brand} {it.product.model_number}</div>
+                                                        <div className="text-[11.5px] text-[#6E6E73]">{it.product.supplier_name || "Supplier"}{it.product.city ? ` · ${it.product.city}` : ""} · ×{it.qty}</div>
+                                                    </div>
+                                                    <div className="font-mono text-[14px] font-semibold text-[#0A0A0B]">₹{lineTotal.toLocaleString("en-IN")}</div>
+                                                </div>
+                                                <div className="mt-1 text-[11.5px]">
+                                                    {br?.sameCity ? (
+                                                        <span className="text-emerald-700 font-semibold">✅ Free delivery within {br.dealerCity}</span>
+                                                    ) : br?.charge > 0 ? (
+                                                        <span className="text-[#6E6E73]">🚚 Intercity delivery: +₹{Number(br.charge).toLocaleString("en-IN")}</span>
+                                                    ) : (
+                                                        <span className="text-orange-700">⚠️ Delivery only within {br?.dealerCity || "dealer city"} — confirm with supplier</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="border-t border-black/[0.06] pt-4 space-y-1.5">
+                                <div className="flex items-center justify-between text-[13px]">
+                                    <span className="text-[#6E6E73]">Items subtotal</span>
+                                    <span className="font-mono text-[#0A0A0B]">₹{subtotal.toLocaleString("en-IN")}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-[13px]">
+                                    <span className="text-[#6E6E73]">Delivery charges</span>
+                                    <span className="font-mono text-[#0A0A0B]">{totalDelivery > 0 ? `₹${totalDelivery.toLocaleString("en-IN")}` : "Free"}</span>
+                                </div>
+                                <div className="text-[11.5px] text-[#86868B]">GST invoice issued by supplier on delivery</div>
+                                <div className="flex items-center justify-between pt-2 border-t border-black/[0.06]">
+                                    <span className="text-[11px] tracking-[0.16em] uppercase font-semibold text-[#0A0A0B]">Total payable</span>
+                                    <span className="font-mono text-[24px] font-bold text-[#0A0A0B]" data-testid="summary-total">₹{grandTotal.toLocaleString("en-IN")}</span>
+                                </div>
+                                <div className="text-[11.5px] text-[#6E6E73] pt-1">Dispatched within 2 business days. Delivery within same city included. Intercity delivery charges applied where applicable.</div>
+                            </div>
+
+                            <div className="space-y-2 pt-2">
+                                <button
+                                    type="button"
+                                    disabled
+                                    title="Online payments coming soon — your order will be confirmed as a request"
+                                    className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-[#F5C400]/40 text-[#0A0A0B]/60 font-semibold text-[14px] cursor-not-allowed border border-[#F5C400]/30"
+                                    data-testid="proceed-to-payment-btn"
+                                >
+                                    <Lock size={14} /> Proceed to Payment (coming soon)
+                                </button>
+                                <div className="text-[11.5px] text-[#6E6E73] text-center">Currently accepting order requests. Payment collected directly by supplier.</div>
+                                <Button
+                                    type="button"
+                                    onClick={placeOrder}
+                                    disabled={loading}
+                                    className="btn-cta w-full inline-flex items-center justify-center gap-2"
+                                    data-testid="place-order-request-btn"
+                                >
+                                    {loading ? "Sending requests…" : `Place Order Request — ₹${grandTotal.toLocaleString("en-IN")}`}
+                                </Button>
+                            </div>
                         </div>
-                        <Button type="submit" className="btn-cta w-full" disabled={loading} data-testid="checkout-submit">
-                            {loading ? "Sending requests…" : `Send ${count} order ${count === 1 ? "request" : "requests"}`}
-                        </Button>
-                    </form>
+                    )}
 
                     <aside className="lg:col-span-5 bg-white border border-black/[0.06] rounded-2xl p-5">
                         <div className="text-[12px] font-semibold uppercase tracking-wider text-[#0A0A0B] mb-3">Items ({count})</div>
@@ -172,6 +320,12 @@ export default function Checkout() {
                             <span className="text-[12px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">Subtotal</span>
                             <span className="font-mono text-[20px] font-semibold text-[#0A0A0B]">₹{subtotal.toLocaleString("en-IN")}</span>
                         </div>
+                        {step === 2 && totalDelivery > 0 && (
+                            <div className="mt-1 flex items-center justify-between text-[12.5px]">
+                                <span className="text-[#6E6E73]">+ delivery</span>
+                                <span className="font-mono text-[#0A0A0B]">₹{totalDelivery.toLocaleString("en-IN")}</span>
+                            </div>
+                        )}
                     </aside>
                 </div>
             </div>

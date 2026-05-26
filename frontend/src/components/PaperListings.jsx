@@ -4,7 +4,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
-import { Plus, Trash2, Package, Copy, Check } from "lucide-react";
+import { Plus, Trash2, Package, Copy, Check, Pencil } from "lucide-react";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
 
@@ -24,8 +24,28 @@ export default function PaperListings() {
     const [open, setOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState(emptyForm());
+    const [editingId, setEditingId] = useState(null);
     const [imageFiles, setImageFiles] = useState([]);
     const [imagePreviews, setImagePreviews] = useState([]);
+
+    const openAdd = () => { setEditingId(null); setForm(emptyForm()); setImageFiles([]); setImagePreviews([]); setOpen(true); };
+    const openEdit = (p) => {
+        setEditingId(p.id);
+        setForm({
+            brand: p.brand || "JK Paper",
+            size: p.size || "A4",
+            gsm: p.gsm || 75,
+            reams_per_box: p.reams_per_box || 10,
+            price_per_ream: String(p.price_per_ream ?? ""),
+            stock: String(p.stock ?? ""),
+            brightness: p.brightness ? String(p.brightness) : "",
+            thickness_microns: p.thickness_microns ? String(p.thickness_microns) : "",
+            acid_free: !!p.acid_free,
+            suitable_for: Array.isArray(p.suitable_for) ? p.suitable_for : [],
+        });
+        setImageFiles([]); setImagePreviews([]);
+        setOpen(true);
+    };
 
     const onPickImages = (e) => {
         const files = Array.from(e.target.files || []);
@@ -57,7 +77,7 @@ export default function PaperListings() {
     useEffect(() => { load(); }, []);
 
     useEffect(() => {
-        const fn = () => { setForm(emptyForm()); setOpen(true); };
+        const fn = () => { openAdd(); };
         window.addEventListener("tc-open-add-paper", fn);
         return () => window.removeEventListener("tc-open-add-paper", fn);
     }, []);
@@ -65,34 +85,44 @@ export default function PaperListings() {
     const submit = async (e) => {
         e.preventDefault();
         if (!form.price_per_ream || !form.stock) { toast.error("Price and stock are required"); return; }
-        if (imageFiles.length < 2) { toast.error("Please upload at least 2 paper images (max 3)"); return; }
+        // For Add (not edit), require at least 1 image
+        if (!editingId && imageFiles.length < 1) { toast.error("Please upload at least 1 paper image (max 3)"); return; }
         setSaving(true);
         try {
-            // Upload all images via backend service role (auto-compressed)
-            const uploadedUrls = [];
-            for (const file of imageFiles) {
-                const fd = new FormData();
-                fd.append("file", file);
-                const { data } = await api.post("/supplier/listing-image", fd);
-                if (data?.url) uploadedUrls.push(data.url);
+            let uploadedUrls = [];
+            if (imageFiles.length > 0) {
+                for (const file of imageFiles) {
+                    const fd = new FormData();
+                    fd.append("file", file);
+                    const { data } = await api.post("/supplier/listing-image", fd);
+                    if (data?.url) uploadedUrls.push(data.url);
+                }
             }
-            if (uploadedUrls.length < 2) { toast.error("Some images failed to upload"); setSaving(false); return; }
-            await api.post("/supplier/papers", {
+            const payload = {
                 brand: form.brand,
                 size: form.size,
                 gsm: Number(form.gsm),
                 reams_per_box: Number(form.reams_per_box),
                 price_per_ream: Number(form.price_per_ream),
                 stock: Number(form.stock),
-                image_url: uploadedUrls[0],
-                image_urls: uploadedUrls,
                 brightness: form.brightness ? Number(form.brightness) : null,
                 thickness_microns: form.thickness_microns ? Number(form.thickness_microns) : null,
                 acid_free: !!form.acid_free,
                 suitable_for: form.suitable_for || [],
-            });
-            toast.success("Paper listing added");
+            };
+            if (uploadedUrls.length > 0) {
+                payload.image_url = uploadedUrls[0];
+                payload.image_urls = uploadedUrls;
+            }
+            if (editingId) {
+                await api.put(`/supplier/papers/${editingId}`, payload);
+                toast.success("Paper listing updated");
+            } else {
+                await api.post("/supplier/papers", payload);
+                toast.success("Paper listing added");
+            }
             setOpen(false);
+            setEditingId(null);
             setForm(emptyForm());
             setImageFiles([]); setImagePreviews([]);
             load();
@@ -158,6 +188,9 @@ export default function PaperListings() {
                                 <div className="text-[#86868B] text-[11.5px]">{p.reams_per_box} reams/box</div>
                             </div>
                             <div className="mt-3 flex items-center gap-3">
+                                <button onClick={() => openEdit(p)} className="text-[12px] text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`edit-paper-${p.id}`}>
+                                    <Pencil size={12} /> Edit
+                                </button>
                                 <button onClick={() => duplicate(p)} className="text-[12px] text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`duplicate-paper-${p.id}`}>
                                     <Copy size={12} /> Duplicate
                                 </button>
@@ -173,7 +206,7 @@ export default function PaperListings() {
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent className="max-w-[560px] max-h-[92vh] overflow-y-auto p-7 rounded-[20px]" data-testid="add-paper-dialog">
                     <DialogHeader>
-                        <DialogTitle className="text-[20px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>Add a paper SKU</DialogTitle>
+                        <DialogTitle className="text-[20px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>{editingId ? "Edit paper SKU" : "Add a paper SKU"}</DialogTitle>
                     </DialogHeader>
                     <form onSubmit={submit} className="mt-2 space-y-3">
                         <div className="grid grid-cols-2 gap-3">
@@ -258,7 +291,7 @@ export default function PaperListings() {
                         <DialogFooter className="mt-3">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
                             <Button type="submit" className="btn-pill-cta" disabled={saving} data-testid="paper-save-btn">
-                                {saving ? "Publishing…" : "Publish paper"}
+                                {saving ? (editingId ? "Updating…" : "Publishing…") : (editingId ? "Save changes" : "Publish paper")}
                             </Button>
                         </DialogFooter>
                     </form>

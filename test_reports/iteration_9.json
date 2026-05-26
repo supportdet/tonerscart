@@ -39,7 +39,7 @@
     "backend": "100% on executable wave3 suite (21/21 pass, 4 skipped due to no approved-supplier seed). 0 failures.",
     "frontend": "Smoke 100% on 8 public/admin/buyer routes. Supplier UI not exercised (no seed credentials)."
   },
-  "test_credentials": "Admin admin@tonerscart.in / Admin@123 — login verified at https://toners-marketplace.preview.emergentagent.com/login → /admin. Buyer buyer1@test.com / Test@123 — login verified → /customer (19 orders visible).",
+  "test_credentials": "Admin admin@tonerscart.in / Admin@123 — login verified at https://b2b-checkout-2.preview.emergentagent.com/login → /admin. Buyer buyer1@test.com / Test@123 — login verified → /customer (19 orders visible).",
   "seed_data_creation": "11 mps_inquiries rows may be created during rate-limit probe. Buyer auto-signup fallback if buyer1@test.com missing.",
   "retest_needed": false,
   "main_agent_can_self_test": true,

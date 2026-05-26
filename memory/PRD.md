@@ -1,5 +1,24 @@
 # TonersCart — Product Requirements (Supabase edition)
 
+
+## Latest changelog (2026-02 Wave 7 — UI completion batch)
+
+Closed every "deferred to next batch" item from Wave 6. Full details in `/app/memory/CHANGELOG.md` (Wave 7 section).
+
+- **Checkout** — 2-step flow with 5-field structured address + order summary (delivery breakdown, GST note, total). Disabled "Proceed to Payment" + active "Place Order Request".
+- **OrderRequestDialog** — 5-field structured address with live delivery preview (free / intercity / orange warning).
+- **Add Toner / Add Printer** — 3-box image upload UI (1 required, 2–3 optional). Brochure PDF field removed. Add Printer now collects print_speed_ppm, monthly_volume_recommended, duty_cycle, connectivity (multi-pill), max_resolution, paper_sizes (multi-pill), mobile_printing (multi-pill), intercity_delivery_charge.
+- **Edit listings end-to-end** — Pencil icon on every toner/printer/paper card opens prefilled form. Saves via PUT `/supplier/listings|printers|papers/{id}`. ListingPatch backend model now accepts every editable attribute and degrades gracefully if a Supabase column is missing.
+- **Sticky search** — added to `/printers` and `/printers/results`.
+- **Sign-in** — "Taking longer than usual…" hint after 5 seconds.
+- **Featured supplier card** — square 1:1 logo (12px radius). Phone/email already hidden from public view.
+- **Grievance text** — `grievance@tonerscart.com` replaced with single support address in About + Footer + Contact.
+- **Email templates** — `email_order_placed` renders structured address breakdown + delivery_charge + amber intercity/intracity note for both buyer & seller.
+- **Backend route hygiene** — removed duplicate `PUT /supplier/listings/{id}` registration; canonical handler validates toner_type and writes updated_at.
+- **Testing** — `/app/backend/tests/test_wave6_batch.py` 11/11 green. Iteration_13 100% pass.
+
+---
+
 ## Latest changelog (2026-02 admin v2 — analytics, dealers, orders, content)
 
 - **Admin Analytics tab** (recharts): live GMV, commission earned, total orders, weekly/monthly slices, dealers, buyers, active listings. Two daily-trend line charts (orders + commission, 30 days), two horizontal bar charts (top 5 toner models, top 5 dealers), donut chart of orders by city. Backend `GET /api/admin/analytics` derives everything from live Supabase data + `_commission_breakdown`.

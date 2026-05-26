@@ -26,6 +26,13 @@ export default function Login() {
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
+    const [slowHint, setSlowHint] = useState(false);
+
+    React.useEffect(() => {
+        if (!loading && !googleLoading) { setSlowHint(false); return; }
+        const t = setTimeout(() => setSlowHint(true), 5000);
+        return () => clearTimeout(t);
+    }, [loading, googleLoading]);
 
     const submit = async (e) => {
         e.preventDefault();
@@ -118,6 +125,11 @@ export default function Login() {
                                 <Button type="submit" className="btn-cta w-full inline-flex items-center justify-center gap-2" disabled={loading || googleLoading} data-testid="login-submit-btn">
                                     {loading ? <><Loader2 size={14} className="animate-spin" /> Signing in…</> : <>Sign in <ArrowRight size={14} /></>}
                                 </Button>
+                                {slowHint && (loading || googleLoading) && (
+                                    <div className="text-[12px] text-[#8C6A00] bg-[#FFFBEB] border border-[#F5E5A6] rounded-md px-3 py-2 mt-1 text-center" data-testid="login-slow-hint">
+                                        This is taking longer than usual…
+                                    </div>
+                                )}
                             </form>
 
                             <div className="text-[12.5px] text-center mt-3">

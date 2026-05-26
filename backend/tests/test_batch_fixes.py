@@ -15,7 +15,7 @@ import uuid
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://toners-marketplace.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://b2b-checkout-2.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 
 SUPABASE_URL = "https://mlvtaozdosufrhzhvgdg.supabase.co"

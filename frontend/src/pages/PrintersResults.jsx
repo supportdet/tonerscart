@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { Printer as PrinterIcon, X, SlidersHorizontal, Search as SearchIcon, Sparkles } from "lucide-react";
 import { useCity } from "../context/CityContext";
 import WhatsAppEnquiry from "../components/WhatsAppEnquiry";
-import ProductActions from "../components/ProductActions";
 
 const CONDITIONS = [
     { id: "new", label: "Brand New" },
@@ -58,9 +57,6 @@ function PrinterCard({ p, onRequest }) {
                     <Button size="sm" className="btn-cta" onClick={() => onRequest(p)} data-testid={`printer-request-${p.id}`}>Request</Button>
                 </div>
                 <div className="text-[10.5px] text-emerald-700 font-semibold">{p.stock} in stock</div>
-                <div className="mt-2">
-                    <ProductActions listing={p} listingType="printer" qty={1} />
-                </div>
             </div>
         </div>
     );
@@ -166,7 +162,24 @@ export default function Printers() {
             </div>
 
             <div className="tc-container py-8">
-                <div className="flex items-end justify-between mb-4">
+                {/* Sticky search bar — light, below navbar */}
+                <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-2 pb-3 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-black/[0.04]" data-testid="printers-sticky-wrapper">
+                    <form onSubmit={submitQ} className="tc-search-shell tc-search-light" data-testid="printers-sticky-search">
+                        <div className="flex items-center gap-2 flex-1 px-3">
+                            <SearchIcon size={16} className="text-[#86868B]" />
+                            <input
+                                value={q}
+                                onChange={(e) => setQ(e.target.value)}
+                                placeholder="Search printers by brand or model…"
+                                className="tc-search-input flex-1 bg-transparent border-none outline-none text-[14px] h-10"
+                                data-testid="printers-sticky-search-input"
+                            />
+                        </div>
+                        <button type="submit" className="tc-search-go" data-testid="printers-sticky-search-btn">Search</button>
+                    </form>
+                </div>
+
+                <div className="flex items-end justify-between mb-4 mt-4">
                     <div>
                         <div className="tc-eyebrow">Results</div>
                         <h2 className="text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "22px", fontWeight: 500 }}>{listings.length} {listings.length === 1 ? "printer" : "printers"}</h2>

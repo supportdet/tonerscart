@@ -906,20 +906,6 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
     return listing_row
 
 
-@api.put("/supplier/listings/{listing_id}")
-def update_listing(listing_id: str, payload: ListingUpdate, user: dict = Depends(require_role("supplier"))):
-    s = _approved_supplier(user)
-    existing = sb_admin.table("listings").select("supplier_id").eq("id", listing_id).maybe_single().execute()
-    if not existing or not existing.data or existing.data["supplier_id"] != s["id"]:
-        raise HTTPException(404, "Listing not found")
-    upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
-    if "toner_type" in upd and upd["toner_type"] not in ("Original", "Compatible", "Refilled"):
-        raise HTTPException(400, "toner_type must be Original, Compatible or Refilled")
-    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
-    sb_admin.table("listings").update(upd).eq("id", listing_id).execute()
-    return {"ok": True}
-
-
 @api.delete("/supplier/listings/{listing_id}")
 def delete_listing(listing_id: str, user: dict = Depends(require_role("supplier"))):
     s = _approved_supplier(user)
@@ -2783,8 +2769,46 @@ def search_listings_paginated(
 # =============================================================================
 
 class ListingPatch(BaseModel):
+    # Toner fields
     stock: Optional[int] = None
     price: Optional[float] = None
+    brand: Optional[str] = None
+    model_number: Optional[str] = None
+    color: Optional[str] = None
+    toner_type: Optional[str] = None
+    page_yield: Optional[int] = None
+    image_url: Optional[str] = None
+    image_urls: Optional[List[str]] = None
+    compatible_models: Optional[str] = None
+    oem_part_number: Optional[str] = None
+    cartridge_weight: Optional[int] = None
+    warranty: Optional[str] = None
+    print_technology: Optional[str] = None
+    intercity_delivery_charge: Optional[float] = None
+    # Printer-specific
+    description: Optional[str] = None
+    usage_type: Optional[str] = None
+    category: Optional[str] = None
+    functions: Optional[List[str]] = None
+    monthly_volume_min: Optional[int] = None
+    monthly_volume_max: Optional[int] = None
+    monthly_volume_recommended: Optional[int] = None
+    print_speed_ppm: Optional[int] = None
+    duty_cycle: Optional[int] = None
+    connectivity: Optional[List[str]] = None
+    paper_sizes: Optional[List[str]] = None
+    mobile_printing: Optional[List[str]] = None
+    max_resolution: Optional[str] = None
+    condition: Optional[str] = None
+    # Paper-specific
+    size: Optional[str] = None
+    gsm: Optional[int] = None
+    brightness: Optional[int] = None
+    thickness_microns: Optional[float] = None
+    acid_free: Optional[bool] = None
+    suitable_for: Optional[List[str]] = None
+    reams_per_box: Optional[int] = None
+    price_per_ream: Optional[float] = None
 
 
 @api.put("/supplier/listings/{listing_id}")
@@ -2794,14 +2818,37 @@ def supplier_patch_listing(listing_id: str, payload: ListingPatch, user: dict = 
     s = sb_admin.table("suppliers").select("id").eq("user_id", user["id"]).maybe_single().execute()
     if not s or not s.data:
         raise HTTPException(403, "Supplier not approved yet")
-    upd = {}
+    upd: dict = {}
+    # Numeric guards
     if payload.stock is not None and payload.stock >= 0:
         upd["stock"] = int(payload.stock)
     if payload.price is not None and payload.price > 0:
         upd["price"] = float(payload.price)
+    if payload.page_yield is not None:
+        upd["page_yield"] = int(payload.page_yield)
+    if payload.cartridge_weight is not None:
+        upd["cartridge_weight"] = int(payload.cartridge_weight)
+    if payload.intercity_delivery_charge is not None:
+        upd["intercity_delivery_charge"] = float(payload.intercity_delivery_charge)
+    # Text / list pass-through fields
+    for k in ("brand", "model_number", "color", "toner_type", "image_url", "image_urls",
+              "compatible_models", "oem_part_number", "warranty", "print_technology"):
+        v = getattr(payload, k, None)
+        if v is not None:
+            upd[k] = v
+    if "toner_type" in upd and upd["toner_type"] not in ("Original", "Compatible", "Refilled"):
+        raise HTTPException(400, "toner_type must be Original, Compatible or Refilled")
     if not upd:
         return {"ok": True, "updated": []}
-    sb_admin.table("listings").update(upd).eq("id", listing_id).eq("supplier_id", s.data["id"]).execute()
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    # Best-effort: drop columns that may not exist (degrade gracefully)
+    try:
+        sb_admin.table("listings").update(upd).eq("id", listing_id).eq("supplier_id", s.data["id"]).execute()
+    except Exception as e:
+        msg = str(e)
+        retry = {k: v for k, v in upd.items() if k not in msg}
+        if retry:
+            sb_admin.table("listings").update(retry).eq("id", listing_id).eq("supplier_id", s.data["id"]).execute()
     return {"ok": True, "updated": list(upd.keys())}
 
 
@@ -2812,14 +2859,38 @@ def supplier_patch_printer(printer_id: str, payload: ListingPatch, user: dict = 
     s = sb_admin.table("suppliers").select("id").eq("user_id", user["id"]).maybe_single().execute()
     if not s or not s.data:
         raise HTTPException(403, "Supplier not approved yet")
-    upd = {}
+    upd: dict = {}
     if payload.stock is not None and payload.stock >= 0:
         upd["stock"] = int(payload.stock)
     if payload.price is not None and payload.price > 0:
         upd["price"] = float(payload.price)
+    if payload.print_speed_ppm is not None:
+        upd["print_speed_ppm"] = int(payload.print_speed_ppm)
+    if payload.duty_cycle is not None:
+        upd["duty_cycle"] = int(payload.duty_cycle)
+    if payload.monthly_volume_min is not None:
+        upd["monthly_volume_min"] = int(payload.monthly_volume_min)
+    if payload.monthly_volume_max is not None:
+        upd["monthly_volume_max"] = int(payload.monthly_volume_max)
+    if payload.monthly_volume_recommended is not None:
+        upd["monthly_volume_recommended"] = int(payload.monthly_volume_recommended)
+    if payload.intercity_delivery_charge is not None:
+        upd["intercity_delivery_charge"] = float(payload.intercity_delivery_charge)
+    for k in ("brand", "model_number", "description", "image_url", "image_urls",
+              "usage_type", "category", "color", "functions", "connectivity",
+              "paper_sizes", "mobile_printing", "max_resolution", "condition"):
+        v = getattr(payload, k, None)
+        if v is not None:
+            upd[k] = v
     if not upd:
         return {"ok": True, "updated": []}
-    sb_admin.table("printer_listings").update(upd).eq("id", printer_id).eq("supplier_id", s.data["id"]).execute()
+    try:
+        sb_admin.table("printer_listings").update(upd).eq("id", printer_id).eq("supplier_id", s.data["id"]).execute()
+    except Exception as e:
+        msg = str(e)
+        retry = {k: v for k, v in upd.items() if k not in msg}
+        if retry:
+            sb_admin.table("printer_listings").update(retry).eq("id", printer_id).eq("supplier_id", s.data["id"]).execute()
     return {"ok": True, "updated": list(upd.keys())}
 
 
@@ -2857,25 +2928,46 @@ def duplicate_printer(printer_id: str, user: dict = Depends(require_user)):
 
 @api.put("/supplier/papers/{paper_id}")
 def patch_paper(paper_id: str, payload: ListingPatch, user: dict = Depends(require_user)):
-    """Bulk stock / price inline edit for paper listings."""
+    """Edit paper listings — price, stock, size, gsm, specs, intercity delivery."""
     if user.get("role") != "supplier":
         raise HTTPException(403, "Only approved sellers can edit papers")
     s = sb_admin.table("suppliers").select("id").eq("user_id", user["id"]).maybe_single().execute()
     if not s or not s.data:
         raise HTTPException(403, "Supplier not approved yet")
-    upd = {}
+    upd: dict = {}
     if payload.stock is not None and payload.stock >= 0:
         upd["stock"] = int(payload.stock)
-    if payload.price is not None and payload.price > 0:
+    if payload.price_per_ream is not None and payload.price_per_ream > 0:
+        upd["price_per_ream"] = float(payload.price_per_ream)
+    elif payload.price is not None and payload.price > 0:
         upd["price_per_ream"] = float(payload.price)
+    if payload.gsm is not None:
+        upd["gsm"] = int(payload.gsm)
+    if payload.brightness is not None:
+        upd["brightness"] = int(payload.brightness)
+    if payload.thickness_microns is not None:
+        upd["thickness_microns"] = int(round(float(payload.thickness_microns)))
+    if payload.acid_free is not None:
+        upd["acid_free"] = bool(payload.acid_free)
+    if payload.reams_per_box is not None:
+        upd["reams_per_box"] = int(payload.reams_per_box)
+    if payload.intercity_delivery_charge is not None:
+        upd["intercity_delivery_charge"] = float(payload.intercity_delivery_charge)
+    for k in ("brand", "size", "image_url", "image_urls", "suitable_for"):
+        v = getattr(payload, k, None)
+        if v is not None:
+            upd[k] = v
     if not upd:
         return {"ok": True, "updated": []}
     try:
         sb_admin.table("paper_listings").update(upd).eq("id", paper_id).eq("supplier_id", s.data["id"]).execute()
     except Exception as e:
-        if "paper_listings" in str(e):
+        msg = str(e)
+        if "paper_listings" in msg and "does not exist" in msg:
             raise HTTPException(503, "paper_listings table not yet migrated") from e
-        raise
+        retry = {k: v for k, v in upd.items() if k not in msg}
+        if retry:
+            sb_admin.table("paper_listings").update(retry).eq("id", paper_id).eq("supplier_id", s.data["id"]).execute()
     return {"ok": True, "updated": list(upd.keys())}
 
 
@@ -3307,7 +3399,7 @@ app.include_router(api)
 _default_origins = [
     "https://www.tonerscart.com",
     "https://tonerscart.com",
-    "https://toners-marketplace.preview.emergentagent.com",
+    "https://b2b-checkout-2.preview.emergentagent.com",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]

@@ -5,7 +5,7 @@ import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
-import { Plus, Trash2, Image as ImageIcon, ChevronLeft, ChevronRight, CheckCircle2, FileText } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, ChevronLeft, ChevronRight, CheckCircle2, FileText, Pencil, X as XIcon } from "lucide-react";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
 
@@ -45,8 +45,22 @@ const TECH_BY_USAGE = {
     ],
 };
 
-const PAPER_SIZES   = []; /* removed from dealer flow — buyer-only */
-const CONNECTIVITY  = []; /* removed from dealer flow — buyer-only */
+const CONNECTIVITY_OPTS = [
+    { id: "USB", label: "USB" }, { id: "WiFi", label: "WiFi" },
+    { id: "Ethernet", label: "Ethernet" }, { id: "Bluetooth", label: "Bluetooth" },
+    { id: "Wi-Fi Direct", label: "Wi-Fi Direct" }, { id: "NFC", label: "NFC" },
+];
+const PAPER_SIZE_OPTS = [
+    { id: "A4", label: "A4" }, { id: "A3", label: "A3" }, { id: "A5", label: "A5" },
+    { id: "Letter", label: "Letter" }, { id: "Legal", label: "Legal" }, { id: "Custom", label: "Custom" },
+];
+const MOBILE_PRINT_OPTS = [
+    { id: "AirPrint", label: "AirPrint" }, { id: "Mopria", label: "Mopria" },
+    { id: "Wi-Fi Direct", label: "Wi-Fi Direct" }, { id: "None", label: "None" },
+];
+
+const PAPER_SIZES   = []; /* legacy — buyer-only */
+const CONNECTIVITY  = []; /* legacy — buyer-only */
 
 const COLOR_OPTS = [
     { id: "color", label: "Color" }, { id: "bw", label: "B&W" }, { id: "both", label: "Both" },
@@ -78,12 +92,21 @@ const fmt = (v) => PRETTY[v] || v;
 const EMPTY = {
     brand: "", model_number: "", description: "",
     image_url: "",
+    image_urls: [],
     spec_pdf_path: "",
     usage_type: "", category: "",
     color: "",
     functions: [],
     monthly_volume_min: "",
     monthly_volume_max: "",
+    monthly_volume_recommended: "",
+    print_speed_ppm: "",
+    duty_cycle: "",
+    connectivity: [],
+    max_resolution: "",
+    paper_sizes: [],
+    mobile_printing: [],
+    intercity_delivery_charge: "0",
     price: "",
     stock: "1",
     condition: "new",
@@ -95,6 +118,7 @@ export default function PrinterListings() {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
     const [open, setOpen] = useState(false);
+    const [editing, setEditing] = useState(null); // listing object being edited
 
     const load = async () => {
         setLoading(true);
@@ -108,7 +132,7 @@ export default function PrinterListings() {
 
     // External trigger from parent dashboard "+ Add printer" button
     useEffect(() => {
-        const handler = () => setOpen(true);
+        const handler = () => { setEditing(null); setOpen(true); };
         window.addEventListener("tc-open-add-printer", handler);
         return () => window.removeEventListener("tc-open-add-printer", handler);
     }, []);
@@ -118,6 +142,8 @@ export default function PrinterListings() {
         try { await api.delete(`/supplier/printers/${id}`); toast.success("Removed"); load(); }
         catch (err) { toast.error(formatApiError(err)); }
     };
+
+    const onEdit = (p) => { setEditing(p); setOpen(true); };
 
     return (
         <div data-testid="printer-listings-section">
@@ -154,7 +180,15 @@ export default function PrinterListings() {
                                         {p.stock > 0 ? `${p.stock} in stock` : "Out of stock"}
                                     </span>
                                 </div>
-                                <div className="flex items-center justify-end pt-1">
+                                <div className="flex items-center justify-end pt-1 gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => onEdit(p)}
+                                        className="text-[11.5px] text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1"
+                                        data-testid={`edit-printer-${p.id}`}
+                                    >
+                                        <Pencil size={11} /> Edit
+                                    </button>
                                     <button
                                         type="button"
                                         onClick={() => remove(p.id)}
@@ -172,36 +206,66 @@ export default function PrinterListings() {
 
             <AddPrinterWizard
                 open={open}
-                onClose={() => setOpen(false)}
-                onSaved={() => { setOpen(false); load(); }}
+                editing={editing}
+                onClose={() => { setOpen(false); setEditing(null); }}
+                onSaved={() => { setOpen(false); setEditing(null); load(); }}
             />
         </div>
     );
 }
 
 // ============================================================
-// 4-step Add-Printer Wizard
+// 4-step Add/Edit Printer Wizard
 // ============================================================
 
-function AddPrinterWizard({ open, onClose, onSaved }) {
+function AddPrinterWizard({ open, editing, onClose, onSaved }) {
     const [step, setStep] = useState(1);
     const [f, setF] = useState(EMPTY);
     const [imageFiles, setImageFiles] = useState([]);
     const [imagePreviews, setImagePreviews] = useState([]);
-    const [brochureFile, setBrochureFile] = useState(null);
+    const [existingImages, setExistingImages] = useState([]);
     const [uploading, setUploading] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    // Reset whenever the dialog reopens
+    // Reset whenever the dialog reopens — or prefill when editing
     useEffect(() => {
-        if (open) {
-            setStep(1);
+        if (!open) return;
+        setStep(1);
+        setImageFiles([]);
+        setImagePreviews([]);
+        if (editing) {
+            setF({
+                brand: editing.brand || "",
+                model_number: editing.model_number || "",
+                description: editing.description || "",
+                image_url: editing.image_url || "",
+                image_urls: Array.isArray(editing.image_urls) ? editing.image_urls : (editing.image_url ? [editing.image_url] : []),
+                spec_pdf_path: "",
+                usage_type: editing.usage_type || "",
+                category: editing.category || "",
+                color: editing.color || "",
+                functions: Array.isArray(editing.functions) ? editing.functions : [],
+                monthly_volume_min: editing.monthly_volume_min != null ? String(editing.monthly_volume_min) : "",
+                monthly_volume_max: editing.monthly_volume_max != null ? String(editing.monthly_volume_max) : "",
+                monthly_volume_recommended: editing.monthly_volume_recommended != null ? String(editing.monthly_volume_recommended) : "",
+                print_speed_ppm: editing.print_speed_ppm != null ? String(editing.print_speed_ppm) : "",
+                duty_cycle: editing.duty_cycle != null ? String(editing.duty_cycle) : "",
+                connectivity: Array.isArray(editing.connectivity) ? editing.connectivity : [],
+                max_resolution: editing.max_resolution || "",
+                paper_sizes: Array.isArray(editing.paper_sizes) ? editing.paper_sizes : [],
+                mobile_printing: Array.isArray(editing.mobile_printing) ? editing.mobile_printing : [],
+                intercity_delivery_charge: editing.intercity_delivery_charge != null ? String(editing.intercity_delivery_charge) : "0",
+                price: editing.price != null ? String(editing.price) : "",
+                stock: editing.stock != null ? String(editing.stock) : "1",
+                condition: editing.condition || "new",
+            });
+            const imgs = Array.isArray(editing.image_urls) ? editing.image_urls.filter(Boolean) : (editing.image_url ? [editing.image_url] : []);
+            setExistingImages(imgs);
+        } else {
             setF(EMPTY);
-            setImageFiles([]);
-            setImagePreviews([]);
-            setBrochureFile(null);
+            setExistingImages([]);
         }
-    }, [open]);
+    }, [open, editing]);
 
     const upd = (k) => (e) => setF({ ...f, [k]: e.target.value });
     const setVal = (k, v) => setF({ ...f, [k]: v });
@@ -213,7 +277,7 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
     // ---------- Step 1: Basic info ----------
     const onPickFile = (e) => {
         const files = Array.from(e.target.files || []);
-        const merged = [...imageFiles];
+        const merged = imageFiles.filter(Boolean);
         for (const file of files) {
             if (merged.length >= 3) break;
             if (file.size > 5 * 1024 * 1024) { toast.error(`"${file.name}" exceeds 5 MB`); continue; }
@@ -224,18 +288,21 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
         setImagePreviews(merged.map((f) => URL.createObjectURL(f)));
         e.target.value = "";
     };
+    void onPickFile;
     const removeImage = (idx) => {
         const next = imageFiles.filter((_, i) => i !== idx);
         setImageFiles(next);
         setImagePreviews(next.map((f) => URL.createObjectURL(f)));
     };
+    void removeImage;
 
     const uploadImages = async () => {
-        if (!imageFiles.length) return f.image_urls || [];
+        const filesToUpload = imageFiles.filter(Boolean);
+        if (!filesToUpload.length) return f.image_urls || [];
         setUploading(true);
         try {
             const out = [];
-            for (const file of imageFiles) {
+            for (const file of filesToUpload) {
                 const fd = new FormData();
                 fd.append("file", file);
                 const { data: up } = await api.post("/supplier/printer-image", fd);
@@ -252,7 +319,7 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
         if (step === 1) {
             if (!f.brand.trim()) return false;
             if (!f.model_number.trim()) return false;
-            const haveImages = imageFiles.length >= 2 || (Array.isArray(f.image_urls) && f.image_urls.length >= 2);
+            const haveImages = imageFiles.length >= 1 || existingImages.length >= 1 || (Array.isArray(f.image_urls) && f.image_urls.length >= 1);
             if (!haveImages) return false;
             return true;
         }
@@ -276,19 +343,22 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
     };
 
     const goNext = async () => {
-        if (!canNext()) { toast.error("Please complete all required fields (min 2 images for printers)"); return; }
-        if (step === 1 && imageFiles.length > 0 && (!f.image_urls || f.image_urls.length === 0)) {
+        if (!canNext()) { toast.error("Please complete all required fields (at least 1 image)"); return; }
+        if (step === 1 && imageFiles.length > 0) {
             try {
                 const urls = await uploadImages();
-                if (urls.length < 2) { toast.error("Need at least 2 successfully uploaded images"); return; }
-                setF((cur) => ({ ...cur, image_url: urls[0], image_urls: urls }));
+                const combined = [...existingImages, ...urls];
+                if (combined.length < 1) { toast.error("Need at least 1 successfully uploaded image"); return; }
+                setF((cur) => ({ ...cur, image_url: combined[0], image_urls: combined }));
+                setExistingImages(combined);
+                setImageFiles([]);
+                setImagePreviews([]);
             } catch (err) {
                 toast.error(formatApiError(err) || "Image upload failed");
                 return;
             }
         }
         if (step === 2) {
-            // If user changes usage but already picked tech from another usage, clear it
             const allowed = (TECH_BY_USAGE[f.usage_type] || []).map((t) => t.id);
             if (f.category && !allowed.includes(f.category)) {
                 setF((cur) => ({ ...cur, category: "" }));
@@ -304,18 +374,11 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
         if (saving) return;
         setSaving(true);
         try {
-            let brochurePath = null;
-            if (brochureFile) {
-                const fd = new FormData();
-                fd.append("file", brochureFile);
-                const { data: up } = await api.post("/supplier/spec-pdf", fd);
-                brochurePath = up?.path || null;
-            }
-            await api.post("/supplier/printers", {
+            const payload = {
                 brand: f.brand.trim(),
                 model_number: f.model_number.trim(),
                 description: f.description.trim(),
-                image_url: f.image_url,
+                image_url: f.image_url || (f.image_urls && f.image_urls[0]) || null,
                 image_urls: f.image_urls || [],
                 condition: f.condition,
                 usage_type: f.usage_type,
@@ -324,11 +387,24 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
                 functions: f.functions,
                 monthly_volume_min: Number(f.monthly_volume_min) || 0,
                 monthly_volume_max: Number(f.monthly_volume_max) || 0,
+                monthly_volume_recommended: f.monthly_volume_recommended ? Number(f.monthly_volume_recommended) : null,
+                print_speed_ppm: f.print_speed_ppm ? Number(f.print_speed_ppm) : null,
+                duty_cycle: f.duty_cycle ? Number(f.duty_cycle) : null,
+                connectivity: f.connectivity || [],
+                max_resolution: f.max_resolution || null,
+                paper_sizes: f.paper_sizes || [],
+                mobile_printing: f.mobile_printing || [],
+                intercity_delivery_charge: parseFloat(f.intercity_delivery_charge || 0) || 0,
                 price: parseFloat(f.price),
                 stock: parseInt(f.stock || "1", 10),
-                spec_pdf_url: brochurePath,
-            });
-            toast.success("Printer listed");
+            };
+            if (editing && editing.id) {
+                await api.put(`/supplier/printers/${editing.id}`, payload);
+                toast.success("Printer updated");
+            } else {
+                await api.post("/supplier/printers", payload);
+                toast.success("Printer listed");
+            }
             onSaved();
         } catch (err) {
             toast.error(formatApiError(err));
@@ -344,7 +420,7 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
             <DialogContent className="max-w-[680px] max-h-[92vh] overflow-y-auto p-8 rounded-[20px] tc-shadow-lg" data-testid="add-printer-dialog">
                 <DialogHeader>
                     <DialogTitle className="text-[#0A0A0B] text-[22px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500, letterSpacing: "-0.01em" }}>
-                        Add a printer
+                        {editing ? "Edit printer" : "Add a printer"}
                     </DialogTitle>
                 </DialogHeader>
 
@@ -369,52 +445,66 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
                         <div className="tc-form-section">Basic info</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="sm:col-span-2">
-                                <Label>Product images <span className="text-red-500">*</span> <span className="text-[12px] text-[#86868B] font-normal">(2 to 3 photos)</span></Label>
-                                <label className="block mt-1 cursor-pointer">
-                                    <input type="file" accept="image/*" multiple onChange={onPickFile} className="hidden" data-testid="wizard-image-input" disabled={imageFiles.length >= 3} />
-                                    <div className={`tc-image-drop ${imagePreviews.length ? "has-image" : ""}`}>
-                                        {imagePreviews.length ? (
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                {imagePreviews.map((src, i) => (
-                                                    <div key={i} className="relative">
-                                                        <img src={src} alt={`preview ${i + 1}`} className="h-24 w-24 object-cover rounded-md border border-black/10" />
-                                                        <button type="button" onClick={(e) => { e.preventDefault(); removeImage(i); }} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white text-[11px] grid place-items-center">×</button>
-                                                    </div>
-                                                ))}
-                                                {imageFiles.length < 3 && (<div className="h-24 w-24 grid place-items-center rounded-md border-2 border-dashed border-[#D2D2D7] text-[#86868B] text-[11px]">+ add</div>)}
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <ImageIcon size={22} />
-                                                <span>Click to upload 2–3 printer images</span>
-                                                <span className="text-[11px] text-[#86868B] font-normal">PNG / JPG · max 5 MB each · auto-compressed</span>
-                                            </>
-                                        )}
-                                    </div>
-                                </label>
-                            </div>
-                            <div className="sm:col-span-2">
-                                <Label>Technical specs / Product brochure (optional)</Label>
-                                <label className="block mt-1 cursor-pointer">
-                                    <input
-                                        type="file"
-                                        accept="application/pdf"
-                                        onChange={(e) => {
-                                            const file = e.target.files?.[0];
-                                            if (!file) return;
-                                            if (file.type !== "application/pdf") { toast.error("Brochure must be PDF"); return; }
-                                            if (file.size > 10 * 1024 * 1024) { toast.error("Brochure must be under 10 MB"); return; }
-                                            setBrochureFile(file);
-                                        }}
-                                        className="hidden"
-                                        data-testid="wizard-brochure-input"
-                                    />
-                                    <div className={`tc-image-drop ${brochureFile ? "has-image" : ""}`} style={{ borderStyle: "dashed" }}>
-                                        <FileText size={22} />
-                                        <span>{brochureFile ? brochureFile.name : "Upload product brochure (PDF, optional)"}</span>
-                                        <span className="text-[11px] text-[#86868B] font-normal">PDF · max 10 MB</span>
-                                    </div>
-                                </label>
+                                <Label>Product images <span className="text-red-500">*</span> <span className="text-[12px] text-[#86868B] font-normal">(1 required, up to 3)</span></Label>
+                                <div className="grid grid-cols-3 gap-3 mt-2" data-testid="printer-image-box-grid">
+                                    {[0, 1, 2].map((idx) => {
+                                        const newPrev = imagePreviews[idx];
+                                        const newFile = imageFiles[idx];
+                                        const existing = existingImages[idx];
+                                        const src = newPrev || existing;
+                                        return (
+                                            <label key={idx} className="block cursor-pointer" data-testid={`printer-image-box-${idx}`}>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (!file) return;
+                                                        if (file.size > 5 * 1024 * 1024) { toast.error(`"${file.name}" exceeds 5 MB`); e.target.value = ""; return; }
+                                                        if (!file.type.startsWith("image/")) { toast.error(`"${file.name}" is not an image`); e.target.value = ""; return; }
+                                                        const nf = [...imageFiles]; nf[idx] = file; setImageFiles(nf);
+                                                        const np = [...imagePreviews]; np[idx] = URL.createObjectURL(file); setImagePreviews(np);
+                                                        e.target.value = "";
+                                                    }}
+                                                    className="hidden"
+                                                    data-testid={`printer-image-input-${idx}`}
+                                                />
+                                                <div className={`relative aspect-square rounded-xl border-2 ${src ? "border-solid border-[#D2D2D7]" : "border-dashed border-[#D2D2D7] hover:border-[#0A0A0B]"} bg-white grid place-items-center overflow-hidden transition`}>
+                                                    {src ? (
+                                                        <>
+                                                            <img src={src} alt={`Printer ${idx + 1}`} className="w-full h-full object-cover" />
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    if (newFile) {
+                                                                        const nf = imageFiles.slice(); nf[idx] = undefined; setImageFiles(nf);
+                                                                        const np = imagePreviews.slice(); np[idx] = undefined; setImagePreviews(np);
+                                                                    } else if (existing) {
+                                                                        const ne = existingImages.filter((_, i) => i !== idx);
+                                                                        setExistingImages(ne);
+                                                                        setF((cur) => ({ ...cur, image_urls: ne, image_url: ne[0] || "" }));
+                                                                    }
+                                                                }}
+                                                                className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-600 text-white grid place-items-center shadow-sm hover:bg-red-700"
+                                                                data-testid={`printer-image-remove-${idx}`}
+                                                                aria-label="Remove image"
+                                                            >
+                                                                <XIcon size={13} />
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <div className="flex flex-col items-center gap-1.5 text-[#86868B]">
+                                                            <ImageIcon size={20} />
+                                                            <span className="text-[11px] font-semibold">{idx === 0 ? "Add photo *" : "Add photo"}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                                <div className="text-[11px] text-[#86868B] mt-1.5">PNG / JPG · max 5 MB each · auto-compressed.</div>
                             </div>
                             <div>
                                 <Label>Brand <span className="text-red-500">*</span></Label>
@@ -496,6 +586,52 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
                                     </div>
                                 </div>
                             </SpecGroup>
+
+                            <SpecGroup label="Print speed (PPM)">
+                                <Input type="number" min="0" value={f.print_speed_ppm} onChange={upd("print_speed_ppm")} placeholder="e.g. 20" className="tc-input-lg" data-testid="wizard-print-speed" />
+                            </SpecGroup>
+
+                            <SpecGroup label="Monthly recommended volume" hint="e.g. Up to 1500 pages">
+                                <Input type="number" min="0" value={f.monthly_volume_recommended} onChange={upd("monthly_volume_recommended")} placeholder="1500" className="tc-input-lg" data-testid="wizard-vol-recommended" />
+                            </SpecGroup>
+
+                            <SpecGroup label="Monthly duty cycle" hint="e.g. Up to 10,000 images/month">
+                                <Input type="number" min="0" value={f.duty_cycle} onChange={upd("duty_cycle")} placeholder="10000" className="tc-input-lg" data-testid="wizard-duty-cycle" />
+                            </SpecGroup>
+
+                            <SpecGroup label="Connectivity">
+                                <PillRow
+                                    options={CONNECTIVITY_OPTS}
+                                    selected={f.connectivity}
+                                    onClick={(id) => toggleArr("connectivity", id)}
+                                    multi
+                                    testKey="connectivity"
+                                />
+                            </SpecGroup>
+
+                            <SpecGroup label="Maximum print resolution">
+                                <Input value={f.max_resolution} onChange={upd("max_resolution")} placeholder="e.g. 600 x 600 dpi" className="tc-input-lg" data-testid="wizard-max-resolution" />
+                            </SpecGroup>
+
+                            <SpecGroup label="Paper sizes supported">
+                                <PillRow
+                                    options={PAPER_SIZE_OPTS}
+                                    selected={f.paper_sizes}
+                                    onClick={(id) => toggleArr("paper_sizes", id)}
+                                    multi
+                                    testKey="paper-size"
+                                />
+                            </SpecGroup>
+
+                            <SpecGroup label="Mobile printing support">
+                                <PillRow
+                                    options={MOBILE_PRINT_OPTS}
+                                    selected={f.mobile_printing}
+                                    onClick={(id) => toggleArr("mobile_printing", id)}
+                                    multi
+                                    testKey="mobile-print"
+                                />
+                            </SpecGroup>
                         </div>
                     </div>
                 )}
@@ -524,6 +660,11 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
                                     testKey="condition"
                                 />
                             </div>
+                            <div>
+                                <Label>Intercity delivery charge (₹)</Label>
+                                <Input type="number" min="0" step="1" value={f.intercity_delivery_charge} onChange={upd("intercity_delivery_charge")} placeholder="0" className="tc-input-lg" data-testid="wizard-intercity-charge" />
+                                <div className="text-[11px] text-[#86868B] mt-1">Delivery within your city is free and included. Enter a charge only if you deliver to other cities. Leave 0 if intercity not available.</div>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -534,8 +675,8 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
                             Review the details and tap Publish when you&apos;re ready.
                         </div>
                         <div className="bg-black/[0.03] border border-black/[0.06] rounded-xl p-4 grid sm:grid-cols-[120px,1fr] gap-4 text-[#0A0A0B]" data-testid="wizard-review-card">
-                            {f.image_url || imagePreview ? (
-                                <img src={f.image_url || imagePreview} alt="preview" className="w-full h-24 object-contain bg-white rounded-md border border-black/[0.06]" />
+                            {f.image_url || imagePreviews[0] || existingImages[0] ? (
+                                <img src={f.image_url || imagePreviews[0] || existingImages[0]} alt="preview" className="w-full h-24 object-contain bg-white rounded-md border border-black/[0.06]" />
                             ) : (
                                 <div className="w-full h-24 grid place-items-center bg-white border border-black/[0.06] rounded-md">
                                     <ImageIcon size={22} className="text-[#D2D2D7]" />
@@ -568,7 +709,7 @@ function AddPrinterWizard({ open, onClose, onSaved }) {
                         </button>
                     ) : (
                         <button type="button" className="btn-pill-cta" onClick={submit} disabled={saving} data-testid="wizard-publish-btn">
-                            {saving ? "Publishing…" : <><CheckCircle2 size={14} /> Publish printer</>}
+                            {saving ? (editing ? "Updating…" : "Publishing…") : <><CheckCircle2 size={14} /> {editing ? "Save changes" : "Publish printer"}</>}
                         </button>
                     )}
                 </div>
