@@ -212,6 +212,8 @@ class ListingCreate(BaseModel):
     cartridge_weight: Optional[int] = None
     pack_size: Optional[int] = None
     warranty: Optional[str] = None
+    print_technology: Optional[str] = None
+    intercity_delivery_charge: Optional[float] = 0
 
 
 class ListingUpdate(BaseModel):
@@ -231,6 +233,13 @@ class OrderCreate(BaseModel):
     delivery_address: str
     notes: Optional[str] = ""
     variant_id: Optional[str] = None
+    # Structured address (optional — falls back to delivery_address)
+    street_address: Optional[str] = None
+    area: Optional[str] = None
+    order_city: Optional[str] = None
+    order_state: Optional[str] = None
+    pincode: Optional[str] = None
+    delivery_charge: Optional[float] = 0
 
 
 class OrderStatusUpdate(BaseModel):
@@ -845,6 +854,8 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
         "cartridge_weight": payload.cartridge_weight,
         "pack_size": payload.pack_size,
         "warranty": payload.warranty,
+        "print_technology": payload.print_technology,
+        "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
     }
     for k, v in optional_cols.items():
         if v is not None:
@@ -858,7 +869,7 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("spec_pdf_url", "image_urls", "compatible_models", "oem_part_number", "cartridge_weight", "pack_size", "warranty"):
+            for k in ("spec_pdf_url", "image_urls", "compatible_models", "oem_part_number", "cartridge_weight", "pack_size", "warranty", "print_technology", "intercity_delivery_charge"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True
@@ -959,14 +970,31 @@ async def create_order(payload: OrderCreate, user: dict = Depends(require_user))
     }
     if variant:
         row["variant_id"] = variant["id"]
-    try:
-        res = sb_admin.table("orders").insert(row).execute()
-    except Exception as e:
-        if "variant_id" in str(e):
-            row.pop("variant_id", None)
+    # Optional structured address — drop columns that aren't migrated yet
+    for k, v in {
+        "street_address": payload.street_address,
+        "area": payload.area,
+        "order_city": payload.order_city,
+        "order_state": payload.order_state,
+        "pincode": payload.pincode,
+        "delivery_charge": (float(payload.delivery_charge) if payload.delivery_charge else None),
+    }.items():
+        if v:
+            row[k] = v
+    while True:
+        try:
             res = sb_admin.table("orders").insert(row).execute()
-        else:
-            raise
+            break
+        except Exception as e:
+            msg = str(e)
+            dropped = False
+            for k in ("variant_id", "street_address", "area", "order_city", "order_state", "pincode", "delivery_charge"):
+                if k in msg and k in row:
+                    row.pop(k, None)
+                    dropped = True
+                    break
+            if not dropped:
+                raise
     # Decrement stock — variant if any, else listing
     try:
         if variant:
@@ -1251,6 +1279,10 @@ class PrinterListingCreate(BaseModel):
     dimensions: Optional[str] = None
     weight_kg: Optional[float] = None
     printer_warranty: Optional[str] = None
+    max_resolution: Optional[str] = None
+    mobile_printing: List[str] = Field(default_factory=list)
+    monthly_volume_recommended: Optional[int] = None
+    intercity_delivery_charge: Optional[float] = 0
 
 
 def _supplier_id_for(user: dict) -> str:
@@ -1355,6 +1387,10 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         "dimensions": payload.dimensions,
         "weight_kg": payload.weight_kg,
         "printer_warranty": payload.printer_warranty,
+        "max_resolution": payload.max_resolution,
+        "mobile_printing": payload.mobile_printing or None,
+        "monthly_volume_recommended": payload.monthly_volume_recommended,
+        "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
     }
     for k, v in optional_cols.items():
         if v is not None:
@@ -1366,7 +1402,7 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("spec_pdf_url", "image_urls", "print_speed_ppm", "duty_cycle", "display_type", "dimensions", "weight_kg", "printer_warranty"):
+            for k in ("spec_pdf_url", "image_urls", "print_speed_ppm", "duty_cycle", "display_type", "dimensions", "weight_kg", "printer_warranty", "max_resolution", "mobile_printing", "monthly_volume_recommended", "intercity_delivery_charge"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True
@@ -2592,6 +2628,7 @@ class PaperCreate(BaseModel):
     thickness_microns: Optional[int] = None
     acid_free: Optional[bool] = None
     suitable_for: List[str] = Field(default_factory=list)
+    intercity_delivery_charge: Optional[float] = 0
 
 
 @api.post("/supplier/papers")
@@ -2618,6 +2655,7 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
         "thickness_microns": payload.thickness_microns,
         "acid_free": payload.acid_free,
         "suitable_for": payload.suitable_for or None,
+        "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
     }
     for k, v in optional_cols.items():
         if v is not None:
@@ -2629,7 +2667,7 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("image_urls", "brightness", "thickness_microns", "acid_free", "suitable_for"):
+            for k in ("image_urls", "brightness", "thickness_microns", "acid_free", "suitable_for", "intercity_delivery_charge"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True

@@ -170,8 +170,10 @@ export default function SupplierDashboard() {
     const [compatibleModels, setCompatibleModels] = useState("");
     const [oemPartNumber, setOemPartNumber] = useState("");
     const [cartridgeWeight, setCartridgeWeight] = useState("");
-    const [packSize, setPackSize] = useState(1);
     const [warranty, setWarranty] = useState("");
+    const [warrantyOther, setWarrantyOther] = useState("");
+    const [printTechnology, setPrintTechnology] = useState("Laser");
+    const [intercityCharge, setIntercityCharge] = useState("0");
     // Variants
     const [variants, setVariants] = useState([{ color: "Black", price: "", stock: "" }]);
 
@@ -227,7 +229,7 @@ export default function SupplierDashboard() {
         setPrice(""); setStock(""); setTonerType("Original"); setPageYield("");
         setImageFiles([]); setImagePreviews([]);
         setBrochureFile(null);
-        setCompatibleModels(""); setOemPartNumber(""); setCartridgeWeight(""); setPackSize(1); setWarranty("");
+        setCompatibleModels(""); setOemPartNumber(""); setCartridgeWeight(""); setWarranty(""); setWarrantyOther(""); setPrintTechnology("Laser"); setIntercityCharge("0");
         setVariants([{ color: "Black", price: "", stock: "" }]);
     };
     const openDialog = () => { reset(); setOpen(true); };
@@ -323,8 +325,9 @@ export default function SupplierDashboard() {
                 compatible_models: compatibleModels || null,
                 oem_part_number: oemPartNumber || null,
                 cartridge_weight: cartridgeWeight ? parseInt(cartridgeWeight, 10) : null,
-                pack_size: packSize ? parseInt(packSize, 10) : 1,
-                warranty: warranty || null,
+                warranty: warranty === "Other" ? (warrantyOther.trim() ? `${warrantyOther.trim()} months` : null) : (warranty || null),
+                print_technology: printTechnology || null,
+                intercity_delivery_charge: parseFloat(intercityCharge || 0) || 0,
                 variants: cleanedVariants,
             });
             void created;
@@ -706,19 +709,31 @@ export default function SupplierDashboard() {
                                 <Input type="number" min="0" step="1" value={cartridgeWeight} onChange={(e) => setCartridgeWeight(e.target.value)} placeholder="e.g. 450" className="tc-input-lg" data-testid="listing-weight" />
                             </div>
                             <div>
-                                <Label>Pack size</Label>
-                                <select value={packSize} onChange={(e) => setPackSize(parseInt(e.target.value, 10))} className="tc-input-lg w-full" data-testid="listing-pack-size">
-                                    {[1, 2, 5, 10].map((n) => <option key={n} value={n}>{n} cartridge{n === 1 ? "" : "s"}</option>)}
+                                <Label>Print technology</Label>
+                                <select value={printTechnology} onChange={(e) => setPrintTechnology(e.target.value)} className="tc-input-lg w-full" data-testid="listing-print-technology">
+                                    <option value="Laser">Laser</option>
+                                    <option value="Inkjet">Inkjet</option>
+                                    <option value="Thermal">Thermal</option>
+                                    <option value="Dot Matrix">Dot Matrix</option>
                                 </select>
                             </div>
                             <div className="col-span-2">
                                 <Label>Warranty</Label>
-                                <select value={warranty} onChange={(e) => setWarranty(e.target.value)} className="tc-input-lg w-full" data-testid="listing-warranty">
+                                <select value={warranty} onChange={(e) => { setWarranty(e.target.value); if (e.target.value !== "Other") setWarrantyOther(""); }} className="tc-input-lg w-full" data-testid="listing-warranty">
                                     <option value="">No warranty</option>
                                     <option value="3 months">3 months</option>
                                     <option value="6 months">6 months</option>
                                     <option value="1 year">1 year</option>
+                                    <option value="Other">Other</option>
                                 </select>
+                                {warranty === "Other" && (
+                                    <Input value={warrantyOther} onChange={(e) => setWarrantyOther(e.target.value)} placeholder="Enter months (e.g. 18)" className="tc-input-lg mt-2" data-testid="listing-warranty-other" />
+                                )}
+                            </div>
+                            <div className="col-span-2">
+                                <Label>Intercity delivery charge (₹)</Label>
+                                <Input type="number" min="0" step="1" value={intercityCharge} onChange={(e) => setIntercityCharge(e.target.value)} placeholder="0" className="tc-input-lg" data-testid="listing-intercity-charge" />
+                                <div className="text-[11px] text-[#86868B] mt-1">Delivery within your city is free and included in your listed price. Enter a charge only if you deliver to other cities. Leave 0 if intercity not available.</div>
                             </div>
                         </div>
 
@@ -748,27 +763,7 @@ export default function SupplierDashboard() {
                             </div>
                         </label>
 
-                        <div className="tc-form-section">Product brochure (optional)</div>
-                        <label className="block cursor-pointer">
-                            <input
-                                type="file"
-                                accept="application/pdf"
-                                onChange={(e) => {
-                                    const f = e.target.files?.[0];
-                                    if (!f) return;
-                                    if (f.type !== "application/pdf") { toast.error("Brochure must be a PDF"); return; }
-                                    if (f.size > 10 * 1024 * 1024) { toast.error("Brochure must be under 10 MB"); return; }
-                                    setBrochureFile(f);
-                                }}
-                                className="hidden"
-                                data-testid="listing-brochure-input"
-                            />
-                            <div className={`tc-image-drop ${brochureFile ? "has-image" : ""}`} style={{ borderStyle: "dashed" }}>
-                                <FileText size={22} />
-                                <span>{brochureFile ? brochureFile.name : "Upload product brochure (PDF, optional)"}</span>
-                                <span className="text-[11px] text-[#86868B] font-normal">Technical specs / Product brochure · PDF · max 10 MB</span>
-                            </div>
-                        </label>
+                        {/* Brochure removed in v5 — replaced by structured specs above */}
 
                         <DialogFooter className="mt-6">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
