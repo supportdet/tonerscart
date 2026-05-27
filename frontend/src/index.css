@@ -1276,3 +1276,53 @@ input, textarea, select, button, label,
         0 30px 60px -20px rgba(0,0,0,0.30),
         0 10px 20px -10px rgba(0,0,0,0.18);
 }
+
+/* ===== Wave 10 — Two-layer category navbar ===================== */
+.tc-cat-scroll {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scroll-snap-type: x proximity;
+}
+.tc-cat-scroll::-webkit-scrollbar { display: none; }
+
+.tc-cat-pill {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    height: 34px;
+    align-self: center;
+    padding: 0 18px;
+    background: #FFFFFF;
+    color: #0A0A0B;
+    font-size: 13.5px;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    white-space: nowrap;
+    border: 1.5px solid var(--pill-color, #0A0A0B);
+    border-radius: 999px;
+    transition: background-color 180ms ease, color 180ms ease, border-width 140ms ease, padding 140ms ease;
+    scroll-snap-align: start;
+    text-decoration: none;
+}
+.tc-cat-pill-stripe { display: none; }
+.tc-cat-pill-label { color: inherit; }
+.tc-cat-pill:hover {
+    background: color-mix(in srgb, var(--pill-color, #0A0A0B) 14%, #FFFFFF);
+    border-width: 1.5px;
+    padding: 0 18px;
+}
+.tc-cat-pill.active,
+.tc-cat-pill[aria-current="page"] {
+    background: color-mix(in srgb, var(--pill-color, #0A0A0B) 18%, #FFFFFF);
+    border-width: 2px;
+    padding: 0 17.5px;
+}
+
+/* xs breakpoint helper (Tailwind doesn't ship one by default) */
+@media (min-width: 380px) {
+    .xs\:inline { display: inline; }
+    .xs\:hidden { display: none; }
+    .xs\:inline-flex { display: inline-flex; }
+}
+

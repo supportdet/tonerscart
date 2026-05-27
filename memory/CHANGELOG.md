@@ -1,3 +1,38 @@
+### 2026-02-XX — Wave 10 (Two-layer navbar + Category pages + D2D)
+
+**Navbar redesign:**
+- `/app/frontend/src/components/Header.jsx` rewritten as a sticky 2-layer header.
+  - Layer 1 (dark `#0A0A0B`, 48px): logo · City · Sell (white pill) · Sign in · Cart · Join free (amber).
+  - Layer 2 (white, 44px, `border-bottom #E8E8EC`): 9 horizontally-scrollable colored pills — Toners `#d81b60`, Printers `#0097a7`, Papers `#795548`, Consumables `#f9a825`, Scanners `#5c6bc0`, MPS/Rentals `#43a047`, Buy Bulk `#e65100`, Dealer to Dealer `#607d8b`, OEM Marketplace `#6d4c41`.
+  - Pills: 3px colored left stripe always, hover shows 2px colored bottom + 10% tint, active shows 3px colored bottom border. Text always black.
+- Old Buy dropdown removed entirely.
+- New CSS in `index.css` (`.tc-cat-scroll`, `.tc-cat-pill*`, `xs:` breakpoint helpers).
+
+**New category pages (all live end-to-end):**
+- `/consumables` and `/scanners` — `ComingSoon.jsx` component with email-only interest capture → `POST /api/mps/inquiry` `{selections.type: "<category>_interest"}` → emails `support@tonerscart.com`.
+- `/bulk` — full Buy-Bulk form (product type, quantity, budget, delivery city w/ datalist, +91 phone, email, notes) → `POST /api/mps/inquiry` `{selections.type: "bulk_enquiry"}` → success message "We'll get you the best bulk price within 24 hours".
+- `/dealer` — D2D marketplace. Gated banner for non-suppliers. Calls `GET /listings/search?d2d_only=true`. Approved suppliers see `D2D Price` badge, savings vs list price, and `Place D2D order` button (wired to `OrderRequestDialog` with D2D price).
+- `/oem` — Dark premium page, "OEM Partner Showcase" headline, 3 placeholder partner-slot cards, application form modal → `POST /api/mps/inquiry` `{selections.type: "oem_application"}`.
+
+**D2D (Dealer-to-Dealer) feature:**
+- New migration `/app/backend/supabase_schema_d2d.sql` — adds `d2d_enabled boolean default false` + `d2d_price numeric(10,2)` + partial index on `d2d_enabled = true`. Must be applied manually via Supabase SQL editor.
+- `ListingCreate` and `ListingPatch` extended with `d2d_enabled` / `d2d_price`. POST `/supplier/listings` retry loop drops these keys when columns missing.
+- `GET /listings/search?d2d_only=true` filter — returns `[]` gracefully when column missing.
+- PUT `/supplier/listings/{id}` returns `503` with clear migration-pending message when only d2d fields are sent and columns are missing (avoids silent-success).
+- Supplier dashboard: new `D2DRow` component on each toner card with toggle + price input. Requires positive price before enabling.
+
+**Backend — relaxed MPSInquiry schema:**
+- `name`, `phone`, `estimated_printers` are now optional with sensible defaults (so email-only interest captures work via the same endpoint).
+- DB insert into `mps_inquiries` is best-effort (logged, never blocks the email send).
+- `email_service.email_mps_inquiry` branches subject/heading for `bulk_enquiry`, `oem_application`, `*_interest` types — all routed to `support@tonerscart.com`.
+
+**Toner image upload now optional:**
+- `SupplierDashboard.jsx` add/edit handler no longer blocks save when no images are provided. Form label updated to "(optional — up to 3)". Animated cartridge SVG fallback already in place across cards & detail pages.
+
+**Testing:** `/app/test_reports/iteration_14.json` — 12/12 backend + 13/13 frontend smoke tests passed.
+
+---
+
 ### 2026-02-XX — Wave 3 finalisation (Papers UI, Admin Finance, Supplier Earnings, Reorder, Bulk stock, Duplicate, Load-more, Static SEO)
 
 **Backend hardening:**

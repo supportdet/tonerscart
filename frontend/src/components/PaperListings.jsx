@@ -5,6 +5,7 @@ import { Label } from "./ui/label";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { Plus, Trash2, Package, Copy, Check, Pencil } from "lucide-react";
+import { GST_RATES, gstAmount, formatINR } from "../lib/listingConstants";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
 
@@ -42,6 +43,7 @@ export default function PaperListings() {
             thickness_microns: p.thickness_microns ? String(p.thickness_microns) : "",
             acid_free: !!p.acid_free,
             suitable_for: Array.isArray(p.suitable_for) ? p.suitable_for : [],
+            gst_rate: p.gst_rate != null ? Number(p.gst_rate) : 18,
         });
         setImageFiles([]); setImagePreviews([]);
         setOpen(true);
@@ -109,6 +111,7 @@ export default function PaperListings() {
                 thickness_microns: form.thickness_microns ? Number(form.thickness_microns) : null,
                 acid_free: !!form.acid_free,
                 suitable_for: form.suitable_for || [],
+                gst_rate: Number(form.gst_rate || 18),
             };
             if (uploadedUrls.length > 0) {
                 payload.image_url = uploadedUrls[0];
@@ -239,6 +242,23 @@ export default function PaperListings() {
                             <div>
                                 <Label>Stock (boxes) <span className="text-red-500">*</span></Label>
                                 <Input type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} required className="tc-input-lg" data-testid="paper-stock-input" />
+                            </div>
+                            <div className="col-span-2">
+                                <Label>GST rate (%)</Label>
+                                <select value={form.gst_rate} onChange={(e) => setForm({ ...form, gst_rate: Number(e.target.value) })} className="tc-input-lg w-full" data-testid="paper-gst-rate">
+                                    {GST_RATES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+                                </select>
+                                {(() => {
+                                    const base = parseFloat(form.price_per_ream || 0);
+                                    if (!base) return null;
+                                    const gst = gstAmount(base, form.gst_rate);
+                                    return (
+                                        <div className="text-[12px] text-[#0A0A0B] bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 mt-2" data-testid="paper-gst-preview">
+                                            Base price: <strong>{formatINR(base)}</strong> + GST ({form.gst_rate}%): <strong>{formatINR(gst)}</strong> = Total: <strong>{formatINR(base + gst)}</strong>
+                                        </div>
+                                    );
+                                })()}
+                                <div className="text-[11px] text-[#86868B] mt-1">Buyer sees only the base price on listing cards. GST is added on checkout.</div>
                             </div>
                         </div>
 

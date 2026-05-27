@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
+import { INDIAN_STATES } from "../lib/listingConstants";
 import { Lock, Minus, Plus } from "lucide-react";
 import PhonePrefixInput from "./PhonePrefixInput";
 
@@ -164,7 +165,10 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
                             </div>
                             <div>
                                 <Label className="text-[12px]">State</Label>
-                                <Input value={orderState} onChange={(e) => setOrderState(e.target.value)} required placeholder="Karnataka" className="h-9 text-[13px]" data-testid="order-state-input" />
+                                <Input list="ord-states" value={orderState} onChange={(e) => setOrderState(e.target.value)} required placeholder="Karnataka" className="h-9 text-[13px]" data-testid="order-state-input" />
+                                <datalist id="ord-states">
+                                    {INDIAN_STATES.map((s) => <option key={s} value={s} />)}
+                                </datalist>
                             </div>
                             <div>
                                 <Label className="text-[12px]">Pincode</Label>

@@ -6,6 +6,7 @@ import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { Plus, Trash2, Image as ImageIcon, ChevronLeft, ChevronRight, CheckCircle2, FileText, Pencil, X as XIcon } from "lucide-react";
+import { GST_RATES, gstAmount, formatINR, PRINTER_SPECIAL_FEATURES } from "../lib/listingConstants";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
 
@@ -95,6 +96,8 @@ const EMPTY = {
     image_urls: [],
     spec_pdf_path: "",
     usage_type: "", category: "",
+    usage_types: [],
+    special_features: [],
     color: "",
     functions: [],
     monthly_volume_min: "",
@@ -107,6 +110,7 @@ const EMPTY = {
     paper_sizes: [],
     mobile_printing: [],
     intercity_delivery_charge: "0",
+    gst_rate: 18,
     price: "",
     stock: "1",
     condition: "new",
@@ -242,6 +246,11 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                 image_urls: Array.isArray(editing.image_urls) ? editing.image_urls : (editing.image_url ? [editing.image_url] : []),
                 spec_pdf_path: "",
                 usage_type: editing.usage_type || "",
+                usage_types: Array.isArray(editing.usage_types) && editing.usage_types.length > 0
+                    ? editing.usage_types
+                    : (editing.usage_type ? [editing.usage_type] : []),
+                special_features: Array.isArray(editing.special_features) ? editing.special_features : [],
+                gst_rate: editing.gst_rate != null ? Number(editing.gst_rate) : 18,
                 category: editing.category || "",
                 color: editing.color || "",
                 functions: Array.isArray(editing.functions) ? editing.functions : [],
@@ -324,7 +333,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
             return true;
         }
         if (step === 2) {
-            if (!f.usage_type) return false;
+            if (!f.usage_types || f.usage_types.length === 0) return false;
             if (!f.category) return false;
             if (!f.color) return false;
             if (!f.functions.length) return false;
@@ -359,10 +368,14 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
             }
         }
         if (step === 2) {
-            const allowed = (TECH_BY_USAGE[f.usage_type] || []).map((t) => t.id);
-            if (f.category && !allowed.includes(f.category)) {
+            const usageList = f.usage_types || [];
+            const allowed = new Set();
+            for (const u of usageList) {
+                for (const t of (TECH_BY_USAGE[u] || [])) allowed.add(t.id);
+            }
+            if (f.category && !allowed.has(f.category)) {
                 setF((cur) => ({ ...cur, category: "" }));
-                toast.error("Pick a printer technology"); return;
+                toast.error("Pick a printer technology that matches the selected usage type(s)"); return;
             }
         }
         setStep((s) => Math.min(4, s + 1));
@@ -381,7 +394,10 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                 image_url: f.image_url || (f.image_urls && f.image_urls[0]) || null,
                 image_urls: f.image_urls || [],
                 condition: f.condition,
-                usage_type: f.usage_type,
+                usage_type: (f.usage_types && f.usage_types[0]) || f.usage_type || "",
+                usage_types: f.usage_types || (f.usage_type ? [f.usage_type] : []),
+                special_features: f.special_features || [],
+                gst_rate: Number(f.gst_rate ?? 18),
                 category: f.category,
                 color: f.color,
                 functions: f.functions,
@@ -413,7 +429,8 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
         }
     };
 
-    const techOpts = TECH_BY_USAGE[f.usage_type] || [];
+    const techOpts = Array.from(new Set((f.usage_types || []).flatMap((u) => (TECH_BY_USAGE[u] || []).map((t) => t.id))))
+        .map((id) => ({ id, label: ((Object.values(TECH_BY_USAGE).flat().find((x) => x.id === id) || {}).label) || id }));
 
     return (
         <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -526,11 +543,12 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                     <div data-testid="wizard-step-2">
                         <div className="tc-form-section">Specifications</div>
                         <div className="space-y-4">
-                            <SpecGroup label="Usage type" required>
+                            <SpecGroup label="Usage type" required hint="Pick all that apply — your printer will appear in each of these buyer searches">
                                 <PillRow
                                     options={USAGE_OPTS}
-                                    selected={[f.usage_type]}
-                                    onClick={(id) => setF({ ...f, usage_type: id, category: "" })}
+                                    selected={f.usage_types || []}
+                                    onClick={(id) => toggleArr("usage_types", id)}
+                                    multi
                                     testKey="usage"
                                 />
                             </SpecGroup>
@@ -538,13 +556,13 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                             <SpecGroup
                                 label="Printer technology"
                                 required
-                                hint={!f.usage_type ? "Pick a usage type first" : undefined}
+                                hint={(!f.usage_types || f.usage_types.length === 0) ? "Pick at least one usage type first" : undefined}
                             >
                                 <PillRow
                                     options={techOpts}
                                     selected={[f.category]}
                                     onClick={(id) => setVal("category", id)}
-                                    disabled={!f.usage_type}
+                                    disabled={!f.usage_types || f.usage_types.length === 0}
                                     testKey="tech"
                                 />
                             </SpecGroup>
@@ -632,6 +650,16 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                                     testKey="mobile-print"
                                 />
                             </SpecGroup>
+
+                            <SpecGroup label="Special features" hint="Helps your printer match more buyer searches">
+                                <PillRow
+                                    options={PRINTER_SPECIAL_FEATURES}
+                                    selected={f.special_features || []}
+                                    onClick={(id) => toggleArr("special_features", id)}
+                                    multi
+                                    testKey="special-feature"
+                                />
+                            </SpecGroup>
                         </div>
                     </div>
                 )}
@@ -659,6 +687,28 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                                     onClick={(id) => setVal("condition", id)}
                                     testKey="condition"
                                 />
+                            </div>
+                            <div>
+                                <Label>GST rate (%)</Label>
+                                <select
+                                    value={f.gst_rate}
+                                    onChange={(e) => setVal("gst_rate", Number(e.target.value))}
+                                    className="tc-input-lg w-full"
+                                    data-testid="wizard-gst-rate"
+                                >
+                                    {GST_RATES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+                                </select>
+                                {(() => {
+                                    const base = parseFloat(f.price || 0);
+                                    if (!base) return null;
+                                    const gst = gstAmount(base, f.gst_rate);
+                                    return (
+                                        <div className="text-[12px] text-[#0A0A0B] bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 mt-2" data-testid="wizard-gst-preview">
+                                            Base price: <strong>{formatINR(base)}</strong> + GST ({f.gst_rate}%): <strong>{formatINR(gst)}</strong> = Total: <strong>{formatINR(base + gst)}</strong>
+                                        </div>
+                                    );
+                                })()}
+                                <div className="text-[11px] text-[#86868B] mt-1">Buyer sees only the base price on listing cards. GST is added on checkout.</div>
                             </div>
                             <div>
                                 <Label>Intercity delivery charge (₹)</Label>
@@ -690,7 +740,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                             </div>
                         </div>
 
-                        <ReviewRow k="Usage type"      v={fmt(f.usage_type)} />
+                        <ReviewRow k="Usage type"      v={(f.usage_types || []).map(fmt).join(", ") || fmt(f.usage_type)} />
                         <ReviewRow k="Technology"      v={fmt(f.category)} />
                         <ReviewRow k="Color"           v={fmt(f.color)} />
                         <ReviewRow k="Functions"       v={(f.functions || []).map(fmt).join(", ") || "—"} />

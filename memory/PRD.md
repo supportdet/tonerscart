@@ -1,6 +1,45 @@
 # TonersCart — Product Requirements (Supabase edition)
 
 
+## Latest changelog (2026-02 Wave 10 — Two-layer navbar + new category pages + D2D marketplace)
+
+- **Two-layer navbar** — `/app/frontend/src/components/Header.jsx` rewritten.
+  - Layer 1 (dark `#0A0A0B`, 48px): logo · City · Sell · Sign in · Cart · Join free.
+  - Layer 2 (white, 44px, `border-bottom #E8E8EC`): 9 horizontally-scrollable colored category pills — Toners `#d81b60`, Printers `#0097a7`, Papers `#795548`, Consumables `#f9a825`, Scanners `#5c6bc0`, MPS/Rentals `#43a047`, Buy Bulk `#e65100`, Dealer to Dealer `#607d8b`, OEM Marketplace `#6d4c41`. Old Buy dropdown removed.
+- **New pages (all live E2E, emails to `support@tonerscart.com`):**
+  - `/consumables` and `/scanners` — Coming-Soon w/ email interest capture (`selections.type = consumables_interest` / `scanners_interest`).
+  - `/bulk` — Buy-Bulk form (product, qty, budget, city, +91 phone, email, notes) → `bulk_enquiry`.
+  - `/dealer` — D2D marketplace, gated to approved suppliers, shows `D2D Price` badges + savings.
+  - `/oem` — Dark OEM Partner Showcase with 3 partner-slot placeholders + application modal → `oem_application`.
+- **D2D feature** — New migration `/app/backend/supabase_schema_d2d.sql` adds `d2d_enabled bool default false` + `d2d_price numeric(10,2)` on `listings`. Toggle + price input on each toner card in supplier dashboard. `/listings/search?d2d_only=true` filter. PUT returns 503 with clear migration-pending message when only d2d fields are sent and the columns are absent.
+- **MPSInquiry schema relaxed** — `name`, `phone`, `estimated_printers` now optional. DB insert is best-effort. `email_mps_inquiry` adapts subject/heading by `selections.type`.
+- **Toner image upload optional** — animated cartridge fallback is shown automatically; supplier can save without any image.
+
+**⚠ Action item for app owner:** Apply `/app/backend/supabase_schema_d2d.sql` in the Supabase SQL editor to enable D2D persistence (the toggle UI is wired but the columns are missing in the live DB).
+
+---
+
+
+## Latest changelog (2026-02 Wave 9 — GST, Universal search, Multi-select printer specs, Cascading filters, State dropdowns)
+
+- **GST end-to-end**:
+  - Add Toner / Add Printer / Add Paper forms have a **GST rate (%)** dropdown (0/5/12/18/28) with a **live calculation panel**: "Base price: ₹X + GST (Y%): ₹Z = Total: ₹W".
+  - Buyer listing cards continue to show only the base price.
+  - Product detail page price block shows **"+ X% GST applied at checkout"** hint below the price.
+  - Checkout summary now shows **Base + GST + Delivery = Total**. POST `/api/orders` carries `gst_rate` + `gst_amount` per order line.
+- **Universal hero search** — `/api/search/universal?q=…` searches toners, printers and papers in parallel with fuzzy `ilike %q%` on brand / model / description / compatible_models / size. Exact brand matches rank first. Search results page renders **three stacked sections** (Toners · Printers · Papers) with thumbnails and "View all →" links. Hidden when a section has 0 hits.
+- **Printer dealer form — multi-select pills**:
+  - **Usage type** is now multi-select (Home / Corporate / Commercial / Print Shop) saved as `usage_types[]` (legacy `usage_type` populated with the first selection for backward compat).
+  - New **Special Features** multi-select pills: Duplex Printing · Auto Document Feeder · Touchscreen · Cloud Printing · Mobile Printing · Secure Print · High Capacity Tray · Fax · Scanner · Wireless.
+- **Cascading filter fallback** — `/api/printers` now progressively drops filters (special_feature → feature → connectivity → paper_size → function → usage_type) when strict filters return < 3 results. Relaxed rows are tagged `is_relaxed_match: true` so the frontend can render a "Best available match" hint. The endpoint also matches `usage_type` against both the legacy column and the new `usage_types[]` array.
+- **State dropdown everywhere** — Indian states master list in `lib/listingConstants.js`. Checkout + OrderRequestDialog now use HTML5 `<datalist>` so typing the first letter narrows the visible states; SellerApplicationForm already used a state select. Contact/MPS forms have no state field.
+- **Product detail layout** — Right column now vertically + horizontally centered (`min-h-[460px]`), brand renders as a small uppercase tracking-wide label above the model number, price block centered, GST hint below price, CTAs centered. Specs section is left-aligned full-width below for readability. Printer specs table also surfaces `usage_types`, `special_features`, `monthly_volume_recommended`, `max_resolution`, `paper_sizes`, `mobile_printing`.
+
+**New migration** — `/app/backend/supabase_schema_wave9.sql` (adds `gst_rate` on listings/printer_listings/paper_listings/orders, `gst_amount` on orders, `usage_types[]` + `special_features[]` on printer_listings). Backend degrades gracefully column-by-column until you apply it on Supabase.
+
+---
+
+
 ## Latest changelog (2026-02 Wave 8 — UX polish + Featured E2E + Test wipe)
 
 - **Product detail title + price** — font swapped to Roboto / Helvetica / Arial stack (weight 700). Roboto-Mono retained on cards.

@@ -215,6 +215,10 @@ class ListingCreate(BaseModel):
     warranty: Optional[str] = None
     print_technology: Optional[str] = None
     intercity_delivery_charge: Optional[float] = 0
+    gst_rate: Optional[int] = 18
+    # D2D (Dealer-to-Dealer) marketplace — Wave 10
+    d2d_enabled: Optional[bool] = False
+    d2d_price: Optional[float] = None
 
 
 class ListingUpdate(BaseModel):
@@ -241,6 +245,9 @@ class OrderCreate(BaseModel):
     order_state: Optional[str] = None
     pincode: Optional[str] = None
     delivery_charge: Optional[float] = 0
+    # Wave 9 — GST
+    gst_rate: Optional[int] = None
+    gst_amount: Optional[float] = None
 
 
 class OrderStatusUpdate(BaseModel):
@@ -686,6 +693,7 @@ def toner_master_brands():
 def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
                     city: Optional[str] = None, toner_type: Optional[str] = None,
                     supplier_id: Optional[str] = None,
+                    d2d_only: bool = False,
                     limit: int = 200):
     qry = sb_admin.table("listings").select(
         "*,suppliers!inner(business_name,city,is_suspended)"
@@ -700,11 +708,22 @@ def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
         qry = qry.eq("toner_type", toner_type)
     if supplier_id:
         qry = qry.eq("supplier_id", supplier_id)
+    if d2d_only:
+        # Defensive — if column doesn't exist yet, surface a sensible empty
+        # result instead of crashing.
+        try:
+            qry = qry.eq("d2d_enabled", True)
+        except Exception:
+            pass
     try:
         rows = qry.execute().data or []
     except Exception as e:
+        msg = str(e)
+        # If D2D filter referenced a missing column, return [] (migration pending).
+        if d2d_only and "d2d_enabled" in msg:
+            return []
         # Graceful fallback if is_suspended column is not yet migrated
-        if "is_suspended" in str(e):
+        if "is_suspended" in msg:
             qry = sb_admin.table("listings").select(
                 "*,suppliers!inner(business_name,city)"
             ).order("price").limit(limit)
@@ -747,6 +766,168 @@ def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
             for r in out:
                 r["variants"] = []
     return out
+
+
+@api.get("/search/universal")
+def search_universal(q: str, limit_per_type: int = 12):
+    """Wave 9 — universal fuzzy search across toners, printers and papers.
+    Matches brand / model_number / description (ilike %q%). Returns three lists.
+    Results are sorted with exact brand matches first, then partial."""
+    q_norm = (q or "").strip()
+    if not q_norm:
+        return {"q": "", "toners": [], "printers": [], "papers": [], "counts": {"toners": 0, "printers": 0, "papers": 0}}
+    needle = q_norm.lower()
+
+    def _rank(rows, brand_key="brand", model_key="model_number"):
+        """Exact-brand matches first, then partial-brand, then model/description."""
+        ranked = []
+        for r in rows:
+            b = (r.get(brand_key) or "").lower()
+            m = (r.get(model_key) or "").lower()
+            d = (r.get("description") or "").lower()
+            if b == needle:
+                score = 0
+            elif b.startswith(needle):
+                score = 1
+            elif needle in b:
+                score = 2
+            elif needle in m:
+                score = 3
+            elif needle in d:
+                score = 4
+            else:
+                score = 5
+            ranked.append((score, r))
+        ranked.sort(key=lambda x: x[0])
+        return [r for _, r in ranked]
+
+    # --- Toners ---
+    toners: list = []
+    try:
+        sel_t = "id,brand,model_number,toner_type,color,price,stock,image_url,image_urls,gst_rate,intercity_delivery_charge,supplier_id,suppliers!inner(business_name,city,is_suspended)"
+        def _run_toners(sel):
+            return sb_admin.table("listings").select(sel).or_(
+                f"brand.ilike.%{q_norm}%,model_number.ilike.%{q_norm}%,compatible_models.ilike.%{q_norm}%"
+            ).gt("stock", 0).limit(200).execute().data or []
+        t_rows = []
+        for _ in range(6):
+            try:
+                t_rows = _run_toners(sel_t)
+                break
+            except Exception as e:
+                msg = str(e)
+                dropped = False
+                # Drop the offending column from select string
+                for k in ("gst_rate", "intercity_delivery_charge", "image_urls", "is_suspended"):
+                    if k in msg and k in sel_t:
+                        sel_t = sel_t.replace(f",{k}", "").replace(f"{k},", "")
+                        dropped = True
+                        break
+                if not dropped and "compatible_models" in msg:
+                    try:
+                        t_rows = sb_admin.table("listings").select(sel_t).or_(
+                            f"brand.ilike.%{q_norm}%,model_number.ilike.%{q_norm}%"
+                        ).gt("stock", 0).limit(200).execute().data or []
+                        break
+                    except Exception:
+                        t_rows = []
+                        break
+                elif not dropped:
+                    raise
+        for r in t_rows:
+            sup = r.pop("suppliers", None) or {}
+            if sup.get("is_suspended"):
+                continue
+            r["supplier_name"] = sup.get("business_name") or ""
+            r["city"] = sup.get("city") or ""
+            toners.append(r)
+        toners = _rank(toners)[:limit_per_type]
+    except Exception as e:
+        logger.warning("universal search toners failed: %s", e)
+
+    # --- Printers ---
+    printers: list = []
+    try:
+        sel_p = "id,brand,model_number,description,price,stock,image_url,image_urls,condition,usage_type,category,color,gst_rate,intercity_delivery_charge,supplier_id,supplier:suppliers!inner(business_name,city,is_suspended)"
+        def _run_printers(sel):
+            return sb_admin.table("printer_listings").select(sel).or_(
+                f"brand.ilike.%{q_norm}%,model_number.ilike.%{q_norm}%,description.ilike.%{q_norm}%"
+            ).gt("stock", 0).limit(200).execute().data or []
+        p_rows = []
+        for _ in range(6):
+            try:
+                p_rows = _run_printers(sel_p)
+                break
+            except Exception as e:
+                msg = str(e)
+                dropped = False
+                for k in ("gst_rate", "intercity_delivery_charge", "image_urls", "is_suspended"):
+                    if k in msg and k in sel_p:
+                        sel_p = sel_p.replace(f",{k}", "").replace(f"{k},", "")
+                        dropped = True
+                        break
+                if not dropped:
+                    raise
+        for r in p_rows:
+            sup = r.pop("supplier", None) or {}
+            if sup.get("is_suspended"):
+                continue
+            r["supplier_name"] = sup.get("business_name") or ""
+            r["city"] = sup.get("city") or ""
+            printers.append(r)
+        printers = _rank(printers)[:limit_per_type]
+    except Exception as e:
+        logger.warning("universal search printers failed: %s", e)
+
+    # --- Papers ---
+    papers: list = []
+    try:
+        sel_pp = "id,brand,size,gsm,reams_per_box,price_per_ream,stock,image_url,image_urls,gst_rate,intercity_delivery_charge,supplier_id,suppliers!inner(business_name,city,is_suspended)"
+        def _run_papers(sel):
+            return sb_admin.table("paper_listings").select(sel).or_(
+                f"brand.ilike.%{q_norm}%,size.ilike.%{q_norm}%"
+            ).gt("stock", 0).limit(200).execute().data or []
+        pp_rows = []
+        for _ in range(6):
+            try:
+                pp_rows = _run_papers(sel_pp)
+                break
+            except Exception as e:
+                msg = str(e)
+                if "paper_listings" in msg and "does not exist" in msg:
+                    pp_rows = []
+                    break
+                dropped = False
+                for k in ("gst_rate", "intercity_delivery_charge", "image_urls", "is_suspended"):
+                    if k in msg and k in sel_pp:
+                        sel_pp = sel_pp.replace(f",{k}", "").replace(f"{k},", "")
+                        dropped = True
+                        break
+                if not dropped:
+                    raise
+        for r in pp_rows:
+            sup = r.pop("suppliers", None) or {}
+            if sup.get("is_suspended"):
+                continue
+            r["supplier_name"] = sup.get("business_name") or ""
+            r["city"] = sup.get("city") or ""
+            papers.append(r)
+        papers = _rank(papers, brand_key="brand", model_key="size")[:limit_per_type]
+    except Exception as e:
+        logger.warning("universal search papers failed: %s", e)
+
+    return {
+        "q": q_norm,
+        "toners": toners,
+        "printers": printers,
+        "papers": papers,
+        "counts": {
+            "toners": len(toners),
+            "printers": len(printers),
+            "papers": len(papers),
+        },
+    }
+
 
 
 @api.get("/listings/facets")
@@ -863,6 +1044,9 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
         "warranty": payload.warranty,
         "print_technology": payload.print_technology,
         "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
+        "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
+        "d2d_enabled": bool(payload.d2d_enabled) if payload.d2d_enabled is not None else None,
+        "d2d_price": (float(payload.d2d_price) if payload.d2d_price else None),
     }
     for k, v in optional_cols.items():
         if v is not None:
@@ -876,7 +1060,7 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("spec_pdf_url", "image_urls", "compatible_models", "oem_part_number", "cartridge_weight", "pack_size", "warranty", "print_technology", "intercity_delivery_charge"):
+            for k in ("spec_pdf_url", "image_urls", "compatible_models", "oem_part_number", "cartridge_weight", "pack_size", "warranty", "print_technology", "intercity_delivery_charge", "gst_rate", "d2d_enabled", "d2d_price"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True
@@ -971,8 +1155,10 @@ async def create_order(payload: OrderCreate, user: dict = Depends(require_user))
         "order_state": payload.order_state,
         "pincode": payload.pincode,
         "delivery_charge": (float(payload.delivery_charge) if payload.delivery_charge else None),
+        "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
+        "gst_amount": (float(payload.gst_amount) if payload.gst_amount is not None else None),
     }.items():
-        if v:
+        if v is not None and v != "":
             row[k] = v
     while True:
         try:
@@ -981,7 +1167,7 @@ async def create_order(payload: OrderCreate, user: dict = Depends(require_user))
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("variant_id", "street_address", "area", "order_city", "order_state", "pincode", "delivery_charge"):
+            for k in ("variant_id", "street_address", "area", "order_city", "order_state", "pincode", "delivery_charge", "gst_rate", "gst_amount"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True
@@ -1253,7 +1439,7 @@ class PrinterListingCreate(BaseModel):
     image_url: str
     image_urls: List[str] = Field(default_factory=list)
     condition: str = "new"
-    usage_type: str
+    usage_type: Optional[str] = None
     category: str
     color: str = "color"
     paper_sizes: List[str] = Field(default_factory=list)
@@ -1276,6 +1462,10 @@ class PrinterListingCreate(BaseModel):
     mobile_printing: List[str] = Field(default_factory=list)
     monthly_volume_recommended: Optional[int] = None
     intercity_delivery_charge: Optional[float] = 0
+    gst_rate: Optional[int] = 18
+    # Wave 9: multi-select usage + special features
+    usage_types: List[str] = Field(default_factory=list)
+    special_features: List[str] = Field(default_factory=list)
 
 
 def _supplier_id_for(user: dict) -> str:
@@ -1341,8 +1531,17 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         raise HTTPException(403, "Only approved sellers can list printers")
     if payload.condition not in PRINTER_CONDITIONS:
         raise HTTPException(400, "Invalid condition")
-    if payload.usage_type not in PRINTER_USAGES:
-        raise HTTPException(400, "Invalid usage_type")
+    # Wave 9 — usage_type is now optional/backward-compat; usage_types[] is canonical.
+    # Accept either, derive the other.
+    usage_types = list(payload.usage_types or [])
+    if not usage_types and payload.usage_type:
+        usage_types = [payload.usage_type]
+    if not usage_types:
+        raise HTTPException(400, "At least one usage type is required")
+    usage_types = [u for u in usage_types if u in PRINTER_USAGES]
+    if not usage_types:
+        raise HTTPException(400, "Invalid usage_types")
+    primary_usage = usage_types[0]
     if payload.category not in PRINTER_CATEGORIES:
         raise HTTPException(400, "Invalid category")
     if payload.color not in PRINTER_COLORS:
@@ -1359,7 +1558,7 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         "description": payload.description or "",
         "image_url": payload.image_url,
         "condition": payload.condition,
-        "usage_type": payload.usage_type,
+        "usage_type": primary_usage,
         "category": payload.category,
         "color": payload.color,
         "paper_sizes": payload.paper_sizes or [],
@@ -1384,6 +1583,9 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         "mobile_printing": payload.mobile_printing or None,
         "monthly_volume_recommended": payload.monthly_volume_recommended,
         "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
+        "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
+        "usage_types": usage_types,
+        "special_features": payload.special_features or None,
     }
     for k, v in optional_cols.items():
         if v is not None:
@@ -1395,7 +1597,7 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("spec_pdf_url", "image_urls", "print_speed_ppm", "duty_cycle", "display_type", "dimensions", "weight_kg", "printer_warranty", "max_resolution", "mobile_printing", "monthly_volume_recommended", "intercity_delivery_charge"):
+            for k in ("spec_pdf_url", "image_urls", "print_speed_ppm", "duty_cycle", "display_type", "dimensions", "weight_kg", "printer_warranty", "max_resolution", "mobile_printing", "monthly_volume_recommended", "intercity_delivery_charge", "gst_rate", "usage_types", "special_features"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True
@@ -1431,6 +1633,7 @@ def list_printers(
     function_: Optional[str] = None,
     connectivity: Optional[str] = None,
     feature: Optional[str] = None,
+    special_feature: Optional[str] = None,
     min_volume: Optional[int] = None,
     max_volume: Optional[int] = None,
     city: Optional[str] = None,
@@ -1438,7 +1641,10 @@ def list_printers(
     supplier_id: Optional[str] = None,
     q: Optional[str] = None,
 ):
-    """Public browse endpoint with optional filters from the MPS flow."""
+    """Public browse endpoint with optional filters from the MPS flow.
+    Wave 9 — supports cascading filter fallback: if strict filters return < 3 rows,
+    relax the most-restrictive ones one at a time and re-run, tagging the relaxed
+    rows with is_relaxed_match=true."""
     sel = (
         "id,brand,model_number,description,image_url,condition,usage_type,category,"
         "color,paper_sizes,functions,connectivity,features,monthly_volume_min,monthly_volume_max,"
@@ -1446,57 +1652,114 @@ def list_printers(
     )
     sel_no_suspend = sel.replace(",is_suspended", "")
     sel_no_brochure = sel_no_suspend.replace(",spec_pdf_url", "")
-    def _build_query(select_str):
+    # Mutable filter dict so we can progressively pop entries during cascading fallback
+    filters = {
+        "special_feature": special_feature,
+        "feature": feature,
+        "connectivity": connectivity,
+        "paper_size": paper_size,
+        "function_": function_,
+        "usage_type": usage_type,
+        "category": category,
+        "condition": condition,
+        "color": color,
+        "min_volume": min_volume,
+        "max_volume": max_volume,
+        "brand": brand,
+        "supplier_id": supplier_id,
+        "q": q,
+    }
+    # Cascade order — drop in this order until we have ≥3 results.
+    CASCADE_ORDER = ["special_feature", "feature", "connectivity", "paper_size", "function_", "usage_type"]
+
+    def _build_query(select_str, f):
         qry = sb_admin.table("printer_listings").select(select_str).gt("stock", 0)
-        if usage_type and usage_type in PRINTER_USAGES:
-            qry = qry.eq("usage_type", usage_type)
-        if category and category in PRINTER_CATEGORIES:
-            qry = qry.eq("category", category)
-        if condition and condition in PRINTER_CONDITIONS:
-            qry = qry.eq("condition", condition)
-        if color and color in PRINTER_COLORS:
-            if color == "color":
+        if f.get("usage_type") and f["usage_type"] in PRINTER_USAGES:
+            # Match either canonical usage_types[] array OR legacy usage_type column
+            qry = qry.or_(
+                f"usage_type.eq.{f['usage_type']},"
+                f"usage_types.cs.{{{f['usage_type']}}}"
+            )
+        if f.get("category") and f["category"] in PRINTER_CATEGORIES:
+            qry = qry.eq("category", f["category"])
+        if f.get("condition") and f["condition"] in PRINTER_CONDITIONS:
+            qry = qry.eq("condition", f["condition"])
+        if f.get("color") and f["color"] in PRINTER_COLORS:
+            if f["color"] == "color":
                 qry = qry.in_("color", ["color", "both"])
-            elif color == "bw":
+            elif f["color"] == "bw":
                 qry = qry.in_("color", ["bw", "both"])
             else:
                 qry = qry.eq("color", "both")
-        if paper_size:
-            qry = qry.contains("paper_sizes", [paper_size])
-        if function_:
-            qry = qry.contains("functions", [function_])
-        if connectivity:
-            qry = qry.contains("connectivity", [connectivity])
-        if feature:
-            qry = qry.contains("features", [feature])
-        if min_volume is not None:
-            qry = qry.gte("monthly_volume_max", min_volume)
-        if max_volume is not None:
-            qry = qry.lte("monthly_volume_min", max_volume)
-        if brand:
-            qry = qry.ilike("brand", f"%{brand}%")
-        if supplier_id:
-            qry = qry.eq("supplier_id", supplier_id)
-        if q:
-            qry = qry.or_(f"brand.ilike.%{q}%,model_number.ilike.%{q}%,description.ilike.%{q}%")
+        if f.get("paper_size"):
+            qry = qry.contains("paper_sizes", [f["paper_size"]])
+        if f.get("function_"):
+            qry = qry.contains("functions", [f["function_"]])
+        if f.get("connectivity"):
+            qry = qry.contains("connectivity", [f["connectivity"]])
+        if f.get("feature"):
+            qry = qry.contains("features", [f["feature"]])
+        if f.get("special_feature"):
+            qry = qry.contains("special_features", [f["special_feature"]])
+        if f.get("min_volume") is not None:
+            qry = qry.gte("monthly_volume_max", f["min_volume"])
+        if f.get("max_volume") is not None:
+            qry = qry.lte("monthly_volume_min", f["max_volume"])
+        if f.get("brand"):
+            qry = qry.ilike("brand", f"%{f['brand']}%")
+        if f.get("supplier_id"):
+            qry = qry.eq("supplier_id", f["supplier_id"])
+        if f.get("q"):
+            qry = qry.or_(f"brand.ilike.%{f['q']}%,model_number.ilike.%{f['q']}%,description.ilike.%{f['q']}%")
         return qry.order("created_at", desc=True).limit(200)
-    try:
-        res = _build_query(sel).execute()
-    except Exception as e:
-        msg = str(e)
-        if "is_suspended" in msg:
-            try:
-                res = _build_query(sel_no_suspend).execute()
-            except Exception as e2:
-                if "spec_pdf_url" in str(e2):
-                    res = _build_query(sel_no_brochure).execute()
-                else:
-                    raise
-        elif "spec_pdf_url" in msg:
-            res = _build_query(sel_no_brochure).execute()
-        else:
+
+    def _run(select_str, f):
+        try:
+            return _build_query(select_str, f).execute()
+        except Exception as e:
+            msg = str(e)
+            # Fallback when columns missing from migrations
+            for column in ("special_features", "usage_types", "is_suspended", "spec_pdf_url"):
+                if column in msg:
+                    # Re-run with that filter dropped or with a lighter select string
+                    if column == "special_features":
+                        f = {**f, "special_feature": None}
+                        return _run(select_str, f)
+                    if column == "usage_types":
+                        # Fall back to plain usage_type equality
+                        ut = f.get("usage_type")
+                        f = {**f, "usage_type": None}
+                        try:
+                            qry = _build_query(select_str, f)
+                            if ut:
+                                qry = qry.eq("usage_type", ut)
+                            return qry.execute()
+                        except Exception:
+                            return _run(select_str, f)
+                    if column == "is_suspended":
+                        return _run(sel_no_suspend, f)
+                    if column == "spec_pdf_url":
+                        return _run(sel_no_brochure, f)
             raise
+
+    # Initial strict run
+    strict_filters = dict(filters)
+    res = _run(sel, strict_filters)
     rows = res.data or []
+    relaxed = False
+    dropped_filters: List[str] = []
+    # Cascade until we have ≥3 results or no more relaxable filters
+    f_state = dict(strict_filters)
+    for key in CASCADE_ORDER:
+        if len(rows) >= 3:
+            break
+        if not f_state.get(key):
+            continue
+        dropped_filters.append(key)
+        f_state[key] = None
+        relaxed = True
+        res = _run(sel, f_state)
+        rows = res.data or []
     out = []
     # Treat common India city aliases as equivalent for filtering
     _CITY_ALIASES = {
@@ -1519,16 +1782,22 @@ def list_printers(
         r["city"] = sup.get("city", "")
         if accepted is not None and r["city"].lower() not in accepted:
             continue
+        if relaxed:
+            r["is_relaxed_match"] = True
         out.append(r)
     return out
 
 
 class MPSInquiry(BaseModel):
-    name: str
+    # Generic enquiry envelope. Used by MPS, Buy-Bulk, OEM Application,
+    # Featured-application, and lightweight interest captures
+    # (Consumables / Scanners "Notify me"). Phone / estimated_printers
+    # are optional so simple email-only captures work.
+    name: Optional[str] = ""
     email: EmailStr
-    phone: str
+    phone: Optional[str] = ""
     description: Optional[str] = ""
-    estimated_printers: str
+    estimated_printers: Optional[str] = "—"
     selections: Optional[dict] = None
 
 
@@ -1545,14 +1814,20 @@ async def mps_inquiry(payload: MPSInquiry, request: Request):
             user_id = None
     row = {
         "user_id": user_id,
-        "name": payload.name.strip(),
+        "name": (payload.name or "").strip(),
         "email": str(payload.email),
-        "phone": payload.phone.strip(),
+        "phone": (payload.phone or "").strip(),
         "description": payload.description or "",
-        "estimated_printers": payload.estimated_printers,
+        "estimated_printers": payload.estimated_printers or "—",
         "selections": payload.selections or {},
     }
-    sb_admin.table("mps_inquiries").insert(row).execute()
+    # Best-effort DB insert; some enquiry types may not have a matching row in
+    # the mps_inquiries table (e.g. interest captures). Email send is always
+    # attempted so support@tonerscart.com is notified regardless.
+    try:
+        sb_admin.table("mps_inquiries").insert(row).execute()
+    except Exception as e:
+        logger.warning("mps_inquiries insert skipped: %s", e)
     try:
         await email_mps_inquiry(row)
     except Exception as e:
@@ -2743,6 +3018,7 @@ class PaperCreate(BaseModel):
     acid_free: Optional[bool] = None
     suitable_for: List[str] = Field(default_factory=list)
     intercity_delivery_charge: Optional[float] = 0
+    gst_rate: Optional[int] = 18
 
 
 @api.post("/supplier/papers")
@@ -2770,6 +3046,7 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
         "acid_free": payload.acid_free,
         "suitable_for": payload.suitable_for or None,
         "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
+        "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
     }
     for k, v in optional_cols.items():
         if v is not None:
@@ -2781,7 +3058,7 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("image_urls", "brightness", "thickness_microns", "acid_free", "suitable_for", "intercity_delivery_charge"):
+            for k in ("image_urls", "brightness", "thickness_microns", "acid_free", "suitable_for", "intercity_delivery_charge", "gst_rate"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True
@@ -2938,6 +3215,13 @@ class ListingPatch(BaseModel):
     suitable_for: Optional[List[str]] = None
     reams_per_box: Optional[int] = None
     price_per_ream: Optional[float] = None
+    # Wave 9 — GST + printer multi-select
+    gst_rate: Optional[int] = None
+    usage_types: Optional[List[str]] = None
+    special_features: Optional[List[str]] = None
+    # Wave 10 — D2D marketplace
+    d2d_enabled: Optional[bool] = None
+    d2d_price: Optional[float] = None
 
 
 @api.put("/supplier/listings/{listing_id}")
@@ -2959,6 +3243,12 @@ def supplier_patch_listing(listing_id: str, payload: ListingPatch, user: dict = 
         upd["cartridge_weight"] = int(payload.cartridge_weight)
     if payload.intercity_delivery_charge is not None:
         upd["intercity_delivery_charge"] = float(payload.intercity_delivery_charge)
+    if payload.gst_rate is not None:
+        upd["gst_rate"] = int(payload.gst_rate)
+    if payload.d2d_enabled is not None:
+        upd["d2d_enabled"] = bool(payload.d2d_enabled)
+    if payload.d2d_price is not None:
+        upd["d2d_price"] = float(payload.d2d_price) if payload.d2d_price else None
     # Text / list pass-through fields
     for k in ("brand", "model_number", "color", "toner_type", "image_url", "image_urls",
               "compatible_models", "oem_part_number", "warranty", "print_technology"):
@@ -2975,6 +3265,13 @@ def supplier_patch_listing(listing_id: str, payload: ListingPatch, user: dict = 
         sb_admin.table("listings").update(upd).eq("id", listing_id).eq("supplier_id", s.data["id"]).execute()
     except Exception as e:
         msg = str(e)
+        # Surface a clear error when the request is *only* about D2D fields
+        # and the corresponding columns are missing — silent success here
+        # would mislead the dealer into thinking D2D is on.
+        d2d_keys = {"d2d_enabled", "d2d_price"}
+        non_meta = {k for k in upd.keys() if k != "updated_at"}
+        if non_meta and non_meta.issubset(d2d_keys) and ("d2d_enabled" in msg or "d2d_price" in msg):
+            raise HTTPException(503, "D2D columns not migrated yet. Apply supabase_schema_d2d.sql to enable Dealer-to-Dealer pricing.")
         retry = {k: v for k, v in upd.items() if k not in msg}
         if retry:
             sb_admin.table("listings").update(retry).eq("id", listing_id).eq("supplier_id", s.data["id"]).execute()
@@ -3005,6 +3302,14 @@ def supplier_patch_printer(printer_id: str, payload: ListingPatch, user: dict = 
         upd["monthly_volume_recommended"] = int(payload.monthly_volume_recommended)
     if payload.intercity_delivery_charge is not None:
         upd["intercity_delivery_charge"] = float(payload.intercity_delivery_charge)
+    if payload.gst_rate is not None:
+        upd["gst_rate"] = int(payload.gst_rate)
+    if payload.usage_types is not None:
+        upd["usage_types"] = payload.usage_types
+        if payload.usage_types:
+            upd["usage_type"] = payload.usage_types[0]
+    if payload.special_features is not None:
+        upd["special_features"] = payload.special_features
     for k in ("brand", "model_number", "description", "image_url", "image_urls",
               "usage_type", "category", "color", "functions", "connectivity",
               "paper_sizes", "mobile_printing", "max_resolution", "condition"):
@@ -3082,6 +3387,8 @@ def patch_paper(paper_id: str, payload: ListingPatch, user: dict = Depends(requi
         upd["reams_per_box"] = int(payload.reams_per_box)
     if payload.intercity_delivery_charge is not None:
         upd["intercity_delivery_charge"] = float(payload.intercity_delivery_charge)
+    if payload.gst_rate is not None:
+        upd["gst_rate"] = int(payload.gst_rate)
     for k in ("brand", "size", "image_url", "image_urls", "suitable_for"):
         v = getattr(payload, k, None)
         if v is not None:

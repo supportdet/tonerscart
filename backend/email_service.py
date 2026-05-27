@@ -186,6 +186,22 @@ async def email_mps_inquiry(payload: dict):
         heading = "New Featured Supplier Application"
         intro = f"<p style='margin:0 0 18px 0;color:#6E6E73;'>Company: <strong>{company}</strong></p>"
         subject = f"New Featured Supplier Application — {company}"
+    elif kind == "bulk_enquiry":
+        product = sel.get("product_type") or "—"
+        qty = sel.get("quantity") or "—"
+        heading = "New Buy-Bulk Enquiry"
+        intro = f"<p style='margin:0 0 18px 0;color:#6E6E73;'>Product: <strong>{product}</strong> · Quantity: <strong>{qty}</strong></p>"
+        subject = f"[TonersCart Bulk] {product} × {qty} — {email}"
+    elif kind == "oem_application":
+        company = sel.get("company") or name or email
+        heading = "New OEM Marketplace Application"
+        intro = f"<p style='margin:0 0 18px 0;color:#6E6E73;'>Company: <strong>{company}</strong></p>"
+        subject = f"[TonersCart OEM] Application — {company}"
+    elif kind.endswith("_interest"):
+        cat = sel.get("category") or kind.replace("_interest", "").title()
+        heading = f"New {cat} Interest Capture"
+        intro = f"<p style='margin:0 0 18px 0;color:#6E6E73;'>Category: <strong>{cat}</strong></p>"
+        subject = f"[TonersCart Notify] {cat} interest — {email}"
     else:
         heading = "New Managed Print Services (MPS) enquiry"
         intro = f"<p style='margin:0 0 18px 0;color:#6E6E73;'>Estimated fleet: <strong>{estimated}</strong> printers</p>"
