@@ -1,0 +1,46 @@
+{
+  "summary": "Wave 12 (D2D for all 3 product types + verification gate + image-optional + bulk-company + landing stats) — backend + frontend tested. Backend pytest: 8/11 pass, 1 skipped (cascade), 2 FAILED. Found TWO blocking backend bugs: (1) GET /api/d2d/me 500s for any approved supplier because the route queries a non-existent column `suppliers.is_approved` — this completely breaks the verification gate on /dealer for legitimate dealers (Supabase returns 'column suppliers.is_approved does not exist'). (2) POST /api/supplier/printers still rejects payloads without image_url at the Pydantic layer (PrinterListingCreate.image_url: str), returning 422 before the endpoint's image-optional code path is reached — spec said printer create should no longer 400 on missing image. Everything else verified working: /d2d/listings public aggregator returns well-formed shape with counts and graceful-degrades on missing columns; /d2d/me unauth → 403; /d2d/me as buyer → {verified:false, reason:'not_supplier'}; toner + paper creates succeed without image_url; PUT /supplier/papers/{id} with d2d body → 503 with migration-pending message (correct graceful path); POST /mps/inquiry with selections.type=bulk_enquiry + company=Acme Corp → {ok:true}. Frontend: landing stats strip has all 4 testids (stat-marketplace #1 Marketplace, stat-suppliers 500+ Dealers, stat-cities 10+ Cities, stat-brands 15+ Brands) with computed fontFamily 'Helvetica, Helvetica Neue, Arial, sans-serif'; /dealer as guest renders dealer-verification-gate + dealer-gate-cta ('Become a verified dealer'); /oem is open to all (no gate, page renders 'OEM Partner Showcase'); /bulk has bulk-company input + bulk-credit-note with the exact 30-day-credit copy. Supplier-dashboard D2DRow / D2DExplainer / image-picker-removal could not be visually verified end-to-end because the same supplier-bootstrap path hits backend bug #1 (verification gate failure) and bug #2 (cannot create new printers without image) — main agent should re-test these UI surfaces after both backend fixes.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/d2d/me", "issue": "Returns 500 for approved suppliers — server.py line 815 selects column `is_approved` from suppliers, but Supabase suppliers table has no such column. Error: \"column suppliers.is_approved does not exist (42703)\". This breaks the entire /dealer verification gate. FIX: derive verified=true from row presence in `suppliers` table (matches existing _supplier_id_for logic) OR add the column via migration.", "priority": "CRITICAL"},
+      {"endpoint": "POST /api/supplier/printers", "issue": "Pydantic schema PrinterListingCreate.image_url is declared `str` (required) at server.py line 1517. Spec said printer image is now optional. Endpoint logic (line 1639) uses `payload.image_url or ''` but never runs because 422 is raised first. FIX: change to `image_url: Optional[str] = ''` (or None).", "priority": "CRITICAL"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Dealer verification gate for approved supplier", "issue": "Cannot be fully verified end-to-end because GET /api/d2d/me returns 500 (Bug #1). UI will show the gate forever for approved suppliers. Re-test after backend fix.", "affected_selectors": ["dealer-verification-gate","dealer-title"]},
+      {"flow": "Supplier Dashboard Printers tab end-to-end", "issue": "Could not seed a fresh printer to verify D2DRow rendering and the no-image flow because POST /api/supplier/printers 422s without image_url (Bug #2). Re-test after backend fix.", "affected_selectors": ["d2d-explainer-card","d2d-row-*","d2d-toggle-*","d2d-price-input-*"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave12.py",
+    "/app/test_reports/pytest/iteration_16_wave12.xml"
+  ],
+  "action_items": [
+    "CRITICAL: Fix GET /api/d2d/me — replace `is_approved` column reference with row-presence check on suppliers table (server.py ~line 815). Suggested patch: drop the `.eq('is_approved', ...)` logic and treat presence in `suppliers` as verified=true (mirrors _supplier_id_for at line 1552).",
+    "CRITICAL: Make PrinterListingCreate.image_url optional in server.py line 1517 (`image_url: Optional[str] = ''`). The endpoint already handles empty/None correctly downstream.",
+    "After both fixes, re-run pytest /app/backend/tests/test_wave12.py (expect 11/11 green) and re-verify the Supplier-Dashboard Printers tab D2DRow + image-picker-removal on Add Printer form."
+  ],
+  "critical_code_review_comments": [
+    "server.py /d2d/me uses `maybe_single().execute()` which raises if zero rows in current supabase-py — consider `.execute()` + manual data check for safer empty-row handling.",
+    "Three nearly-identical d2d PUT blocks (lines ~3335/3400/3487) are copy-pasted across listings/printers/papers — extract into a shared helper to satisfy the DRY guideline.",
+    "server.py is 3960 lines — well past the 700-line guideline. Suggest splitting D2D, papers, printers, MPS into separate routers.",
+    "PaperCreate is well-modelled (image_url Optional) but PrinterListingCreate diverges by making image_url required — inconsistent with the rest of the codebase and the wave-12 spec."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_wave12.py (new — 11 cases, reusable regression)"
+  ],
+  "success_rate": {
+    "backend": "73% (8/11 pass, 2 failed, 1 skipped due to cascade)",
+    "frontend": "100% on guest-accessible surfaces (landing stats, /dealer gate, /oem open, /bulk company+note). Supplier-only surfaces not fully verified due to backend bugs."
+  },
+  "test_credentials": "Admin: admin@tonerscart.in / Admin@123. Reused supplier TEST.w7.sup.cf61d246@tonerscarttest.com / Test@12345 (still active). Fresh buyer per-run via /api/auth/signup-customer.",
+  "seed_data_creation": "Created 1 toner + 1 paper for the existing supplier without images (success). Printer creation without image failed (Pydantic 422 — bug). New buyer created per test run (TEST.w12.buyer.<uuid>@tonerscarttest.com).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Wave 12 regression suite is at /app/backend/tests/test_wave12.py (11 cases, ~25s). The two CRITICAL bugs documented above are blockers — until /d2d/me is fixed, no logged-in supplier can pass the /dealer gate; until PrinterListingCreate.image_url is optional, no printer can be created via the spec-compliant no-image flow. Testid map: dealer-verification-gate, dealer-gate-cta, dealer-title, dealer-search-input, dealer-empty, d2d-section-toner|printer|paper, d2d-explainer-card, d2d-row-*, d2d-toggle-*, d2d-price-input-*, bulk-company, bulk-credit-note, stat-marketplace/suppliers/cities/brands. /api/auth/signup endpoint does NOT exist — use /api/auth/signup-customer for buyers and /api/auth/signup-supplier for dealers.",
+  "rca of the issue": "BUG 1 root cause: server.py line 815 hard-codes a `select('id,business_name,is_approved')` on the suppliers table; the live Supabase schema tracks approval via the suppliers_pending.status column instead (the suppliers table contains only approved dealers — confirmed by reading admin/suppliers/{id}/approve at line 1446 which inserts into suppliers AFTER approval). Mitigation: replace the select+is_approved check with mere row-presence (`if s.data: verified=true`). Reproduction: login as approved supplier → GET /api/d2d/me → 500. Postgres error 42703.  BUG 2 root cause: PrinterListingCreate model still declares `image_url: str` (line 1517) so FastAPI validates before reaching the endpoint body where image_url is treated as optional. Mitigation: `image_url: Optional[str] = ''`. Reproduction: POST /api/supplier/printers without image_url → 422 with pydantic 'Field required'."
+}

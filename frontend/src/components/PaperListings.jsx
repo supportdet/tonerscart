@@ -5,6 +5,7 @@ import { Label } from "./ui/label";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { Plus, Trash2, Package, Copy, Check, Pencil } from "lucide-react";
+import D2DRow from "./D2DRow";
 import { GST_RATES, gstAmount, formatINR } from "../lib/listingConstants";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
@@ -87,19 +88,9 @@ export default function PaperListings() {
     const submit = async (e) => {
         e.preventDefault();
         if (!form.price_per_ream || !form.stock) { toast.error("Price and stock are required"); return; }
-        // For Add (not edit), require at least 1 image
-        if (!editingId && imageFiles.length < 1) { toast.error("Please upload at least 1 paper image (max 3)"); return; }
+        // Wave 12 — image upload removed. Themed ream graphic auto-renders.
         setSaving(true);
         try {
-            let uploadedUrls = [];
-            if (imageFiles.length > 0) {
-                for (const file of imageFiles) {
-                    const fd = new FormData();
-                    fd.append("file", file);
-                    const { data } = await api.post("/supplier/listing-image", fd);
-                    if (data?.url) uploadedUrls.push(data.url);
-                }
-            }
             const payload = {
                 brand: form.brand,
                 size: form.size,
@@ -113,10 +104,6 @@ export default function PaperListings() {
                 suitable_for: form.suitable_for || [],
                 gst_rate: Number(form.gst_rate || 18),
             };
-            if (uploadedUrls.length > 0) {
-                payload.image_url = uploadedUrls[0];
-                payload.image_urls = uploadedUrls;
-            }
             if (editingId) {
                 await api.put(`/supplier/papers/${editingId}`, payload);
                 toast.success("Paper listing updated");
@@ -201,6 +188,7 @@ export default function PaperListings() {
                                     <Trash2 size={12} /> Remove
                                 </button>
                             </div>
+                            <D2DRow listing={p} endpoint={`/supplier/papers/${p.id}`} onChanged={load} />
                         </div>
                     ))}
                 </div>
@@ -262,25 +250,8 @@ export default function PaperListings() {
                             </div>
                         </div>
 
-                        <div className="text-[11px] tracking-[0.16em] uppercase font-semibold text-[#86868B] mt-2">Product images <span className="text-red-500">*</span> <span className="normal-case text-[#86868B] tracking-normal">(2–3 photos, auto-compressed)</span></div>
-                        <label className="block cursor-pointer">
-                            <input type="file" accept="image/*" multiple onChange={onPickImages} className="hidden" data-testid="paper-image-input" disabled={imageFiles.length >= 3} />
-                            <div className="border-2 border-dashed border-[#D2D2D7] rounded-xl p-3 hover:border-[#00B7C7] transition">
-                                {imagePreviews.length ? (
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        {imagePreviews.map((src, i) => (
-                                            <div key={i} className="relative">
-                                                <img src={src} alt={`preview ${i + 1}`} className="h-20 w-20 object-cover rounded-md border border-black/10" />
-                                                <button type="button" onClick={(e) => { e.preventDefault(); removeImage(i); }} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white text-[11px] grid place-items-center">×</button>
-                                            </div>
-                                        ))}
-                                        {imageFiles.length < 3 && <div className="h-20 w-20 grid place-items-center rounded-md border-2 border-dashed border-[#D2D2D7] text-[#86868B] text-[11px]">+ add</div>}
-                                    </div>
-                                ) : (
-                                    <div className="text-center text-[12.5px] text-[#86868B]">Click to upload 2–3 paper images · PNG / JPG · max 5 MB each</div>
-                                )}
-                            </div>
-                        </label>
+                        {/* Wave 12 — paper image upload removed. Themed ream graphic
+                            auto-renders on every paper listing card. */}
 
                         <div className="grid grid-cols-2 gap-3 mt-2">
                             <div>

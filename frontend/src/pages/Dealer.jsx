@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { MapPin, Search as SearchIcon, Lock, ShoppingCart } from "lucide-react";
+import { MapPin, Search as SearchIcon, Lock, ShoppingCart, ShieldCheck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -10,209 +10,246 @@ import OrderRequestDialog from "../components/OrderRequestDialog";
 
 const ACCENT = "#607d8b";
 
-function D2DCard({ p, canSeeD2D, onBuy }) {
-    const d2dPrice = Number(p.d2d_price ?? 0);
-    const list = Number(p.price ?? 0);
-    const savings = d2dPrice && list ? Math.max(0, list - d2dPrice) : 0;
+function fmtINR(n) { return `₹${Number(n || 0).toLocaleString("en-IN")}`; }
+
+function D2DCard({ kind, p, onBuy }) {
+    const list = Number(p.price ?? p.price_per_ream ?? 0);
+    const d2d = Number(p.d2d_price ?? 0);
+    const savings = d2d && list ? Math.max(0, list - d2d) : 0;
+    const detailHref =
+        kind === "toner" ? `/toner/${p.id}` :
+            kind === "printer" ? `/printer/${p.id}` :
+                `/paper/${p.id}`;
+    const title = kind === "paper"
+        ? `${p.brand} · ${p.size} · ${p.gsm} GSM`
+        : `${p.brand} ${p.model_number}`;
+
     return (
-        <div className="tc-product-card relative" data-testid={`d2d-card-${p.id}`}>
+        <div className="tc-product-card relative" data-testid={`d2d-${kind}-card-${p.id}`}>
             <div className="absolute top-3 left-3 z-10">
                 <span
                     className="inline-block text-[10px] font-bold uppercase tracking-[0.1em] px-2 py-1 rounded-md text-white"
                     style={{ background: ACCENT }}
-                    data-testid={`d2d-badge-${p.id}`}
                 >
                     D2D Price
                 </span>
             </div>
-            <Link to={`/toner/${p.id}`} className="tc-product-img block">
+            <Link to={detailHref} className="tc-product-img block">
                 <span className="tc-product-img-label">{p.brand}</span>
-                {p.image_url ? (
-                    <img src={p.image_url} alt={`${p.brand} ${p.model_number}`} className="w-full h-full object-cover" loading="lazy" />
-                ) : (
+                {p.image_url && kind === "printer" ? (
+                    <img src={p.image_url} alt={title} className="w-full h-full object-cover" loading="lazy" />
+                ) : kind === "toner" ? (
                     <TonerCartridge color={p.color || "Black"} brand={p.brand} model={p.model_number} type={p.toner_type || "Original"} />
+                ) : (
+                    <div className="w-full h-full grid place-items-center" style={{ background: "linear-gradient(180deg,#FAFAFB,#F0F0F2)" }}>
+                        <div className="text-center">
+                            <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-[#86868B] mb-1">{p.size || ""}</div>
+                            <div className="text-[26px] font-bold text-[#0A0A0B]">{p.gsm || "—"}<span className="text-[12px] font-medium text-[#86868B] ml-0.5">GSM</span></div>
+                        </div>
+                    </div>
                 )}
             </Link>
             <div className="p-4 flex flex-col gap-2 flex-1">
                 <div className="text-[10px] tracking-[0.16em] uppercase font-semibold text-[#6E6E73]">{p.brand}</div>
-                <Link to={`/toner/${p.id}`} className="font-mono text-[18px] font-semibold text-[#0A0A0B] tracking-tight hover:text-[#00B7C7] transition">{p.model_number}</Link>
-                <div className="text-[13px] text-[#1D1D1F] truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
-                    {p.supplier_name || "—"}
+                <Link to={detailHref} className="font-mono text-[17px] font-semibold text-[#0A0A0B] tracking-tight hover:text-[#00B7C7] transition truncate">{title}</Link>
+                <div className="text-[12.5px] text-[#1D1D1F] truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
+                    {p.supplier_name || (p.suppliers && p.suppliers.business_name) || "—"}
                 </div>
                 <div className="text-[12px] text-[#6E6E73] flex items-center gap-1">
-                    <MapPin size={11} /> {p.city}
+                    <MapPin size={11} /> {p.supplier_city || p.city || "—"}
                 </div>
-
                 <div className="mt-2 pt-3 border-t border-black/[0.05]">
-                    {canSeeD2D ? (
-                        <>
-                            <div className="text-[10px] tracking-[0.14em] uppercase font-semibold" style={{ color: ACCENT }}>D2D Price</div>
-                            <div className="flex items-end gap-2">
-                                <div className="font-mono text-[20px] font-semibold text-[#0A0A0B]">₹{d2dPrice.toLocaleString("en-IN")}</div>
-                                {list > 0 && (
-                                    <div className="text-[12px] text-[#86868B] line-through pb-0.5">₹{list.toLocaleString("en-IN")}</div>
-                                )}
-                            </div>
-                            {savings > 0 && (
-                                <div className="text-[11.5px] text-emerald-600 font-medium mt-0.5">Save ₹{savings.toLocaleString("en-IN")}</div>
-                            )}
-                            <button
-                                onClick={() => onBuy(p)}
-                                className="mt-3 w-full h-10 rounded-xl text-[13px] font-semibold text-white inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
-                                style={{ background: ACCENT }}
-                                disabled={p.stock <= 0}
-                                data-testid={`d2d-order-${p.id}`}
-                            >
-                                <ShoppingCart size={13} /> {p.stock > 0 ? "Place D2D order" : "Out of stock"}
-                            </button>
-                        </>
-                    ) : (
-                        <div className="text-center py-1">
-                            <div className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-[#86868B] mb-1.5">
-                                <Lock size={12} /> D2D price hidden
-                            </div>
-                            <div className="text-[12px] text-[#6E6E73]">
-                                Visible to approved dealers only.
-                            </div>
-                        </div>
-                    )}
+                    <div className="text-[10px] tracking-[0.14em] uppercase font-semibold" style={{ color: ACCENT }}>D2D Price</div>
+                    <div className="flex items-end gap-2">
+                        <div className="font-mono text-[20px] font-semibold text-[#0A0A0B]">{fmtINR(d2d)}</div>
+                        {list > 0 && d2d < list && (
+                            <div className="text-[12px] text-[#86868B] line-through pb-0.5">{fmtINR(list)}</div>
+                        )}
+                    </div>
+                    {savings > 0 && <div className="text-[11.5px] text-emerald-600 font-medium mt-0.5">Save {fmtINR(savings)}</div>}
+                    <button
+                        onClick={() => onBuy(kind, p)}
+                        className="mt-3 w-full h-10 rounded-xl text-[13px] font-semibold text-white inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
+                        style={{ background: ACCENT }}
+                        disabled={p.stock != null && p.stock <= 0}
+                        data-testid={`d2d-order-${kind}-${p.id}`}
+                    >
+                        <ShoppingCart size={13} /> {p.stock != null && p.stock <= 0 ? "Out of stock" : "Place D2D order"}
+                    </button>
                 </div>
             </div>
         </div>
     );
 }
 
+function Section({ title, kind, items, onBuy }) {
+    if (!items.length) return null;
+    return (
+        <section className="mb-10" data-testid={`d2d-section-${kind}`}>
+            <div className="flex items-baseline justify-between mb-3">
+                <h2 className="text-[18px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>{title}</h2>
+                <div className="text-[12px] text-[#86868B]">{items.length} listing{items.length === 1 ? "" : "s"}</div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {items.map((p) => <D2DCard key={p.id} kind={kind} p={p} onBuy={onBuy} />)}
+            </div>
+        </section>
+    );
+}
+
+function VerificationGate({ status }) {
+    const reason = status?.reason;
+    let title = "Verify as a dealer to access this marketplace";
+    let body = "Only approved dealers on TonersCart can view and purchase at D2D rates. Apply once — get verified — buy from your peers at exclusive pricing.";
+    let cta = { to: "/sell", label: "Become a verified dealer" };
+    if (reason === "not_approved") {
+        title = "Your dealer application is pending review";
+        body = "We're reviewing your dealer application. You'll receive an email once approved (typically within 24 hours).";
+        cta = { to: "/supplier", label: "Open dealer dashboard" };
+    }
+    return (
+        <div className="tc-container max-w-[640px] py-16 sm:py-24">
+            <div
+                className="rounded-[24px] bg-white border border-black/[0.06] p-8 sm:p-12 text-center"
+                style={{ boxShadow: "0 8px 40px -12px rgba(0,0,0,0.08)" }}
+                data-testid="dealer-verification-gate"
+            >
+                <div className="mx-auto w-14 h-14 rounded-2xl grid place-items-center mb-6" style={{ background: `${ACCENT}1A`, color: ACCENT }}>
+                    <ShieldCheck size={22} />
+                </div>
+                <div className="tc-eyebrow mb-3" style={{ color: ACCENT }}>Verified dealers only</div>
+                <h1 className="text-[#0A0A0B] mb-4" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(24px, 3.5vw, 32px)", fontWeight: 400, letterSpacing: "-0.02em" }}>
+                    {title}
+                </h1>
+                <p className="text-[14.5px] text-[#6E6E73] leading-relaxed mb-7 max-w-[440px] mx-auto">{body}</p>
+                <Link
+                    to={cta.to}
+                    className="inline-flex items-center justify-center h-12 px-7 rounded-xl text-[14px] font-semibold text-white"
+                    style={{ background: ACCENT }}
+                    data-testid="dealer-gate-cta"
+                >
+                    {cta.label}
+                </Link>
+                <div className="mt-6 text-[11.5px] text-[#86868B]">Already a dealer? <Link to="/login" className="underline font-medium">Sign in</Link></div>
+            </div>
+        </div>
+    );
+}
+
 export default function Dealer() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
+    const [status, setStatus] = useState(null); // null = checking, {verified:bool,...}
     const [q, setQ] = useState("");
-    const [products, setProducts] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [orderProduct, setOrderProduct] = useState(null);
+    const [data, setData] = useState({ toners: [], printers: [], papers: [] });
+    const [loading, setLoading] = useState(false);
+    const [order, setOrder] = useState(null); // {kind, p}
 
-    // Only approved suppliers should see D2D prices / place orders.
-    const canSeeD2D = !!user && user.role === "supplier";
-
+    // Verification check
     useEffect(() => {
+        if (authLoading) return;
+        if (!user) { setStatus({ verified: false, reason: "guest" }); return; }
         let cancelled = false;
-        const fetch = async () => {
-            setLoading(true);
-            try {
-                const r = await api.get("/listings/search", { params: { d2d_only: true, q: q || undefined, limit: 200 } });
-                if (!cancelled) setProducts(Array.isArray(r.data) ? r.data : []);
-            } catch {
-                if (!cancelled) setProducts([]);
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        };
-        fetch();
+        api.get("/d2d/me")
+            .then((r) => { if (!cancelled) setStatus(r.data); })
+            .catch(() => { if (!cancelled) setStatus({ verified: false, reason: "error" }); });
         return () => { cancelled = true; };
-    }, [q]);
+    }, [user, authLoading]);
 
-    const visible = useMemo(() => products.filter((p) => p.d2d_enabled), [products]);
+    // Listings fetch (only when verified)
+    useEffect(() => {
+        if (!status?.verified) return;
+        let cancelled = false;
+        setLoading(true);
+        api.get("/d2d/listings", { params: { q: q || undefined } })
+            .then((r) => { if (!cancelled) setData(r.data || { toners: [], printers: [], papers: [] }); })
+            .catch(() => { if (!cancelled) setData({ toners: [], printers: [], papers: [] }); })
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, [status, q]);
 
-    const onBuy = (p) => {
-        if (!canSeeD2D) {
-            toast.info("Sign in as an approved dealer to place D2D orders");
+    const onBuy = (kind, p) => {
+        if (kind !== "toner") {
+            toast.info("D2D orders for this product type are coming soon — contact dealer directly for now");
             return;
         }
-        setOrderProduct(p);
+        setOrder({ kind, p });
     };
 
     return (
         <>
-            <PageMeta title="Dealer to Dealer · TonersCart" description="Exclusive dealer-to-dealer pricing across India's toner network." />
+            <PageMeta title="Dealer to Dealer · TonersCart" description="Exclusive dealer pricing across India's verified toner / printer / paper network." />
             <div className="min-h-[80vh] bg-[#F5F5F7] py-10 sm:py-14">
-                <div className="tc-container">
-                    <div className="mb-6 sm:mb-8">
-                        <div
-                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] tracking-[0.18em] uppercase font-semibold mb-3"
-                            style={{ background: `${ACCENT}1A`, color: ACCENT }}
-                        >
-                            Dealer to Dealer
-                        </div>
-                        <h1
-                            className="text-[#0A0A0B]"
-                            style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(26px, 4vw, 38px)", fontWeight: 400, letterSpacing: "-0.02em" }}
-                            data-testid="dealer-title"
-                        >
-                            Exclusive dealer pricing
-                        </h1>
-                        <p className="text-[14.5px] text-[#6E6E73] mt-2 max-w-[560px]">
-                            Buy from fellow approved dealers at preferential prices. Only verified suppliers can view and place D2D orders.
-                        </p>
+                {authLoading || status === null ? (
+                    <div className="tc-container py-24 flex items-center justify-center text-[#86868B]">
+                        <Loader2 size={18} className="animate-spin mr-2" /> Checking dealer status…
                     </div>
-
-                    {/* Search */}
-                    <div className="mb-6 max-w-[520px]">
-                        <div className="relative">
-                            <SearchIcon size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#86868B]" />
-                            <input
-                                type="text"
-                                placeholder="Search by brand or model — e.g. HP 88A"
-                                value={q}
-                                onChange={(e) => setQ(e.target.value)}
-                                className="w-full h-12 pl-10 pr-3 rounded-2xl border border-[#D2D2D7] bg-white text-[14px] focus:outline-none focus:border-[#0A0A0B]"
-                                data-testid="dealer-search-input"
-                            />
+                ) : !status.verified ? (
+                    <VerificationGate status={status} />
+                ) : (
+                    <div className="tc-container">
+                        <div className="mb-6 sm:mb-8">
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] tracking-[0.18em] uppercase font-semibold mb-3" style={{ background: `${ACCENT}1A`, color: ACCENT }}>
+                                <ShieldCheck size={11} /> Verified dealer · {status.business_name || "you"}
+                            </div>
+                            <h1 className="text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(26px, 4vw, 38px)", fontWeight: 400, letterSpacing: "-0.02em" }} data-testid="dealer-title">
+                                Dealer to Dealer marketplace
+                            </h1>
+                            <p className="text-[14.5px] text-[#6E6E73] mt-2 max-w-[620px]">
+                                Toners, printers and papers at exclusive D2D pricing from your peer dealers across India. Buyer-side pricing stays unchanged — only verified dealers see these rates.
+                            </p>
                         </div>
-                    </div>
 
-                    {!canSeeD2D && (
-                        <div
-                            className="mb-6 rounded-2xl px-5 py-4 flex items-start gap-3 text-[13px]"
-                            style={{ background: `${ACCENT}10`, border: `1px solid ${ACCENT}33`, color: "#37474F" }}
-                            data-testid="dealer-locked-banner"
-                        >
-                            <Lock size={16} className="shrink-0 mt-0.5" style={{ color: ACCENT }} />
-                            <div>
-                                <div className="font-semibold mb-0.5">D2D pricing is restricted</div>
-                                <div className="text-[#52606D]">
-                                    Only approved dealers can see D2D prices and place D2D orders. <Link to="/sell" className="underline font-medium">Apply to sell on TonersCart →</Link>
-                                </div>
+                        <div className="mb-6 max-w-[520px]">
+                            <div className="relative">
+                                <SearchIcon size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#86868B]" />
+                                <input
+                                    type="text"
+                                    placeholder="Search by brand or model — e.g. HP 88A"
+                                    value={q}
+                                    onChange={(e) => setQ(e.target.value)}
+                                    className="w-full h-12 pl-10 pr-3 rounded-2xl border border-[#D2D2D7] bg-white text-[14px] focus:outline-none focus:border-[#0A0A0B]"
+                                    data-testid="dealer-search-input"
+                                />
                             </div>
                         </div>
-                    )}
 
-                    {loading ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {Array.from({ length: 6 }).map((_, i) => (
-                                <div key={i} className="tc-product-card animate-pulse">
-                                    <div className="tc-product-img bg-black/[0.04]" />
-                                    <div className="p-4 space-y-2">
-                                        <div className="h-3 bg-black/[0.06] rounded w-1/3" />
-                                        <div className="h-5 bg-black/[0.08] rounded w-2/3" />
-                                        <div className="h-4 bg-black/[0.06] rounded w-1/2" />
+                        {loading ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {Array.from({ length: 6 }).map((_, i) => (
+                                    <div key={i} className="tc-product-card animate-pulse">
+                                        <div className="tc-product-img bg-black/[0.04]" />
+                                        <div className="p-4 space-y-2">
+                                            <div className="h-3 bg-black/[0.06] rounded w-1/3" />
+                                            <div className="h-5 bg-black/[0.08] rounded w-2/3" />
+                                            <div className="h-4 bg-black/[0.06] rounded w-1/2" />
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : visible.length === 0 ? (
-                        <div className="tc-card-flat p-12 text-center" data-testid="dealer-empty">
-                            <div className="text-[15px] font-semibold text-[#0A0A0B] mb-1">No D2D listings yet</div>
-                            <div className="text-[13px] text-[#6E6E73]">
-                                Dealers can enable D2D on their listings from the supplier dashboard.
+                                ))}
                             </div>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="dealer-grid">
-                            {visible.map((p) => (
-                                <D2DCard key={p.id} p={p} canSeeD2D={canSeeD2D} onBuy={onBuy} />
-                            ))}
-                        </div>
-                    )}
-                </div>
+                        ) : (data.toners.length + data.printers.length + data.papers.length === 0) ? (
+                            <div className="tc-card-flat p-12 text-center" data-testid="dealer-empty">
+                                <Lock size={22} className="mx-auto mb-2 text-[#86868B]" />
+                                <div className="text-[15px] font-semibold text-[#0A0A0B] mb-1">No D2D listings yet</div>
+                                <div className="text-[13px] text-[#6E6E73]">
+                                    Dealers can enable D2D on any toner, printer or paper listing from their supplier dashboard.
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <Section title="Toners" kind="toner" items={data.toners} onBuy={onBuy} />
+                                <Section title="Printers" kind="printer" items={data.printers} onBuy={onBuy} />
+                                <Section title="Papers" kind="paper" items={data.papers} onBuy={onBuy} />
+                            </>
+                        )}
+                    </div>
+                )}
             </div>
 
-            {orderProduct && (
+            {order && (
                 <OrderRequestDialog
-                    product={{
-                        ...orderProduct,
-                        // Override the price the dialog uses to the D2D price.
-                        price: Number(orderProduct.d2d_price ?? orderProduct.price ?? 0),
-                    }}
+                    product={{ ...order.p, price: Number(order.p.d2d_price ?? order.p.price ?? 0) }}
                     initialQty={1}
-                    onClose={() => setOrderProduct(null)}
+                    onClose={() => setOrder(null)}
                 />
             )}
         </>
