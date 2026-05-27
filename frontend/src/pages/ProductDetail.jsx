@@ -219,8 +219,8 @@ export default function ProductDetail({ kind = "toner" }) {
                         )}
                     </div>
 
-                    {/* RIGHT — content (55%, vertically + horizontally centered, balanced spacing) */}
-                    <div className="flex flex-col items-center text-center justify-center min-h-[460px]">
+                    {/* RIGHT — content (55%, LEFT-aligned per Wave 14) */}
+                    <div className="flex flex-col items-start text-left justify-start min-h-[460px]">
                         {data.toner_type && (
                             <span className={`inline-block text-[10.5px] tracking-[0.16em] uppercase font-semibold px-2.5 py-1 rounded-full border ${data.toner_type === "Original" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : data.toner_type === "Refilled" ? "bg-orange-50 border-orange-200 text-orange-700" : "bg-blue-50 border-blue-200 text-blue-700"}`} data-testid="product-type-badge">
                                 {data.toner_type}
