@@ -126,6 +126,75 @@ function InlineStock({ stock, onSave, testId }) {
 
 function _TrackingInputLegacy() { return null; }
 
+// Wave 10 — D2D toggle + price input on each toner listing card.
+function D2DRow({ listing, onPatch }) {
+    const initialEnabled = !!listing.d2d_enabled;
+    const initialPrice = listing.d2d_price != null ? String(listing.d2d_price) : "";
+    const [enabled, setEnabled] = React.useState(initialEnabled);
+    const [price, setPrice] = React.useState(initialPrice);
+    const [savingPrice, setSavingPrice] = React.useState(false);
+    React.useEffect(() => {
+        setEnabled(!!listing.d2d_enabled);
+        setPrice(listing.d2d_price != null ? String(listing.d2d_price) : "");
+    }, [listing.id, listing.d2d_enabled, listing.d2d_price]);
+
+    const toggle = async () => {
+        const next = !enabled;
+        if (next && (!price || Number(price) <= 0)) {
+            window.alert("Set a D2D price (₹) first, then enable.");
+            return;
+        }
+        setEnabled(next);
+        await onPatch(listing.id, { d2d_enabled: next, ...(next && price ? { d2d_price: Number(price) } : {}) });
+    };
+
+    const savePrice = async () => {
+        const n = Number(price);
+        if (!n || n <= 0) return;
+        setSavingPrice(true);
+        try { await onPatch(listing.id, { d2d_price: n }); }
+        finally { setSavingPrice(false); }
+    };
+
+    return (
+        <div className="mt-3 pt-3 border-t border-black/[0.05]" data-testid={`d2d-row-${listing.id}`}>
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+                <div className="text-[11.5px] font-semibold text-[#0A0A0B]">Dealer to Dealer</div>
+                <label className="inline-flex items-center gap-2 cursor-pointer" data-testid={`d2d-toggle-${listing.id}`}>
+                    <span className="text-[11px] text-[#6E6E73]">{enabled ? "On" : "Off"}</span>
+                    <span
+                        role="switch"
+                        aria-checked={enabled}
+                        onClick={toggle}
+                        className={`relative inline-block w-9 h-5 rounded-full transition-colors ${enabled ? "bg-[#607d8b]" : "bg-[#D2D2D7]"}`}
+                    >
+                        <span
+                            className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+                            style={{ left: enabled ? "calc(100% - 18px)" : "2px" }}
+                        />
+                    </span>
+                </label>
+            </div>
+            <div className="flex items-center gap-2">
+                <div className="text-[11px] text-[#6E6E73] shrink-0">D2D Price (₹)</div>
+                <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    onBlur={() => { if (price && Number(price) !== Number(listing.d2d_price ?? 0)) savePrice(); }}
+                    placeholder="Lower than list"
+                    className="h-8 flex-1 px-2 text-[12px] rounded border border-[#D2D2D7] bg-white font-mono focus:outline-none focus:border-[#607d8b]"
+                    data-testid={`d2d-price-input-${listing.id}`}
+                    disabled={savingPrice}
+                />
+            </div>
+        </div>
+    );
+}
+
+
 
 export default function SupplierDashboard() {
     const { user, refresh } = useAuth();
@@ -346,9 +415,8 @@ export default function SupplierDashboard() {
         e.preventDefault();
         if (!brand) { toast.error("Please select a brand"); return; }
         if (!modelNumber.trim()) { toast.error("Please enter a model number"); return; }
-        const newFilesCount = imageFiles.filter(Boolean).length;
-        const totalImages = newFilesCount + existingImages.length;
-        if (totalImages < 1) { toast.error("Please upload at least 1 product image (max 3)"); return; }
+        // Wave 10 — images are optional. Animated cartridge fallback is shown
+        // automatically when no image is provided.
         const cleanedVariants = variants
             .map((v) => ({ color: (v.color || "").trim(), price: parseFloat(v.price), stock: parseInt(v.stock, 10) }))
             .filter((v) => v.color && v.price > 0 && v.stock >= 0);
@@ -367,11 +435,8 @@ export default function SupplierDashboard() {
                 if (data?.url) uploadedUrls.push(data.url);
             }
             const finalImageUrls = [...existingImages, ...uploadedUrls];
-            if (finalImageUrls.length < 1) {
-                toast.error("Some images failed to upload — please retry");
-                setSaving(false);
-                return;
-            }
+            // Images are optional — skip the upload-failure check if user
+            // intentionally provided no images.
 
             // Top-level price/stock derived from cheapest variant for backward compatibility
             const cheapest = cleanedVariants.reduce((a, b) => (a.price <= b.price ? a : b));
@@ -386,7 +451,7 @@ export default function SupplierDashboard() {
                 stock: totalStock,
                 toner_type: tonerType,
                 page_yield: pageYield ? parseInt(pageYield, 10) : null,
-                image_url: finalImageUrls[0],
+                image_url: finalImageUrls[0] || "",
                 image_urls: finalImageUrls,
                 compatible_models: compatibleModels || null,
                 oem_part_number: oemPartNumber || null,
@@ -424,6 +489,15 @@ export default function SupplierDashboard() {
         try {
             await api.put(`/supplier/listings/${id}`, { stock: Number(newStock) });
             toast.success("Stock updated");
+            load();
+        } catch (e) { toast.error(formatApiError(e)); }
+    };
+
+    // Wave 10 — D2D toggle + D2D price patch (toner listings only).
+    const patchD2D = async (id, patch) => {
+        try {
+            await api.put(`/supplier/listings/${id}`, patch);
+            toast.success("D2D updated");
             load();
         } catch (e) { toast.error(formatApiError(e)); }
     };
@@ -660,6 +734,7 @@ export default function SupplierDashboard() {
                                             <Trash2 size={12} /> Remove
                                         </button>
                                     </div>
+                                    <D2DRow listing={l} onPatch={patchD2D} />
                                 </div>
                             </div>
                         );
@@ -838,14 +913,14 @@ export default function SupplierDashboard() {
                             </div>
                         </div>
 
-                        <div className="tc-form-section">Product images <span className="text-red-500">*</span> <span className="text-[12px] text-[#86868B] font-normal">(1 required, up to 3)</span></div>
+                        <div className="tc-form-section">Product images <span className="text-[12px] text-[#86868B] font-normal">(optional — up to 3)</span></div>
+                        <div className="text-[11.5px] text-[#86868B] -mt-2 mb-2">If you don't upload an image, an animated cartridge graphic is shown automatically.</div>
                         <div className="grid grid-cols-3 gap-3" data-testid="image-box-grid">
                             {[0, 1, 2].map((idx) => {
                                 const newPrev = imagePreviews[idx];
                                 const newFile = imageFiles[idx];
                                 const existing = existingImages[idx];
                                 const src = newPrev || existing;
-                                const isRequired = idx === 0 && !src;
                                 return (
                                     <label key={idx} className="block cursor-pointer" data-testid={`image-box-${idx}`}>
                                         <input type="file" accept="image/*" onChange={(e) => onPickFileAt(idx, e)} className="hidden" data-testid={`image-input-${idx}`} />
@@ -870,8 +945,7 @@ export default function SupplierDashboard() {
                                             ) : (
                                                 <div className="flex flex-col items-center gap-1.5 text-[#86868B]">
                                                     <Camera size={20} />
-                                                    <span className="text-[11px] font-semibold">{idx === 0 ? "Add photo *" : "Add photo"}</span>
-                                                    {isRequired && <span className="text-[10px] text-red-500">Required</span>}
+                                                    <span className="text-[11px] font-semibold">Add photo</span>
                                                 </div>
                                             )}
                                         </div>

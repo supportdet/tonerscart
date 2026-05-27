@@ -36,6 +36,10 @@ import ResetPassword from "./pages/ResetPassword";
 import About from "./pages/About";
 import ProductDetail from "./pages/ProductDetail";
 import NotFound from "./pages/NotFound";
+import ComingSoon from "./pages/ComingSoon";
+import Bulk from "./pages/Bulk";
+import Dealer from "./pages/Dealer";
+import OEM from "./pages/OEM";
 import ErrorBoundary from "./components/ErrorBoundary";
 import VisitorTracker from "./components/VisitorTracker";
 
@@ -66,6 +70,11 @@ function App() {
                                     <Route path="/printers" element={<PrintersGuide />} />
                                     <Route path="/printers/results" element={<PrintersResults />} />
                                     <Route path="/papers" element={<Papers />} />
+                                    <Route path="/consumables" element={<ComingSoon category="Consumables" accent="#f9a825" blurb="Inks, drums, fusers, maintenance kits and more — sourced directly from verified dealers. Be the first to know when we go live." />} />
+                                    <Route path="/scanners" element={<ComingSoon category="Scanners" accent="#5c6bc0" blurb="Desktop, network and production scanners from leading brands — coming to TonersCart soon. Get notified when we launch." />} />
+                                    <Route path="/bulk" element={<Bulk />} />
+                                    <Route path="/dealer" element={<Dealer />} />
+                                    <Route path="/oem" element={<OEM />} />
                                     <Route path="/terms" element={<Terms />} />
                                     <Route path="/privacy" element={<Privacy />} />
                                     <Route path="/contact" element={<Contact />} />

@@ -216,6 +216,9 @@ class ListingCreate(BaseModel):
     print_technology: Optional[str] = None
     intercity_delivery_charge: Optional[float] = 0
     gst_rate: Optional[int] = 18
+    # D2D (Dealer-to-Dealer) marketplace — Wave 10
+    d2d_enabled: Optional[bool] = False
+    d2d_price: Optional[float] = None
 
 
 class ListingUpdate(BaseModel):
@@ -690,6 +693,7 @@ def toner_master_brands():
 def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
                     city: Optional[str] = None, toner_type: Optional[str] = None,
                     supplier_id: Optional[str] = None,
+                    d2d_only: bool = False,
                     limit: int = 200):
     qry = sb_admin.table("listings").select(
         "*,suppliers!inner(business_name,city,is_suspended)"
@@ -704,11 +708,22 @@ def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
         qry = qry.eq("toner_type", toner_type)
     if supplier_id:
         qry = qry.eq("supplier_id", supplier_id)
+    if d2d_only:
+        # Defensive — if column doesn't exist yet, surface a sensible empty
+        # result instead of crashing.
+        try:
+            qry = qry.eq("d2d_enabled", True)
+        except Exception:
+            pass
     try:
         rows = qry.execute().data or []
     except Exception as e:
+        msg = str(e)
+        # If D2D filter referenced a missing column, return [] (migration pending).
+        if d2d_only and "d2d_enabled" in msg:
+            return []
         # Graceful fallback if is_suspended column is not yet migrated
-        if "is_suspended" in str(e):
+        if "is_suspended" in msg:
             qry = sb_admin.table("listings").select(
                 "*,suppliers!inner(business_name,city)"
             ).order("price").limit(limit)
@@ -1030,6 +1045,8 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
         "print_technology": payload.print_technology,
         "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
+        "d2d_enabled": bool(payload.d2d_enabled) if payload.d2d_enabled is not None else None,
+        "d2d_price": (float(payload.d2d_price) if payload.d2d_price else None),
     }
     for k, v in optional_cols.items():
         if v is not None:
@@ -1043,7 +1060,7 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("spec_pdf_url", "image_urls", "compatible_models", "oem_part_number", "cartridge_weight", "pack_size", "warranty", "print_technology", "intercity_delivery_charge", "gst_rate"):
+            for k in ("spec_pdf_url", "image_urls", "compatible_models", "oem_part_number", "cartridge_weight", "pack_size", "warranty", "print_technology", "intercity_delivery_charge", "gst_rate", "d2d_enabled", "d2d_price"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True
@@ -1772,11 +1789,15 @@ def list_printers(
 
 
 class MPSInquiry(BaseModel):
-    name: str
+    # Generic enquiry envelope. Used by MPS, Buy-Bulk, OEM Application,
+    # Featured-application, and lightweight interest captures
+    # (Consumables / Scanners "Notify me"). Phone / estimated_printers
+    # are optional so simple email-only captures work.
+    name: Optional[str] = ""
     email: EmailStr
-    phone: str
+    phone: Optional[str] = ""
     description: Optional[str] = ""
-    estimated_printers: str
+    estimated_printers: Optional[str] = "—"
     selections: Optional[dict] = None
 
 
@@ -1793,14 +1814,20 @@ async def mps_inquiry(payload: MPSInquiry, request: Request):
             user_id = None
     row = {
         "user_id": user_id,
-        "name": payload.name.strip(),
+        "name": (payload.name or "").strip(),
         "email": str(payload.email),
-        "phone": payload.phone.strip(),
+        "phone": (payload.phone or "").strip(),
         "description": payload.description or "",
-        "estimated_printers": payload.estimated_printers,
+        "estimated_printers": payload.estimated_printers or "—",
         "selections": payload.selections or {},
     }
-    sb_admin.table("mps_inquiries").insert(row).execute()
+    # Best-effort DB insert; some enquiry types may not have a matching row in
+    # the mps_inquiries table (e.g. interest captures). Email send is always
+    # attempted so support@tonerscart.com is notified regardless.
+    try:
+        sb_admin.table("mps_inquiries").insert(row).execute()
+    except Exception as e:
+        logger.warning("mps_inquiries insert skipped: %s", e)
     try:
         await email_mps_inquiry(row)
     except Exception as e:
@@ -3192,6 +3219,9 @@ class ListingPatch(BaseModel):
     gst_rate: Optional[int] = None
     usage_types: Optional[List[str]] = None
     special_features: Optional[List[str]] = None
+    # Wave 10 — D2D marketplace
+    d2d_enabled: Optional[bool] = None
+    d2d_price: Optional[float] = None
 
 
 @api.put("/supplier/listings/{listing_id}")
@@ -3215,6 +3245,10 @@ def supplier_patch_listing(listing_id: str, payload: ListingPatch, user: dict = 
         upd["intercity_delivery_charge"] = float(payload.intercity_delivery_charge)
     if payload.gst_rate is not None:
         upd["gst_rate"] = int(payload.gst_rate)
+    if payload.d2d_enabled is not None:
+        upd["d2d_enabled"] = bool(payload.d2d_enabled)
+    if payload.d2d_price is not None:
+        upd["d2d_price"] = float(payload.d2d_price) if payload.d2d_price else None
     # Text / list pass-through fields
     for k in ("brand", "model_number", "color", "toner_type", "image_url", "image_urls",
               "compatible_models", "oem_part_number", "warranty", "print_technology"):
@@ -3231,6 +3265,13 @@ def supplier_patch_listing(listing_id: str, payload: ListingPatch, user: dict = 
         sb_admin.table("listings").update(upd).eq("id", listing_id).eq("supplier_id", s.data["id"]).execute()
     except Exception as e:
         msg = str(e)
+        # Surface a clear error when the request is *only* about D2D fields
+        # and the corresponding columns are missing — silent success here
+        # would mislead the dealer into thinking D2D is on.
+        d2d_keys = {"d2d_enabled", "d2d_price"}
+        non_meta = {k for k in upd.keys() if k != "updated_at"}
+        if non_meta and non_meta.issubset(d2d_keys) and ("d2d_enabled" in msg or "d2d_price" in msg):
+            raise HTTPException(503, "D2D columns not migrated yet. Apply supabase_schema_d2d.sql to enable Dealer-to-Dealer pricing.")
         retry = {k: v for k, v in upd.items() if k not in msg}
         if retry:
             sb_admin.table("listings").update(retry).eq("id", listing_id).eq("supplier_id", s.data["id"]).execute()
