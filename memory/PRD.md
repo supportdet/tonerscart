@@ -1,6 +1,25 @@
 # TonersCart — Product Requirements (Supabase edition)
 
 
+## Latest changelog (2026-02 Wave 10 — Two-layer navbar + new category pages + D2D marketplace)
+
+- **Two-layer navbar** — `/app/frontend/src/components/Header.jsx` rewritten.
+  - Layer 1 (dark `#0A0A0B`, 48px): logo · City · Sell · Sign in · Cart · Join free.
+  - Layer 2 (white, 44px, `border-bottom #E8E8EC`): 9 horizontally-scrollable colored category pills — Toners `#d81b60`, Printers `#0097a7`, Papers `#795548`, Consumables `#f9a825`, Scanners `#5c6bc0`, MPS/Rentals `#43a047`, Buy Bulk `#e65100`, Dealer to Dealer `#607d8b`, OEM Marketplace `#6d4c41`. Old Buy dropdown removed.
+- **New pages (all live E2E, emails to `support@tonerscart.com`):**
+  - `/consumables` and `/scanners` — Coming-Soon w/ email interest capture (`selections.type = consumables_interest` / `scanners_interest`).
+  - `/bulk` — Buy-Bulk form (product, qty, budget, city, +91 phone, email, notes) → `bulk_enquiry`.
+  - `/dealer` — D2D marketplace, gated to approved suppliers, shows `D2D Price` badges + savings.
+  - `/oem` — Dark OEM Partner Showcase with 3 partner-slot placeholders + application modal → `oem_application`.
+- **D2D feature** — New migration `/app/backend/supabase_schema_d2d.sql` adds `d2d_enabled bool default false` + `d2d_price numeric(10,2)` on `listings`. Toggle + price input on each toner card in supplier dashboard. `/listings/search?d2d_only=true` filter. PUT returns 503 with clear migration-pending message when only d2d fields are sent and the columns are absent.
+- **MPSInquiry schema relaxed** — `name`, `phone`, `estimated_printers` now optional. DB insert is best-effort. `email_mps_inquiry` adapts subject/heading by `selections.type`.
+- **Toner image upload optional** — animated cartridge fallback is shown automatically; supplier can save without any image.
+
+**⚠ Action item for app owner:** Apply `/app/backend/supabase_schema_d2d.sql` in the Supabase SQL editor to enable D2D persistence (the toggle UI is wired but the columns are missing in the live DB).
+
+---
+
+
 ## Latest changelog (2026-02 Wave 9 — GST, Universal search, Multi-select printer specs, Cascading filters, State dropdowns)
 
 - **GST end-to-end**:
