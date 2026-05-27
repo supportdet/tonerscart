@@ -64,11 +64,11 @@ export default function Header() {
     };
 
     return (
-        <header className="sticky top-0 z-[100]" data-testid="site-header">
+        <header className="sticky top-0 z-[100] bg-white" data-testid="site-header">
             {/* Layer 1 — top bar */}
             <div
-                className="text-white"
-                style={{ background: "#0A0A0B", height: 64 }}
+                className="bg-white text-[#0A0A0B] border-b border-[#E8E8EC]"
+                style={{ height: 64 }}
                 data-testid="navbar-top"
             >
                 <div className="tc-container flex items-center h-full gap-4">
@@ -88,7 +88,7 @@ export default function Header() {
                         <button
                             onClick={() => setCityOpen((o) => !o)}
                             onBlur={() => setTimeout(() => setCityOpen(false), 150)}
-                            className="inline-flex items-center gap-2 text-[13px] font-medium px-3 h-9 rounded-lg text-white hover:bg-white/10 transition-colors"
+                            className="inline-flex items-center gap-2 text-[13px] font-medium px-3 h-9 rounded-lg text-[#1D1D1F] hover:bg-black/[0.04] transition-colors"
                             data-testid="city-pill-btn"
                         >
                             <MapPin size={14} />
@@ -116,11 +116,12 @@ export default function Header() {
                         )}
                     </div>
 
-                    {/* Sell — black text on white pill per spec */}
+                    {/* Sell — outline pill on white */}
                     {!isSeller && !isAdmin && (
                         <NavLink
                             to="/sell"
-                            className="hidden sm:inline-flex items-center text-[13px] font-semibold px-4 h-9 rounded-lg bg-white text-[#0A0A0B] hover:bg-[#F5F5F7] transition-colors"
+                            className="hidden sm:inline-flex items-center text-[13px] font-semibold px-4 h-9 rounded-lg text-[#0A0A0B] hover:bg-black/[0.04] transition-colors"
+                            style={{ border: "1px solid #D2D2D7" }}
                             data-testid="nav-sell"
                         >
                             Sell
@@ -131,7 +132,7 @@ export default function Header() {
                         <>
                             <button
                                 onClick={() => navigate("/login")}
-                                className="text-[13px] font-medium text-white/90 hover:text-white px-3 h-9 rounded-lg hover:bg-white/10 transition-colors"
+                                className="text-[13px] font-medium text-[#1D1D1F] hover:text-[#0A0A0B] px-3 h-9 rounded-lg hover:bg-black/[0.04] transition-colors"
                                 data-testid="header-login-btn"
                             >
                                 Sign in
@@ -139,7 +140,7 @@ export default function Header() {
                             {!isAdmin && (
                                 <button
                                     onClick={() => navigate("/cart")}
-                                    className="relative w-10 h-10 grid place-items-center rounded-lg hover:bg-white/10 text-white transition-colors"
+                                    className="relative w-10 h-10 grid place-items-center rounded-lg hover:bg-black/[0.04] text-[#0A0A0B] transition-colors"
                                     aria-label="Cart"
                                     data-testid="header-cart-btn"
                                 >
@@ -163,7 +164,7 @@ export default function Header() {
                             {!isAdmin && (
                                 <button
                                     onClick={() => navigate("/cart")}
-                                    className="relative w-10 h-10 grid place-items-center rounded-lg hover:bg-white/10 text-white transition-colors"
+                                    className="relative w-10 h-10 grid place-items-center rounded-lg hover:bg-black/[0.04] text-[#0A0A0B] transition-colors"
                                     aria-label="Cart"
                                     data-testid="header-cart-btn"
                                 >
@@ -175,14 +176,14 @@ export default function Header() {
                             )}
                             <button
                                 onClick={() => navigate(isSeller ? "/supplier" : isAdmin ? "/admin" : "/customer")}
-                                className="text-[13px] font-medium text-white/90 hover:text-white px-3 h-9 rounded-lg hover:bg-white/10 transition-colors"
+                                className="text-[13px] font-medium text-[#1D1D1F] hover:text-[#0A0A0B] px-3 h-9 rounded-lg hover:bg-black/[0.04] transition-colors"
                                 data-testid="header-user-chip"
                             >
                                 {(user.name || "Account").split(" ")[0]}
                             </button>
                             <button
                                 onClick={handleLogout}
-                                className="text-white/70 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors"
+                                className="text-[#86868B] hover:text-[#0A0A0B] p-2 rounded-lg hover:bg-black/[0.04] transition-colors"
                                 data-testid="header-logout-btn"
                                 aria-label="Log out"
                             >
@@ -195,7 +196,7 @@ export default function Header() {
 
             {/* Layer 2 — categories */}
             <nav
-                className="bg-white border-b border-[#E8E8EC]"
+                className="bg-white"
                 style={{ height: 56 }}
                 data-testid="navbar-categories"
                 aria-label="Categories"
