@@ -55,13 +55,17 @@ export default function Header() {
         window.location.replace("/");
     };
 
-    const isActivePath = (to) => {
-        const p = location.pathname;
-        if (to === "/search") return p === "/search" || p.startsWith("/toner/");
-        if (to === "/printers") return p === "/printers" || p.startsWith("/printer/") || p.startsWith("/printers/");
-        if (to === "/papers") return p === "/papers" || p.startsWith("/paper/");
-        return p === to || p.startsWith(`${to}/`);
-    };
+    return (
+        <header className="bg-white border-b border-black/[0.06] sticky top-0 z-[100]" data-testid="site-header">
+            <div className="tc-container flex items-center justify-between h-16 gap-3">
+                <Link to="/" className="flex items-center self-center shrink-0 group" data-testid="logo-home-link" onClick={closeMobile} aria-label="TonersCart home">
+                    <img
+src="/TONERSCART-bg.png"                        alt="TonersCart"
+                        className="block h-9 w-auto transition-transform group-hover:scale-[1.03]"
+                        style={{ alignSelf: "center" }}
+                        data-testid="header-logo-img"
+                    />
+                </Link>
 
     return (
         <header className="sticky top-0 z-[100] bg-white" data-testid="site-header">
