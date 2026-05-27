@@ -17,10 +17,11 @@ import SupplierEarnings from "../components/SupplierEarnings";
 import CommissionBanner from "../components/CommissionBanner";
 import CommissionCalculator from "../components/CommissionCalculator";
 import { commissionFor } from "../lib/commission";
-import { Copy, Check, ChevronDown } from "lucide-react";
+import { Copy, Check, ChevronDown, ChevronLeft } from "lucide-react";
 import { colorSwatch as _colorSwatch } from "../lib/colors";
 import BulkUploadDialog from "../components/BulkUploadDialog";
 import D2DRow, { D2DExplainer } from "../components/D2DRow";
+import SupplierAgreementDialog, { hasAcceptedSupplierAgreement } from "../components/SupplierAgreementDialog";
 
 const colorSwatchHex = (name) => {
     const v = _colorSwatch(name);
@@ -137,6 +138,9 @@ export default function SupplierDashboard() {
     const [catalog, setCatalog] = useState("toners"); // 'toners' | 'printers' | 'papers' | 'earnings' | 'orders'
     const [bulkOpen, setBulkOpen] = useState(false);
     const [addMenuOpen, setAddMenuOpen] = useState(false);
+    // Wave 14 — one-time supplier agreement gate
+    const [agreementOpen, setAgreementOpen] = useState(false);
+    const [pendingAddAction, setPendingAddAction] = useState(null); // 'single' | 'bulk' | null
 
     // Sync catalog tab from URL hash so the header "My stock" vs "Orders" pills route correctly.
     React.useEffect(() => {
@@ -245,6 +249,25 @@ export default function SupplierDashboard() {
         setExistingImages([]);
     };
     const openDialog = () => { reset(); setOpen(true); };
+
+    // Wave 14 — Gate the first listing attempt (single OR bulk) behind a
+    // one-time supplier agreement modal. Stored in localStorage.
+    const requestAddAction = (kind /* 'single' | 'bulk' */) => {
+        if (hasAcceptedSupplierAgreement()) {
+            if (kind === "bulk") setBulkOpen(true);
+            else openDialog();
+            return;
+        }
+        setPendingAddAction(kind);
+        setAgreementOpen(true);
+    };
+    const onAgreementAccepted = () => {
+        const kind = pendingAddAction;
+        setAgreementOpen(false);
+        setPendingAddAction(null);
+        if (kind === "bulk") setBulkOpen(true);
+        else if (kind === "single") openDialog();
+    };
 
     const openEditDialog = (l) => {
         reset();
@@ -534,7 +557,7 @@ export default function SupplierDashboard() {
                                     data-testid="add-toner-menu"
                                 >
                                     <button
-                                        onMouseDown={() => { setAddMenuOpen(false); openDialog(); }}
+                                        onMouseDown={() => { setAddMenuOpen(false); requestAddAction("single"); }}
                                         className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]"
                                         data-testid="add-single-toner-btn"
                                     >
@@ -542,7 +565,7 @@ export default function SupplierDashboard() {
                                         <div className="text-[11.5px] text-[#86868B]">One listing with images & variants</div>
                                     </button>
                                     <button
-                                        onMouseDown={() => { setAddMenuOpen(false); setBulkOpen(true); }}
+                                        onMouseDown={() => { setAddMenuOpen(false); requestAddAction("bulk"); }}
                                         className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]"
                                         data-testid="bulk-upload-btn"
                                     >
@@ -707,6 +730,14 @@ export default function SupplierDashboard() {
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent className="max-w-[680px] max-h-[92vh] overflow-y-auto p-8 rounded-[20px] tc-shadow-lg" data-testid="add-listing-dialog">
                     <DialogHeader>
+                        <button
+                            type="button"
+                            onClick={() => setOpen(false)}
+                            className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-[#3a3a40] hover:text-[#0A0A0B] -ml-1 mb-3 self-start"
+                            data-testid="back-to-dashboard-from-toner"
+                        >
+                            <ChevronLeft size={14} /> Back to Dashboard
+                        </button>
                         <DialogTitle className="text-[22px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500, letterSpacing: "-0.01em" }}>
                             {editingId ? "Edit toner listing" : "Add a toner"}
                         </DialogTitle>
@@ -883,6 +914,11 @@ export default function SupplierDashboard() {
                     onSuccess={() => { setBulkOpen(false); load(); }}
                 />
             )}
+            <SupplierAgreementDialog
+                open={agreementOpen}
+                onAccept={onAgreementAccepted}
+                onClose={() => { setAgreementOpen(false); setPendingAddAction(null); }}
+            />
             </div>
         </div>
     );

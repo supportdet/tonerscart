@@ -197,6 +197,14 @@ export default function PaperListings() {
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent className="max-w-[560px] max-h-[92vh] overflow-y-auto p-7 rounded-[20px]" data-testid="add-paper-dialog">
                     <DialogHeader>
+                        <button
+                            type="button"
+                            onClick={() => setOpen(false)}
+                            className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-[#3a3a40] hover:text-[#0A0A0B] -ml-1 mb-3 self-start"
+                            data-testid="back-to-dashboard-from-paper"
+                        >
+                            <ChevronLeft size={14} /> Back to Dashboard
+                        </button>
                         <DialogTitle className="text-[20px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>{editingId ? "Edit paper SKU" : "Add a paper SKU"}</DialogTitle>
                     </DialogHeader>
                     <form onSubmit={submit} className="mt-2 space-y-3">

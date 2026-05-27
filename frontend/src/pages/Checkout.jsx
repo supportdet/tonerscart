@@ -31,6 +31,7 @@ export default function Checkout() {
     const [authEmail, setAuthEmail] = useState("");
     const [authPassword, setAuthPassword] = useState("");
     const [loading, setLoading] = useState(false);
+    const [policyAgreed, setPolicyAgreed] = useState(false);
 
     // Compute per-item delivery + GST: delivery 0 if same city else listing.intercity_delivery_charge
     const deliveryBreakdown = useMemo(() => {
@@ -89,6 +90,10 @@ export default function Checkout() {
     };
 
     const placeOrder = async () => {
+        if (!policyAgreed) {
+            toast.error("Please accept TonersCart's terms to place your order");
+            return;
+        }
         setLoading(true);
         try {
             await ensureAuth();
@@ -294,6 +299,24 @@ export default function Checkout() {
                             </div>
 
                             <div className="space-y-2 pt-2">
+                                {/* Policy agreement gate */}
+                                <label
+                                    className="flex items-start gap-2.5 p-3.5 rounded-xl bg-[#F5F5F7] border border-[#E8E8EC] cursor-pointer hover:bg-[#EEEEF1] transition"
+                                    data-testid="policy-agreement-block"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={policyAgreed}
+                                        onChange={(e) => setPolicyAgreed(e.target.checked)}
+                                        className="mt-0.5 w-4 h-4 accent-[#0A0A0B] flex-shrink-0"
+                                        data-testid="policy-agreement-checkbox"
+                                    />
+                                    <div className="text-[12px] text-[#3a3a40] leading-[1.55]">
+                                        <strong className="text-[#0A0A0B]">I agree to TonersCart's terms and policies.</strong>{" "}
+                                        TonersCart is an intermediary marketplace — the GST invoice is raised directly by the supplier, delivery is handled by the supplier within 2 business days, and any disputes are resolved via <a href="mailto:support@tonerscart.com" className="text-[#00B7C7] hover:underline" onClick={(e) => e.stopPropagation()}>support@tonerscart.com</a> within 48 hours.
+                                    </div>
+                                </label>
+
                                 <button
                                     type="button"
                                     disabled
@@ -307,11 +330,11 @@ export default function Checkout() {
                                 <Button
                                     type="button"
                                     onClick={placeOrder}
-                                    disabled={loading}
+                                    disabled={loading || !policyAgreed}
                                     className="btn-cta w-full inline-flex items-center justify-center gap-2"
                                     data-testid="place-order-request-btn"
                                 >
-                                    {loading ? "Sending requests…" : `Place Order Request — ₹${grandTotal.toLocaleString("en-IN")}`}
+                                    {loading ? "Placing order…" : `Place Order — ₹${grandTotal.toLocaleString("en-IN")}`}
                                 </Button>
                             </div>
                         </div>

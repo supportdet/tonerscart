@@ -2271,6 +2271,21 @@ async def create_quotation(payload: QuotationRequest, user: dict = Depends(requi
         "qty": qty,
         "total": total,
         "listing_type": payload.listing_type,
+        # Wave 14 — full tech specs for email
+        "page_yield": L.get("page_yield"),
+        "compatible_models": L.get("compatible_models"),
+        "oem_part_number": L.get("oem_part_number"),
+        "cartridge_weight": L.get("cartridge_weight"),
+        "print_technology": L.get("print_technology"),
+        "warranty": L.get("warranty"),
+        "print_speed_ppm": L.get("print_speed_ppm"),
+        "duty_cycle": L.get("duty_cycle"),
+        "connectivity": L.get("connectivity"),
+        "max_resolution": L.get("max_resolution"),
+        "paper_sizes": L.get("paper_sizes"),
+        "mobile_printing": L.get("mobile_printing"),
+        "condition": L.get("condition"),
+        "printer_warranty": L.get("printer_warranty"),
     }
     try:
         await email_quotation(
