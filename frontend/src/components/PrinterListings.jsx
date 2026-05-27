@@ -6,6 +6,7 @@ import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { Plus, Trash2, Image as ImageIcon, ChevronLeft, ChevronRight, CheckCircle2, FileText, Pencil, X as XIcon } from "lucide-react";
+import D2DRow from "./D2DRow";
 import { GST_RATES, gstAmount, formatINR, PRINTER_SPECIAL_FEATURES } from "../lib/listingConstants";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
@@ -202,6 +203,7 @@ export default function PrinterListings() {
                                         <Trash2 size={11} /> Remove
                                     </button>
                                 </div>
+                                <D2DRow listing={p} endpoint={`/supplier/printers/${p.id}`} onChanged={load} />
                             </div>
                         </div>
                     ))}

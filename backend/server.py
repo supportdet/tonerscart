@@ -768,6 +768,58 @@ def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
     return out
 
 
+# Wave 12 — D2D marketplace aggregator (toners + printers + papers in one fetch).
+@api.get("/d2d/listings")
+def d2d_listings(q: Optional[str] = None, limit_per_type: int = 60):
+    """Returns all D2D-enabled listings across the three product tables.
+    Each section gracefully returns [] if the d2d_enabled column is missing
+    (migration not yet applied)."""
+    needle = (q or "").strip().lower()
+
+    def safe(table, select_cols):
+        try:
+            qry = sb_admin.table(table).select(select_cols).eq("d2d_enabled", True).order("created_at", desc=True).limit(limit_per_type)
+            rows = qry.execute().data or []
+        except Exception as e:
+            if "d2d_enabled" in str(e):
+                return []
+            logger.warning("d2d_listings %s failed: %s", table, e)
+            return []
+        if needle:
+            def m(r):
+                return needle in (r.get("brand", "") + " " + r.get("model_number", "") + " " + (r.get("size") or "")).lower()
+            rows = [r for r in rows if m(r)]
+        # Flatten supplier join
+        for r in rows:
+            sup = r.get("suppliers") or {}
+            if isinstance(sup, dict):
+                r["supplier_name"] = sup.get("business_name")
+                r["supplier_city"] = sup.get("city")
+        return rows
+
+    toners = safe("listings", "*,suppliers(business_name,city)")
+    printers = safe("printer_listings", "*,suppliers(business_name,city)")
+    papers = safe("paper_listings", "*,suppliers(business_name,city)")
+    return {
+        "toners": toners, "printers": printers, "papers": papers,
+        "counts": {"toners": len(toners), "printers": len(printers), "papers": len(papers)},
+    }
+
+
+# Wave 12 — verified-dealer status check (gate for /dealer page).
+@api.get("/d2d/me")
+def d2d_me(user: dict = Depends(require_user)):
+    """Returns whether the calling user is a verified (approved) dealer."""
+    if user.get("role") != "supplier":
+        return {"verified": False, "reason": "not_supplier"}
+    s = sb_admin.table("suppliers").select("id,business_name,is_approved").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        return {"verified": False, "reason": "no_supplier_record"}
+    if not s.data.get("is_approved"):
+        return {"verified": False, "reason": "not_approved", "business_name": s.data.get("business_name")}
+    return {"verified": True, "business_name": s.data.get("business_name"), "supplier_id": s.data["id"]}
+
+
 @api.get("/search/universal")
 def search_universal(q: str, limit_per_type: int = 12):
     """Wave 9 — universal fuzzy search across toners, printers and papers.
@@ -1492,6 +1544,9 @@ class PrinterListingCreate(BaseModel):
     # Wave 9: multi-select usage + special features
     usage_types: List[str] = Field(default_factory=list)
     special_features: List[str] = Field(default_factory=list)
+    # Wave 10 — D2D marketplace
+    d2d_enabled: Optional[bool] = False
+    d2d_price: Optional[float] = None
 
 
 def _supplier_id_for(user: dict) -> str:
@@ -1574,15 +1629,14 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         raise HTTPException(400, "Invalid color")
     if payload.price < 0 or payload.stock < 0:
         raise HTTPException(400, "price and stock must be non-negative")
-    if not payload.image_url:
-        raise HTTPException(400, "Image is required")
+    # Wave 12 — printer image upload is now optional (animated fallback in UI)
     sid = _supplier_id_for(user)
     row = {
         "supplier_id": sid,
         "brand": payload.brand.strip(),
         "model_number": payload.model_number.strip(),
         "description": payload.description or "",
-        "image_url": payload.image_url,
+        "image_url": payload.image_url or "",
         "condition": payload.condition,
         "usage_type": primary_usage,
         "category": payload.category,
@@ -1612,6 +1666,8 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
         "usage_types": usage_types,
         "special_features": payload.special_features or None,
+        "d2d_enabled": bool(payload.d2d_enabled) if payload.d2d_enabled is not None else None,
+        "d2d_price": (float(payload.d2d_price) if payload.d2d_price else None),
     }
     for k, v in optional_cols.items():
         if v is not None:
@@ -1623,7 +1679,7 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("spec_pdf_url", "image_urls", "print_speed_ppm", "duty_cycle", "display_type", "dimensions", "weight_kg", "printer_warranty", "max_resolution", "mobile_printing", "monthly_volume_recommended", "intercity_delivery_charge", "gst_rate", "usage_types", "special_features"):
+            for k in ("spec_pdf_url", "image_urls", "print_speed_ppm", "duty_cycle", "display_type", "dimensions", "weight_kg", "printer_warranty", "max_resolution", "mobile_printing", "monthly_volume_recommended", "intercity_delivery_charge", "gst_rate", "usage_types", "special_features", "d2d_enabled", "d2d_price"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True
@@ -3045,6 +3101,9 @@ class PaperCreate(BaseModel):
     suitable_for: List[str] = Field(default_factory=list)
     intercity_delivery_charge: Optional[float] = 0
     gst_rate: Optional[int] = 18
+    # Wave 10 — D2D marketplace
+    d2d_enabled: Optional[bool] = False
+    d2d_price: Optional[float] = None
 
 
 @api.post("/supplier/papers")
@@ -3073,6 +3132,8 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
         "suitable_for": payload.suitable_for or None,
         "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
+        "d2d_enabled": bool(payload.d2d_enabled) if payload.d2d_enabled is not None else None,
+        "d2d_price": (float(payload.d2d_price) if payload.d2d_price else None),
     }
     for k, v in optional_cols.items():
         if v is not None:
@@ -3084,7 +3145,7 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("image_urls", "brightness", "thickness_microns", "acid_free", "suitable_for", "intercity_delivery_charge", "gst_rate"):
+            for k in ("image_urls", "brightness", "thickness_microns", "acid_free", "suitable_for", "intercity_delivery_charge", "gst_rate", "d2d_enabled", "d2d_price"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True
@@ -3336,6 +3397,10 @@ def supplier_patch_printer(printer_id: str, payload: ListingPatch, user: dict = 
             upd["usage_type"] = payload.usage_types[0]
     if payload.special_features is not None:
         upd["special_features"] = payload.special_features
+    if payload.d2d_enabled is not None:
+        upd["d2d_enabled"] = bool(payload.d2d_enabled)
+    if payload.d2d_price is not None:
+        upd["d2d_price"] = float(payload.d2d_price) if payload.d2d_price else None
     for k in ("brand", "model_number", "description", "image_url", "image_urls",
               "usage_type", "category", "color", "functions", "connectivity",
               "paper_sizes", "mobile_printing", "max_resolution", "condition"):
@@ -3348,6 +3413,10 @@ def supplier_patch_printer(printer_id: str, payload: ListingPatch, user: dict = 
         sb_admin.table("printer_listings").update(upd).eq("id", printer_id).eq("supplier_id", s.data["id"]).execute()
     except Exception as e:
         msg = str(e)
+        d2d_keys = {"d2d_enabled", "d2d_price"}
+        non_meta = set(upd.keys())
+        if non_meta and non_meta.issubset(d2d_keys) and ("d2d_enabled" in msg or "d2d_price" in msg):
+            raise HTTPException(503, "D2D columns not migrated yet. Apply supabase_schema_d2d.sql to enable Dealer-to-Dealer pricing.")
         retry = {k: v for k, v in upd.items() if k not in msg}
         if retry:
             sb_admin.table("printer_listings").update(retry).eq("id", printer_id).eq("supplier_id", s.data["id"]).execute()
@@ -3415,6 +3484,10 @@ def patch_paper(paper_id: str, payload: ListingPatch, user: dict = Depends(requi
         upd["intercity_delivery_charge"] = float(payload.intercity_delivery_charge)
     if payload.gst_rate is not None:
         upd["gst_rate"] = int(payload.gst_rate)
+    if payload.d2d_enabled is not None:
+        upd["d2d_enabled"] = bool(payload.d2d_enabled)
+    if payload.d2d_price is not None:
+        upd["d2d_price"] = float(payload.d2d_price) if payload.d2d_price else None
     for k in ("brand", "size", "image_url", "image_urls", "suitable_for"):
         v = getattr(payload, k, None)
         if v is not None:
@@ -3427,6 +3500,10 @@ def patch_paper(paper_id: str, payload: ListingPatch, user: dict = Depends(requi
         msg = str(e)
         if "paper_listings" in msg and "does not exist" in msg:
             raise HTTPException(503, "paper_listings table not yet migrated") from e
+        d2d_keys = {"d2d_enabled", "d2d_price"}
+        non_meta = set(upd.keys())
+        if non_meta and non_meta.issubset(d2d_keys) and ("d2d_enabled" in msg or "d2d_price" in msg):
+            raise HTTPException(503, "D2D columns not migrated yet. Apply supabase_schema_d2d.sql to enable Dealer-to-Dealer pricing.")
         retry = {k: v for k, v in upd.items() if k not in msg}
         if retry:
             sb_admin.table("paper_listings").update(retry).eq("id", paper_id).eq("supplier_id", s.data["id"]).execute()

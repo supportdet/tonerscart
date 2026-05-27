@@ -289,19 +289,40 @@ export default function Landing() {
                 </div>
             </section>
 
-            {/* ====== STATS STRIP — hardcoded display values (real data not yet there) ====== */}
+            {/* ====== STATS STRIP — Helvetica, justified, 4 stats ====== */}
             <section className="bg-white border-b border-black/[0.06]">
-                <div className="tc-container py-6 sm:py-8 grid grid-cols-3 gap-4 sm:gap-6" data-testid="stats-strip">
+                <div
+                    className="tc-container py-6 sm:py-8 grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6"
+                    data-testid="stats-strip"
+                    style={{ fontFamily: "Helvetica, 'Helvetica Neue', Arial, sans-serif", textAlign: "justify", textAlignLast: "justify" }}
+                >
                     {[
-                        { v: "500+", k: "Dealers", testid: "stat-suppliers" },
-                        { v: "10+",  k: "Cities",  testid: "stat-cities" },
-                        { v: "15+",  k: "Brands",  testid: "stat-brands" },
+                        { v: "#1",   k: "Marketplace", testid: "stat-marketplace" },
+                        { v: "500+", k: "Dealers",     testid: "stat-suppliers" },
+                        { v: "10+",  k: "Cities",      testid: "stat-cities" },
+                        { v: "15+",  k: "Brands",      testid: "stat-brands" },
                     ].map((s, i) => (
-                        <div key={s.k} className="tc-reveal text-center sm:text-left" style={{ transitionDelay: `${i * 80}ms` }} data-testid={s.testid}>
-                            <div className="font-mono text-2xl sm:text-3xl lg:text-4xl font-semibold text-[#0A0A0B] tracking-tight">
+                        <div
+                            key={s.k}
+                            className="tc-reveal text-center sm:text-left"
+                            style={{
+                                transitionDelay: `${i * 80}ms`,
+                                fontFamily: "Helvetica, 'Helvetica Neue', Arial, sans-serif",
+                            }}
+                            data-testid={s.testid}
+                        >
+                            <div
+                                className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#0A0A0B] tracking-tight"
+                                style={{ fontFamily: "Helvetica, 'Helvetica Neue', Arial, sans-serif" }}
+                            >
                                 {s.v}
                             </div>
-                            <div className="text-[10px] sm:text-[11px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73] mt-1.5 sm:mt-2">{s.k}</div>
+                            <div
+                                className="text-[10px] sm:text-[11px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73] mt-1.5 sm:mt-2"
+                                style={{ fontFamily: "Helvetica, 'Helvetica Neue', Arial, sans-serif" }}
+                            >
+                                {s.k}
+                            </div>
                         </div>
                     ))}
                 </div>

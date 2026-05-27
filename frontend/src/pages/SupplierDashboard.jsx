@@ -20,6 +20,7 @@ import { commissionFor } from "../lib/commission";
 import { Copy, Check, ChevronDown } from "lucide-react";
 import { colorSwatch as _colorSwatch } from "../lib/colors";
 import BulkUploadDialog from "../components/BulkUploadDialog";
+import D2DRow, { D2DExplainer } from "../components/D2DRow";
 
 const colorSwatchHex = (name) => {
     const v = _colorSwatch(name);
@@ -127,73 +128,6 @@ function InlineStock({ stock, onSave, testId }) {
 
 function _TrackingInputLegacy() { return null; }
 
-// Wave 10 — D2D toggle + price input on each toner listing card.
-function D2DRow({ listing, onPatch }) {
-    const initialEnabled = !!listing.d2d_enabled;
-    const initialPrice = listing.d2d_price != null ? String(listing.d2d_price) : "";
-    const [enabled, setEnabled] = React.useState(initialEnabled);
-    const [price, setPrice] = React.useState(initialPrice);
-    const [savingPrice, setSavingPrice] = React.useState(false);
-    React.useEffect(() => {
-        setEnabled(!!listing.d2d_enabled);
-        setPrice(listing.d2d_price != null ? String(listing.d2d_price) : "");
-    }, [listing.id, listing.d2d_enabled, listing.d2d_price]);
-
-    const toggle = async () => {
-        const next = !enabled;
-        if (next && (!price || Number(price) <= 0)) {
-            window.alert("Set a D2D price (₹) first, then enable.");
-            return;
-        }
-        setEnabled(next);
-        await onPatch(listing.id, { d2d_enabled: next, ...(next && price ? { d2d_price: Number(price) } : {}) });
-    };
-
-    const savePrice = async () => {
-        const n = Number(price);
-        if (!n || n <= 0) return;
-        setSavingPrice(true);
-        try { await onPatch(listing.id, { d2d_price: n }); }
-        finally { setSavingPrice(false); }
-    };
-
-    return (
-        <div className="mt-3 pt-3 border-t border-black/[0.05]" data-testid={`d2d-row-${listing.id}`}>
-            <div className="flex items-center justify-between gap-2 mb-1.5">
-                <div className="text-[11.5px] font-semibold text-[#0A0A0B]">Dealer to Dealer</div>
-                <label className="inline-flex items-center gap-2 cursor-pointer" data-testid={`d2d-toggle-${listing.id}`}>
-                    <span className="text-[11px] text-[#6E6E73]">{enabled ? "On" : "Off"}</span>
-                    <span
-                        role="switch"
-                        aria-checked={enabled}
-                        onClick={toggle}
-                        className={`relative inline-block w-9 h-5 rounded-full transition-colors ${enabled ? "bg-[#607d8b]" : "bg-[#D2D2D7]"}`}
-                    >
-                        <span
-                            className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
-                            style={{ left: enabled ? "calc(100% - 18px)" : "2px" }}
-                        />
-                    </span>
-                </label>
-            </div>
-            <div className="flex items-center gap-2">
-                <div className="text-[11px] text-[#6E6E73] shrink-0">D2D Price (₹)</div>
-                <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    onBlur={() => { if (price && Number(price) !== Number(listing.d2d_price ?? 0)) savePrice(); }}
-                    placeholder="Lower than list"
-                    className="h-8 flex-1 px-2 text-[12px] rounded border border-[#D2D2D7] bg-white font-mono focus:outline-none focus:border-[#607d8b]"
-                    data-testid={`d2d-price-input-${listing.id}`}
-                    disabled={savingPrice}
-                />
-            </div>
-        </div>
-    );
-}
 
 
 
@@ -429,17 +363,10 @@ export default function SupplierDashboard() {
         }
         setSaving(true);
         try {
-            // Upload new images via backend service role
-            const uploadedUrls = [];
-            for (const file of imageFiles.filter(Boolean)) {
-                const fd = new FormData();
-                fd.append("file", file);
-                const { data } = await api.post("/supplier/listing-image", fd);
-                if (data?.url) uploadedUrls.push(data.url);
-            }
-            const finalImageUrls = [...existingImages, ...uploadedUrls];
-            // Images are optional — skip the upload-failure check if user
-            // intentionally provided no images.
+            // Wave 12 — image upload removed. Animated cartridge fallback renders
+            // on every card. Existing image URLs (if editing an older listing)
+            // are preserved.
+            const finalImageUrls = existingImages || [];
 
             // Top-level price/stock derived from cheapest variant for backward compatibility
             const cheapest = cleanedVariants.reduce((a, b) => (a.price <= b.price ? a : b));
@@ -496,14 +423,7 @@ export default function SupplierDashboard() {
         } catch (e) { toast.error(formatApiError(e)); }
     };
 
-    // Wave 10 — D2D toggle + D2D price patch (toner listings only).
-    const patchD2D = async (id, patch) => {
-        try {
-            await api.put(`/supplier/listings/${id}`, patch);
-            toast.success("D2D updated");
-            load();
-        } catch (e) { toast.error(formatApiError(e)); }
-    };
+    // Wave 10 — D2D toggle is now handled inline by the shared D2DRow component.
 
     const duplicateListing = async (id) => {
         try {
@@ -646,11 +566,13 @@ export default function SupplierDashboard() {
                 {catalog === "printers" ? (
                     <>
                         <h2 id="printers" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your printers</h2>
+                        <D2DExplainer />
                         <PrinterListings />
                     </>
                 ) : catalog === "papers" ? (
                     <>
                         <h2 id="papers" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your papers</h2>
+                        <D2DExplainer />
                         <PaperListings />
                     </>
                 ) : catalog === "earnings" ? (
@@ -719,6 +641,7 @@ export default function SupplierDashboard() {
                 <>
                 {/* Listings */}
                 <h2 id="listings" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your toners</h2>
+                <D2DExplainer />
             {listings.length === 0 ? (
                 <div className="tc-card-flat p-8 text-center text-[#6E6E73]">
                     No listings yet. Tap <span className="font-semibold text-[#0A0A0B]">Add product</span> to publish your first toner.
@@ -762,7 +685,7 @@ export default function SupplierDashboard() {
                                             <Trash2 size={12} /> Remove
                                         </button>
                                     </div>
-                                    <D2DRow listing={l} onPatch={patchD2D} />
+                                    <D2DRow listing={l} endpoint={`/supplier/listings/${l.id}`} onChanged={load} />
                                 </div>
                             </div>
                         );
@@ -941,47 +864,8 @@ export default function SupplierDashboard() {
                             </div>
                         </div>
 
-                        <div className="tc-form-section">Product images <span className="text-[12px] text-[#86868B] font-normal">(optional — up to 3)</span></div>
-                        <div className="text-[11.5px] text-[#86868B] -mt-2 mb-2">If you don't upload an image, an animated cartridge graphic is shown automatically.</div>
-                        <div className="grid grid-cols-3 gap-3" data-testid="image-box-grid">
-                            {[0, 1, 2].map((idx) => {
-                                const newPrev = imagePreviews[idx];
-                                const newFile = imageFiles[idx];
-                                const existing = existingImages[idx];
-                                const src = newPrev || existing;
-                                return (
-                                    <label key={idx} className="block cursor-pointer" data-testid={`image-box-${idx}`}>
-                                        <input type="file" accept="image/*" onChange={(e) => onPickFileAt(idx, e)} className="hidden" data-testid={`image-input-${idx}`} />
-                                        <div className={`relative aspect-square rounded-xl border-2 ${src ? "border-solid border-[#D2D2D7]" : "border-dashed border-[#D2D2D7] hover:border-[#0A0A0B]"} bg-white grid place-items-center overflow-hidden transition`}>
-                                            {src ? (
-                                                <>
-                                                    <img src={src} alt={`Product ${idx + 1}`} className="w-full h-full object-cover" />
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.preventDefault();
-                                                            if (newFile) removeImageAt(idx);
-                                                            else if (existing) removeExistingImage(idx);
-                                                        }}
-                                                        className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-600 text-white grid place-items-center shadow-sm hover:bg-red-700"
-                                                        data-testid={`image-remove-${idx}`}
-                                                        aria-label="Remove image"
-                                                    >
-                                                        <XIcon size={13} />
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                <div className="flex flex-col items-center gap-1.5 text-[#86868B]">
-                                                    <Camera size={20} />
-                                                    <span className="text-[11px] font-semibold">Add photo</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </label>
-                                );
-                            })}
-                        </div>
-                        <div className="text-[11px] text-[#86868B] mt-1.5">PNG / JPG · max 5 MB each · automatically compressed. First image is the cover.</div>
+                        {/* Wave 12 — image upload removed for toners. Animated cartridge
+                            graphic is shown automatically on every listing card. */}
 
                         <DialogFooter className="mt-6">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>

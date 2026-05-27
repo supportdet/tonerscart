@@ -17,6 +17,7 @@ export default function Bulk() {
     const [quantity, setQuantity] = useState("");
     const [budget, setBudget] = useState("");
     const [deliveryCity, setDeliveryCity] = useState(city || "Mumbai");
+    const [company, setCompany] = useState("");
     const [phone, setPhone] = useState("");
     const [email, setEmail] = useState("");
     const [notes, setNotes] = useState("");
@@ -25,6 +26,7 @@ export default function Bulk() {
 
     const submit = async (e) => {
         e.preventDefault();
+        if (!company.trim()) { toast.error("Please enter your company name"); return; }
         if (!quantity || Number(quantity) <= 0) { toast.error("Please enter a valid quantity"); return; }
         if (!/^\S+@\S+\.\S+$/.test(email)) { toast.error("Please enter a valid email"); return; }
         const cleanedPhone = phone.replace(/\D/g, "").slice(-10);
@@ -33,13 +35,14 @@ export default function Bulk() {
         setSubmitting(true);
         try {
             await api.post("/mps/inquiry", {
-                name: "",
+                name: company.trim(),
                 email: email.trim(),
                 phone: `+91${cleanedPhone}`,
                 description: notes,
                 estimated_printers: "—",
                 selections: {
                     type: "bulk_enquiry",
+                    company: company.trim(),
                     product_type: productType,
                     quantity: Number(quantity),
                     budget: budget ? Number(budget) : null,
@@ -75,7 +78,7 @@ export default function Bulk() {
                             Buy in Bulk
                         </h1>
                         <p className="text-[15px] text-[#6E6E73] mt-3 max-w-[520px] mx-auto">
-                            Tell us what you need. We'll get you the best price from verified dealers within 24 hours.
+                            Tell us what you need. We review every request and respond within 24 hours with the best dealer pricing.
                         </p>
                     </div>
 
@@ -151,6 +154,18 @@ export default function Bulk() {
                                         </datalist>
                                     </div>
                                     <div>
+                                        <label className="block text-[12px] font-medium text-[#1D1D1F] mb-1.5">Company name *</label>
+                                        <input
+                                            type="text"
+                                            value={company}
+                                            onChange={(e) => setCompany(e.target.value)}
+                                            placeholder="Your business name"
+                                            required
+                                            className="w-full h-11 px-3 rounded-xl border border-[#D2D2D7] bg-white text-[14px] focus:outline-none focus:border-[#0A0A0B]"
+                                            data-testid="bulk-company"
+                                        />
+                                    </div>
+                                    <div>
                                         <label className="block text-[12px] font-medium text-[#1D1D1F] mb-1.5">Phone *</label>
                                         <div className="flex items-center gap-2">
                                             <span className="inline-flex h-11 items-center px-3 rounded-xl border border-[#D2D2D7] bg-[#F5F5F7] text-[14px] font-medium text-[#6E6E73]">+91</span>
@@ -190,6 +205,14 @@ export default function Bulk() {
                                         className="w-full px-3 py-2.5 rounded-xl border border-[#D2D2D7] bg-white text-[14px] focus:outline-none focus:border-[#0A0A0B] resize-none"
                                         data-testid="bulk-notes"
                                     />
+                                </div>
+
+                                <div
+                                    className="rounded-xl px-4 py-3 text-[12.5px]"
+                                    style={{ background: "#fff3e0", border: "1px solid #ffd9a8", color: "#7a3e00" }}
+                                    data-testid="bulk-credit-note"
+                                >
+                                    <strong>For corporate buyers needing 30-day credit terms</strong>, mention it in your requirement and our team will arrange accordingly.
                                 </div>
 
                                 <button
