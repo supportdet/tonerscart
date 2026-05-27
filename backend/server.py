@@ -812,10 +812,10 @@ def d2d_me(user: dict = Depends(require_user)):
     """Returns whether the calling user is a verified (approved) dealer."""
     if user.get("role") != "supplier":
         return {"verified": False, "reason": "not_supplier"}
-    s = sb_admin.table("suppliers").select("id,business_name,is_approved").eq("user_id", user["id"]).maybe_single().execute()
+    s = sb_admin.table("suppliers").select("id,business_name,approved_at").eq("user_id", user["id"]).maybe_single().execute()
     if not s or not s.data:
         return {"verified": False, "reason": "no_supplier_record"}
-    if not s.data.get("is_approved"):
+    if not s.data.get("approved_at"):
         return {"verified": False, "reason": "not_approved", "business_name": s.data.get("business_name")}
     return {"verified": True, "business_name": s.data.get("business_name"), "supplier_id": s.data["id"]}
 
@@ -1514,7 +1514,7 @@ class PrinterListingCreate(BaseModel):
     brand: str
     model_number: str
     description: Optional[str] = ""
-    image_url: str
+    image_url: Optional[str] = ""
     image_urls: List[str] = Field(default_factory=list)
     condition: str = "new"
     usage_type: Optional[str] = None

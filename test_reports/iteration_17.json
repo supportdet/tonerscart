@@ -1,0 +1,38 @@
+{
+  "summary": "Wave 12 RETEST after main-agent fixes. Both blocking bugs from iteration_16 are fully resolved. Re-ran the entire test_wave12.py regression suite (11 tests) — ALL 11 PASS (vs 8/11 last iteration). Added one extra targeted test (test_wave12_pending.py) that signs up a fresh supplier and confirms GET /api/d2d/me does NOT 500 for a pending (un-approved) account — also PASSES with verified=false + reason in {not_supplier|no_supplier_record|not_approved}. Specifically verified: (1) /api/d2d/me as approved supplier → 200 {verified: true, business_name, supplier_id}. (2) /api/d2d/me as customer → {verified: false, reason: 'not_supplier'}. (3) /api/d2d/me as pending supplier → {verified: false, reason: not_approved/no_supplier_record} — no 500. (4) /api/d2d/me unauth → 403. (5) POST /api/supplier/printers without image_url → 200/201 (no longer 422; PrinterListingCreate.image_url confirmed Optional[str]='' at line 1517). (6) All other Wave 12 endpoints still green: /d2d/listings shape + counts, toner/paper creates without image, /supplier/printers PUT d2d body returns 200 or 503 (graceful), /supplier/papers PUT d2d returns 200 or 503, /mps/inquiry bulk_enquiry with company. Wave 12 backend is now 100% green; main agent can proceed with frontend verification of the /dealer 3-section layout for approved suppliers.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave12.py",
+    "/app/backend/tests/test_wave12_pending.py",
+    "/app/test_reports/pytest/iteration_17_wave12.xml"
+  ],
+  "action_items": [
+    "Frontend smoke (main agent self-test) — visit /dealer logged-in as the approved supplier TEST.w7.sup.cf61d246@tonerscarttest.com / Test@12345 and confirm the verified-dealer 3-section layout renders (toner / printer / paper sections, no infinite loading spinner). Backend /d2d/me now returns verified:true for that account."
+  ],
+  "critical_code_review_comments": [
+    "server.py /d2d/me still uses .maybe_single().execute() — current supabase-py raises on zero rows; the `if not s or not s.data:` guard handles it but consider switching to .execute()+manual length check for robustness across future supabase-py versions.",
+    "server.py is still 3960 lines — exceeds the 700-line guideline. Splitting D2D / printers / papers / MPS into dedicated routers is overdue.",
+    "Three near-duplicate D2D PUT branches (listings/printers/papers around lines 3335/3400/3487) remain — DRY violation; extract into a shared _update_d2d_fields(table, id, body) helper."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_wave12_pending.py (new — single-case retest for pending-supplier /d2d/me)"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 — 11 in test_wave12.py + 1 in test_wave12_pending.py)",
+    "frontend": "Not in scope this iteration — testing_type=backend."
+  },
+  "test_credentials": "Admin: admin@tonerscart.in / Admin@123. Approved supplier (still active): TEST.w7.sup.cf61d246@tonerscarttest.com / Test@12345. Fresh buyer + pending supplier created per run.",
+  "seed_data_creation": "1 toner + 1 paper + 1 printer (no image) added to the existing approved supplier. 1 fresh buyer + 1 fresh pending supplier created per test run (TEST.w12*.*).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Wave 12 backend is GREEN. Regression suite: /app/backend/tests/test_wave12.py (11 cases) + /app/backend/tests/test_wave12_pending.py (1 case). Both bugs from iteration_16 fixed in server.py: (a) /d2d/me at line 815 now selects id,business_name,approved_at and derives verified from approved_at IS NOT NULL — no more column-not-found error. (b) PrinterListingCreate.image_url at line 1517 is now Optional[str]=''. d2d_enabled/d2d_price columns are still NOT applied to the live Supabase DB — graceful-degradation paths (503 on PUT, [] on /d2d/listings) remain the verified correct behaviour. Next testing pass should focus on frontend /dealer verified-dealer 3-section layout end-to-end as an approved supplier.",
+  "rca of the issue": "FIX 1 (verified): server.py:815 now uses `select('id,business_name,approved_at')` and computes verified from `approved_at IS NOT NULL`. The `approved_at` column exists on the suppliers table (confirmed by 200 responses on both approved and pending suppliers). FIX 2 (verified): server.py:1517 now declares `image_url: Optional[str] = ''` — Pydantic no longer 422s on missing field; printer creation without image succeeds. Reproduction (positive control): approved-supplier login → GET /d2d/me → {verified: true, business_name, supplier_id}. POST /supplier/printers without image_url → 200/201 with id."
+}
