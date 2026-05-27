@@ -387,6 +387,12 @@ export default function Landing() {
                         </button>
                     ))}
                 </div>
+                {!groupedLoading && grouped.length === 0 && (
+                    <div className="text-center py-10 tc-card-flat" data-testid="popular-empty">
+                        <div className="text-[14px] font-semibold text-[#0A0A0B] mb-1">New listings coming soon</div>
+                        <div className="text-[12.5px] text-[#6E6E73]">Verified dealers are onboarding right now. Check back in a few hours.</div>
+                    </div>
+                )}
 
                 {/* Mobile-only "browse all" */}
                 <div className="mt-6 sm:hidden">

@@ -84,7 +84,7 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
                 pincode,
                 delivery_charge: deliveryCharge,
             });
-            toast.success("Order request sent to supplier");
+            toast.success("Order placed — supplier will confirm shortly");
             onClose?.();
             const enriched = {
                 ...created,
@@ -115,7 +115,7 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
         <Dialog open onOpenChange={(o) => !o && onClose?.()}>
             <DialogContent className="p-0 max-w-md gap-0 overflow-hidden" data-testid="order-request-dialog">
                 <DialogHeader className="px-5 pt-5 pb-3 border-b border-black/[0.06]">
-                    <DialogTitle className="text-[#0A0A0B] text-[17px] font-semibold tracking-tight">Request order</DialogTitle>
+                    <DialogTitle className="text-[#0A0A0B] text-[17px] font-semibold tracking-tight">Place order</DialogTitle>
                     <DialogDescription className="text-[12px] text-[#6E6E73] truncate">
                         <span className="font-mono text-[#0A0A0B]">{product.brand} {product.model_number}</span> · {product.toner_type || "Original"} · {product.supplier_name} ({product.city})
                     </DialogDescription>
@@ -225,7 +225,7 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
                     </div>
                     <div className="flex items-center gap-2">
                         <Button variant="outline" size="sm" onClick={onClose} data-testid="order-cancel-btn">Cancel</Button>
-                        <Button className="btn-cta" size="sm" onClick={submit} disabled={loading} data-testid="order-submit-btn">{loading ? "Sending…" : "Send request"}</Button>
+                        <Button className="btn-cta" size="sm" onClick={submit} disabled={loading} data-testid="order-submit-btn">{loading ? "Placing…" : "Place order"}</Button>
                     </div>
                 </DialogFooter>
             </DialogContent>

@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { X, Plus, Trash2, Upload, Download, FileSpreadsheet, Loader2, CheckCircle2 } from "lucide-react";
 import api from "../lib/api";
@@ -125,13 +126,21 @@ function csvEscape(v) {
 }
 
 function buildTemplate() {
+    // Blank template — headers + ONE example row that the dealer can replace.
     const header = COLUMNS.map((c) => c.label).join(",");
     const example = COLUMNS.map((c) => csvEscape(TEMPLATE_EXAMPLE[c.key] ?? "")).join(",");
     return `${header}\n${example}\n`;
 }
 
+function buildCurrent(rows) {
+    // Snapshot of the table as the dealer sees it (filled OR empty).
+    const header = COLUMNS.map((c) => c.label).join(",");
+    const body = rows.map((r) => COLUMNS.map((c) => csvEscape(r[c.key] ?? "")).join(","));
+    return `${header}\n${body.join("\n")}\n`;
+}
+
 export default function BulkUploadDialog({ onClose, onSuccess }) {
-    const [rows, setRows] = useState(() => Array.from({ length: 5 }, EMPTY_ROW));
+    const [rows, setRows] = useState(() => Array.from({ length: 10 }, EMPTY_ROW));
     const [submitting, setSubmitting] = useState(false);
     const [progress, setProgress] = useState({ done: 0, total: 0 });
     const [result, setResult] = useState(null); // { succeeded, failed, errors }
@@ -156,41 +165,75 @@ export default function BulkUploadDialog({ onClose, onSuccess }) {
         URL.revokeObjectURL(url);
     };
 
+    const downloadCurrent = () => {
+        // Snapshot the table as-is (10 empty rows if untouched, or whatever
+        // the dealer has filled in so far).
+        const blob = new Blob([buildCurrent(rows)], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "tonerscart_bulk_toners.csv";
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
     const onFile = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
         try {
-            const text = await file.text();
-            const parsed = parseCSV(text);
+            const name = file.name.toLowerCase();
+            let parsed; // matrix of cells (array of arrays of strings)
+            if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+                // Excel branch — parse via SheetJS, take the first sheet, flatten to strings.
+                const buf = await file.arrayBuffer();
+                const wb = XLSX.read(buf, { type: "array" });
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const matrix = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" });
+                parsed = matrix.map((r) => r.map((c) => (c == null ? "" : String(c))));
+            } else {
+                const text = await file.text();
+                parsed = parseCSV(text);
+            }
             if (parsed.length < 2) {
-                toast.error("CSV is empty");
+                toast.error("File is empty or has no data rows");
                 return;
             }
-            // Build header → key map. Match by label (case-insensitive).
-            const header = parsed[0].map((h) => h.trim().toLowerCase());
+            // Header → key map. Match by label OR key (case-insensitive, whitespace-tolerant).
+            // Any unrecognised column is silently ignored (per Wave 13 spec).
+            const norm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+            const header = parsed[0].map(norm);
             const keyByIdx = header.map((h) => {
-                const col = COLUMNS.find((c) => c.label.toLowerCase() === h || c.key.toLowerCase() === h);
+                const col = COLUMNS.find((c) => norm(c.label) === h || c.key.toLowerCase() === h);
                 return col?.key || null;
             });
+            const recognised = keyByIdx.filter(Boolean).length;
+            if (recognised === 0) {
+                toast.error("No recognised columns found. Download the template for the correct headers.");
+                return;
+            }
             const dataRows = parsed.slice(1).map((cells) => {
                 const r = EMPTY_ROW();
                 keyByIdx.forEach((k, i) => {
-                    if (!k) return;
+                    if (!k) return; // skip unknown columns
                     const v = (cells[i] ?? "").trim();
                     if (v !== "") r[k] = v;
                 });
                 return r;
             }).filter((r) => !rowIsEmpty(r));
             if (dataRows.length === 0) {
-                toast.error("No data rows detected in CSV");
+                toast.error("No data rows detected after parsing");
                 return;
             }
-            // Pad with 1 extra empty row for further edits
-            setRows([...dataRows, EMPTY_ROW()]);
+            // Pad with extra blank rows so the dealer can keep editing
+            const padded = [...dataRows];
+            while (padded.length < 10) padded.push(EMPTY_ROW());
+            padded.push(EMPTY_ROW());
+            setRows(padded);
             setShowErrors(false);
-            toast.success(`Loaded ${dataRows.length} row${dataRows.length === 1 ? "" : "s"} from CSV`);
+            const skipped = header.length - recognised;
+            toast.success(`Loaded ${dataRows.length} row${dataRows.length === 1 ? "" : "s"}${skipped > 0 ? ` · ${skipped} extra column${skipped === 1 ? "" : "s"} ignored` : ""}`);
         } catch (err) {
-            toast.error("Could not parse CSV. Make sure headers match the template.");
+            toast.error("Could not parse file. Use the template format (CSV or Excel).");
         } finally {
             if (fileRef.current) fileRef.current.value = "";
         }
@@ -258,11 +301,14 @@ export default function BulkUploadDialog({ onClose, onSuccess }) {
                 {/* Action bar */}
                 <div className="px-6 py-3 border-b border-black/[0.06] flex flex-wrap items-center gap-2 bg-[#FAFAFB]">
                     <button onClick={downloadTemplate} className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold px-3 h-9 rounded-lg border border-[#D2D2D7] bg-white hover:bg-black/[0.04]" data-testid="bulk-download-template">
-                        <Download size={14} /> Download template
+                        <Download size={14} /> Template
+                    </button>
+                    <button onClick={downloadCurrent} className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold px-3 h-9 rounded-lg border border-[#D2D2D7] bg-white hover:bg-black/[0.04]" data-testid="bulk-download-current" title="Download the current table (empty or filled)">
+                        <Download size={14} /> Download table
                     </button>
                     <label className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold px-3 h-9 rounded-lg border border-[#D2D2D7] bg-white hover:bg-black/[0.04] cursor-pointer" data-testid="bulk-upload-csv-label">
-                        <FileSpreadsheet size={14} /> Upload CSV
-                        <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={onFile} className="hidden" data-testid="bulk-upload-csv-input" />
+                        <FileSpreadsheet size={14} /> Upload CSV / Excel
+                        <input ref={fileRef} type="file" accept=".csv,.tsv,.xls,.xlsx,text/csv" onChange={onFile} className="hidden" data-testid="bulk-upload-csv-input" />
                     </label>
                     <div className="flex-1" />
                     <button onClick={addRow} className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold px-3 h-9 rounded-lg border border-[#D2D2D7] bg-white hover:bg-black/[0.04]" data-testid="bulk-add-row">
