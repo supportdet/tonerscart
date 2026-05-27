@@ -33,9 +33,11 @@ def _envelope(subject: str, body_html: str) -> str:
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F5F5F7;padding:32px 0;">
     <tr><td align="center">
       <table role="presentation" cellpadding="0" cellspacing="0" width="560" style="background:#fff;border:1px solid #E5E5EA;border-radius:14px;overflow:hidden;">
-        <tr><td style="padding:24px 32px;border-bottom:1px solid #E5E5EA;background:#0A0A0B;color:#fff;">
-          <div style="font-size:18px;font-weight:600;letter-spacing:-0.02em;">TonersCart</div>
-          <div style="font-size:12px;color:rgba(255,255,255,0.6);">India&apos;s B2B printer-toner marketplace</div>
+        <tr><td style="padding:24px 32px;border-bottom:1px solid #E5E5EA;background:#FFFFFF;color:#0A0A0B;">
+          <div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">
+            <span style="color:#0A0A0B;">Toners</span><span style="color:#00B7C7;">Cart</span>
+          </div>
+          <div style="font-size:12px;color:#86868B;margin-top:2px;">India&apos;s B2B printer-toner marketplace</div>
         </td></tr>
         <tr><td style="padding:28px 32px;font-size:14.5px;line-height:1.55;">
           {body_html}
@@ -284,12 +286,69 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
     unit = float(item.get("unit_price") or 0)
     total = float(item.get("total") or (unit * qty))
 
+    # ----- Tech specs table (two-column) ------------------------------------
+    listing_type = (item.get("listing_type") or "toner").lower()
+    spec_rows: list[tuple[str, str]] = []
+    def _push(label: str, val):
+        if val is None:
+            return
+        s = str(val).strip()
+        if not s or s.lower() in ("none", "null", "—"):
+            return
+        spec_rows.append((label, s))
+    if listing_type == "printer":
+        _push("Print speed", f"{item.get('print_speed_ppm')} ppm" if item.get('print_speed_ppm') else None)
+        _push("Duty cycle", item.get('duty_cycle'))
+        connectivity = item.get('connectivity')
+        _push("Connectivity", ", ".join(connectivity) if isinstance(connectivity, list) else connectivity)
+        _push("Max resolution", item.get('max_resolution'))
+        paper_sizes = item.get('paper_sizes')
+        _push("Paper sizes", ", ".join(paper_sizes) if isinstance(paper_sizes, list) else paper_sizes)
+        mobile = item.get('mobile_printing')
+        _push("Mobile printing", ", ".join(mobile) if isinstance(mobile, list) else mobile)
+        _push("Condition", item.get('condition'))
+        _push("Warranty", item.get('printer_warranty'))
+    else:  # toner (default)
+        _push("Page yield", f"{item.get('page_yield')} pages" if item.get('page_yield') else None)
+        compat = item.get('compatible_models')
+        _push("Compatible models", ", ".join(compat) if isinstance(compat, list) else compat)
+        _push("OEM part number", item.get('oem_part_number'))
+        _push("Cartridge weight", f"{item.get('cartridge_weight')} g" if item.get('cartridge_weight') else None)
+        _push("Print technology", item.get('print_technology'))
+        _push("Toner type", raw_type)
+        _push("Color", color if color != "—" else None)
+        _push("Warranty", item.get('warranty'))
+
+    specs_html = ""
+    if spec_rows:
+        cells = []
+        for i, (lbl, val) in enumerate(spec_rows):
+            cells.append(f"""
+            <td style="padding:10px 14px;border-top:1px solid #E5E5EA;width:50%;vertical-align:top;">
+              <div style="font-size:10.5px;letter-spacing:0.16em;text-transform:uppercase;font-weight:700;color:#86868B;">{lbl}</div>
+              <div style="font-size:13px;color:#0A0A0B;margin-top:3px;line-height:1.45;">{val}</div>
+            </td>""")
+        rows_html = ""
+        for i in range(0, len(cells), 2):
+            pair = cells[i:i+2]
+            if len(pair) == 1:
+                pair.append('<td style="padding:10px 14px;border-top:1px solid #E5E5EA;width:50%;"></td>')
+            rows_html += f"<tr>{''.join(pair)}</tr>"
+        specs_html = f"""
+        <div style="margin-top:22px;">
+          <div style="font-size:11px;letter-spacing:0.22em;text-transform:uppercase;font-weight:700;color:#00B7C7;margin-bottom:8px;">Technical Specifications</div>
+          <table style="width:100%;border-collapse:collapse;border:1px solid #E5E5EA;border-radius:8px;overflow:hidden;background:#FFFFFF;">
+            {rows_html}
+          </table>
+        </div>
+        """
+
     body = f"""
     <div style="border-top:4px solid #00B7C7;background:#FFFFFF;padding:24px 0 8px 0;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid #E5E5EA;">
       <div>
         <div style="font-family:'Montserrat',sans-serif;font-size:22px;font-weight:700;letter-spacing:-0.02em;">
-          <span style="color:#0A0A0B;">Toners</span><span style="color:#F5C400;">Cart</span>
+          <span style="color:#0A0A0B;">Toners</span><span style="color:#00B7C7;">Cart</span>
         </div>
         <div style="font-size:11px;letter-spacing:0.22em;text-transform:uppercase;font-weight:700;color:#00B7C7;margin-top:8px;">Quotation</div>
         <div style="font-family:monospace;font-size:15px;font-weight:700;color:#0A0A0B;margin-top:2px;">{quote_number}</div>
@@ -345,6 +404,7 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
         </tr>
       </tbody>
     </table>
+    {specs_html}
 
     <div style="margin-top:16px;padding:12px 14px;border-left:3px solid #F5C400;background:#FFFBEB;border-radius:6px;font-size:12.5px;color:#5C4A00;">
       This quotation is valid for <strong>7 days</strong>. Prices are subject to availability.

@@ -21,7 +21,7 @@ const COLUMNS = [
     { key: "intercity_delivery_charge", label: "Intercity Delivery (₹)", required: false, type: "number", w: 140 },
 ];
 
-const TONER_TYPES = ["Original", "Compatible", "Refilled"];
+const TONER_TYPES = ["Original", "Compatible"];
 const REQUIRED_KEYS = COLUMNS.filter((c) => c.required).map((c) => c.key);
 
 const EMPTY_ROW = () => ({
@@ -155,26 +155,28 @@ export default function BulkUploadDialog({ onClose, onSuccess }) {
     const addRow = () => setRows((prev) => [...prev, EMPTY_ROW()]);
     const removeRow = (idx) => setRows((prev) => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx));
 
+    const downloadXLSX = (data, filename) => {
+        // data is an array-of-arrays: [headerRow, ...dataRows]
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        // Set sensible column widths from our COLUMNS definition
+        ws["!cols"] = COLUMNS.map((c) => ({ wch: Math.max(c.label.length + 2, Math.round((c.w || 100) / 7)) }));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Toners");
+        XLSX.writeFile(wb, filename);
+    };
+
     const downloadTemplate = () => {
-        const blob = new Blob([buildTemplate()], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "tonerscart_bulk_toners_template.csv";
-        a.click();
-        URL.revokeObjectURL(url);
+        const header = COLUMNS.map((c) => c.label);
+        const example = COLUMNS.map((c) => TEMPLATE_EXAMPLE[c.key] ?? "");
+        downloadXLSX([header, example], "tonerscart_bulk_toners_template.xlsx");
     };
 
     const downloadCurrent = () => {
         // Snapshot the table as-is (10 empty rows if untouched, or whatever
         // the dealer has filled in so far).
-        const blob = new Blob([buildCurrent(rows)], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "tonerscart_bulk_toners.csv";
-        a.click();
-        URL.revokeObjectURL(url);
+        const header = COLUMNS.map((c) => c.label);
+        const body = rows.map((r) => COLUMNS.map((c) => r[c.key] ?? ""));
+        downloadXLSX([header, ...body], "tonerscart_bulk_toners.xlsx");
     };
 
     const onFile = async (e) => {

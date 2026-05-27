@@ -438,6 +438,14 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
         <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
             <DialogContent className="max-w-[680px] max-h-[92vh] overflow-y-auto p-8 rounded-[20px] tc-shadow-lg" data-testid="add-printer-dialog">
                 <DialogHeader>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-[#3a3a40] hover:text-[#0A0A0B] -ml-1 mb-3 self-start"
+                        data-testid="back-to-dashboard-from-printer"
+                    >
+                        <ChevronLeft size={14} /> Back to Dashboard
+                    </button>
                     <DialogTitle className="text-[#0A0A0B] text-[22px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500, letterSpacing: "-0.01em" }}>
                         {editing ? "Edit printer" : "Add a printer"}
                     </DialogTitle>

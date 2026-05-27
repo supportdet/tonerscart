@@ -1,3 +1,44 @@
+### 2026-02-XX — Wave 14 (Polish batch: footer, emails, checkout policy, supplier agreement)
+
+**Footer**: `Footer.jsx` flipped from `bg-[#0A0A0B] text-white` to clean white with dark text + `#00B7C7` link-hover. Single thin top border, no shadow.
+
+**Email branding**: `_envelope` shell header is now white with brand `TonersCart` rendered as `Toners` (#0A0A0B) + `Cart` (#00B7C7). The quotation header swatch flipped from `#F5C400` to `#00B7C7`.
+
+**Quotation email — full tech specs**:
+- `email_quotation` now builds a 2-column "Technical Specifications" table below the totals.
+- For toners: page yield, compatible models, OEM part, cartridge weight, print technology, toner type, color, warranty.
+- For printers: print speed, duty cycle, connectivity, max resolution, paper sizes, mobile printing, condition, warranty.
+- `/quotation` endpoint in `server.py` enriches the `item` dict with every spec field from the listing row.
+
+**Product detail page**:
+- Right column wrapper `items-center text-center justify-center` → `items-start text-left justify-start`. Price, qty stepper, CTAs and delivery note now all left-aligned.
+- Page yield row always present at the top of the spec list (shows `—` fallback when missing).
+
+**Bulk upload (`BulkUploadDialog.jsx`)**:
+- Both `Template` and `Download table` buttons now produce **`.xlsx`** via SheetJS (`XLSX.utils.book_new` + `XLSX.writeFile`) — column widths derived from `COLUMNS[*].label / w`.
+- `TONER_TYPES` reduced to `["Original","Compatible"]` (Refilled removed).
+
+**Checkout policy gate (`Checkout.jsx`)**:
+- New `policyAgreed` state + `policy-agreement-block` + `policy-agreement-checkbox`.
+- Single-paragraph clause covering intermediary status, GST invoice from supplier, 2-day dispatch, disputes via `support@tonerscart.com`.
+- `placeOrder` returns early with toast `"Please accept TonersCart's terms to place your order"` until the box is checked.
+- "Place Order" button disabled until `policyAgreed`.
+- Button label renamed `Place Order Request → Place Order`.
+
+**Supplier first-listing agreement (`SupplierAgreementDialog.jsx`)**:
+- New shared dialog with 4 bullet commitments (accurate stock+pricing, 2-day dispatch, GST invoicing, commission terms) + `I agree` checkbox + `Start listing` CTA.
+- Acceptance persisted via `localStorage['tc.supplier_agreement.v1'] = 'accepted'`.
+- `SupplierDashboard.requestAddAction('single'|'bulk')` wraps both "Add single toner" and "Bulk upload" entry points — gates the FIRST attempt only.
+
+**"← Back to Dashboard" buttons**:
+- Inside Add/Edit Toner dialog header (`back-to-dashboard-from-toner`).
+- Inside Add/Edit Printer dialog header (`back-to-dashboard-from-printer`).
+- Inside Add/Edit Paper dialog header (`back-to-dashboard-from-paper`).
+
+**Testing**: `/app/test_reports/iteration_19.json` — 9/10 passed first round; 1 HIGH regression bug (right column still centered due to wrapper className) was fixed in a one-line patch (line 223 of ProductDetail.jsx). Backend test_wave14.py suite is 7/7 green.
+
+---
+
 ### 2026-02-XX — Wave 13 (Test-data wipe + Direct-purchase papers + Bulk Excel)
 
 **Test data cleanup:** removed 49 `@tonerscarttest.com` users + their 7 test suppliers + every dependent listing/order. Only real onboarding accounts retained.

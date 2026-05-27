@@ -1,0 +1,33 @@
+{
+  "summary": "Wave 14 polish batch — verified 9 of 10 items pass spec, 1 regression bug found. Backend: 7/7 pytest cases pass (test_wave14.py) — quotation email now embeds 'Technical Specifications' section with toner page_yield / compatible_models / oem_part_number / cartridge_weight / print_technology AND printer print_speed / duty_cycle / connectivity / paper_sizes / mobile_printing. Brand logo in BOTH email envelope shell AND quotation header renders Toners in #0A0A0B + Cart in #00B7C7 (NO yellow). Live UI smoke: Footer (data-testid='site-footer') has white bg (rgb(255,255,255)), dark text (rgb(10,10,11)), hover #00B7C7 confirmed via element hover. ProductDetail page yield row renders '—' fallback when missing (verified on /toner/62d88617…). All required testids exist (policy-agreement-block, policy-agreement-checkbox, place-order-request-btn, supplier-agreement-dialog, supplier-agreement-checkbox, supplier-agreement-accept, supplier-agreement-cancel, back-to-dashboard-from-{toner,printer,paper}, site-footer, product-price, product-spec table contains 'Page yield'). Source review confirms: BulkUploadDialog.downloadXLSX writes .xlsx via XLSX.writeFile; TONER_TYPES = ['Original','Compatible'] only (no 'Refilled'); Checkout placeOrder guards on policyAgreed with exact toast text 'Please accept TonersCart's terms to place your order'; SupplierAgreementDialog persists localStorage 'tc.supplier_agreement.v1' = 'accepted' on Start listing; SupplierDashboard.requestAddAction gates BOTH single + bulk first-listing actions through the modal.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ProductDetail right column container", "issue": "Wave 14 spec #3 says price/qty/CTAs/delivery-note must be LEFT-aligned, but the right-column wrapper still has className='flex flex-col items-center text-center justify-center' (line 223, comment still reads 'vertically + horizontally centered'). Live computed style on /toner/<id> shows text-align=center on the price element (parent-align=center). Visually all content (brand, model, badges, price block) renders centered. Internal flex rows do use justify-start, but the parent items-center forces horizontal centering on every child block. Buy-now button still uses yellow #F5C400 which is fine, but layout is wrong.", "selector": "div.flex.flex-col.items-center.text-center.justify-center.min-h-[460px] (line 223 of ProductDetail.jsx)", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave14.py",
+    "/app/test_reports/pytest/iteration_19_wave14.xml"
+  ],
+  "action_items": [
+    "ProductDetail.jsx line 223: change wrapper from 'flex flex-col items-center text-center justify-center min-h-[460px]' to 'flex flex-col items-start text-left justify-start min-h-[460px]' (or similar) so price, qty, CTAs, delivery-note are LEFT-aligned per Wave 14 spec #3. Also update the inline comment which still reads '55%, vertically + horizontally centered, balanced spacing'."
+  ],
+  "critical_code_review_comments": [
+    "ProductDetail.jsx line 223 — wrapper still left over from previous wave (items-center text-center). This contradicts the Wave 14 brief that the WHOLE right column should be left-aligned. Internal flex rows already say 'left aligned' in code comments and use justify-start, but they are visually centered because the parent wrapper centers them.",
+    "BulkUploadDialog.downloadXLSX uses 'Toners' as sheet name regardless of category — when bulk upload is added for printers/papers in a future wave this will need parametrising (cosmetic).",
+    "SupplierAgreementDialog stores localStorage as plain string 'accepted'. Consider storing JSON with timestamp + version so a future v2 of the agreement can supersede it without manual key bumping (current key is .v1 which is fine for now)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_wave14.py (new — 7 cases, all pass)"
+  ],
+  "success_rate": {"backend": "100% (7/7 pytest cases pass)", "frontend": "90% (9 of 10 Wave 14 items verified pass; ProductDetail right-column alignment regression on item #3)"},
+  "test_credentials": "Admin: admin@tonerscart.in / Admin@123 (Supabase). No live approved supplier was used — all supplier-dashboard / bulk-upload acceptance verified through source-review since seeded test suppliers were wiped in Wave 13.",
+  "seed_data_creation": "None — read-only smoke testing on public surfaces plus pytest against email_service helpers with mocked _send.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Wave 14 is GREEN except for one HIGH-priority layout bug on ProductDetail right column (line 223 still has items-center / text-center). Once main agent flips it to items-start / text-left, retest /toner/<id> and verify computed text-align=left on data-testid='product-price'. All other Wave 14 items (quotation email Technical Specifications section + branding, Footer white bg + dark text + cyan hover, page-yield always-visible row with '—' fallback, Checkout policy-agreement gate + toast, SupplierAgreementDialog localStorage tc.supplier_agreement.v1 wiring on both single + bulk add, BulkUpload .xlsx downloads via SheetJS, TONER_TYPES only Original+Compatible, back-to-dashboard buttons inside Add Toner / Add Printer / Add Paper dialogs) are confirmed correct in source AND for the publicly-testable surfaces (footer / product detail / source-grep of remaining components).",
+  "rca of the issue": "ProductDetail.jsx item #3 regression: when the right column was redesigned for the brand-page look earlier, the wrapper got 'items-center text-center justify-center' so the column would visually center against the image on the left. Wave 14 brief #3 changed the design direction (LEFT-aligned everywhere) and the comments INSIDE the column were updated (lines 273 '/* Price + stock — left aligned */', 294, 304) and inner flex rows do use justify-start, but the parent wrapper className was not flipped. Net effect: justify-start has no visible impact because every child is a full-width or shrink-fit block inside an items-center column. Fix is one-line: line 223 className change to items-start / text-left."
+}

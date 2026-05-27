@@ -219,8 +219,8 @@ export default function ProductDetail({ kind = "toner" }) {
                         )}
                     </div>
 
-                    {/* RIGHT — content (55%, vertically + horizontally centered, balanced spacing) */}
-                    <div className="flex flex-col items-center text-center justify-center min-h-[460px]">
+                    {/* RIGHT — content (55%, LEFT-aligned per Wave 14) */}
+                    <div className="flex flex-col items-start text-left justify-start min-h-[460px]">
                         {data.toner_type && (
                             <span className={`inline-block text-[10.5px] tracking-[0.16em] uppercase font-semibold px-2.5 py-1 rounded-full border ${data.toner_type === "Original" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : data.toner_type === "Refilled" ? "bg-orange-50 border-orange-200 text-orange-700" : "bg-blue-50 border-blue-200 text-blue-700"}`} data-testid="product-type-badge">
                                 {data.toner_type}
@@ -270,8 +270,8 @@ export default function ProductDetail({ kind = "toner" }) {
                             </div>
                         )}
 
-                        {/* Price + stock — centered, balanced spacing */}
-                        <div className="mt-6 flex items-end justify-center gap-4">
+                        {/* Price + stock — left aligned */}
+                        <div className="mt-6 flex items-end justify-start gap-4">
                             <div className="text-[#0A0A0B] leading-none" style={{ fontFamily: "'Roboto', Helvetica, Arial, sans-serif", fontWeight: 700, fontSize: "clamp(24px, 3vw, 36px)" }} data-testid="product-price">{fmtMoney(displayPrice)}</div>
                             <span className={`text-[11.5px] font-semibold px-2.5 py-1 rounded-full border ${stockLabel.cls}`} data-testid="product-stock">{stockLabel.txt}</span>
                         </div>
@@ -291,8 +291,8 @@ export default function ProductDetail({ kind = "toner" }) {
                             {data.supplier_city && (<><MapPin size={12} className="ml-1 text-[#86868B]" /><span>{data.supplier_city}</span></>)}
                         </div>
 
-                        {/* Qty stepper */}
-                        <div className="mt-6 flex items-center justify-center gap-3">
+                        {/* Qty stepper — left aligned */}
+                        <div className="mt-6 flex items-center justify-start gap-3">
                             <div className="text-[11px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">Quantity</div>
                             <div className="inline-flex items-center bg-white border border-[#D2D2D7] rounded-full overflow-hidden">
                                 <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="w-9 h-9 grid place-items-center hover:bg-black/5 text-[15px]" data-testid="qty-decrement">−</button>
@@ -301,8 +301,8 @@ export default function ProductDetail({ kind = "toner" }) {
                             </div>
                         </div>
 
-                        {/* CTAs */}
-                        <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                        {/* CTAs — left aligned */}
+                        <div className="mt-5 flex flex-wrap items-center justify-start gap-3">
                             <button onClick={onAddToCart} disabled={displayStock <= 0} className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-[#0A0A0B] text-white text-[13.5px] font-semibold hover:bg-[#1D1D1F] disabled:opacity-40 disabled:cursor-not-allowed transition" data-testid="add-to-cart-btn">
                                 <ShoppingCart size={15} /> Add to cart
                             </button>
@@ -314,7 +314,7 @@ export default function ProductDetail({ kind = "toner" }) {
                             </button>
                         </div>
 
-                        <div className="mt-3 text-[11.5px] text-[#86868B] leading-snug text-center max-w-[480px]" data-testid="delivery-note">
+                        <div className="mt-3 text-[11.5px] text-[#86868B] leading-snug text-left max-w-[480px]" data-testid="delivery-note">
                             Delivery within city included. Intercity delivery charges to be confirmed by supplier before dispatch.
                         </div>
 
@@ -376,9 +376,10 @@ function SpecsBlock({ kind, data, selectedVariant }) {
     if (kind === "toner") {
         rows.push(["Brand", data.brand]);
         if (data.model_number) rows.push(["Model number", data.model_number]);
+        // Page yield — always shown (key buying signal for toners)
+        rows.push(["Page yield", data.page_yield ? `${Number(data.page_yield).toLocaleString("en-IN")} pages` : "—"]);
         rows.push(["Type", data.toner_type]);
         rows.push(["Colour", selectedVariant?.color || data.color]);
-        if (data.page_yield) rows.push(["Page yield", `${data.page_yield} pages`]);
         if (data.compatible_models) rows.push(["Compatible models", data.compatible_models]);
         if (data.oem_part_number) rows.push(["OEM part number", data.oem_part_number]);
         if (data.cartridge_weight) rows.push(["Cartridge weight", `${data.cartridge_weight} g`]);
