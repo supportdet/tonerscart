@@ -17,8 +17,9 @@ import SupplierEarnings from "../components/SupplierEarnings";
 import CommissionBanner from "../components/CommissionBanner";
 import CommissionCalculator from "../components/CommissionCalculator";
 import { commissionFor } from "../lib/commission";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, ChevronDown } from "lucide-react";
 import { colorSwatch as _colorSwatch } from "../lib/colors";
+import BulkUploadDialog from "../components/BulkUploadDialog";
 
 const colorSwatchHex = (name) => {
     const v = _colorSwatch(name);
@@ -200,6 +201,8 @@ export default function SupplierDashboard() {
     const { user, refresh } = useAuth();
     const isApproved = user?.supplier_status === "approved";
     const [catalog, setCatalog] = useState("toners"); // 'toners' | 'printers' | 'papers' | 'earnings' | 'orders'
+    const [bulkOpen, setBulkOpen] = useState(false);
+    const [addMenuOpen, setAddMenuOpen] = useState(false);
 
     // Sync catalog tab from URL hash so the header "My stock" vs "Orders" pills route correctly.
     React.useEffect(() => {
@@ -601,9 +604,34 @@ export default function SupplierDashboard() {
                         <button onClick={() => setCatalog("earnings")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "earnings" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-earnings">My Earnings</button>
                     </div>
                     {catalog === "toners" ? (
-                        <Button className="btn-cta inline-flex items-center gap-2" onClick={openDialog} data-testid="add-listing-btn">
-                            <Plus size={16} /> Add toner
-                        </Button>
+                        <div className="relative" onBlur={() => setTimeout(() => setAddMenuOpen(false), 150)} tabIndex={-1}>
+                            <Button className="btn-cta inline-flex items-center gap-2" onClick={() => setAddMenuOpen((o) => !o)} data-testid="add-listing-btn">
+                                <Plus size={16} /> Add toner <ChevronDown size={14} />
+                            </Button>
+                            {addMenuOpen && (
+                                <div
+                                    className="absolute right-0 top-full mt-2 w-60 bg-white text-[#1D1D1F] rounded-xl shadow-xl border border-black/[0.08] py-2 z-30"
+                                    data-testid="add-toner-menu"
+                                >
+                                    <button
+                                        onMouseDown={() => { setAddMenuOpen(false); openDialog(); }}
+                                        className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]"
+                                        data-testid="add-single-toner-btn"
+                                    >
+                                        <div className="font-semibold">Add single toner</div>
+                                        <div className="text-[11.5px] text-[#86868B]">One listing with images & variants</div>
+                                    </button>
+                                    <button
+                                        onMouseDown={() => { setAddMenuOpen(false); setBulkOpen(true); }}
+                                        className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]"
+                                        data-testid="bulk-upload-btn"
+                                    >
+                                        <div className="font-semibold">Bulk upload</div>
+                                        <div className="text-[11.5px] text-[#86868B]">Spreadsheet or CSV — many at once</div>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     ) : catalog === "printers" ? (
                         <Button className="btn-cta inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-printer"))} data-testid="add-printer-cta-btn">
                             <Plus size={16} /> Add printer
@@ -965,6 +993,12 @@ export default function SupplierDashboard() {
                 </DialogContent>
             </Dialog>
             <RefilledWarningDialog open={refilledWarning} onClose={() => setRefilledWarning(false)} />
+            {bulkOpen && (
+                <BulkUploadDialog
+                    onClose={() => setBulkOpen(false)}
+                    onSuccess={() => { setBulkOpen(false); load(); }}
+                />
+            )}
             </div>
         </div>
     );

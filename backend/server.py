@@ -1104,6 +1104,32 @@ def delete_listing(listing_id: str, user: dict = Depends(require_role("supplier"
     return {"ok": True}
 
 
+# Wave 11 — Bulk upload of toner listings (CSV / spreadsheet flow).
+@api.post("/supplier/listings/bulk")
+def create_listings_bulk(payload: List[ListingCreate], user: dict = Depends(require_role("supplier"))):
+    """Create many listings at once. Reuses the single create path per row to
+    keep validation / specs / variants / D2D logic identical. Returns
+    `{created: [...], errors: [{row, message}]}` with any per-row failures so
+    the dealer can fix only the bad rows without losing the rest.
+    """
+    if not payload:
+        raise HTTPException(400, "No rows provided")
+    if len(payload) > 200:
+        raise HTTPException(400, "Bulk upload is limited to 200 rows per request")
+
+    created: List[dict] = []
+    errors: List[dict] = []
+    for idx, row in enumerate(payload):
+        try:
+            listing = create_listing(row, user=user)
+            created.append(listing)
+        except HTTPException as he:
+            errors.append({"row": idx, "message": he.detail if isinstance(he.detail, str) else str(he.detail)})
+        except Exception as e:
+            errors.append({"row": idx, "message": str(e)[:240]})
+    return {"created": created, "errors": errors, "total": len(payload), "succeeded": len(created), "failed": len(errors)}
+
+
 # ===== Orders ==================================================================
 
 @api.post("/orders")
