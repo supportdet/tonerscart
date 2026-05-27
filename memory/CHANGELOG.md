@@ -1,3 +1,31 @@
+### 2026-02-XX — Wave 12 (D2D for all products + verification gate + image-upload removed)
+
+**Backend:**
+- `supabase_schema_d2d.sql` now adds `d2d_enabled` + `d2d_price` to **listings**, **printer_listings** AND **paper_listings** (single re-runnable migration).
+- `PrinterListingCreate` extended with `d2d_enabled` / `d2d_price`; image_url is now `Optional[str] = ""` (previously required).
+- `PaperCreate` extended with `d2d_enabled` / `d2d_price`.
+- Printer create endpoint no longer returns 400 when image_url is missing.
+- New `GET /api/d2d/listings` — aggregator returning `{toners, printers, papers, counts}`; gracefully returns `[]` per section when columns missing.
+- New `GET /api/d2d/me` — verified-dealer status check using `suppliers.approved_at IS NOT NULL` (the correct platform column — the previous `is_approved` was wrong).
+- Printer + Paper PUT endpoints surface a clear 503 ("D2D columns not migrated yet…") when only d2d fields are sent and columns missing.
+
+**Frontend:**
+- `/dealer` rewritten — verified-dealer gate (`VerificationGate` + `/d2d/me` check). Approved suppliers see a 3-section grid (Toners / Printers / Papers) hitting `/d2d/listings`. Guests and customers see a friendly wall with a "Become a verified dealer" CTA → `/sell`.
+- `/oem` stays open to everyone (OEMs are manufacturers, not dealers).
+- `/bulk` — added Company name field + 30-day-credit corporate note.
+- Landing stats redesigned — Helvetica, justified, 4 stats: **#1 Marketplace**, **500+ Dealers**, **10+ Cities**, **15+ Brands**.
+- New shared component `D2DRow` + `D2DExplainer` — used by toner, printer and paper listing cards in supplier dashboard. Explainer card shown at the top of each catalog tab.
+- **Image upload removed entirely** from Add/Edit Toner and Add/Edit Paper forms. Animated cartridge / themed ream graphics auto-render on every card.
+
+**Data:**
+- All `listings`, `printer_listings`, `paper_listings`, `listing_variants`, `orders`, `order_status_history`, `order_tracking`, `quotations` rows wiped. Dealers + users + suppliers retained.
+
+**Testing:** `/app/test_reports/iteration_17.json` — 11/11 backend tests pass (post-fix). Frontend smoke verified for /dealer gate, /oem open, /bulk form, Landing stats.
+
+**Action required from user:** Apply the updated `/app/backend/supabase_schema_d2d.sql` once via Supabase SQL editor to enable D2D persistence for all three product types.
+
+---
+
 ### 2026-02-XX — Wave 10 (Two-layer navbar + Category pages + D2D)
 
 **Navbar redesign:**
