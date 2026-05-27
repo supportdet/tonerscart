@@ -26,13 +26,9 @@ function CategoryPill({ to, label, color, active }) {
         <NavLink
             to={to}
             data-testid={`nav-pill-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}
-            className="tc-cat-pill group"
-            style={{
-                "--pill-color": color,
-                borderBottomColor: active ? color : "transparent",
-            }}
+            className={`tc-cat-pill${active ? " active" : ""}`}
+            style={{ "--pill-color": color }}
         >
-            <span className="tc-cat-pill-stripe" style={{ background: color }} aria-hidden="true" />
             <span className="tc-cat-pill-label">{label}</span>
         </NavLink>
     );
@@ -206,7 +202,7 @@ export default function Header() {
             >
                 <div className="tc-container h-full">
                     <div
-                        className="flex items-stretch h-full gap-1 overflow-x-auto tc-cat-scroll"
+                        className="flex items-stretch h-full gap-2 overflow-x-auto tc-cat-scroll"
                         role="tablist"
                     >
                         {CATEGORY_PILLS.map((p) => (
