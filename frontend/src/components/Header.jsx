@@ -10,15 +10,15 @@ import { LogOut, MapPin, ChevronDown, ShoppingCart, Loader2 } from "lucide-react
 // Layer 2 (white): horizontally-scrollable colored category pills.
 
 const CATEGORY_PILLS = [
-    { to: "/search", label: "Toners", color: "#d81b60" },
-    { to: "/printers", label: "Printers", color: "#0097a7" },
-    { to: "/papers", label: "Papers", color: "#795548" },
-    { to: "/consumables", label: "Consumables", color: "#f9a825" },
-    { to: "/scanners", label: "Scanners", color: "#5c6bc0" },
-    { to: "/mps", label: "MPS/Rentals", color: "#43a047" },
-    { to: "/bulk", label: "Buy Bulk", color: "#e65100" },
-    { to: "/dealer", label: "Dealer to Dealer", color: "#607d8b" },
-    { to: "/oem", label: "OEM Marketplace", color: "#6d4c41" },
+    { to: "/search", label: "Toners", color: "#ec407a" },
+    { to: "/printers", label: "Printers", color: "#00bcd4" },
+    { to: "/papers", label: "Papers", color: "#a1887f" },
+    { to: "/consumables", label: "Consumables", color: "#ffb300" },
+    { to: "/scanners", label: "Scanners", color: "#7986cb" },
+    { to: "/mps", label: "MPS/Rentals", color: "#66bb6a" },
+    { to: "/bulk", label: "Buy Bulk", color: "#fb8c00" },
+    { to: "/dealer", label: "Dealer to Dealer", color: "#90a4ae" },
+    { to: "/oem", label: "OEM Marketplace", color: "#bcaaa4" },
 ];
 
 function CategoryPill({ to, label, color, active }) {
@@ -68,37 +68,37 @@ export default function Header() {
             {/* Layer 1 — top bar */}
             <div
                 className="text-white"
-                style={{ background: "#0A0A0B", height: 48 }}
+                style={{ background: "#0A0A0B", height: 64 }}
                 data-testid="navbar-top"
             >
-                <div className="tc-container flex items-center h-full gap-3">
+                <div className="tc-container flex items-center h-full gap-4">
                     <Link to="/" className="flex items-center shrink-0 group" data-testid="logo-home-link" aria-label="TonersCart home">
                         <img
                             src="/TONERSCART-bg.png"
                             alt="TonersCart"
-                            className="block h-7 sm:h-8 w-auto transition-transform group-hover:scale-[1.03]"
+                            className="block h-9 sm:h-10 w-auto transition-transform group-hover:scale-[1.03]"
                             data-testid="header-logo-img"
                         />
                     </Link>
 
                     <div className="flex-1" />
 
-                    {/* City — visible from xs (hidden label below 360px) */}
+                    {/* City */}
                     <div className="relative">
                         <button
                             onClick={() => setCityOpen((o) => !o)}
                             onBlur={() => setTimeout(() => setCityOpen(false), 150)}
-                            className="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-2.5 py-1.5 rounded-md text-white hover:bg-white/10"
+                            className="inline-flex items-center gap-2 text-[13px] font-medium px-3 h-9 rounded-lg text-white hover:bg-white/10 transition-colors"
                             data-testid="city-pill-btn"
                         >
-                            <MapPin size={13} />
+                            <MapPin size={14} />
                             <span className="hidden xs:inline">{city}</span>
                             <span className="xs:hidden">{(city || "").slice(0, 3)}</span>
-                            <ChevronDown size={11} />
+                            <ChevronDown size={12} />
                         </button>
                         {cityOpen && (
                             <div
-                                className="absolute right-0 top-full mt-1 w-56 bg-white text-[#1D1D1F] rounded-xl shadow-xl border border-black/[0.08] py-2 max-h-72 overflow-auto"
+                                className="absolute right-0 top-full mt-1.5 w-60 bg-white text-[#1D1D1F] rounded-xl shadow-xl border border-black/[0.08] py-2 max-h-72 overflow-auto"
                                 data-testid="city-dropdown"
                             >
                                 <div className="px-3 py-1 text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B]">Choose your city</div>
@@ -116,11 +116,11 @@ export default function Header() {
                         )}
                     </div>
 
-                    {/* Sell — black text link per spec */}
+                    {/* Sell — black text on white pill per spec */}
                     {!isSeller && !isAdmin && (
                         <NavLink
                             to="/sell"
-                            className="hidden sm:inline-flex items-center text-[12.5px] font-semibold px-3 py-1.5 rounded-md bg-white text-[#0A0A0B] hover:bg-[#F5F5F7] transition-colors"
+                            className="hidden sm:inline-flex items-center text-[13px] font-semibold px-4 h-9 rounded-lg bg-white text-[#0A0A0B] hover:bg-[#F5F5F7] transition-colors"
                             data-testid="nav-sell"
                         >
                             Sell
@@ -131,7 +131,7 @@ export default function Header() {
                         <>
                             <button
                                 onClick={() => navigate("/login")}
-                                className="text-[12.5px] font-medium text-white/90 hover:text-white px-2.5 py-1.5 rounded-md hover:bg-white/10"
+                                className="text-[13px] font-medium text-white/90 hover:text-white px-3 h-9 rounded-lg hover:bg-white/10 transition-colors"
                                 data-testid="header-login-btn"
                             >
                                 Sign in
@@ -139,19 +139,19 @@ export default function Header() {
                             {!isAdmin && (
                                 <button
                                     onClick={() => navigate("/cart")}
-                                    className="relative w-9 h-9 grid place-items-center rounded-md hover:bg-white/10 text-white"
+                                    className="relative w-10 h-10 grid place-items-center rounded-lg hover:bg-white/10 text-white transition-colors"
                                     aria-label="Cart"
                                     data-testid="header-cart-btn"
                                 >
-                                    <ShoppingCart size={16} />
+                                    <ShoppingCart size={17} />
                                     {cartCount > 0 && (
-                                        <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-[#E6007E] text-white text-[10px] font-bold grid place-items-center" data-testid="header-cart-count">{cartCount}</span>
+                                        <span className="absolute top-0.5 right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#E6007E] text-white text-[10px] font-bold grid place-items-center" data-testid="header-cart-count">{cartCount}</span>
                                     )}
                                 </button>
                             )}
                             <button
                                 onClick={() => navigate("/register")}
-                                className="hidden xs:inline-flex items-center text-[12.5px] font-semibold px-3 py-1.5 rounded-md"
+                                className="hidden xs:inline-flex items-center text-[13px] font-semibold px-4 h-9 rounded-lg transition-transform active:scale-95"
                                 style={{ background: "#FFC107", color: "#0A0A0B" }}
                                 data-testid="header-register-btn"
                             >
@@ -163,30 +163,30 @@ export default function Header() {
                             {!isAdmin && (
                                 <button
                                     onClick={() => navigate("/cart")}
-                                    className="relative w-9 h-9 grid place-items-center rounded-md hover:bg-white/10 text-white"
+                                    className="relative w-10 h-10 grid place-items-center rounded-lg hover:bg-white/10 text-white transition-colors"
                                     aria-label="Cart"
                                     data-testid="header-cart-btn"
                                 >
-                                    <ShoppingCart size={16} />
+                                    <ShoppingCart size={17} />
                                     {cartCount > 0 && (
-                                        <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-[#E6007E] text-white text-[10px] font-bold grid place-items-center" data-testid="header-cart-count">{cartCount}</span>
+                                        <span className="absolute top-0.5 right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#E6007E] text-white text-[10px] font-bold grid place-items-center" data-testid="header-cart-count">{cartCount}</span>
                                     )}
                                 </button>
                             )}
                             <button
                                 onClick={() => navigate(isSeller ? "/supplier" : isAdmin ? "/admin" : "/customer")}
-                                className="text-[12.5px] font-medium text-white/90 hover:text-white px-2.5 py-1.5 rounded-md hover:bg-white/10"
+                                className="text-[13px] font-medium text-white/90 hover:text-white px-3 h-9 rounded-lg hover:bg-white/10 transition-colors"
                                 data-testid="header-user-chip"
                             >
                                 {(user.name || "Account").split(" ")[0]}
                             </button>
                             <button
                                 onClick={handleLogout}
-                                className="text-white/70 hover:text-white p-1.5 rounded-md hover:bg-white/10"
+                                className="text-white/70 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors"
                                 data-testid="header-logout-btn"
                                 aria-label="Log out"
                             >
-                                <LogOut size={15} />
+                                <LogOut size={16} />
                             </button>
                         </>
                     )}
@@ -196,13 +196,13 @@ export default function Header() {
             {/* Layer 2 — categories */}
             <nav
                 className="bg-white border-b border-[#E8E8EC]"
-                style={{ height: 44 }}
+                style={{ height: 56 }}
                 data-testid="navbar-categories"
                 aria-label="Categories"
             >
                 <div className="tc-container h-full">
                     <div
-                        className="flex items-stretch h-full gap-2 overflow-x-auto tc-cat-scroll"
+                        className="flex items-center h-full gap-3 sm:gap-4 overflow-x-auto tc-cat-scroll"
                         role="tablist"
                     >
                         {CATEGORY_PILLS.map((p) => (
