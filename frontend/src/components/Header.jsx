@@ -6,15 +6,15 @@ import { useCart } from "../context/CartContext";
 import { LogOut, MapPin, ChevronDown, ShoppingCart, Loader2 } from "lucide-react";
 
 const CATEGORY_PILLS = [
-    { to: "/search", label: "Toners", color: "#ec407a" },
-    { to: "/printers", label: "Printers", color: "#00bcd4" },
-    { to: "/papers", label: "Papers", color: "#a1887f" },
-    { to: "/consumables", label: "Consumables", color: "#ffb300" },
-    { to: "/scanners", label: "Scanners", color: "#7986cb" },
-    { to: "/mps", label: "MPS/Rentals", color: "#66bb6a" },
-    { to: "/bulk", label: "Buy Bulk", color: "#fb8c00" },
-    { to: "/dealer", label: "Dealer to Dealer", color: "#90a4ae" },
-    { to: "/oem", label: "OEM Marketplace", color: "#bcaaa4" },
+    { to: "/search", label: "Toners", color: "#FF1F75" },
+    { to: "/printers", label: "Printers", color: "#00D4E5" },
+    { to: "/papers", label: "Papers", color: "#C58A6E" },
+    { to: "/consumables", label: "Consumables", color: "#FFC107" },
+    { to: "/scanners", label: "Scanners", color: "#5468FF" },
+    { to: "/mps", label: "MPS/Rentals", color: "#3FD267" },
+    { to: "/bulk", label: "Buy Bulk", color: "#FF7A00" },
+    { to: "/dealer", label: "Dealer to Dealer", color: "#5E8CB5" },
+    { to: "/oem", label: "OEM Marketplace", color: "#B58A75" },
 ];
 
 function CategoryPill({ to, label, color }) {
