@@ -1,3 +1,31 @@
+### 2026-02-XX — Wave 13 (Test-data wipe + Direct-purchase papers + Bulk Excel)
+
+**Test data cleanup:** removed 49 `@tonerscarttest.com` users + their 7 test suppliers + every dependent listing/order. Only real onboarding accounts retained.
+
+**Papers — direct purchase only:**
+- `/app/frontend/src/pages/Papers.jsx` fully rewritten — no `OrderRequestDialog` import.
+- Each paper card now shows **Add to cart** + **Buy now** buttons (data-testids `paper-addcart-{id}`, `paper-buy-{id}`). Paper rows are mapped to a generic product shape via `toCartProduct(p)` so the existing CartContext + /checkout flow works unchanged.
+
+**No more "Request" wording anywhere:**
+- `OrderRequestDialog.jsx` — title `"Request order"` → `"Place order"`; submit `"Send request"` → `"Place order"`; success toast `"Order request sent to supplier"` → `"Order placed — supplier will confirm shortly"`.
+
+**Bulk upload upgrades (`BulkUploadDialog.jsx`):**
+- **10 starter rows** (was 5).
+- Two download buttons:
+  - **Template** — header + 1 example row (`bulk-download-template`)
+  - **Download table** — current table snapshot, empty or filled (`bulk-download-current`)
+- Upload input now accepts **`.csv`, `.tsv`, `.xls`, `.xlsx`** via `xlsx@0.18.5` (yarn add).
+- Strict column matching — case + whitespace tolerant; **extra/unknown columns are silently ignored**, the dealer is informed via toast `"Loaded N rows · X extra columns ignored"`.
+- Failed parse falls back to a clear error toast.
+
+**Landing polish:**
+- "Popular brands and highly compatible models" section now renders an empty-state card `"New listings coming soon"` (`data-testid='popular-empty'`) when the dealer-uploaded grouped list is empty. Once dealers upload, top 8 actual listings render automatically (no padding, no fake fallbacks).
+- Brand marquee `"Brands on TonersCart"` restored above (was incorrectly removed; user clarified the marquee is NOT what they meant).
+
+**Testing:** `/app/test_reports/iteration_18.json` — 6/6 backend regression + all UI smoke tests pass; no action items, no retest needed.
+
+---
+
 ### 2026-02-XX — Wave 12 (D2D for all products + verification gate + image-upload removed)
 
 **Backend:**
