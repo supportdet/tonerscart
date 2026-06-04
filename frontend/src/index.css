@@ -1297,7 +1297,7 @@ input, textarea, select, button, label,
     flex: 0 0 auto;
     height: 34px;
     align-self: center;
-    padding: 0 18px;
+    padding: 0 15px;
     background: #FFFFFF;
     color: #0A0A0B;
     font-size: 13.5px;
@@ -1315,13 +1315,13 @@ input, textarea, select, button, label,
 .tc-cat-pill:hover {
     background: color-mix(in srgb, var(--pill-color, #0A0A0B) 14%, #FFFFFF);
     border-width: 2px;
-    padding: 0 18px;
+    padding: 0 15px;
 }
 .tc-cat-pill.active,
 .tc-cat-pill[aria-current="page"] {
     background: color-mix(in srgb, var(--pill-color, #0A0A0B) 20%, #FFFFFF);
     border-width: 2.5px;
-    padding: 0 17.25px;
+    padding: 0 14.25px;
 }
 
 /* xs breakpoint helper (Tailwind doesn't ship one by default) */

@@ -19,6 +19,7 @@ const CATEGORY_PILLS = [
     { to: "/bulk", label: "Bulk Orders", color: "#FF7A00" },
     { to: "/dealer", label: "Dealer to Dealer", color: "#5E8CB5" },
     { to: "/oem", label: "OEM Marketplace", color: "#B58A75" },
+    { to: "/procurement/login", label: "Govt Portal", color: "#1E3A8A" },
 ];
 
 function CategoryPill({ to, label, color, active }) {
