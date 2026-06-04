@@ -94,9 +94,8 @@ export default function Header() {
                             data-testid="city-pill-btn"
                         >
                             <MapPin size={14} />
-                            <span className="hidden xs:inline">{city}</span>
-                            <span className="xs:hidden">{(city || "").slice(0, 3)}</span>
-                            <ChevronDown size={12} />
+                            <span className="hidden sm:inline">{city}</span>
+                            <ChevronDown size={12} className="hidden sm:block" />
                         </button>
                         {cityOpen && (
                             <div
@@ -173,7 +172,7 @@ export default function Header() {
                         <>
                             <button
                                 onClick={() => navigate("/login")}
-                                className="text-[13px] font-medium text-[#1D1D1F] hover:text-[#0A0A0B] px-2 sm:px-3 h-9 rounded-lg hover:bg-black/[0.04] transition-colors whitespace-nowrap"
+                                className="text-[13px] rounded-lg whitespace-nowrap transition-colors h-9 px-3.5 font-semibold bg-[#FFC107] text-[#0A0A0B] sm:bg-transparent sm:px-3 sm:font-medium sm:text-[#1D1D1F] sm:hover:bg-black/[0.04] sm:hover:text-[#0A0A0B]"
                                 data-testid="header-login-btn"
                             >
                                 Sign in
