@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Sparkles, Camera, ShieldCheck, MapPin } from "lucide-react";
+import { ArrowRight, Sparkles, Camera, ShieldCheck, MapPin, Search } from "lucide-react";
 import api from "../lib/api";
 import TonerSearchInput from "../components/TonerSearchInput";
 import TonerAnimation from "../components/TonerAnimation";
@@ -10,6 +10,7 @@ import { useCity } from "../context/CityContext";
 import useReveal from "../hooks/useReveal";
 import PageMeta from "../components/PageMeta";
 import { Skeleton } from "../components/ui/skeleton";
+import { categoryRoute } from "../lib/categoryRoute";
 
 // Hardcoded defaults removed — both marquee brands and popular chips
 // now come from /api/config/<key>. The backend ships sane defaults so the
@@ -68,6 +69,8 @@ export default function Landing() {
 
     const submit = (override) => {
         const useQ = override?.query ?? q;
+        const route = categoryRoute(useQ);
+        if (route) { navigate(route); return; }
         const params = new URLSearchParams();
         if (useQ) params.set("q", useQ);
         navigate(`/search?${params.toString()}`);
@@ -122,7 +125,8 @@ export default function Landing() {
                     <div className="tc-search-shell w-full tc-fade-up tc-fade-up-1" data-testid="hero-search-form">
                         <TonerSearchInput value={q} onChange={setQ} onSubmit={submit} testId="hero-search-input" />
                         <button onClick={() => submit()} className="tc-search-go tc-search-go-yellow" data-testid="hero-search-submit">
-                            Search <ArrowRight size={16} />
+                            <Search size={18} className="sm:hidden" />
+                            <span className="tc-search-go-label hidden sm:inline-flex items-center gap-1.5">Search <ArrowRight size={16} /></span>
                         </button>
                     </div>
 

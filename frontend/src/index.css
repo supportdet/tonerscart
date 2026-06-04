@@ -297,18 +297,19 @@
     transform: translateY(-1px);
 }
 @media (max-width: 640px) {
-    /* Stack the input + button into two distinct full-width elements on mobile.
-       Applies to BOTH the glass hero shell and the light /search shell:
-       the input becomes its own white rounded pill, the CTA a full-width
-       button below it. */
+    /* Keep the input + a COMPACT icon-only search button on ONE row so the
+       autocomplete dropdown (which drops below the input) never covers the
+       button. The input becomes its own white rounded pill; the button is a
+       small square magnifier to its right. */
     .tc-search-shell {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr auto;
         background: transparent;
         border: none;
         box-shadow: none;
         padding: 0;
-        gap: 10px;
+        gap: 8px;
         border-radius: 0;
+        align-items: stretch;
     }
     .tc-search-shell > div:first-child {
         background: #FFFFFF;
@@ -331,8 +332,13 @@
     .tc-search-shell .tc-search-input { color: #0A0A0B !important; caret-color: #0A0A0B; }
     .tc-search-shell .tc-search-input::placeholder { color: #86868B !important; }
     .tc-search-shell > div:first-child > svg { color: #86868B !important; }
-    .tc-search-go { width: 100%; justify-content: center; border-radius: 14px; height: 50px; }
-    /* Light shell CTA stays dark, hero CTA stays yellow (handled by its own class). */
+    /* Compact icon-only search button on the right. */
+    .tc-search-go {
+        width: 50px; min-width: 50px; padding: 0;
+        border-radius: 14px; height: auto; align-self: stretch;
+        justify-content: center;
+    }
+    .tc-search-go-label { display: none; }
     .tc-search-shell.tc-search-light .tc-search-go { background: var(--tc-ink); color: #FFFFFF; }
 }
 

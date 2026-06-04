@@ -292,7 +292,10 @@ export default function PrintersGuide() {
                             data-testid="printers-sticky-search-input"
                         />
                     </div>
-                    <button type="submit" className="tc-search-go" data-testid="printers-sticky-search-btn">Search</button>
+                    <button type="submit" className="tc-search-go" data-testid="printers-sticky-search-btn">
+                        <SearchIcon size={18} className="sm:hidden" />
+                        <span className="tc-search-go-label hidden sm:inline">Search</span>
+                    </button>
                 </form>
             </div>
             <div className="tc-container relative pt-10 sm:pt-14 max-w-3xl">

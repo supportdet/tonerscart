@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
-import { MapPin, Boxes, Plus, Minus, ShoppingCart, X, SlidersHorizontal } from "lucide-react";
+import { MapPin, Boxes, Plus, Minus, ShoppingCart, X, SlidersHorizontal, Search } from "lucide-react";
 import { Skeleton } from "../components/ui/skeleton";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -17,6 +17,7 @@ import PageMeta from "../components/PageMeta";
 import useReveal from "../hooks/useReveal";
 import { colorSwatch } from "../lib/colors";
 import { cityMatch, deliveryLabel } from "../lib/location";
+import { categoryRoute } from "../lib/categoryRoute";
 
 const variantColorFromName = (name) => {
     const v = colorSwatch(name);
@@ -226,6 +227,9 @@ export default function SearchPage() {
 
     const apply = (override) => {
         const useQ = override?.query ?? q;
+        // Typing a main category keyword jumps straight to that category page.
+        const route = categoryRoute(useQ);
+        if (route && route !== "/search") { navigate(route); return; }
         const p = new URLSearchParams();
         if (useQ) p.set("q", useQ);
         if (brand && brand !== "all") p.set("brand", brand);
@@ -344,7 +348,10 @@ export default function SearchPage() {
             <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-2 pb-3 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-black/[0.04]" data-testid="search-sticky-wrapper">
                 <div className="tc-search-shell tc-search-light" data-testid="search-bar">
                     <TonerSearchInput value={q} onChange={setQ} onSubmit={apply} testId="search-input" placeholder="Search toners, printers, papers — brand or model…" />
-                    <button onClick={() => apply()} className="tc-search-go" data-testid="search-apply-btn">Search</button>
+                    <button onClick={() => apply()} className="tc-search-go" data-testid="search-apply-btn">
+                        <Search size={18} className="sm:hidden" />
+                        <span className="tc-search-go-label hidden sm:inline">Search</span>
+                    </button>
                 </div>
             </div>
 
