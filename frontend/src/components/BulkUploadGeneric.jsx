@@ -141,35 +141,58 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess }) {
     const submit = async () => {
         const nonEmpty = rows.filter((r) => !config.isRowEmpty(r));
         if (nonEmpty.length === 0) { toast.error("Add at least one row"); return; }
-        const bad = nonEmpty.filter((r) => config.rowErrors(r).size > 0);
-        if (bad.length > 0) {
-            setShowErrors(true);
-            toast.error(`${bad.length} row${bad.length === 1 ? "" : "s"} have missing or invalid required fields`);
+
+        // Partition by client-side validation. Valid rows are submitted; invalid
+        // rows are reported (and downloadable) so the dealer can fix only those.
+        const clientValid = [];
+        const clientFailed = []; // { data, message }
+        nonEmpty.forEach((r) => {
+            const errs = config.rowErrors(r);
+            if (errs.size === 0) clientValid.push(r);
+            else clientFailed.push({ data: r, message: `Missing / invalid: ${[...errs].join(", ")}` });
+        });
+        setShowErrors(clientFailed.length > 0);
+
+        // Nothing valid to send — just surface the failures.
+        if (clientValid.length === 0) {
+            const failed = clientFailed.map((c) => ({ ...c.data, _error: c.message }));
+            setResult({ succeeded: 0, failed: failed.length, errors: failed.map((f, i) => ({ row: i, message: f._error })) });
+            setFailedRows(failed);
+            toast.error(`${failed.length} row${failed.length === 1 ? "" : "s"} need fixing`);
             return;
         }
+
         setResult(null);
         setFailedRows(null);
         setSubmitting(true);
-        setProgress({ done: 0, total: nonEmpty.length });
+        setProgress({ done: 0, total: clientValid.length });
         const ticker = setInterval(() => {
             setProgress((p) => p.done < p.total - 1 ? { ...p, done: p.done + 1 } : p);
         }, 220);
         try {
-            const payload = nonEmpty.map(config.toPayload);
+            const payload = clientValid.map(config.toPayload);
             const res = await api.post(config.endpoint, payload);
             clearInterval(ticker);
-            setProgress({ done: nonEmpty.length, total: nonEmpty.length });
+            setProgress({ done: clientValid.length, total: clientValid.length });
             const data = res.data || {};
-            setResult(data);
-            // Build failed-row snapshot (map backend error.row index → submitted input row)
-            if (Array.isArray(data.errors) && data.errors.length > 0) {
-                setFailedRows(data.errors.map((er) => ({ ...(nonEmpty[er.row] || {}), _error: er.message })));
+            // Map backend per-row errors back onto the submitted (clientValid) rows,
+            // then merge with the client-side failures into one downloadable set.
+            const backendFailed = (Array.isArray(data.errors) ? data.errors : [])
+                .map((er) => ({ ...(clientValid[er.row] || {}), _error: er.message }));
+            const allFailed = [
+                ...backendFailed,
+                ...clientFailed.map((c) => ({ ...c.data, _error: c.message })),
+            ];
+            const succeeded = data.succeeded || 0;
+            setResult({ succeeded, failed: allFailed.length, errors: allFailed.map((f, i) => ({ row: i, message: f._error })) });
+            setFailedRows(allFailed.length > 0 ? allFailed : null);
+            if (succeeded > 0) {
+                toast.success(`${succeeded} ${config.unitLabel}${succeeded === 1 ? "" : "s"} uploaded successfully${allFailed.length ? `, ${allFailed.length} failed` : ""}`);
             }
-            if (data.succeeded > 0) {
-                toast.success(`${data.succeeded} ${config.unitLabel}${data.succeeded === 1 ? "" : "s"} uploaded successfully`);
-            }
-            if (data.failed === 0) {
+            if (allFailed.length === 0) {
                 setTimeout(() => { onSuccess?.(); onClose?.(); }, 1200);
+            } else {
+                onSuccess?.(); // refresh list to show the rows that did succeed
             }
         } catch (e) {
             clearInterval(ticker);

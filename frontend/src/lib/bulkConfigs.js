@@ -153,9 +153,11 @@ const paperEmptyRow = () => ({
 });
 
 const paperIsRowEmpty = (r) =>
-    !["brand", "gsm", "price_per_ream", "stock", "brightness", "suitable_for", "description"]
-        .some((k) => String(r[k] ?? "").trim() !== "") &&
-        (r.brand === PAPER_BRANDS_HINT || String(r.brand ?? "").trim() === "");
+    String(r.price_per_ream ?? "").trim() === "" &&
+    String(r.stock ?? "").trim() === "" &&
+    String(r.description ?? "").trim() === "" &&
+    String(r.brightness ?? "").trim() === "" &&
+    String(r.suitable_for ?? "").trim() === "";
 
 const paperRowErrors = (r) => {
     const errs = new Set();

@@ -1,3 +1,15 @@
+### 2026-06-04 — Wave 16 (Papers upload page + bulk Excel for Papers/Printers + auth flicker + inline auth errors)
+
+**Tested**: backend 13/13 pytest (`test_wave16.py`) + per-row validation refactor; frontend live Playwright — papers single upload, bulk papers, bulk printers (incl. mixed valid+invalid → "X uploaded, Y failed" + failed-rows download), auth flicker, login/register inline errors all GREEN.
+
+1. **Dealer Papers upload page** (`PaperListings.jsx`) — fixed crash (missing `ChevronLeft` import); added **Description** field and **product image upload** (up to 3, via `/supplier/listing-image`). Single create persists & shows on public `/papers`.
+2. **Bulk Excel upload — Papers & Printers** — new reusable `components/BulkUploadGeneric.jsx` + `lib/bulkConfigs.js` (printer/paper column configs). Features: downloadable XLSX template, CSV/Excel parse, editable grid, **per-row validation**, success summary "X uploaded successfully, Y failed", inline reasons, and **Download failed rows** (.xlsx) for correction/re-upload. Valid rows upload even when some rows fail (client-invalid + backend-failed merged into one downloadable set). Wired via `tc-open-bulk-printer` / `tc-open-bulk-paper`; SupplierDashboard "Add printer/paper" buttons are now single/bulk dropdowns.
+   - Backend: `POST /api/supplier/printers/bulk` & `POST /api/supplier/papers/bulk` accept `List[dict]` and validate **each row independently** (per-row Pydantic via `_fmt_validation_error` + business rules) so one bad row never 422s the batch. Returns `{created, errors:[{row,message}], total, succeeded, failed}`. Guards: empty → 400, >200 rows → 400, non-supplier → 401/403.
+   - `PaperCreate` gained `description`; `create_paper` drops unknown columns gracefully.
+3. **Auth flicker fix** (`Header.jsx`) — consumes `authLoading`; renders a neutral placeholder (`header-auth-loading`) while the session is verified. `Sell` / `Sign in` / `Join free` never flash for logged-in users; account chip + Logout render only after the check resolves.
+4. **Inline auth errors** (`Login.jsx`, `Register.jsx`) — all error messages are now RED inline text inside the form (no toasts/banners): wrong credentials → below password (`login-password-error`); Register adds a **Confirm password** field with "Passwords don't match" (`register-confirm-error`), password<6 (`register-password-error`), and duplicate-email (`register-email-error`).
+
+
 ### 2026-06-04 — Wave 15 (Navbar/stats/mobile polish + location-based features + Verified badge)
 
 **Tested**: 17/17 backend pytest (`/app/backend/tests/test_wave15.py`), frontend 12/12 spec items (`iteration_20.json`). No regressions.
