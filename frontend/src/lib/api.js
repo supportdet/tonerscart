@@ -7,7 +7,11 @@ export const API_BASE = `${BASE}/api`;
 // Cache the access token to avoid calling supabase.auth.getSession() on every request
 // (which can deadlock when many requests are in flight back-to-back).
 let cachedToken = null;
-supabase.auth.getSession().then(({ data }) => {
+// Promise that resolves once the initial session restore from storage completes.
+// The request interceptor awaits this before the FIRST authed call so we never
+// fire /auth/me without a token (which previously caused a 401 → false redirect
+// to /login → auth flicker for logged-in users on reload).
+const sessionReady = supabase.auth.getSession().then(({ data }) => {
     cachedToken = data?.session?.access_token || null;
 });
 supabase.auth.onAuthStateChange((_event, session) => {
@@ -18,7 +22,12 @@ const api = axios.create({
     baseURL: API_BASE,
 });
 
-api.interceptors.request.use((cfg) => {
+api.interceptors.request.use(async (cfg) => {
+    // Ensure the initial Supabase session restore has finished before attaching
+    // the token. For guests this resolves quickly with a null token (no block).
+    if (cachedToken == null) {
+        try { await sessionReady; } catch { /* ignore */ }
+    }
     if (cachedToken) cfg.headers.Authorization = `Bearer ${cachedToken}`;
     return cfg;
 });
