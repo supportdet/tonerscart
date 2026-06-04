@@ -270,6 +270,27 @@ async def oem_product_image(file: UploadFile = File(...), ctx: dict = Depends(re
     return {"url": sb_admin.storage.from_("printer-images").get_public_url(path), "path": path}
 
 
+@oem_router.post("/logo")
+async def oem_logo(file: UploadFile = File(...), ctx: dict = Depends(require_oem)):
+    """Upload the brand logo and persist it on the OEM partner row."""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(400, "Only images are allowed")
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Max 5 MB")
+    ext = (file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "png").lower()
+    path = f"oem/{ctx['partner']['id']}/logo-{uuid.uuid4().hex}.{ext}"
+    try:
+        sb_admin.storage.from_("printer-images").upload(
+            path, content, {"content-type": file.content_type, "upsert": "false"}
+        )
+    except Exception as e:
+        raise HTTPException(500, f"Upload failed: {e}") from e
+    url = sb_admin.storage.from_("printer-images").get_public_url(path)
+    sb_admin.table("oem_partners").update({"logo_url": url}).eq("id", ctx["partner"]["id"]).execute()
+    return {"url": url}
+
+
 # ---- Admin ------------------------------------------------------------------
 @oem_admin_router.get("/pending")
 def admin_oem_pending(admin: dict = Depends(require_admin)):

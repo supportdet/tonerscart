@@ -1,3 +1,10 @@
+### 2026-06-04 — OEM logo upload + "Verified Manufacturer" trust strip
+
+- Backend: added `POST /api/oem/logo` (uploads to `printer-images`, persists `logo_url` on `oem_partners`).
+- OEM dashboard (`OemDashboard.jsx`): brand logo with an upload control in the header (placeholder when unset); updates live on upload.
+- Public `/oem` (`OEM.jsx`): each brand card now renders the uploaded logo (placeholder fallback) plus a **Verified Manufacturer · Official brand products · Direct from the brand** trust strip.
+- Verified E2E with a temp OEM (logo upload → `/me` + `/public` return `logo_url`; trust strip renders via screenshot), then the temp account was purged — OEM tables remain empty.
+
 ### 2026-06-04 — OEM showcase module + mobile search + test-data cleanup
 
 **OEM (manufacturer) showcase module — NEW (Supabase Auth, role=oem; showcase + enquiry only, no checkout):**

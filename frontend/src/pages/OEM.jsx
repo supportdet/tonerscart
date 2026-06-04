@@ -192,6 +192,12 @@ export default function OEM() {
                                             {p.company && p.company !== p.brand && <div className="text-[12px] text-white/50">{p.company}</div>}
                                         </div>
                                     </div>
+                                    {/* Verified Manufacturer trust strip */}
+                                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mb-5 text-[12px] text-white/60" data-testid={`oem-trust-strip-${p.id}`}>
+                                        <span className="inline-flex items-center gap-1.5 text-emerald-300 font-medium"><ShieldCheck size={13} /> Verified Manufacturer</span>
+                                        <span className="inline-flex items-center gap-1.5"><BadgeCheck size={13} /> Official brand products</span>
+                                        <span className="inline-flex items-center gap-1.5"><Building2 size={13} /> Direct from the brand</span>
+                                    </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                                         {p.products.map((pr) => (
                                             <ProductCard key={pr.id} product={pr} brand={p.brand} onEnquire={openEnquiry} />

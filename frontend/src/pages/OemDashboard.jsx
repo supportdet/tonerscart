@@ -29,6 +29,7 @@ export default function OemDashboard() {
     const [form, setForm] = useState(EMPTY);
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [logoUploading, setLogoUploading] = useState(false);
     const [confirmDel, setConfirmDel] = useState(null);
 
     const load = useCallback(async () => {
@@ -73,6 +74,23 @@ export default function OemDashboard() {
             toast.error(formatApiError(err));
         } finally {
             setUploading(false);
+        }
+    };
+
+    const onLogoUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setLogoUploading(true);
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            const { data } = await api.post("/oem/logo", fd, { headers: { "Content-Type": "multipart/form-data" } });
+            setPartner((p) => ({ ...p, logo_url: data.url }));
+            toast.success("Logo updated");
+        } catch (err) {
+            toast.error(formatApiError(err));
+        } finally {
+            setLogoUploading(false);
         }
     };
 
@@ -123,12 +141,25 @@ export default function OemDashboard() {
             <div className="tc-container max-w-[1100px] py-8 sm:py-10">
                 {/* Header */}
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-7">
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <h1 className="text-[24px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }} data-testid="oem-dash-brand">{partner?.brand || "OEM"}</h1>
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 px-2 py-0.5 rounded-full bg-emerald-100"><BadgeCheck size={12} /> Official Brand</span>
+                    <div className="flex items-center gap-4">
+                        <div className="relative group">
+                            {partner?.logo_url ? (
+                                <img src={partner.logo_url} alt={partner?.brand} className="w-16 h-16 rounded-xl object-cover border border-[#E8E8EC] bg-white" data-testid="oem-dash-logo" />
+                            ) : (
+                                <div className="w-16 h-16 rounded-xl bg-white border border-[#E8E8EC] grid place-items-center" data-testid="oem-dash-logo-placeholder"><Building2 size={22} className="text-[#C7C7CC]" /></div>
+                            )}
+                            <label className="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-full bg-[#0A0A0B] text-white grid place-items-center cursor-pointer shadow-md hover:bg-black" title="Upload logo" data-testid="oem-logo-upload">
+                                {logoUploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                                <input type="file" accept="image/*" className="hidden" onChange={onLogoUpload} disabled={logoUploading} />
+                            </label>
                         </div>
-                        <p className="text-[13px] text-[#6E6E73] mt-0.5">{partner?.company} · Showcase products on the OEM Marketplace</p>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-[24px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }} data-testid="oem-dash-brand">{partner?.brand || "OEM"}</h1>
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 px-2 py-0.5 rounded-full bg-emerald-100"><BadgeCheck size={12} /> Official Brand</span>
+                            </div>
+                            <p className="text-[13px] text-[#6E6E73] mt-0.5">{partner?.company} · {partner?.logo_url ? "Logo set" : "Add your brand logo →"}</p>
+                        </div>
                     </div>
                     <Button onClick={openNew} className="btn-cta inline-flex items-center gap-1.5" data-testid="oem-add-product-btn"><Plus size={16} /> Add product</Button>
                 </div>
