@@ -1,0 +1,39 @@
+{
+  "summary": "Frontend-only E2E testing of the new OEM showcase module completed end-to-end on the preview URL. All critical user flows pass: public /oem page, seeded InkPro brand + 2 products rendering with Official Brand badges, enquiry happy-path and invalid-email block, OEM apply form, admin approve and reject-with-reason (both worked, applications disappeared from pending after action), OEM login redirect to /oem-dashboard, dashboard shows brand 'InkPro' + 2 seeded products, add/edit/toggle/delete product flow on the OEM dashboard, and catalog isolation (InkPro NOT present on /search or /papers).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Header (OEM role)", "issue": "After OEM login, a DOM node containing the text 'Sell' is still findable via locator 'a:has-text(\"Sell\")' (count=1). Visually the top navbar shows only category pills (Toners/Printers/Papers/.../Govt Portal) with no Sell link, so this is likely matching a 'Sellers' / 'Best Sellers' / footer link rather than the seller CTA. Worth a quick double-check that Header.jsx truly hides the seller-CTA link when isOem=true (no false visible Sell pill).", "selector": "a:has-text('Sell')", "priority": "LOW"},
+      {"component": "Papers page select", "issue": "React hydration warning: '<span> cannot be a child of <option>' on /papers — visualisation library wraps option label in <span>. Not blocking but pollutes console with hydration errors.", "selector": "/papers select option", "priority": "LOW"},
+      {"component": "Dialogs (shadcn)", "issue": "Console warning: 'Missing Description or aria-describedby for {DialogContent}' on OEM product dialog, reject-reason dialog and delete-confirm dialog. Add aria-describedby / DialogDescription for accessibility.", "selector": "[data-testid='oem-product-dialog']", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Background API calls (logged-out and logged-in)", "issue": "Several '401 Unauthorized' console errors appear on initial /oem load and during navigation (likely /me or analytics endpoints called before auth resolves). Functionally harmless but noisy; consider gating /me-style calls behind user state to keep console clean.", "affected_selectors": []}
+    ],
+    "design_issues": [
+      {"screen": "/oem-dashboard", "issues": ["Location coachmark popover ('Set your location / Choose city / Not now') overlays the top-right Add product button area on first load even on the OEM dashboard — dismissible but consider suppressing for OEM role."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Verify Header.jsx truly hides the Sell CTA for role=oem (DOM still has an element whose text contains 'Sell' — likely a footer 'Sellers' link, but please confirm).",
+    "(Optional) Suppress console 401s on the public /oem page by not calling protected endpoints when there is no auth.",
+    "(Optional) Fix Papers <option><span> hydration warning.",
+    "(Optional) Add DialogDescription / aria-describedby to OEM dialogs."
+  ],
+  "critical_code_review_comments": [
+    "OEM.jsx (325 lines) is fine but combines public showcase + apply form + enquiry modal — consider splitting modals into subcomponents for maintainability.",
+    "OemDashboard.jsx — product card grid does NOT render description, so an 'edit description' visual verification is not possible from the grid; consider showing a description tooltip or surfacing it for confirmation.",
+    "All OEM endpoints correctly prefixed under /api via api.js wrapper — good.",
+    "Good: all interactive OEM elements have data-testid attributes, which made testing straightforward.",
+    "Good: catalog isolation verified — InkPro products do NOT leak into /search or /papers."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "skipped", "frontend": "95%" },
+  "test_credentials": "Admin admin@tonerscart.in/Admin@123; Seeded OEM oem.demo@tonerscart.in/OemDemo@123 — both worked.",
+  "seed_data_creation": "During the test the following throwaway OEM applications were submitted via the public /oem form: brand 'TestBrand<ts>' (then APPROVED by admin — became an approved partner) and 'RejectBrand<ts>' (then REJECTED with reason). The approved one will appear in approved-partners list and will have created a Supabase OEM user; main agent may want to purge it. Also one extra product 'TestProd<ts>' was added then deleted on the seeded InkPro dashboard — net zero.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All 9 OEM scenarios from the review request were exercised on the preview URL and PASS visually and via selectors. The two reported FAILs in the raw test log are false negatives: (1) 'oem-dashboard loads' returned count=0 momentarily but the dashboard then rendered InkPro brand + 2 products + add-product flow worked, confirming it actually loaded; (2) 'Edit product' assertion looked for the new description string in body text but the OEM card grid does not render description — the edit save itself succeeded (no error toast, dialog closed). The one borderline finding worth checking is the header 'Sell' DOM element for role=oem; visually no Sell pill is shown.",
+  "rca of the issue": "n/a — no blocking bugs found. Header Sell-link finding is likely a footer 'Sellers' link matching the loose locator; not reproducible visually."
+}
