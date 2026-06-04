@@ -105,7 +105,7 @@ async def email_application_received(application: dict):
     )
     admin_html = f"""
     <h2 style="margin:0 0 6px 0;font-size:18px;">New supplier application</h2>
-    <p style="margin:0 0 18px 0;color:#6E6E73;">Review at <a href="https://b2b-checkout-2.preview.emergentagent.com/admin">/admin</a>.</p>
+    <p style="margin:0 0 18px 0;color:#6E6E73;">Review at <a href="https://printer-supply-hub.preview.emergentagent.com/admin">/admin</a>.</p>
     <table style="width:100%;border-collapse:collapse;font-size:13px;">{rows}</table>
     """
     await _send(SUPPORT_INBOX, f"[TonersCart] New supplier application — {biz}", admin_html, reply_to=email_to_applicant)
@@ -115,7 +115,7 @@ async def email_application_received(application: dict):
         applicant_html = f"""
         <h2 style="margin:0 0 6px 0;font-size:18px;">Thanks {name or 'there'} — we&apos;ve got your application</h2>
         <p>Your business <strong>{biz}</strong> is now in TonersCart&apos;s review queue. Our team typically reviews applications within 1–2 working days.</p>
-        <p>You can sign in at <a href="https://b2b-checkout-2.preview.emergentagent.com/login">tonerscart</a> any time to track approval status.</p>
+        <p>You can sign in at <a href="https://printer-supply-hub.preview.emergentagent.com/login">tonerscart</a> any time to track approval status.</p>
         <p style="margin-top:22px;color:#86868B;font-size:12.5px;">Questions? Just reply to this email.</p>
         """
         await _send(email_to_applicant, "Your TonersCart supplier application is in review", applicant_html)
@@ -133,7 +133,7 @@ async def email_application_approved(application: dict):
     <p>Great news — your application for <strong>{biz}</strong> has been approved on TonersCart.
     You can now sign in and start listing your toner products.</p>
     <p style="margin:22px 0;">
-      <a href="https://b2b-checkout-2.preview.emergentagent.com/supplier"
+      <a href="https://printer-supply-hub.preview.emergentagent.com/supplier"
          style="display:inline-block;padding:12px 22px;background:#F7C600;color:#0A0A0B;border-radius:10px;font-weight:600;text-decoration:none;">
         Go to my dashboard
       </a>
@@ -597,7 +597,7 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
         {gst_block_s}
         <p style="margin:18px 0 4px 0;"><strong>Please dispatch within 2 business days</strong> and update tracking in your dashboard.</p>
         <p style="margin:18px 0;">
-          <a href="https://b2b-checkout-2.preview.emergentagent.com/supplier"
+          <a href="https://printer-supply-hub.preview.emergentagent.com/supplier"
              style="display:inline-block;padding:12px 22px;background:#F7C600;color:#0A0A0B;border-radius:10px;font-weight:600;text-decoration:none;">
             Open my dashboard
           </a>
