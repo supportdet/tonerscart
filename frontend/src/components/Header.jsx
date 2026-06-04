@@ -132,7 +132,7 @@ export default function Header() {
                         <>
                             <button
                                 onClick={() => navigate("/login")}
-                                className="text-[13px] font-medium text-[#1D1D1F] hover:text-[#0A0A0B] px-3 h-9 rounded-lg hover:bg-black/[0.04] transition-colors"
+                                className="text-[13px] font-medium text-[#1D1D1F] hover:text-[#0A0A0B] px-2 sm:px-3 h-9 rounded-lg hover:bg-black/[0.04] transition-colors whitespace-nowrap"
                                 data-testid="header-login-btn"
                             >
                                 Sign in
@@ -152,7 +152,7 @@ export default function Header() {
                             )}
                             <button
                                 onClick={() => navigate("/register")}
-                                className="hidden xs:inline-flex items-center text-[13px] font-semibold px-4 h-9 rounded-lg transition-transform active:scale-95"
+                                className="hidden xs:inline-flex items-center text-[13px] font-semibold px-3 sm:px-4 h-9 rounded-lg transition-transform active:scale-95 whitespace-nowrap"
                                 style={{ background: "#FFC107", color: "#0A0A0B" }}
                                 data-testid="header-register-btn"
                             >

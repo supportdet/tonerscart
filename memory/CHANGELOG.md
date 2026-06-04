@@ -1,3 +1,25 @@
+### 2026-06-04 — Wave 15 (Navbar/stats/mobile polish + location-based features + Verified badge)
+
+**Tested**: 17/17 backend pytest (`/app/backend/tests/test_wave15.py`), frontend 12/12 spec items (`iteration_20.json`). No regressions.
+
+1. **Navbar text** — category pill "Buy Bulk" → **"Bulk Orders"** (`Header.jsx`).
+2. **Navbar alignment** — 9 category pills span logo-left → "Join free"-right (verified: logo_x=360, OEM pill right=1560 = Join free right=1560 @1920px). Existing `lg:justify-between` confirmed correct.
+3. **Stats strip** (`Landing.jsx`) — rebuilt as a flex row, evenly spaced; numbers now **Montserrat font-weight 300** (was Helvetica bold); **shiny gold dot (•) separators** between stats (`.tc-stat-dot` in index.css).
+4. **Mobile header** — gaps tightened (`gap-2 sm:gap-4`), user-chip truncated, `whitespace-nowrap` on Sign in / Join free; added `overflow-x:hidden` + `max-width:100vw` to html/body/#root. Verified no horizontal overflow @390px.
+5. **Mobile search bar** — `.tc-search-shell` mobile rules generalized: input becomes its own white rounded pill, **separate full-width CTA below** (yellow on hero, dark on /search). Dark input text on the white pill.
+6. **Location-based sorting + labels** —
+   - Backend `_sort_by_near_city(rows, near_city)` helper (stable same-city-first partition, city-alias aware). Added `near_city` param to `GET /listings/search/paginated`, `GET /printers`, `GET /papers`. Hard `city=` filter overrides near_city.
+   - Frontend passes user city as `near_city`; `byCityThenPrice` client sort mirrors it (`Search.jsx`). New `lib/location.js` (`cityKey`/`cityMatch`/`deliveryLabel`).
+   - Product cards (Search/Papers/Printers) show **"Local · Free delivery"** (same city) or **"Ships from <City>"**.
+   - `other-cities-banner` on /search when no local dealer ("Showing results from other cities") — products never hidden.
+   - Homepage **"Set your location" prompt** (`set-location-prompt`/`set-location-select`) shown until city explicitly set. CityContext gained `citySet` flag (localStorage `tc_city_set`).
+   - **View analytics**: `POST /listings/{id}/view` (guest-ok, best-effort) records viewer city; `GET /supplier/analytics/views` aggregates by city. New `SupplierInsights.jsx` + **Insights tab** in supplier dashboard. Migration `supabase_schema_listing_views.sql` (⚠ USER MUST APPLY — degrades gracefully to empty until then).
+   - Seller order email (`email_service.py`) now shows a prominent **Buyer city** row with Intercity / Local·free-delivery badge.
+7. **Verified dealer badge** — new `components/VerifiedBadge.jsx` (green `BadgeCheck` seal + "Verified", compact tick-only on mobile, hover/focus tooltip). Placed on Search cards, Papers cards, Dealer D2D cards, Featured Suppliers (homepage), and Product Detail supplier line.
+
+**⚠ Action item for app owner:** Apply `/app/backend/supabase_schema_listing_views.sql` in the Supabase SQL editor to enable view-analytics persistence.
+
+
 ### 2026-02-XX — Wave 14 (Polish batch: footer, emails, checkout policy, supplier agreement)
 
 **Footer**: `Footer.jsx` flipped from `bg-[#0A0A0B] text-white` to clean white with dark text + `#00B7C7` link-hover. Single thin top border, no shadow.
