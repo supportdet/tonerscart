@@ -1200,11 +1200,11 @@ def delete_listing(listing_id: str, user: dict = Depends(require_role("supplier"
 
 # Wave 11 — Bulk upload of toner listings (CSV / spreadsheet flow).
 @api.post("/supplier/listings/bulk")
-def create_listings_bulk(payload: List[ListingCreate], user: dict = Depends(require_role("supplier"))):
-    """Create many listings at once. Reuses the single create path per row to
-    keep validation / specs / variants / D2D logic identical. Returns
-    `{created: [...], errors: [{row, message}]}` with any per-row failures so
-    the dealer can fix only the bad rows without losing the rest.
+def create_listings_bulk(payload: List[dict], user: dict = Depends(require_role("supplier"))):
+    """Create many listings at once. Validates EACH row independently (Pydantic
+    + business rules) so one bad row never fails the whole batch. Returns
+    `{created, errors:[{row, message}], total, succeeded, failed}` so the dealer
+    can fix only the bad rows without losing the rest.
     """
     if not payload:
         raise HTTPException(400, "No rows provided")
@@ -1213,10 +1213,12 @@ def create_listings_bulk(payload: List[ListingCreate], user: dict = Depends(requ
 
     created: List[dict] = []
     errors: List[dict] = []
-    for idx, row in enumerate(payload):
+    for idx, raw in enumerate(payload):
         try:
-            listing = create_listing(row, user=user)
+            listing = create_listing(ListingCreate(**raw), user=user)
             created.append(listing)
+        except ValidationError as ve:
+            errors.append({"row": idx, "message": _fmt_validation_error(ve)})
         except HTTPException as he:
             errors.append({"row": idx, "message": he.detail if isinstance(he.detail, str) else str(he.detail)})
         except Exception as e:

@@ -20,7 +20,8 @@ import CommissionCalculator from "../components/CommissionCalculator";
 import { commissionFor } from "../lib/commission";
 import { Copy, Check, ChevronDown, ChevronLeft } from "lucide-react";
 import { colorSwatch as _colorSwatch } from "../lib/colors";
-import BulkUploadDialog from "../components/BulkUploadDialog";
+import BulkUploadGeneric from "../components/BulkUploadGeneric";
+import { tonerBulkConfig } from "../lib/bulkConfigs";
 import D2DRow, { D2DExplainer } from "../components/D2DRow";
 import SupplierAgreementDialog, { hasAcceptedSupplierAgreement } from "../components/SupplierAgreementDialog";
 
@@ -944,9 +945,10 @@ export default function SupplierDashboard() {
             </Dialog>
             <RefilledWarningDialog open={refilledWarning} onClose={() => setRefilledWarning(false)} />
             {bulkOpen && (
-                <BulkUploadDialog
+                <BulkUploadGeneric
+                    config={tonerBulkConfig}
                     onClose={() => setBulkOpen(false)}
-                    onSuccess={() => { setBulkOpen(false); load(); }}
+                    onSuccess={() => { load(); }}
                 />
             )}
             <SupplierAgreementDialog

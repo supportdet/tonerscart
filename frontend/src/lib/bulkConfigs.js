@@ -8,6 +8,84 @@ const splitList = (v) =>
         .map((x) => x.trim())
         .filter(Boolean);
 
+// ============================ TONERS ============================
+
+const TONER_TYPES = ["Original", "Compatible"];
+
+const TONER_COLUMNS = [
+    { key: "brand", label: "Brand", required: true, w: 130 },
+    { key: "model_number", label: "Model Number", required: true, w: 160 },
+    { key: "color", label: "Color", required: false, w: 110 },
+    { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
+    { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
+    { key: "stock", label: "Stock", required: true, type: "number", w: 90 },
+    { key: "compatible_models", label: "Compatible Models", required: false, w: 200 },
+    { key: "page_yield", label: "Page Yield", required: false, type: "number", w: 110 },
+    { key: "oem_part_number", label: "OEM Part Number", required: false, w: 150 },
+    { key: "toner_type", label: "Toner Type", required: true, type: "select", w: 130 },
+    { key: "intercity_delivery_charge", label: "Intercity Delivery (₹)", required: false, type: "number", w: 140 },
+];
+
+const tonerEmptyRow = () => ({
+    brand: "", model_number: "", color: "Black", price: "", gst_rate: "18",
+    stock: "", compatible_models: "", page_yield: "", oem_part_number: "",
+    toner_type: "Original", intercity_delivery_charge: "0",
+});
+
+const tonerIsRowEmpty = (r) =>
+    !["brand", "model_number", "price", "stock", "compatible_models", "page_yield", "oem_part_number"]
+        .some((k) => String(r[k] ?? "").trim() !== "");
+
+const tonerRowErrors = (r) => {
+    const errs = new Set();
+    if (tonerIsRowEmpty(r)) return errs;
+    for (const k of ["brand", "model_number", "price", "stock", "toner_type"]) {
+        if (String(r[k] ?? "").trim() === "") errs.add(k);
+    }
+    if (r.price !== "" && Number(r.price) <= 0) errs.add("price");
+    if (r.stock !== "" && Number(r.stock) < 0) errs.add("stock");
+    if (r.toner_type && !TONER_TYPES.includes(r.toner_type)) errs.add("toner_type");
+    return errs;
+};
+
+export const tonerBulkConfig = {
+    title: "Bulk upload toners",
+    subtitle: "Fill the table or upload a CSV / Excel. Required: Brand, Model, Price, Stock, Toner Type.",
+    sheetName: "Toners",
+    templateFilename: "tonerscart_bulk_toners_template.xlsx",
+    currentFilename: "tonerscart_bulk_toners.xlsx",
+    unitLabel: "toner",
+    endpoint: "/supplier/listings/bulk",
+    columns: TONER_COLUMNS,
+    selectOptions: { toner_type: TONER_TYPES },
+    emptyRow: tonerEmptyRow,
+    templateExample: {
+        brand: "HP", model_number: "88A", color: "Black", price: "1850",
+        gst_rate: "18", stock: "10", compatible_models: "P1007, P1008, P1106, P1108",
+        page_yield: "1500", oem_part_number: "CC388A", toner_type: "Original",
+        intercity_delivery_charge: "150",
+    },
+    requiredKeys: ["brand", "model_number", "price", "stock", "toner_type"],
+    isRowEmpty: tonerIsRowEmpty,
+    rowErrors: tonerRowErrors,
+    toPayload: (r) => ({
+        brand: r.brand.trim(),
+        model_number: r.model_number.trim(),
+        color: r.color || "Black",
+        price: Number(r.price),
+        stock: Number(r.stock),
+        toner_type: r.toner_type || "Original",
+        gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
+        compatible_models: r.compatible_models?.trim() || null,
+        page_yield: r.page_yield !== "" ? Number(r.page_yield) : null,
+        oem_part_number: r.oem_part_number?.trim() || null,
+        intercity_delivery_charge: r.intercity_delivery_charge !== "" ? Number(r.intercity_delivery_charge) : 0,
+        image_url: "",
+        image_urls: [],
+        variants: [{ color: r.color || "Black", price: Number(r.price), stock: Number(r.stock) }],
+    }),
+};
+
 // ============================ PRINTERS ============================
 
 const PRINTER_CATEGORIES = [

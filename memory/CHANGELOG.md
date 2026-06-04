@@ -1,3 +1,11 @@
+### 2026-06-04 — Wave 16.2 (Toners bulk upload → unified BulkUploadGeneric)
+
+- Migrated **Toners** bulk upload to the shared `BulkUploadGeneric` component (Wave 16) via a new `tonerBulkConfig` in `lib/bulkConfigs.js` (same toner columns/payload incl. variants & D2D-compatible fields).
+- **Deleted** the old `components/BulkUploadDialog.jsx`; `SupplierDashboard.jsx` now renders `BulkUploadGeneric` with `tonerBulkConfig`.
+- Backend `POST /api/supplier/listings/bulk` refactored to `List[dict]` + per-row Pydantic validation (`_fmt_validation_error`) so one bad row no longer 422s the batch — matches printers/papers.
+- All three product types now share one consistent flow: XLSX template, per-row validation, "X uploaded, Y failed" summary, inline per-row reasons, and **Download failed rows**. Verified live: toner mixed batch → "1 toner uploaded successfully, 1 failed", "Row 1: Missing / invalid: price", failed-rows download present.
+
+
 ### 2026-06-04 — Wave 16.1 (Location prompt → navbar coachmark)
 
 - Removed the wide "Set your location" bar under the hero search (was too large on web & mobile, `Landing.jsx`).
