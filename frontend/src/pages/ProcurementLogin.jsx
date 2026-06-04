@@ -153,34 +153,34 @@ export default function ProcurementLogin() {
     );
 
     return (
-        <div className="min-h-screen bg-[#0B1220]" data-testid="procurement-login-page">
+        <div className="min-h-screen bg-[#F5F5F7]" data-testid="procurement-login-page">
             <PageMeta title="Procurement Portal — TonersCart" description="Government & Corporate procurement portal: compare suppliers, generate formal quotations and order on credit." />
             <div className="mx-auto max-w-6xl px-4 sm:px-6 py-8 sm:py-12">
-                <Link to="/login" className="inline-flex items-center gap-1.5 text-[13px] text-white/70 hover:text-white mb-6" data-testid="proc-back-to-login">
+                <Link to="/login" className="inline-flex items-center gap-1.5 text-[13px] text-[#6E6E73] hover:text-[#0A0A0B] mb-6" data-testid="proc-back-to-login">
                     <ArrowLeft size={14} /> Back to regular sign in
                 </Link>
 
                 <div className="grid lg:grid-cols-[0.9fr_1.1fr] gap-6 lg:gap-10 items-start">
                     {/* Left — value panel */}
-                    <div className="text-white pt-2">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-[12px] font-semibold tracking-wide mb-5">
-                            <ShieldCheck size={14} className="text-[#F7C600]" /> Procurement Portal
+                    <div className="text-[#0A0A0B] pt-2">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#00B7C7]/10 border border-[#00B7C7]/25 text-[#0A7682] text-[12px] font-semibold tracking-wide mb-5">
+                            <ShieldCheck size={14} className="text-[#00B7C7]" /> Procurement Portal
                         </div>
-                        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight leading-tight" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-                            Government & Corporate procurement, simplified.
+                        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight leading-tight text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                            Government &amp; Corporate procurement, simplified.
                         </h1>
-                        <p className="mt-4 text-white/70 text-[14.5px] leading-relaxed max-w-md">
+                        <p className="mt-4 text-[#6E6E73] text-[14.5px] leading-relaxed max-w-md">
                             Compare verified suppliers (L1/L2/L3), generate formal GST quotations as PDFs, and order on credit with NEFT/RTGS terms — all in one place.
                         </p>
-                        <ul className="mt-6 space-y-2.5 text-[13.5px] text-white/80">
+                        <ul className="mt-6 space-y-2.5 text-[13.5px] text-[#3A3A3C]">
                             {["L1/L2/L3 lowest-price comparison", "Formal PDF quotations (valid 7 days)", "Credit account with 30-day terms", "Govt PO upload & admin review"].map((t) => (
-                                <li key={t} className="flex items-center gap-2"><CheckCircle2 size={15} className="text-[#3DD68C]" /> {t}</li>
+                                <li key={t} className="flex items-center gap-2"><CheckCircle2 size={15} className="text-[#00B7C7]" /> {t}</li>
                             ))}
                         </ul>
                     </div>
 
                     {/* Right — auth card */}
-                    <div className="bg-white rounded-2xl shadow-2xl p-5 sm:p-7">
+                    <div className="bg-white rounded-2xl border border-[#E8E8EC] shadow-sm p-5 sm:p-7">
                         <Tabs value={portal} onValueChange={switchPortal}>
                             <TabsList className="grid grid-cols-2 w-full mb-5">
                                 <TabsTrigger value="govt" data-testid="proc-tab-govt" className="gap-1.5"><Landmark size={14} /> Government</TabsTrigger>

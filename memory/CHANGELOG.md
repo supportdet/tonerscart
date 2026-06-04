@@ -1,3 +1,11 @@
+### 2026-06-04 — Navbar 10th pill (Govt Portal) + auth-flicker root fix + procurement portal restyle + remove exposed admin creds
+
+- **Navbar:** added a 10th category pill **"Govt Portal"** (navy `#1E3A8A`, → `/procurement/login`). Trimmed `.tc-cat-pill` padding 18px→15px so all 10 fit; verified @1920px the last pill's right edge = "Join free" right edge (both 1560px, 0px delta), first pill left = logo left (360px), no overflow.
+- **Auth flicker (recurring) — fixed at the source:** root cause was a token race in `lib/api.js` — `cachedToken` was set async via `getSession().then()`, so `AuthContext.refresh()`'s first `/auth/me` on mount often fired WITHOUT the bearer token → 401 → `setUser(null)` → ProtectedRoute redirected logged-in users to `/login` (the flash) before the session restored. Wave 16 only fixed the header buttons. Fix: request interceptor now `await`s a `sessionReady` promise before the first authed call; added global `AuthGate` in `App.js` that renders a neutral white spinner and blocks ALL routes until the auth check resolves; added an 8s timeout to `/auth/me`. Verified: 4 protected-page reloads → login never flashed, neutral loader shown, stayed on `/admin`.
+- **Procurement portal restyle (`ProcurementLogin.jsx`):** dark `#0B1220` background → light `#F5F5F7`; left value-panel text → dark `#0A0A0B`/`#6E6E73`, teal `#00B7C7` accents; right card → white with `#E8E8EC` border + soft shadow. Matches the marketplace aesthetic.
+- **Security:** removed the publicly-visible "Admin demo: admin@tonerscart.in / Admin@123" hint box from `Login.jsx`.
+
+
 ### 2026-06-04 — Procurement Module · PHASE 1 + PHASE 2 E2E VERIFICATION (fork)
 
 **What was verified (not new code — this fork verified existing build):**

@@ -3,7 +3,7 @@ import "@/App.css";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { Toaster } from "sonner";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import { CityProvider } from "./context/CityContext";
 import { CartProvider } from "./context/CartContext";
 import Header from "./components/Header";
@@ -67,6 +67,21 @@ function Chrome({ children }) {
     );
 }
 
+// Blocks ALL rendering until the initial auth check resolves, so logged-in
+// users never briefly see the sign-in page on reload/navigation. Neutral
+// full-screen loading state — no header, no content, no flicker.
+function AuthGate({ children }) {
+    const { loading } = useAuth();
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-white flex items-center justify-center" data-testid="app-auth-gate">
+                <div className="w-8 h-8 rounded-full border-2 border-black/10 border-t-[#00B7C7] animate-spin" aria-label="Loading" />
+            </div>
+        );
+    }
+    return children;
+}
+
 function App() {
     return (
         <HelmetProvider>
@@ -76,6 +91,7 @@ function App() {
                     <CartProvider>
                         <AuthProvider>
                             <ProcAuthProvider>
+                            <AuthGate>
                             <Chrome>
                                 <Routes>
                                     <Route path="/" element={<Landing />} />
@@ -115,6 +131,7 @@ function App() {
                                     <Route path="*" element={<NotFound />} />
                                 </Routes>
                             </Chrome>
+                            </AuthGate>
                             </ProcAuthProvider>
                         </AuthProvider>
                     </CartProvider>

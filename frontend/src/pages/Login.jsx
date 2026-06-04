@@ -186,10 +186,6 @@ export default function Login() {
                                 </Link>
                             </div>
                         </div>
-
-                        <div className="mt-4 text-[11px] text-white/55 bg-white/[0.06] border border-white/[0.08] rounded-md p-2.5 font-mono backdrop-blur" data-testid="login-admin-hint">
-                            <span className="text-white/80">Admin demo:</span> admin@tonerscart.in / Admin@123
-                        </div>
                     </div>
                 </div>
             </div>
