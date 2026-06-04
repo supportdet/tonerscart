@@ -36,7 +36,7 @@ function CategoryPill({ to, label, color, active }) {
 
 export default function Header() {
     const { user, logout, loading: authLoading } = useAuth();
-    const { city, setCity } = useCity();
+    const { city, setCity, locPrompt, dismissLocationPrompt } = useCity();
     const { count: cartCount } = useCart();
     const navigate = useNavigate();
     const location = useLocation();
@@ -86,9 +86,9 @@ export default function Header() {
                     {/* City */}
                     <div className="relative">
                         <button
-                            onClick={() => setCityOpen((o) => !o)}
+                            onClick={() => { setCityOpen((o) => !o); if (locPrompt) dismissLocationPrompt(); }}
                             onBlur={() => setTimeout(() => setCityOpen(false), 150)}
-                            className="inline-flex items-center gap-1.5 sm:gap-2 text-[13px] font-medium px-2 sm:px-3 h-9 rounded-lg text-[#1D1D1F] hover:bg-black/[0.04] transition-colors"
+                            className={`inline-flex items-center gap-1.5 sm:gap-2 text-[13px] font-medium px-2 sm:px-3 h-9 rounded-lg text-[#1D1D1F] hover:bg-black/[0.04] transition-colors${locPrompt ? " tc-loc-pulse" : ""}`}
                             data-testid="city-pill-btn"
                         >
                             <MapPin size={14} />
@@ -98,7 +98,7 @@ export default function Header() {
                         </button>
                         {cityOpen && (
                             <div
-                                className="absolute right-0 top-full mt-1.5 w-60 bg-white text-[#1D1D1F] rounded-xl shadow-xl border border-black/[0.08] py-2 max-h-72 overflow-auto"
+                                className="absolute right-0 top-full mt-1.5 w-60 bg-white text-[#1D1D1F] rounded-xl shadow-xl border border-black/[0.08] py-2 max-h-72 overflow-auto z-20"
                                 data-testid="city-dropdown"
                             >
                                 <div className="px-3 py-1 text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B]">Choose your city</div>
@@ -112,6 +112,37 @@ export default function Header() {
                                         {c}
                                     </button>
                                 ))}
+                            </div>
+                        )}
+
+                        {/* Location coachmark — small walkthrough hint pointing up at
+                            the city selector. Shown only when GPS was denied/unavailable. */}
+                        {locPrompt && !cityOpen && (
+                            <div className="tc-coachmark" role="dialog" aria-label="Set your location" data-testid="location-coachmark">
+                                <span className="tc-coachmark-arrow" aria-hidden="true" />
+                                <div className="flex items-start gap-2">
+                                    <MapPin size={15} className="text-[#00B7C7] mt-0.5 shrink-0" />
+                                    <div className="flex-1">
+                                        <div className="text-[12.5px] font-semibold text-[#0A0A0B] leading-snug">Set your location</div>
+                                        <div className="text-[11.5px] text-[#6E6E73] mt-0.5 leading-snug">Tap here to pick your city and see local dealers first.</div>
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <button
+                                                onClick={() => { dismissLocationPrompt(); setCityOpen(true); }}
+                                                className="text-[11.5px] font-semibold px-2.5 h-7 rounded-md bg-[#0A0A0B] text-white hover:bg-black/80 transition-colors"
+                                                data-testid="coachmark-choose-btn"
+                                            >
+                                                Choose city
+                                            </button>
+                                            <button
+                                                onClick={dismissLocationPrompt}
+                                                className="text-[11.5px] font-medium text-[#86868B] hover:text-[#0A0A0B] px-1.5 h-7"
+                                                data-testid="coachmark-dismiss-btn"
+                                            >
+                                                Not now
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>

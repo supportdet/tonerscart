@@ -6,7 +6,7 @@ import TonerSearchInput from "../components/TonerSearchInput";
 import TonerAnimation from "../components/TonerAnimation";
 import TonerCartridge from "../components/TonerCartridge";
 import VerifiedBadge from "../components/VerifiedBadge";
-import { useCity, KNOWN_CITIES } from "../context/CityContext";
+import { useCity } from "../context/CityContext";
 import useReveal from "../hooks/useReveal";
 import PageMeta from "../components/PageMeta";
 import { Skeleton } from "../components/ui/skeleton";
@@ -17,7 +17,7 @@ import { Skeleton } from "../components/ui/skeleton";
 
 export default function Landing() {
     const navigate = useNavigate();
-    const { city, citySet, setCity } = useCity();
+    const { city } = useCity();
     const [q, setQ] = useState("");
     const [facets, setFacets] = useState({ brands: [], cities: [], models: [] });
     const [grouped, setGrouped] = useState([]);
@@ -125,26 +125,6 @@ export default function Landing() {
                             Search <ArrowRight size={16} />
                         </button>
                     </div>
-
-                    {/* Set-your-location prompt — shown until the buyer confirms a city,
-                        so we can surface local suppliers first across the marketplace. */}
-                    {!citySet && (
-                        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-white/10 border border-white/15 backdrop-blur px-4 py-3 tc-fade-up tc-fade-up-2" data-testid="set-location-prompt">
-                            <MapPin size={16} className="text-[#F5C400] shrink-0" />
-                            <span className="text-[12.5px] sm:text-[13.5px] text-white/85 font-medium">
-                                Set your location to see local suppliers first
-                            </span>
-                            <select
-                                value={city}
-                                onChange={(e) => setCity(e.target.value)}
-                                className="ml-auto h-9 px-3 rounded-lg bg-white text-[#0A0A0B] text-[13px] font-semibold border border-white/20 focus:outline-none"
-                                data-testid="set-location-select"
-                                aria-label="Choose your city"
-                            >
-                                {KNOWN_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                        </div>
-                    )}
 
                     {/* Popular model chips */}
                     {popularChips.length > 0 && (

@@ -1,3 +1,10 @@
+### 2026-06-04 — Wave 16.1 (Location prompt → navbar coachmark)
+
+- Removed the wide "Set your location" bar under the hero search (was too large on web & mobile, `Landing.jsx`).
+- Replaced with a **small walkthrough coachmark** anchored to the navbar city selector with an upward arrow + gentle pulse on the city button (`Header.jsx`, `.tc-coachmark`/`.tc-loc-pulse` in index.css). Copy: "Set your location — Tap here to pick your city…" with **Choose city** (opens the city dropdown) / **Not now** (dismiss, persisted).
+- Trigger logic (`CityContext.jsx`): on first visit the browser is asked for location; the coachmark shows **only when GPS is denied / unavailable / returns an unserved city** and the user hasn't set or dismissed it. Picking a city or dismissing hides it permanently (`tc_loc_dismissed_v1`). Verified live on desktop + mobile (no overflow).
+
+
 ### 2026-06-04 — Wave 16 (Papers upload page + bulk Excel for Papers/Printers + auth flicker + inline auth errors)
 
 **Tested**: backend 13/13 pytest (`test_wave16.py`) + per-row validation refactor; frontend live Playwright — papers single upload, bulk papers, bulk printers (incl. mixed valid+invalid → "X uploaded, Y failed" + failed-rows download), auth flicker, login/register inline errors all GREEN.
