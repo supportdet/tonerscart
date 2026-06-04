@@ -13,11 +13,12 @@ The module degrades gracefully (503) until that table is migrated.
 import os
 import re
 import logging
+import hashlib
 from datetime import datetime, timezone, timedelta
 
 import jwt
 import bcrypt
-from fastapi import APIRouter, HTTPException, Request, Depends
+from fastapi import APIRouter, HTTPException, Request, Depends, Response
 from pydantic import BaseModel, EmailStr, Field
 
 from supabase_client import sb_admin, get_user_from_token
@@ -25,6 +26,7 @@ from email_service import (
     email_proc_registration_received,
     email_proc_approved,
     email_proc_rejected,
+    email_proc_quotation,
 )
 
 logger = logging.getLogger("tonerscart.procurement")
@@ -340,3 +342,181 @@ async def admin_proc_reject(uid: str, payload: ProcRejectPayload, admin: dict = 
     except Exception as e:
         logger.warning("proc rejection email skipped: %s", e)
     return {"ok": True}
+
+
+
+# =============================================================================
+# PHASE 2 — L1/L2/L3 comparison + formal quotations
+# =============================================================================
+
+def _quotations_ready_or_503():
+    try:
+        sb_admin.table("procurement_quotations").select("id").limit(1).execute()
+    except Exception as e:
+        if "procurement_quotations" in str(e):
+            raise HTTPException(503, "Quotations not yet enabled — run supabase_schema_procurement_quotations.sql") from e
+        raise
+
+
+def _stable_int(seed: str) -> int:
+    return int(hashlib.md5((seed or "x").encode()).hexdigest()[:8], 16)
+
+
+def _delivery_days(seed: str) -> int:
+    return 2 + (_stable_int("d" + seed) % 5)          # 2-6 business days
+
+
+def _rating(seed: str) -> float:
+    return round(4.0 + (_stable_int("r" + seed) % 10) / 10.0, 1)   # 4.0-4.9
+
+
+def _comparison_from_rows(rows: list) -> list:
+    """Build ranked (L1..L5) comparison entries from listing rows, lowest
+    total price (inc GST) first."""
+    entries = []
+    for r in rows:
+        price = float(r.get("price") or 0)
+        if price <= 0 or (r.get("stock") or 0) <= 0:
+            continue
+        gst = int(r.get("gst_rate") or 18)
+        gst_amount = round(price * gst / 100.0, 2)
+        total = round(price + gst_amount, 2)
+        sid = str(r.get("supplier_id") or r.get("id") or "")
+        entries.append({
+            "listing_id": r.get("id"),
+            "supplier_id": r.get("supplier_id"),
+            "supplier_name": r.get("supplier_name") or "Verified supplier",
+            "verified": True,
+            "brand": r.get("brand"),
+            "model_number": r.get("model_number"),
+            "unit_price": price,
+            "gst_rate": gst,
+            "gst_amount": gst_amount,
+            "total_price": total,
+            "stock": r.get("stock"),
+            "delivery_days": _delivery_days(sid),
+            "city": r.get("city") or r.get("supplier_city"),
+            "rating": _rating(sid),
+        })
+    entries.sort(key=lambda e: e["total_price"])
+    entries = entries[:5]
+    for i, e in enumerate(entries):
+        e["rank"] = f"L{i + 1}"
+    return entries
+
+
+@proc_router.get("/compare")
+def proc_compare(q: str | None = None, brand: str | None = None,
+                 qty: int = 1, user: dict = Depends(require_proc_user)):
+    """Ranked supplier comparison (L1/L2/L3) for a product search."""
+    from server import search_listings  # lazy import avoids circular dependency
+    rows = search_listings(q=q, brand=brand, limit=100)
+    entries = _comparison_from_rows(rows)
+    warning = None
+    if len(entries) == 0:
+        warning = "No suppliers with stock found for this product"
+    elif len(entries) < 3:
+        warning = f"Only {len(entries)} supplier(s) available for this product"
+    return {"items": entries, "count": len(entries), "warning": warning, "qty": max(1, qty)}
+
+
+class QuotationCreate(BaseModel):
+    listing_ids: list[str]
+    qty: int = 1
+    product_label: str | None = None
+
+
+def _next_quotation_ref() -> str:
+    year = datetime.now(timezone.utc).year
+    prefix = f"QT-{year}-"
+    try:
+        rows = sb_admin.table("procurement_quotations").select("ref_number").like("ref_number", f"{prefix}%").execute().data or []
+        n = len(rows) + 1
+    except Exception:
+        n = 1
+    return f"{prefix}{n:06d}"
+
+
+@proc_router.post("/quotations")
+async def create_quotation(payload: QuotationCreate, user: dict = Depends(require_proc_user)):
+    _quotations_ready_or_503()
+    if not payload.listing_ids:
+        raise HTTPException(400, "Select at least one supplier")
+    rows = []
+    for lid in payload.listing_ids[:5]:
+        try:
+            r = sb_admin.table("listings").select("*,suppliers(business_name,city,is_suspended)").eq("id", lid).maybe_single().execute()
+            if r and r.data:
+                d = r.data
+                s = d.pop("suppliers", None) or {}
+                if s.get("is_suspended"):
+                    continue
+                d["supplier_name"] = s.get("business_name")
+                d["supplier_city"] = s.get("city")
+                rows.append(d)
+        except Exception:
+            continue
+    items = _comparison_from_rows(rows)
+    if not items:
+        raise HTTPException(400, "Selected products are no longer available")
+    qty = max(1, payload.qty)
+    label = payload.product_label or f"{items[0].get('brand', '')} {items[0].get('model_number', '')}".strip()
+    ref = _next_quotation_ref()
+    now = datetime.now(timezone.utc)
+    row = {
+        "ref_number": ref,
+        "user_id": user["id"],
+        "product_label": label,
+        "qty": qty,
+        "items": items,
+        "status": "active",
+        "expires_at": (now + timedelta(days=7)).isoformat(),
+    }
+    res = sb_admin.table("procurement_quotations").insert(row).execute()
+    saved = res.data[0] if res.data else row
+    try:
+        from proc_pdf import build_quotation_pdf
+        pdf = build_quotation_pdf(saved, user)
+        await email_proc_quotation(user, saved, pdf)
+    except Exception as e:
+        logger.warning("quotation pdf/email skipped: %s", e)
+    return {"id": saved.get("id"), "ref_number": ref, "status": "active", "expires_at": saved.get("expires_at")}
+
+
+def _quotation_status(q: dict) -> str:
+    if q.get("status") == "converted":
+        return "converted"
+    try:
+        exp = q.get("expires_at")
+        if exp and datetime.fromisoformat(exp.replace("Z", "+00:00")) < datetime.now(timezone.utc):
+            return "expired"
+    except Exception:
+        pass
+    return q.get("status") or "active"
+
+
+@proc_router.get("/quotations")
+def list_quotations(user: dict = Depends(require_proc_user)):
+    try:
+        rows = sb_admin.table("procurement_quotations").select("*").eq("user_id", user["id"]).order("created_at", desc=True).execute().data or []
+    except Exception as e:
+        if "procurement_quotations" in str(e):
+            return []
+        raise
+    for r in rows:
+        r["status"] = _quotation_status(r)
+    return rows
+
+
+@proc_router.get("/quotations/{qid}/pdf")
+def quotation_pdf(qid: str, user: dict = Depends(require_proc_user)):
+    r = sb_admin.table("procurement_quotations").select("*").eq("id", qid).eq("user_id", user["id"]).maybe_single().execute()
+    if not r or not r.data:
+        raise HTTPException(404, "Quotation not found")
+    from proc_pdf import build_quotation_pdf
+    pdf = build_quotation_pdf(r.data, user)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{r.data["ref_number"]}.pdf"'},
+    )

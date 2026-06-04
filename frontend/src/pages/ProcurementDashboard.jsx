@@ -10,6 +10,8 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import procApi, { formatApiError } from "../lib/procApi";
 import { useProcAuth } from "../context/ProcAuthContext";
+import SearchCompare from "../components/procurement/SearchCompare";
+import MyQuotations from "../components/procurement/MyQuotations";
 import PageMeta from "../components/PageMeta";
 
 const inr = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
@@ -99,12 +101,8 @@ export default function ProcurementDashboard() {
 
                 {/* Content */}
                 <div className="min-w-0">
-                    {section === "search" && (
-                        <ComingSoon title="Search & Compare (L1/L2/L3)" note="Search any product to see a ranked supplier comparison with lowest-price L1/L2/L3 and request formal quotations. Rolling out in the next phase." />
-                    )}
-                    {section === "quotations" && (
-                        <ComingSoon title="My Quotations" note="Your formal PDF quotations with 7-day validity will appear here, with Active / Expired / Converted status." />
-                    )}
+                    {section === "search" && <SearchCompare onQuoted={() => setSection("quotations")} />}
+                    {section === "quotations" && <MyQuotations active={section === "quotations"} />}
                     {section === "orders" && (
                         <ComingSoon title="My Orders" note="Track every procurement order through its full status timeline, with downloadable invoices." />
                     )}
