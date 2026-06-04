@@ -1,3 +1,19 @@
+### 2026-06-04 — OEM showcase module + mobile search + test-data cleanup
+
+**OEM (manufacturer) showcase module — NEW (Supabase Auth, role=oem; showcase + enquiry only, no checkout):**
+- DB: `supabase_schema_oem.sql` → `oem_partners`, `oem_products`, and `users.role` check now includes `'oem'`. (User applied the migration.)
+- Backend `oem.py`: public `/api/oem/apply`, `/public`, `/enquire`; OEM `/me`, `/products` CRUD, `/product-image`; admin `/api/admin/oem/pending|partners|{id}/approve|{id}/reject`. Approval creates a Supabase auth user (role=oem, generated temp password) and emails credentials via Resend (reuses existing `sb_admin.auth.admin.create_user` pattern — no new auth tech). Emails added to `email_service.py` (application/approved/rejected/enquiry).
+- Frontend: `OEM.jsx` now fetches `/oem/public` and renders brands + products with an **Official Brand** badge + **Enquire** modal (emails the brand); apply form posts to `/oem/apply`. New `OemDashboard.jsx` (/oem-dashboard, role-gated) for product CRUD + image upload. New admin `OemTab.jsx` (approve/reject queue). Wired: App.js route, Login role→/oem-dashboard, Header hides Sell/cart for OEM + chip→/oem-dashboard, AdminDashboard OEM tab with pending badge.
+- OEM products are isolated to `/oem` only (NOT in /search, /papers, etc.) — verified.
+- Verified: backend E2E (apply→approve→login→add product→/public→enquire all 200) + frontend E2E iteration_23.json (95%, all 9 scenarios pass, no blockers). Seeded demo: `oem.demo@tonerscart.in` / `OemDemo@123` (brand InkPro, 2 products).
+
+**Mobile search (`Search.jsx`, `Landing.jsx`, `PrintersGuide/Results.jsx`, `lib/categoryRoute.js`, `index.css`):**
+- Typing a main category (printer/paper/toner/scanner/MPS/bulk/OEM/dealer) on submit now jumps straight to that category page.
+- Mobile search button is now a compact magnifier icon to the RIGHT of the bar (one row) so the autocomplete dropdown no longer covers it; desktop unchanged.
+
+**Test-data cleanup:** removed 4 test suppliers + 4 users + their listings/printers/papers (cleanup_test_data), all 6 test procurement accounts, and throwaway OEM partners — only the seeded InkPro OEM demo remains.
+
+
 ### 2026-06-04 — Navbar 10th pill (Govt Portal) + auth-flicker root fix + procurement portal restyle + remove exposed admin creds
 
 - **Navbar:** added a 10th category pill **"Govt Portal"** (navy `#1E3A8A`, → `/procurement/login`). Trimmed `.tc-cat-pill` padding 18px→15px so all 10 fit; verified @1920px the last pill's right edge = "Join free" right edge (both 1560px, 0px delta), first pill left = logo left (360px), no overflow.
