@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Landmark, Building2, ArrowRight, ShieldCheck, Loader2, CheckCircle2, ArrowLeft } from "lucide-react";
+import { Landmark, Building2, ArrowRight, Loader2, CheckCircle2, ArrowLeft } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -153,66 +153,77 @@ export default function ProcurementLogin() {
     );
 
     return (
-        <div className="min-h-screen bg-[#F5F5F7]" data-testid="procurement-login-page">
+        <div className="tc-hero relative min-h-screen pb-16" data-testid="procurement-login-page">
             <PageMeta title="Procurement Portal — TonersCart" description="Government & Corporate procurement portal: compare suppliers, generate formal quotations and order on credit." />
-            <div className="mx-auto max-w-6xl px-4 sm:px-6 py-8 sm:py-12">
-                <Link to="/login" className="inline-flex items-center gap-1.5 text-[13px] text-[#6E6E73] hover:text-[#0A0A0B] mb-6" data-testid="proc-back-to-login">
+            <div className="tc-hero-grid" />
+            <div className="tc-container relative pt-10 sm:pt-14">
+                <Link to="/login" className="inline-flex items-center gap-1.5 text-[13px] text-white/70 hover:text-white mb-8" data-testid="proc-back-to-login">
                     <ArrowLeft size={14} /> Back to regular sign in
                 </Link>
 
-                <div className="grid lg:grid-cols-[0.9fr_1.1fr] gap-6 lg:gap-10 items-start">
-                    {/* Left — value panel */}
-                    <div className="text-[#0A0A0B] pt-2">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#00B7C7]/10 border border-[#00B7C7]/25 text-[#0A7682] text-[12px] font-semibold tracking-wide mb-5">
-                            <ShieldCheck size={14} className="text-[#00B7C7]" /> Procurement Portal
+                <div className="grid lg:grid-cols-12 gap-8 lg:gap-14 items-start">
+                    {/* Left — pitch (matches /login hero) */}
+                    <div className="lg:col-span-5 hidden lg:block">
+                        <div className="flex items-center gap-3 mb-4">
+                            <span className="tc-strip" />
+                            <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-white/60">Procurement Portal</span>
                         </div>
-                        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight leading-tight text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-                            Government &amp; Corporate procurement, simplified.
+                        <h1 className="text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(32px, 3.6vw, 48px)", lineHeight: 1.07, letterSpacing: "-0.03em", fontWeight: 300 }}>
+                            Government &amp; corporate procurement, <span className="text-[#00B7C7]" style={{ fontWeight: 500 }}>simplified</span>.
                         </h1>
-                        <p className="mt-4 text-[#6E6E73] text-[14.5px] leading-relaxed max-w-md">
+                        <p className="text-white/65 mt-5 max-w-md text-[14.5px] leading-relaxed">
                             Compare verified suppliers (L1/L2/L3), generate formal GST quotations as PDFs, and order on credit with NEFT/RTGS terms — all in one place.
                         </p>
-                        <ul className="mt-6 space-y-2.5 text-[13.5px] text-[#3A3A3C]">
+                        <ul className="mt-8 space-y-3 text-[13.5px] text-white/80 max-w-md">
                             {["L1/L2/L3 lowest-price comparison", "Formal PDF quotations (valid 7 days)", "Credit account with 30-day terms", "Govt PO upload & admin review"].map((t) => (
-                                <li key={t} className="flex items-center gap-2"><CheckCircle2 size={15} className="text-[#00B7C7]" /> {t}</li>
+                                <li key={t} className="flex items-center gap-2.5"><CheckCircle2 size={16} className="text-[#00B7C7] shrink-0" /> {t}</li>
                             ))}
                         </ul>
                     </div>
 
-                    {/* Right — auth card */}
-                    <div className="bg-white rounded-2xl border border-[#E8E8EC] shadow-sm p-5 sm:p-7">
-                        <Tabs value={portal} onValueChange={switchPortal}>
-                            <TabsList className="grid grid-cols-2 w-full mb-5">
-                                <TabsTrigger value="govt" data-testid="proc-tab-govt" className="gap-1.5"><Landmark size={14} /> Government</TabsTrigger>
-                                <TabsTrigger value="corporate" data-testid="proc-tab-corporate" className="gap-1.5"><Building2 size={14} /> Corporate</TabsTrigger>
-                            </TabsList>
+                    {/* Right — auth card (matches /login card) */}
+                    <div className="lg:col-span-7 w-full max-w-xl ml-auto">
+                        <div className="bg-white border border-black/[0.06] rounded-2xl shadow-2xl p-6 sm:p-8 text-[#0A0A0B]">
+                            <h2 className="text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "26px", fontWeight: 300, letterSpacing: "-0.02em" }}>
+                                {mode === "register" ? "Create your account" : "Welcome back"}
+                            </h2>
+                            <p className="text-[13px] text-[#6E6E73] mt-1">Government &amp; corporate buyers sign in or register here.</p>
 
-                            {submitted ? (
-                                <div className="py-8 text-center" data-testid="proc-under-review">
-                                    <div className="mx-auto w-12 h-12 rounded-full bg-emerald-50 grid place-items-center mb-3">
-                                        <CheckCircle2 className="text-emerald-600" size={26} />
-                                    </div>
-                                    <h3 className="text-[17px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Your account is under review</h3>
-                                    <p className="text-[13.5px] text-[#6E6E73] mt-2 max-w-sm mx-auto">You will receive an email once your {portal === "govt" ? "government" : "corporate"} account is approved by the TonersCart team.</p>
-                                    <button onClick={() => { setSubmitted(false); setMode("login"); }} className="mt-5 text-[13px] font-semibold text-[#00B7C7] hover:underline" data-testid="proc-goto-login">Go to sign in</button>
-                                </div>
-                            ) : (
-                                <>
-                                    {/* mode toggle */}
-                                    <div className="inline-flex p-1 rounded-xl bg-black/[0.04] mb-5" role="tablist">
-                                        <button onClick={() => switchMode("login")} className={`px-4 py-1.5 rounded-lg text-[13px] font-semibold transition ${mode === "login" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73]"}`} data-testid="proc-mode-login">Sign in</button>
-                                        <button onClick={() => switchMode("register")} className={`px-4 py-1.5 rounded-lg text-[13px] font-semibold transition ${mode === "register" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73]"}`} data-testid="proc-mode-register">Register</button>
-                                    </div>
+                            <div className="mt-6">
+                            <Tabs value={portal} onValueChange={switchPortal}>
+                                <TabsList className="grid grid-cols-2 w-full mb-5">
+                                    <TabsTrigger value="govt" data-testid="proc-tab-govt" className="gap-1.5"><Landmark size={14} /> Government</TabsTrigger>
+                                    <TabsTrigger value="corporate" data-testid="proc-tab-corporate" className="gap-1.5"><Building2 size={14} /> Corporate</TabsTrigger>
+                                </TabsList>
 
-                                    <TabsContent value="govt" forceMount={portal === "govt" ? undefined : false} className={portal === "govt" ? "" : "hidden"}>
-                                        {mode === "login" ? renderLogin() : renderRegister()}
-                                    </TabsContent>
-                                    <TabsContent value="corporate" forceMount={portal === "corporate" ? undefined : false} className={portal === "corporate" ? "" : "hidden"}>
-                                        {mode === "login" ? renderLogin() : renderRegister()}
-                                    </TabsContent>
-                                </>
-                            )}
-                        </Tabs>
+                                {submitted ? (
+                                    <div className="py-8 text-center" data-testid="proc-under-review">
+                                        <div className="mx-auto w-12 h-12 rounded-full bg-emerald-50 grid place-items-center mb-3">
+                                            <CheckCircle2 className="text-emerald-600" size={26} />
+                                        </div>
+                                        <h3 className="text-[17px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Your account is under review</h3>
+                                        <p className="text-[13.5px] text-[#6E6E73] mt-2 max-w-sm mx-auto">You will receive an email once your {portal === "govt" ? "government" : "corporate"} account is approved by the TonersCart team.</p>
+                                        <button onClick={() => { setSubmitted(false); setMode("login"); }} className="mt-5 text-[13px] font-semibold text-[#00B7C7] hover:underline" data-testid="proc-goto-login">Go to sign in</button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* mode toggle */}
+                                        <div className="inline-flex p-1 rounded-xl bg-black/[0.04] mb-5" role="tablist">
+                                            <button onClick={() => switchMode("login")} className={`px-4 py-1.5 rounded-lg text-[13px] font-semibold transition ${mode === "login" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73]"}`} data-testid="proc-mode-login">Sign in</button>
+                                            <button onClick={() => switchMode("register")} className={`px-4 py-1.5 rounded-lg text-[13px] font-semibold transition ${mode === "register" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73]"}`} data-testid="proc-mode-register">Register</button>
+                                        </div>
+
+                                        <TabsContent value="govt" forceMount={portal === "govt" ? undefined : false} className={portal === "govt" ? "" : "hidden"}>
+                                            {mode === "login" ? renderLogin() : renderRegister()}
+                                        </TabsContent>
+                                        <TabsContent value="corporate" forceMount={portal === "corporate" ? undefined : false} className={portal === "corporate" ? "" : "hidden"}>
+                                            {mode === "login" ? renderLogin() : renderRegister()}
+                                        </TabsContent>
+                                    </>
+                                )}
+                            </Tabs>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
