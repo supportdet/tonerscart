@@ -4132,6 +4132,12 @@ def _bust_landing_cache():
 
 app.include_router(api)
 
+# Procurement module (Govt & Corporate) — self-contained, separate from the
+# regular Supabase-Auth customer/dealer/admin flow.
+from procurement import proc_router, proc_admin_router  # noqa: E402
+app.include_router(proc_router)
+app.include_router(proc_admin_router)
+
 
 # CORS — explicit origin list (browsers reject the wildcard "*" combined with allow_credentials=True,
 # which silently strips the Access-Control-Allow-Origin header on the response).

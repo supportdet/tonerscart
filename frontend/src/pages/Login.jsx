@@ -7,7 +7,7 @@ import { Label } from "../components/ui/label";
 import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
-import { ArrowRight, Mail, Lock, Loader2 } from "lucide-react";
+import { ArrowRight, Mail, Lock, Loader2, Landmark } from "lucide-react";
 
 const GoogleIcon = (props) => (
     <svg viewBox="0 0 48 48" width="18" height="18" {...props}>
@@ -170,6 +170,20 @@ export default function Login() {
 
                             <div className="text-[13px] text-[#6E6E73] text-center mt-5">
                                 No account yet? <Link to="/register" className="text-[#00B7C7] font-semibold hover:underline" data-testid="login-to-register-link">Create one</Link>
+                            </div>
+
+                            <div className="mt-5 pt-5 border-t border-black/[0.08]">
+                                <Link
+                                    to="/procurement/login"
+                                    className="flex items-center justify-between gap-3 w-full px-4 py-3 rounded-xl bg-[#0B1220] text-white hover:bg-[#111a2e] transition-colors group"
+                                    data-testid="procurement-login-link"
+                                >
+                                    <span className="flex items-center gap-2.5">
+                                        <Landmark size={16} className="text-[#F7C600]" />
+                                        <span className="text-[13px] font-semibold">Government &amp; Corporate Procurement</span>
+                                    </span>
+                                    <ArrowRight size={15} className="opacity-70 group-hover:translate-x-0.5 transition-transform" />
+                                </Link>
                             </div>
                         </div>
 

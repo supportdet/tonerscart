@@ -1,3 +1,22 @@
+### 2026-06-04 — Procurement Module · PHASE 1 (Govt & Corporate registration + approval + auth + dashboard shell)
+
+**Scope:** Self-contained Government & Corporate procurement portal, fully separate from the regular Supabase-Auth customer/dealer/admin flow (no overlap). All existing flows untouched.
+
+**Backend** (`procurement.py`, included in `server.py`):
+- New table `procurement_users` — migration `supabase_schema_procurement.sql` (⚠ APPLY IN SUPABASE; backend returns 503 gracefully until then).
+- Auth: own email+password — **bcrypt** hashes + backend-issued **JWT (PyJWT, HS256, `JWT_SECRET`)** sent as Bearer. `require_proc_user` (approved-only) + `require_admin` (reuses Supabase admin) dependencies.
+- Endpoints: `POST /api/procurement/register/govt` (validates official email .gov.in/.nic.in/.gov), `/register/corporate` (validates GSTIN format), `/login` (blocks pending/rejected with message), `GET/PATCH /api/procurement/me`. Admin: `GET /api/admin/procurement/pending` (separate govt + corporate lists), `/accounts`, `POST /{id}/approve`, `/{id}/reject` (reason).
+- Emails via Resend (`email_service.py`): registration-received (applicant + admin notify), approved (with login link), rejected (with reason).
+
+**Frontend:**
+- `/procurement/login` — dark portal, Government/Corporate tabs, Sign in + Register per tab, inline validation (GST format, govt email domain, password length), "Your account is under review" success state. Global Header/Footer hidden on `/procurement` (App.js `Chrome` gate + `ProcAuthProvider`).
+- `/procurement` (protected) dashboard — side nav: Search & Compare / My Quotations / My Orders (Phase 2/3 placeholders), **Credit Account** (limit/used/available + utilisation; "being set up" when 0), **Profile** (read-only details + editable phone/address). Separate `procApi` axios client + `ProcAuthContext`.
+- Regular `/login` now has a **"Government & Corporate Procurement"** entry button → `/procurement/login`.
+- Admin dashboard: new **Procurement** tab (badge = pending count) with separate Government & Corporate approval queues, Approve + Reject-with-reason.
+
+**Status:** UI verified rendering live; backend graceful states verified (503 pre-migration, validation, 403 admin-gate). **End-to-end register→approve→login pending the Supabase migration** (no direct DB access from the build env).
+
+
 ### 2026-06-04 — Wave 16.2 (Toners bulk upload → unified BulkUploadGeneric)
 
 - Migrated **Toners** bulk upload to the shared `BulkUploadGeneric` component (Wave 16) via a new `tonerBulkConfig` in `lib/bulkConfigs.js` (same toner columns/payload incl. variants & D2D-compatible fields).
