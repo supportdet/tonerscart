@@ -51,7 +51,7 @@ def _envelope(subject: str, body_html: str) -> str:
 </body></html>"""
 
 
-async def _send(to: str, subject: str, body_html: str, reply_to: str | None = None):
+async def _send(to: str, subject: str, body_html: str, reply_to: str | None = None, attachments: list | None = None):
     if not _resend:
         logger.info("[EMAIL SKIPPED — no RESEND_API_KEY] to=%s subject=%s", to, subject)
         return False
@@ -63,12 +63,38 @@ async def _send(to: str, subject: str, body_html: str, reply_to: str | None = No
     }
     if reply_to:
         params["reply_to"] = reply_to
+    if attachments:
+        # Resend expects [{ "filename": str, "content": [bytes] or base64 str }]
+        params["attachments"] = attachments
     try:
         await asyncio.to_thread(_resend.Emails.send, params)
         return True
     except Exception as e:
         logger.warning("Resend send failed to=%s: %s", to, e)
         return False
+
+
+async def email_proc_quotation(u: dict, quotation: dict, pdf_bytes: bytes):
+    """Email a generated quotation PDF to the procurement user."""
+    email_to = u.get("email")
+    if not email_to:
+        return False
+    import base64
+    ref = quotation.get("ref_number")
+    valid_until = (quotation.get("expires_at") or "")[:10]
+    html = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;">Your quotation {ref} is ready</h2>
+    <p>Hi {u.get('name') or 'there'},</p>
+    <p>Please find your formal TonersCart quotation attached (PDF). It compares the
+    lowest-priced verified suppliers (L1/L2/L3) for your requirement.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;">
+      <tr><td style="padding:4px 12px;color:#86868B;">Reference</td><td style="padding:4px 12px;"><strong>{ref}</strong></td></tr>
+      <tr><td style="padding:4px 12px;color:#86868B;">Valid until</td><td style="padding:4px 12px;"><strong>{valid_until}</strong> (7 days)</td></tr>
+    </table>
+    <p style="margin-top:16px;color:#6E6E73;font-size:12.5px;">Sign in to your dashboard to proceed with an order from any listed supplier.</p>
+    """
+    attachment = {"filename": f"{ref}.pdf", "content": list(pdf_bytes)}
+    return await _send(email_to, f"TonersCart Quotation {ref}", html, attachments=[attachment])
 
 
 # ===== Public helpers ===========================================================

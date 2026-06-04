@@ -1,3 +1,15 @@
+### 2026-06-04 — Procurement Module · PHASE 1 + PHASE 2 E2E VERIFICATION (fork)
+
+**What was verified (not new code — this fork verified existing build):**
+- Discovered Phase 1 AND partial Phase 2 were already implemented (`procurement.py` 522 lines: auth/register/login/me/admin-queues + `/compare` L1-L5 ranking + quotation create/list + `quotation/{id}/pdf` via `proc_pdf.py`). Frontend `SearchCompare.jsx` + `MyQuotations.jsx` already wired into `ProcurementDashboard.jsx`.
+- **DB reality check:** user believed all 3 procurement migrations were applied, but only `procurement_users` existed. Had user run `supabase_schema_procurement_quotations.sql` → quotations now work. `procurement_orders` + `credit_ledger` **still NOT migrated** (needed before the Phase 2 order flow).
+- **Backend E2E (curl):** register govt → admin pending → approve → login (JWT) → `/me` → `/compare` (returned ranked L1 ₹1770 / L2 ₹1770 / L3 ₹2183 / L4 ₹7466) → POST `/quotations` (QT-2026-000001) → list → PDF (valid `%PDF-`, 3985 bytes). ALL PASS.
+- **Frontend E2E (testing agent, iteration_22.json): 22/22 = 100%.** Govt+Corporate register (incl. non-gov-email & invalid-GST inline errors), admin approve + reject-with-reason queues, login (approved/pending/wrong-pw states), dashboard 5-section nav, credit-unset empty state, profile edit/save, Search & Compare ranked rows, generate quotation → My Quotations, PDF download, logout. Only 2 non-blocking cosmetics (reject-dialog aria-describedby; harmless stale-token 401 in console).
+- Test creds added to `test_credentials.md`: approved govt `proc.gov.1780590694@test.gov.in` / `secret123`.
+
+**Next:** Phase 2 order flow + Govt PO upload (requires `supabase_schema_procurement_orders.sql` to be applied first).
+
+
 ### 2026-06-04 — Procurement Module · PHASE 1 (Govt & Corporate registration + approval + auth + dashboard shell)
 
 **Scope:** Self-contained Government & Corporate procurement portal, fully separate from the regular Supabase-Auth customer/dealer/admin flow (no overlap). All existing flows untouched.
