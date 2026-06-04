@@ -8,6 +8,8 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { toast } from "sonner";
 import PageMeta from "../components/PageMeta";
+import VerifiedBadge from "../components/VerifiedBadge";
+import { deliveryLabel } from "../lib/location";
 import { formatApiError } from "../lib/api";
 
 const SIZES = ["A4", "A3", "A5", "Letter"];
@@ -56,6 +58,7 @@ export default function Papers() {
         try {
             const params = {};
             for (const [k, v] of Object.entries(filters)) if (v) params[k] = v;
+            if (!params.city && appCity) params.near_city = appCity;
             const { data } = await api.get("/papers", { params });
             setRows(Array.isArray(data) ? data : []);
         } catch (e) {
@@ -129,7 +132,7 @@ export default function Papers() {
                 ) : (
                     <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {rows.map((p) => (
-                            <PaperCard key={p.id} p={p} onAddToCart={onAddToCart} onBuyNow={onBuyNow} />
+                            <PaperCard key={p.id} p={p} onAddToCart={onAddToCart} onBuyNow={onBuyNow} userCity={appCity} />
                         ))}
                     </div>
                 )}
@@ -138,9 +141,10 @@ export default function Papers() {
     );
 }
 
-function PaperCard({ p, onAddToCart, onBuyNow }) {
+function PaperCard({ p, onAddToCart, onBuyNow, userCity }) {
     const pricePerBox = Number(p.price_per_ream) * Number(p.reams_per_box || 1);
     const outOfStock = Number(p.stock || 0) <= 0;
+    const loc = deliveryLabel(p.supplier_city || p.city, userCity);
     return (
         <div className="bg-white border border-black/[0.06] rounded-2xl p-4 shadow-sm hover:border-black/[0.15] transition flex flex-col" data-testid={`paper-card-${p.id}`}>
             <Link to={`/paper/${p.id}`} className="block flex-1" data-testid={`paper-link-${p.id}`}>
@@ -163,9 +167,18 @@ function PaperCard({ p, onAddToCart, onBuyNow }) {
                         <div className="font-mono font-semibold text-[#0A0A0B]">{fmtMoney(pricePerBox)}</div>
                     </div>
                 </div>
-                <div className="mt-3 flex items-center justify-between text-[11.5px] text-[#6E6E73]">
-                    <span className="inline-flex items-center gap-1"><MapPin size={11} /> {p.supplier_city || p.city || "—"}</span>
-                    <span className="truncate max-w-[160px]">{p.supplier_name}</span>
+                <div className="mt-3 flex items-center justify-between text-[11.5px] text-[#6E6E73] gap-2">
+                    <span className="inline-flex items-center gap-1 min-w-0">
+                        <span className="truncate max-w-[120px]">{p.supplier_name}</span>
+                        <VerifiedBadge compact />
+                    </span>
+                    {loc.text ? (
+                        <span className={`inline-flex items-center gap-1 text-[10.5px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${loc.local ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-[#F4F4F6] text-[#6E6E73] border-[#E5E5EA]"}`} data-testid={`paper-delivery-${p.id}`}>
+                            {loc.local ? "Local · Free delivery" : loc.text}
+                        </span>
+                    ) : (
+                        <span className="inline-flex items-center gap-1"><MapPin size={11} /> {p.supplier_city || p.city || "—"}</span>
+                    )}
                 </div>
             </Link>
             <div className="mt-3 grid grid-cols-2 gap-2">

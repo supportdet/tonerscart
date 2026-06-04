@@ -16,7 +16,7 @@ const CATEGORY_PILLS = [
     { to: "/consumables", label: "Consumables", color: "#FFC107" },
     { to: "/scanners", label: "Scanners", color: "#5468FF" },
     { to: "/mps", label: "MPS/Rentals", color: "#3FD267" },
-    { to: "/bulk", label: "Buy Bulk", color: "#FF7A00" },
+    { to: "/bulk", label: "Bulk Orders", color: "#FF7A00" },
     { to: "/dealer", label: "Dealer to Dealer", color: "#5E8CB5" },
     { to: "/oem", label: "OEM Marketplace", color: "#B58A75" },
 ];
@@ -71,7 +71,7 @@ export default function Header() {
                 style={{ height: 64 }}
                 data-testid="navbar-top"
             >
-                <div className="tc-container flex items-center h-full gap-4">
+                <div className="tc-container flex items-center h-full gap-2 sm:gap-4">
                     <Link to="/" className="flex items-center shrink-0 group" data-testid="logo-home-link" aria-label="TonersCart home">
                         <img
                             src="/TONERSCART-bg.png"
@@ -88,7 +88,7 @@ export default function Header() {
                         <button
                             onClick={() => setCityOpen((o) => !o)}
                             onBlur={() => setTimeout(() => setCityOpen(false), 150)}
-                            className="inline-flex items-center gap-2 text-[13px] font-medium px-3 h-9 rounded-lg text-[#1D1D1F] hover:bg-black/[0.04] transition-colors"
+                            className="inline-flex items-center gap-1.5 sm:gap-2 text-[13px] font-medium px-2 sm:px-3 h-9 rounded-lg text-[#1D1D1F] hover:bg-black/[0.04] transition-colors"
                             data-testid="city-pill-btn"
                         >
                             <MapPin size={14} />
@@ -176,7 +176,7 @@ export default function Header() {
                             )}
                             <button
                                 onClick={() => navigate(isSeller ? "/supplier" : isAdmin ? "/admin" : "/customer")}
-                                className="text-[13px] font-medium text-[#1D1D1F] hover:text-[#0A0A0B] px-3 h-9 rounded-lg hover:bg-black/[0.04] transition-colors"
+                                className="text-[13px] font-medium text-[#1D1D1F] hover:text-[#0A0A0B] px-2 sm:px-3 h-9 rounded-lg hover:bg-black/[0.04] transition-colors max-w-[88px] sm:max-w-none truncate"
                                 data-testid="header-user-chip"
                             >
                                 {(user.name || "Account").split(" ")[0]}

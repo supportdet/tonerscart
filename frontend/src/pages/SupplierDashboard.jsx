@@ -14,6 +14,7 @@ import TonerCartridge from "../components/TonerCartridge";
 import PrinterListings from "../components/PrinterListings";
 import PaperListings from "../components/PaperListings";
 import SupplierEarnings from "../components/SupplierEarnings";
+import SupplierInsights from "../components/SupplierInsights";
 import CommissionBanner from "../components/CommissionBanner";
 import CommissionCalculator from "../components/CommissionCalculator";
 import { commissionFor } from "../lib/commission";
@@ -545,6 +546,7 @@ export default function SupplierDashboard() {
                         <button onClick={() => setCatalog("papers")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "papers" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-papers">Papers</button>
                         <button onClick={() => setCatalog("orders")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "orders" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-orders">Orders</button>
                         <button onClick={() => setCatalog("earnings")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "earnings" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-earnings">My Earnings</button>
+                        <button onClick={() => setCatalog("insights")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "insights" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-insights">Insights</button>
                     </div>
                     {catalog === "toners" ? (
                         <div className="relative" onBlur={() => setTimeout(() => setAddMenuOpen(false), 150)} tabIndex={-1}>
@@ -602,6 +604,11 @@ export default function SupplierDashboard() {
                     <>
                         <h2 id="earnings" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>My earnings</h2>
                         <SupplierEarnings />
+                    </>
+                ) : catalog === "insights" ? (
+                    <>
+                        <h2 id="insights" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Listing insights</h2>
+                        <SupplierInsights />
                     </>
                 ) : catalog === "orders" ? (
                     <>

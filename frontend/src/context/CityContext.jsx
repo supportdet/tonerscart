@@ -1,16 +1,31 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 
 const STORAGE_KEY = "tc_city";
+const SET_KEY = "tc_city_set";
 const DEFAULT_CITY = "Bangalore";
 
 const CityContext = createContext(null);
 
 export const CityProvider = ({ children }) => {
-    const [city, setCity] = useState(() => {
+    const [city, setCityState] = useState(() => {
         try { return localStorage.getItem(STORAGE_KEY) || DEFAULT_CITY; }
         catch { return DEFAULT_CITY; }
     });
+    // Whether the user (or GPS) has explicitly confirmed a city. Drives the
+    // "Set your location" prompt on the homepage.
+    const [citySet, setCitySet] = useState(() => {
+        try { return localStorage.getItem(SET_KEY) === "1"; }
+        catch { return false; }
+    });
     const [gpsRequested, setGpsRequested] = useState(false);
+
+    const setCity = (c, explicit = true) => {
+        setCityState(c);
+        if (explicit) {
+            setCitySet(true);
+            try { localStorage.setItem(SET_KEY, "1"); } catch { /* ignore */ }
+        }
+    };
 
     useEffect(() => {
         try { localStorage.setItem(STORAGE_KEY, city); } catch { /* ignore */ }
@@ -54,7 +69,7 @@ export const CityProvider = ({ children }) => {
     };
 
     return (
-        <CityContext.Provider value={{ city, setCity, requestGps }}>
+        <CityContext.Provider value={{ city, setCity, citySet, requestGps }}>
             {children}
         </CityContext.Provider>
     );

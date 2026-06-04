@@ -57,7 +57,7 @@
 
 @layer base {
     * { @apply border-border; }
-    html { scroll-behavior: smooth; }
+    html { scroll-behavior: smooth; overflow-x: hidden; }
     body, #root {
         background-color: var(--tc-bg);
         color: var(--tc-text);
@@ -65,6 +65,8 @@
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         font-feature-settings: "ss01";
+        overflow-x: hidden;
+        max-width: 100vw;
     }
     h1, h2, h3, h4, h5, .tc-display, .tc-h1, .tc-h2, .tc-h3 {
         font-family: 'Montserrat', -apple-system, system-ui, sans-serif;
@@ -295,40 +297,43 @@
     transform: translateY(-1px);
 }
 @media (max-width: 640px) {
-    .tc-search-shell { grid-template-columns: 1fr; padding: 6px; border-radius: 16px; }
-    .tc-search-go { width: 100%; justify-content: center; }
-    /* On the light /search shell, mobile splits the input + button into two
-       distinct rounded rectangles so the search input is obviously a "field"
-       and the Search CTA is clearly a separate button. */
-    .tc-search-shell.tc-search-light {
+    /* Stack the input + button into two distinct full-width elements on mobile.
+       Applies to BOTH the glass hero shell and the light /search shell:
+       the input becomes its own white rounded pill, the CTA a full-width
+       button below it. */
+    .tc-search-shell {
+        grid-template-columns: 1fr;
         background: transparent;
         border: none;
         box-shadow: none;
         padding: 0;
         gap: 10px;
+        border-radius: 0;
     }
-    .tc-search-shell.tc-search-light > div:first-child {
+    .tc-search-shell > div:first-child {
         background: #FFFFFF;
         border: 1.5px solid #D2D2D7;
         border-radius: 14px;
         box-shadow: 0 1px 2px rgba(10,10,11,0.04);
     }
-    .tc-search-shell.tc-search-light:focus-within {
+    .tc-search-shell:focus-within {
         background: transparent;
         border: none;
         box-shadow: none;
         transform: none;
     }
-    .tc-search-shell.tc-search-light:focus-within > div:first-child {
+    .tc-search-shell:focus-within > div:first-child {
         border-color: #00B7C7;
         box-shadow: 0 0 0 3px rgba(0,183,199,0.18);
     }
-    .tc-search-shell.tc-search-light .tc-search-go {
-        background: var(--tc-ink);
-        color: #FFFFFF;
-        border-radius: 14px;
-        height: 48px;
-    }
+    /* Dark text inside the white input pill on mobile (glass shell defaults to
+       white text which would be invisible on white). */
+    .tc-search-shell .tc-search-input { color: #0A0A0B !important; caret-color: #0A0A0B; }
+    .tc-search-shell .tc-search-input::placeholder { color: #86868B !important; }
+    .tc-search-shell > div:first-child > svg { color: #86868B !important; }
+    .tc-search-go { width: 100%; justify-content: center; border-radius: 14px; height: 50px; }
+    /* Light shell CTA stays dark, hero CTA stays yellow (handled by its own class). */
+    .tc-search-shell.tc-search-light .tc-search-go { background: var(--tc-ink); color: #FFFFFF; }
 }
 
 /* Ensure the magnifier icon is dark/visible on light shells (even on
@@ -1325,4 +1330,45 @@ input, textarea, select, button, label,
     .xs\:hidden { display: none; }
     .xs\:inline-flex { display: inline-flex; }
 }
+
+/* ===== Verified dealer badge tooltip ===== */
+.tc-verified { cursor: default; outline: none; }
+.tc-verified-tip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    z-index: 50;
+    width: max-content;
+    max-width: 240px;
+    padding: 8px 10px;
+    background: #0A0A0B;
+    color: #FFFFFF;
+    font-size: 11.5px;
+    line-height: 1.4;
+    font-weight: 500;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px -8px rgba(0,0,0,0.4);
+    opacity: 0;
+    transform: translateY(4px);
+    pointer-events: none;
+    transition: opacity 160ms ease, transform 160ms ease;
+}
+.tc-verified:hover .tc-verified-tip,
+.tc-verified:focus-visible .tc-verified-tip,
+.tc-verified:focus .tc-verified-tip { opacity: 1; transform: translateY(0); }
+
+/* ===== Homepage stats — shiny dot separator ===== */
+.tc-stat-dot {
+    flex: 0 0 auto;
+    font-size: 16px;
+    line-height: 1;
+    background: linear-gradient(135deg, #F5C400, #FFE07A, #F5C400);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    filter: drop-shadow(0 1px 2px rgba(245,196,0,0.35));
+    user-select: none;
+}
+
 

@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import PageMeta from "../components/PageMeta";
 import TonerCartridge from "../components/TonerCartridge";
 import OrderRequestDialog from "../components/OrderRequestDialog";
+import VerifiedBadge from "../components/VerifiedBadge";
 
 const ACCENT = "#607d8b";
 
@@ -52,8 +53,9 @@ function D2DCard({ kind, p, onBuy }) {
             <div className="p-4 flex flex-col gap-2 flex-1">
                 <div className="text-[10px] tracking-[0.16em] uppercase font-semibold text-[#6E6E73]">{p.brand}</div>
                 <Link to={detailHref} className="font-mono text-[17px] font-semibold text-[#0A0A0B] tracking-tight hover:text-[#00B7C7] transition truncate">{title}</Link>
-                <div className="text-[12.5px] text-[#1D1D1F] truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
-                    {p.supplier_name || (p.suppliers && p.suppliers.business_name) || "—"}
+                <div className="text-[12.5px] text-[#1D1D1F] truncate flex items-center gap-1.5" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
+                    <span className="truncate">{p.supplier_name || (p.suppliers && p.suppliers.business_name) || "—"}</span>
+                    <VerifiedBadge compact />
                 </div>
                 <div className="text-[12px] text-[#6E6E73] flex items-center gap-1">
                     <MapPin size={11} /> {p.supplier_city || p.city || "—"}

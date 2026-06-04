@@ -1,0 +1,38 @@
+{
+  "summary": "Wave 15 batch verified — 12 of 12 spec items pass. Backend: 17/17 pytest cases pass in /app/backend/tests/test_wave15.py covering near_city ordering on /listings/search/paginated, /printers, /papers; hard city filter overrides near_city; /listings/{id}/view ping returns {ok:true} for guest with kind=toner|printer|paper (degrades gracefully with listing_views table missing); /supplier/analytics/views blocks guests (401/403, no 500); regression: paginated search without near_city is price-ASC sorted; /listings/{id}/public works. Frontend live smoke: (1) navbar shows 'Bulk Orders' (no 'Buy Bulk' remnant); (2) 9 category pills align with logo_x=360 and last pill 'OEM Marketplace' right=1560 matching 'Join free' button right=1560 at 1920px viewport; (3) stats-strip renders 4 stats (#1 MARKETPLACE • 500+ DEALERS • 10+ CITIES • 15+ BRANDS) with gold dot separators; inner stat value font-weight=300, font-family='Montserrat, sans-serif' (verified via getComputedStyle on [data-testid='stat-marketplace'] inner div); (4) set-location-prompt + set-location-select visible when localStorage tc_city_set is cleared; selecting Mumbai hides prompt and writes tc_city='Mumbai', tc_city_set='1'; (5) mobile (390x844) — document.scrollWidth==clientWidth==390 (no horizontal overflow); cart/Sign in/Join free all visible in header; hero splits into full-width white input pill (340w @y=184) and full-width yellow 'Search' CTA below (342w @y=241); (6) /search shows verified-badge testid next to supplier name AND 'Local · Free delivery' label when city matches; 'Ships from <City>' label when city='Hyderabad' (no local); (7) other-cities-banner testid appears with copy 'No local dealers in Hyderabad ... showing results from other cities' when no local results; products NOT hidden; (8) ProductDetail page shows verified-badge + 'Sold by' line; Featured Suppliers section on landing shows verified-badge; (9) tab-insights testid + supplier-insights component confirmed in /app/frontend/src/pages/SupplierDashboard.jsx and SupplierInsights.jsx via grep — /supplier route is ProtectedRoute(roles=['supplier']) so could not exercise live without supplier seed, but source confirmed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Mobile header (390w)", "issues": ["'Sign in' text wraps to 2 lines because of tight gap with 'Join free'. Functionally visible (passes spec) but visually cramped. Consider shrinking padding or making 'Sign in' an icon on <360px."]},
+      {"screen": "Papers page", "issues": ["No paper listings in DB so verified-badge presence on /papers cards could not be live-validated (empty state shown). Source confirms VerifiedBadge import is wired in Papers.jsx."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave15.py",
+    "/app/test_reports/pytest/iteration_20_wave15.xml"
+  ],
+  "action_items": [
+    "(Optional, cosmetic) Tighten 'Sign in' label / padding on <420px viewport so it doesn't wrap onto 2 lines next to 'Join free'.",
+    "(Out of Wave 15 scope) Hydration console warning 'In HTML, <span> cannot be a child of <option>' surfaces on page load — appears to come from a different select (not set-location-select, which renders {c} directly). Worth grepping <option>{...<span>...}</option> patterns in headers/filters in a future polish pass.",
+    "(Data) Apply supabase_schema_listing_views.sql migration in live DB when ready so /supplier/analytics/views and view-ping persistence become non-empty; current graceful empty path is verified."
+  ],
+  "critical_code_review_comments": [
+    "_sort_by_near_city is a stable partition (preserves price order within each group) and the hard-city short-circuit (`if near_city and not (city and city != 'all')`) correctly suppresses near_city ordering when an exact city filter is passed — exactly matches spec.",
+    "record_listing_view swallows ALL exceptions containing 'listing_views' silently — fine for the migration-pending case, but if the underlying Postgrest error message ever changes wording the warning will fire on every guest page-view. Consider catching `APIError` with code='PGRST205' / table-not-found rather than substring match.",
+    "supplier_view_analytics uses three sequential .execute() round trips to gather listing_ids across tables — fine for small catalogues, but could be a single in-clause or RPC if a supplier ever has thousands of listings.",
+    "VerifiedBadge.jsx + SupplierInsights.jsx + location.js (cityMatch/deliveryLabel) are small focused components — good DRY consolidation across Search/Papers/Dealer/ProductDetail/Landing.",
+    "Landing.jsx is now ~440 lines with the new stats strip + set-location prompt — still under the 700-line guideline but trending up; could split the stats section into its own component on the next refactor."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_wave15.py (new — 17 cases, all pass)"
+  ],
+  "success_rate": {"backend": "100% (17/17 pytest cases pass)", "frontend": "100% on testable items (12/12 spec items verified). Supplier Insights tab confirmed via source review only — live exercise requires supplier-role seed, not available in current DB."},
+  "test_credentials": "Admin: admin@tonerscart.in / Admin@123 (Supabase). No supplier seed available; supplier analytics 403/guest-path tested.",
+  "seed_data_creation": "None — read-only smoke tests + pytest against live Supabase.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Wave 15 is GREEN. listing_views table is still NOT migrated in live Supabase, so /supplier/analytics/views returns {total_views:0, by_city:[]} and POST /listings/{id}/view returns {ok:true} without persistence — both are intentional graceful paths covered by tests. When the schema is applied, re-run test_wave15.py and additionally seed a few view pings to confirm by_city aggregation works. Supplier-role insight tab (/supplier → Insights) still needs a logged-in approved supplier to exercise live — pre-existing test supplier from Wave 6 (TEST.w7.sup.cf61d246@tonerscarttest.com / Test@12345) was wiped in Wave 13, so create one fresh via signup→apply-seller→admin approve if you need to exercise the dashboard UI.",
+  "rca of the issue": "No regressions. Hydration warning (span inside option) is pre-existing and not introduced by Wave 15 (set-location-select renders plain {c} text inside <option>)."
+}

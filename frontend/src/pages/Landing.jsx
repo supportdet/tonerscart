@@ -5,7 +5,8 @@ import api from "../lib/api";
 import TonerSearchInput from "../components/TonerSearchInput";
 import TonerAnimation from "../components/TonerAnimation";
 import TonerCartridge from "../components/TonerCartridge";
-import { useCity } from "../context/CityContext";
+import VerifiedBadge from "../components/VerifiedBadge";
+import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import useReveal from "../hooks/useReveal";
 import PageMeta from "../components/PageMeta";
 import { Skeleton } from "../components/ui/skeleton";
@@ -16,7 +17,7 @@ import { Skeleton } from "../components/ui/skeleton";
 
 export default function Landing() {
     const navigate = useNavigate();
-    const { city } = useCity();
+    const { city, citySet, setCity } = useCity();
     const [q, setQ] = useState("");
     const [facets, setFacets] = useState({ brands: [], cities: [], models: [] });
     const [grouped, setGrouped] = useState([]);
@@ -124,6 +125,26 @@ export default function Landing() {
                             Search <ArrowRight size={16} />
                         </button>
                     </div>
+
+                    {/* Set-your-location prompt — shown until the buyer confirms a city,
+                        so we can surface local suppliers first across the marketplace. */}
+                    {!citySet && (
+                        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-white/10 border border-white/15 backdrop-blur px-4 py-3 tc-fade-up tc-fade-up-2" data-testid="set-location-prompt">
+                            <MapPin size={16} className="text-[#F5C400] shrink-0" />
+                            <span className="text-[12.5px] sm:text-[13.5px] text-white/85 font-medium">
+                                Set your location to see local suppliers first
+                            </span>
+                            <select
+                                value={city}
+                                onChange={(e) => setCity(e.target.value)}
+                                className="ml-auto h-9 px-3 rounded-lg bg-white text-[#0A0A0B] text-[13px] font-semibold border border-white/20 focus:outline-none"
+                                data-testid="set-location-select"
+                                aria-label="Choose your city"
+                            >
+                                {KNOWN_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                    )}
 
                     {/* Popular model chips */}
                     {popularChips.length > 0 && (
@@ -237,8 +258,9 @@ export default function Landing() {
                                 </div>
 
                                 <div className="mt-5 text-center">
-                                    <div className="text-white text-[17px] font-semibold tracking-tight" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                                    <div className="inline-flex items-center gap-1.5 text-white text-[17px] font-semibold tracking-tight" style={{ fontFamily: "'Montserrat', sans-serif" }}>
                                         {s.name}
+                                        <VerifiedBadge compact className="[&_svg]:text-emerald-400" />
                                     </div>
                                     <div className="mt-1 inline-flex items-center gap-1 text-[12px] text-white/55">
                                         <MapPin size={11} /> {s.city || "Pan-India"}
@@ -289,41 +311,40 @@ export default function Landing() {
                 </div>
             </section>
 
-            {/* ====== STATS STRIP — Helvetica, justified, 4 stats ====== */}
+            {/* ====== STATS STRIP — Montserrat light, dot-separated, justified ====== */}
             <section className="bg-white border-b border-black/[0.06]">
                 <div
-                    className="tc-container py-6 sm:py-8 grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6"
+                    className="tc-container py-6 sm:py-8 flex items-center justify-between gap-2 sm:gap-4"
                     data-testid="stats-strip"
-                    style={{ fontFamily: "Helvetica, 'Helvetica Neue', Arial, sans-serif", textAlign: "justify", textAlignLast: "justify" }}
                 >
                     {[
                         { v: "#1",   k: "Marketplace", testid: "stat-marketplace" },
                         { v: "500+", k: "Dealers",     testid: "stat-suppliers" },
                         { v: "10+",  k: "Cities",      testid: "stat-cities" },
                         { v: "15+",  k: "Brands",      testid: "stat-brands" },
-                    ].map((s, i) => (
-                        <div
-                            key={s.k}
-                            className="tc-reveal text-center sm:text-left"
-                            style={{
-                                transitionDelay: `${i * 80}ms`,
-                                fontFamily: "Helvetica, 'Helvetica Neue', Arial, sans-serif",
-                            }}
-                            data-testid={s.testid}
-                        >
-                            <div
-                                className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#0A0A0B] tracking-tight"
-                                style={{ fontFamily: "Helvetica, 'Helvetica Neue', Arial, sans-serif" }}
-                            >
-                                {s.v}
+                    ].map((s, i, arr) => (
+                        <React.Fragment key={s.k}>
+                            <div className="tc-reveal text-center flex-1 min-w-0" style={{ transitionDelay: `${i * 80}ms` }} data-testid={s.testid}>
+                                <div
+                                    className="text-[#0A0A0B]"
+                                    style={{
+                                        fontFamily: "'Montserrat', sans-serif",
+                                        fontWeight: 300,
+                                        letterSpacing: "-0.02em",
+                                        fontSize: "clamp(24px, 4.4vw, 40px)",
+                                        lineHeight: 1.05,
+                                    }}
+                                >
+                                    {s.v}
+                                </div>
+                                <div className="text-[9.5px] sm:text-[11px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73] mt-1.5 sm:mt-2">
+                                    {s.k}
+                                </div>
                             </div>
-                            <div
-                                className="text-[10px] sm:text-[11px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73] mt-1.5 sm:mt-2"
-                                style={{ fontFamily: "Helvetica, 'Helvetica Neue', Arial, sans-serif" }}
-                            >
-                                {s.k}
-                            </div>
-                        </div>
+                            {i < arr.length - 1 && (
+                                <span className="tc-stat-dot" aria-hidden="true">•</span>
+                            )}
+                        </React.Fragment>
                     ))}
                 </div>
                 {/* Subtle shiny line — visual separator below stats */}

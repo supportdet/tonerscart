@@ -9,6 +9,7 @@ import { Skeleton } from "../components/ui/skeleton";
 import PageMeta from "../components/PageMeta";
 import OrderRequestDialog from "../components/OrderRequestDialog";
 import AuthRequiredDialog from "../components/AuthRequiredDialog";
+import VerifiedBadge from "../components/VerifiedBadge";
 import { colorSwatch, isLightSwatch } from "../lib/colors";
 import { useCity } from "../context/CityContext";
 
@@ -40,6 +41,14 @@ export default function ProductDetail({ kind = "toner" }) {
             .finally(() => { if (alive) setLoading(false); });
         return () => { alive = false; };
     }, [id, endpoint]);
+
+    // Best-effort view ping for dealer location analytics (silent / non-blocking).
+    useEffect(() => {
+        if (!id) return;
+        let c = "";
+        try { c = localStorage.getItem("tc_city") || ""; } catch { /* ignore */ }
+        api.post(`/listings/${id}/view`, { kind, city: c }).catch(() => { /* ignore */ });
+    }, [id, kind]);
 
     const images = useMemo(() => {
         if (!data) return [];
@@ -288,6 +297,7 @@ export default function ProductDetail({ kind = "toner" }) {
                         <div className="mt-4 flex items-center gap-2 text-[13px] text-[#3a3a40]" data-testid="product-supplier">
                             <Shield size={14} className="text-emerald-600" />
                             <span>Sold by <strong className="text-[#0A0A0B]">{data.supplier_name || "Verified supplier"}</strong></span>
+                            <VerifiedBadge />
                             {data.supplier_city && (<><MapPin size={12} className="ml-1 text-[#86868B]" /><span>{data.supplier_city}</span></>)}
                         </div>
 
