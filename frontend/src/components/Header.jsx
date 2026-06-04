@@ -47,7 +47,8 @@ export default function Header() {
     const role = user?.role;
     const isSeller = role === "supplier";
     const isAdmin = role === "admin";
-    const isBuyer = !!user && !isSeller && !isAdmin;
+    const isOem = role === "oem";
+    const isBuyer = !!user && !isSeller && !isAdmin && !isOem;
 
     const handleLogout = async () => {
         setLoggingOut(true);
@@ -151,7 +152,7 @@ export default function Header() {
                     {/* Sell — outline pill on white. Hidden entirely while the
                         session is still being checked so logged-in users never
                         see a flash of "Sell". */}
-                    {!authLoading && !isSeller && !isAdmin && (
+                    {!authLoading && !isSeller && !isAdmin && !isOem && (
                         <NavLink
                             to="/sell"
                             className="hidden sm:inline-flex items-center text-[13px] font-semibold px-4 h-9 rounded-lg text-[#0A0A0B] hover:bg-black/[0.04] transition-colors"
@@ -201,7 +202,7 @@ export default function Header() {
                         </>
                     ) : (
                         <>
-                            {!isAdmin && (
+                            {!isAdmin && !isOem && (
                                 <button
                                     onClick={() => navigate("/cart")}
                                     className="relative w-10 h-10 grid place-items-center rounded-lg hover:bg-black/[0.04] text-[#0A0A0B] transition-colors"
@@ -215,7 +216,7 @@ export default function Header() {
                                 </button>
                             )}
                             <button
-                                onClick={() => navigate(isSeller ? "/supplier" : isAdmin ? "/admin" : "/customer")}
+                                onClick={() => navigate(isSeller ? "/supplier" : isAdmin ? "/admin" : isOem ? "/oem-dashboard" : "/customer")}
                                 className="text-[13px] font-medium text-[#1D1D1F] hover:text-[#0A0A0B] px-2 sm:px-3 h-9 rounded-lg hover:bg-black/[0.04] transition-colors max-w-[88px] sm:max-w-none truncate"
                                 data-testid="header-user-chip"
                             >

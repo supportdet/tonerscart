@@ -13,6 +13,7 @@ import OrdersTab from "./admin/OrdersTab";
 import ContentTab from "./admin/ContentTab";
 import FinanceTab from "./admin/FinanceTab";
 import ProcurementTab from "./admin/ProcurementTab";
+import OemTab from "./admin/OemTab";
 
 function aiSummary(application) {
     const ai = application?.ai_check || {};
@@ -53,6 +54,7 @@ export default function AdminDashboard() {
     const [approved, setApproved] = useState([]);
     const [featured, setFeatured] = useState([]);
     const [procPending, setProcPending] = useState(0);
+    const [oemPending, setOemPending] = useState(0);
     const [tab, setTab] = useState("analytics");
     const [reviewing, setReviewing] = useState(null);
     const [rejecting, setRejecting] = useState(null);
@@ -73,6 +75,9 @@ export default function AdminDashboard() {
             api.get("/admin/procurement/pending")
                 .then((r) => setProcPending((r.data?.counts?.govt || 0) + (r.data?.counts?.corporate || 0)))
                 .catch(() => setProcPending(0));
+            api.get("/admin/oem/pending")
+                .then((r) => setOemPending(r.data?.count || 0))
+                .catch(() => setOemPending(0));
         } catch (e) { toast.error(formatApiError(e)); }
     };
     useEffect(() => { load(); }, []);
@@ -211,6 +216,9 @@ export default function AdminDashboard() {
                     <TabsTrigger value="procurement" data-testid="tab-procurement">
                         Procurement {procPending > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-[#0B1220] text-white text-[10px] font-bold px-1.5">{procPending}</span>)}
                     </TabsTrigger>
+                    <TabsTrigger value="oem" data-testid="tab-oem">
+                        OEM {oemPending > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-[#6d4c41] text-white text-[10px] font-bold px-1.5">{oemPending}</span>)}
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="analytics">
@@ -235,6 +243,10 @@ export default function AdminDashboard() {
 
                 <TabsContent value="procurement">
                     {tab === "procurement" && <ProcurementTab />}
+                </TabsContent>
+
+                <TabsContent value="oem">
+                    {tab === "oem" && <OemTab />}
                 </TabsContent>
 
                 <TabsContent value="pending">

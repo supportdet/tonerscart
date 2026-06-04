@@ -50,7 +50,7 @@ export default function Login() {
                 navigate(next);
                 return;
             }
-            const path = me.role === "admin" ? "/admin" : me.role === "supplier" ? "/supplier" : "/customer";
+            const path = me.role === "admin" ? "/admin" : me.role === "supplier" ? "/supplier" : me.role === "oem" ? "/oem-dashboard" : "/customer";
             navigate(path);
         } catch (err) {
             const msg = err?.message || formatApiError(err) || "Sign-in failed";

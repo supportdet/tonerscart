@@ -184,6 +184,108 @@ async def email_proc_rejected(u: dict, reason: str):
     await _send(email_to, "Update on your TonersCart procurement application", html)
 
 
+# ===== OEM (manufacturer showcase) ==============================================
+
+async def email_oem_application_received(p: dict):
+    """OEM showcase application: applicant acknowledgement + admin notification."""
+    email_to = p.get("email")
+    brand = p.get("brand") or p.get("company") or "your brand"
+    if email_to:
+        html = f"""
+        <h2 style="margin:0 0 6px 0;font-size:18px;">Thanks {p.get('contact_name') or 'there'} — application received</h2>
+        <p>We&apos;ve received your request to showcase <strong>{brand}</strong> on the TonersCart OEM Marketplace.</p>
+        <div style="margin:18px 0;padding:14px 16px;border-left:3px solid #00B7C7;background:#F0FBFC;border-radius:6px;">
+          <strong>Your application is under review.</strong> Once approved, you&apos;ll receive login details to add your products.
+        </div>
+        <p style="color:#86868B;font-size:12.5px;">Questions? Just reply to this email.</p>
+        """
+        await _send(email_to, "Your TonersCart OEM application is under review", html)
+
+    rows = "".join(
+        f"<tr><td style='padding:6px 12px;color:#86868B;'>{k}</td>"
+        f"<td style='padding:6px 12px;'><strong>{v or '—'}</strong></td></tr>"
+        for k, v in [
+            ("Company", p.get("company")), ("Brand", p.get("brand")),
+            ("Contact", p.get("contact_name")), ("Email", p.get("email")),
+            ("Phone", p.get("phone")), ("Products", p.get("products_note")),
+        ]
+    )
+    admin_html = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;">New OEM partner application</h2>
+    <p style="margin:0 0 18px 0;color:#6E6E73;">Review at <a href="{PROC_BASE}/admin">/admin → OEM</a>.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">{rows}</table>
+    """
+    await _send(SUPPORT_INBOX, f"[TonersCart] New OEM application — {brand}", admin_html, reply_to=p.get("email"))
+
+
+async def email_oem_approved(p: dict, email: str, temp_password):
+    if not email:
+        return
+    cred_block = ""
+    if temp_password:
+        cred_block = f"""
+        <div style="margin:18px 0;padding:14px 16px;border-left:3px solid #0A8754;background:#F0FBF6;border-radius:6px;">
+          <div style="font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#86868B;">Temporary password</div>
+          <div style="margin-top:6px;font-family:monospace;font-size:15px;"><strong>{temp_password}</strong></div>
+          <div style="margin-top:6px;color:#6E6E73;font-size:12px;">Please change it after first sign-in (use &quot;Forgot password&quot; on the login page).</div>
+        </div>"""
+    html = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;color:#0A8754;">Your OEM account is approved 🎉</h2>
+    <p>Hi {p.get('contact_name') or 'there'},</p>
+    <p><strong>{p.get('brand') or p.get('company')}</strong> is now a verified OEM partner. Sign in to add products to your showcase on the TonersCart OEM Marketplace.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;">
+      <tr><td style="padding:4px 12px;color:#86868B;">Login email</td><td style="padding:4px 12px;"><strong>{email}</strong></td></tr>
+    </table>
+    {cred_block}
+    <p style="margin:22px 0;">
+      <a href="{PROC_BASE}/login" style="display:inline-block;padding:12px 22px;background:#F7C600;color:#0A0A0B;border-radius:10px;font-weight:600;text-decoration:none;">Sign in to OEM dashboard</a>
+    </p>
+    """
+    await _send(email, "Your TonersCart OEM account is approved", html)
+
+
+async def email_oem_rejected(p: dict, reason: str):
+    email_to = p.get("email")
+    if not email_to:
+        return
+    html = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;">Update on your OEM application</h2>
+    <p>Hi {p.get('contact_name') or 'there'},</p>
+    <p>After review, we weren&apos;t able to approve <strong>{p.get('brand') or p.get('company')}</strong> for the OEM Marketplace at this time.</p>
+    <div style="margin:18px 0;padding:14px 16px;border-left:3px solid #FF3B30;background:#FFF5F5;border-radius:6px;">
+      <div style="font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#86868B;">Reason</div>
+      <div style="margin-top:6px;">{reason or 'Not specified.'}</div>
+    </div>
+    <p>If you&apos;d like to re-apply, just reply to this email.</p>
+    """
+    await _send(email_to, "Update on your TonersCart OEM application", html)
+
+
+async def email_oem_enquiry(partner: dict, product: dict, buyer: dict):
+    """Buyer enquiry about an OEM product → routed to the OEM brand's contact email."""
+    to = partner.get("email")
+    if not to:
+        return
+    pname = product.get("name") or product.get("model_number") or "your product"
+    rows = "".join(
+        f"<tr><td style='padding:6px 12px;color:#86868B;'>{k}</td>"
+        f"<td style='padding:6px 12px;'><strong>{v or '—'}</strong></td></tr>"
+        for k, v in [
+            ("Name", buyer.get("name")), ("Email", buyer.get("email")),
+            ("Phone", buyer.get("phone")), ("Product", pname),
+            ("Message", buyer.get("message")),
+        ]
+    )
+    html = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;">New enquiry for {pname}</h2>
+    <p>You&apos;ve received a buyer enquiry from the TonersCart OEM Marketplace for <strong>{partner.get('brand') or partner.get('company')}</strong>.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;">{rows}</table>
+    <p style="margin-top:16px;color:#6E6E73;font-size:12.5px;">Reply directly to this email to reach the buyer.</p>
+    """
+    await _send(to, f"[TonersCart OEM] Enquiry for {pname}", html, reply_to=buyer.get("email"))
+
+
+
 async def email_application_received(application: dict):
     """Sends both:
        1. Notification → support inbox with full application details

@@ -4138,6 +4138,11 @@ from procurement import proc_router, proc_admin_router  # noqa: E402
 app.include_router(proc_router)
 app.include_router(proc_admin_router)
 
+# OEM (manufacturer) showcase module — reuses Supabase Auth (role=oem).
+from oem import oem_router, oem_admin_router  # noqa: E402
+app.include_router(oem_router)
+app.include_router(oem_admin_router)
+
 
 # CORS — explicit origin list (browsers reject the wildcard "*" combined with allow_credentials=True,
 # which silently strips the Access-Control-Allow-Origin header on the response).

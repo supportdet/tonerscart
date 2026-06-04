@@ -40,6 +40,7 @@ import ComingSoon from "./pages/ComingSoon";
 import Bulk from "./pages/Bulk";
 import Dealer from "./pages/Dealer";
 import OEM from "./pages/OEM";
+import OemDashboard from "./pages/OemDashboard";
 import ErrorBoundary from "./components/ErrorBoundary";
 import VisitorTracker from "./components/VisitorTracker";
 import { ProcAuthProvider } from "./context/ProcAuthContext";
@@ -127,6 +128,7 @@ function App() {
                                     <Route path="/procurement" element={<ProcProtectedRoute><ProcurementDashboard /></ProcProtectedRoute>} />
                                     <Route path="/customer" element={<ProtectedRoute roles={["customer"]}><CustomerDashboard /></ProtectedRoute>} />
                                     <Route path="/supplier" element={<ProtectedRoute roles={["supplier"]}><SupplierDashboard /></ProtectedRoute>} />
+                                    <Route path="/oem-dashboard" element={<ProtectedRoute roles={["oem"]}><OemDashboard /></ProtectedRoute>} />
                                     <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
                                     <Route path="*" element={<NotFound />} />
                                 </Routes>
