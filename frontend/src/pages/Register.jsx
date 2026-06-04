@@ -24,34 +24,44 @@ export default function Register() {
     const navigate = useNavigate();
     const [params] = useSearchParams();
     const next = params.get("next") || "/search";
-    const [c, setC] = useState({ email: "", password: "", name: "", phone: "", city: "" });
+    const [c, setC] = useState({ email: "", password: "", confirm: "", name: "", phone: "", city: "" });
     const [loading, setLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
-    const upd = (k) => (e) => setC({ ...c, [k]: e.target.value });
+    const [errors, setErrors] = useState({});
+    const upd = (k) => (e) => { setC({ ...c, [k]: e.target.value }); if (errors[k] || errors.form) setErrors((p) => { const n = { ...p }; delete n[k]; delete n.form; return n; }); };
 
     const submit = async (e) => {
         e.preventDefault();
+        // Client-side inline validation
+        const next_errors = {};
+        if (!c.name.trim()) next_errors.name = "Please enter your name";
+        if ((c.password || "").length < 6) next_errors.password = "Password must be at least 6 characters";
+        if (c.confirm !== c.password) next_errors.confirm = "Passwords don't match";
+        if (Object.keys(next_errors).length > 0) { setErrors(next_errors); return; }
+        setErrors({});
         setLoading(true);
         try {
-            const payload = { ...c, phone: c.phone ? `+91 ${c.phone}` : "" };
+            const { confirm: _omit, ...rest } = c;
+            const payload = { ...rest, phone: c.phone ? `+91 ${c.phone}` : "" };
             await signupCustomer(payload);
             toast.success("Welcome to TonersCart!");
             navigate(next);
         } catch (err) {
             const msg = formatApiError(err);
             if ((msg || "").toLowerCase().includes("already")) {
-                toast.error("This email is already registered. Try signing in instead.");
+                setErrors({ email: "This email is already registered. Try signing in instead." });
             } else {
-                toast.error(msg || "Could not create account");
+                setErrors({ form: msg || "Could not create account" });
             }
         } finally { setLoading(false); }
     };
 
     const onGoogle = () => {
+        setErrors({});
         flushSync(() => setGoogleLoading(true));
         (async () => {
             try { await signInWithGoogle(next); }
-            catch (e) { toast.error(e?.message || "Google sign-in unavailable"); setGoogleLoading(false); }
+            catch (e) { setErrors({ form: e?.message || "Google sign-in unavailable" }); setGoogleLoading(false); }
         })();
     };
 
@@ -85,12 +95,14 @@ export default function Register() {
                         <span className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B]">or with email</span>
                         <div className="h-px flex-1 bg-black/[0.08]" />
                     </div>
-                    <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                        <div className="sm:col-span-2"><Label>Full name</Label><Input value={c.name} onChange={upd("name")} required data-testid="register-name-input" /></div>
-                        <div className="sm:col-span-2"><Label>Email</Label><Input type="email" value={c.email} onChange={upd("email")} required data-testid="register-email-input" /></div>
-                        <div className="sm:col-span-2"><Label>Password</Label><Input type="password" value={c.password} onChange={upd("password")} required minLength={6} placeholder="6+ characters" data-testid="register-password-input" /></div>
+                    <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4" noValidate>
+                        <div className="sm:col-span-2"><Label>Full name</Label><Input value={c.name} onChange={upd("name")} data-testid="register-name-input" />{errors.name && <p className="text-red-600 text-[12px] mt-1" data-testid="register-name-error">{errors.name}</p>}</div>
+                        <div className="sm:col-span-2"><Label>Email</Label><Input type="email" value={c.email} onChange={upd("email")} required data-testid="register-email-input" />{errors.email && <p className="text-red-600 text-[12px] mt-1" data-testid="register-email-error">{errors.email}</p>}</div>
+                        <div className="sm:col-span-2"><Label>Password</Label><Input type="password" value={c.password} onChange={upd("password")} required minLength={6} placeholder="6+ characters" data-testid="register-password-input" />{errors.password && <p className="text-red-600 text-[12px] mt-1" data-testid="register-password-error">{errors.password}</p>}</div>
+                        <div className="sm:col-span-2"><Label>Confirm password</Label><Input type="password" value={c.confirm} onChange={upd("confirm")} required placeholder="Re-enter password" data-testid="register-confirm-input" />{errors.confirm && <p className="text-red-600 text-[12px] mt-1" data-testid="register-confirm-error">{errors.confirm}</p>}</div>
                         <div><Label>Phone</Label><PhonePrefixInput value={c.phone} onChange={(v) => setC({ ...c, phone: v })} testId="register-phone-input" /></div>
                         <div><Label>City</Label><Input value={c.city} onChange={upd("city")} data-testid="register-city-input" /></div>
+                        {errors.form && <div className="sm:col-span-2"><p className="text-red-600 text-[12px]" data-testid="register-form-error">{errors.form}</p></div>}
                         <div className="sm:col-span-2">
                             <Button type="submit" className="btn-cta w-full inline-flex items-center justify-center gap-2" disabled={loading} data-testid="register-submit-btn">
                                 {loading ? "Creating account…" : <>Create account <ArrowRight size={14} /></>}

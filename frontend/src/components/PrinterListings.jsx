@@ -10,6 +10,8 @@ import D2DRow from "./D2DRow";
 import { GST_RATES, gstAmount, formatINR, PRINTER_SPECIAL_FEATURES } from "../lib/listingConstants";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
+import BulkUploadGeneric from "./BulkUploadGeneric";
+import { printerBulkConfig } from "../lib/bulkConfigs";
 
 // ============================================================
 // Option catalogues — kept aligned with PrintersGuide.jsx so
@@ -124,6 +126,7 @@ export default function PrinterListings() {
     const [loading, setLoading] = useState(false);
     const [open, setOpen] = useState(false);
     const [editing, setEditing] = useState(null); // listing object being edited
+    const [bulkOpen, setBulkOpen] = useState(false);
 
     const load = async () => {
         setLoading(true);
@@ -139,7 +142,12 @@ export default function PrinterListings() {
     useEffect(() => {
         const handler = () => { setEditing(null); setOpen(true); };
         window.addEventListener("tc-open-add-printer", handler);
-        return () => window.removeEventListener("tc-open-add-printer", handler);
+        const bhandler = () => setBulkOpen(true);
+        window.addEventListener("tc-open-bulk-printer", bhandler);
+        return () => {
+            window.removeEventListener("tc-open-add-printer", handler);
+            window.removeEventListener("tc-open-bulk-printer", bhandler);
+        };
     }, []);
 
     const remove = async (id) => {
@@ -152,6 +160,9 @@ export default function PrinterListings() {
 
     return (
         <div data-testid="printer-listings-section">
+            {bulkOpen && (
+                <BulkUploadGeneric config={printerBulkConfig} onClose={() => setBulkOpen(false)} onSuccess={load} />
+            )}
             <div className="flex items-center justify-between mb-4">
                 <div className="text-[12px] text-[#6E6E73]">{items.length} {items.length === 1 ? "printer" : "printers"} listed</div>
             </div>

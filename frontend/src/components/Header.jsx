@@ -35,7 +35,7 @@ function CategoryPill({ to, label, color, active }) {
 }
 
 export default function Header() {
-    const { user, logout } = useAuth();
+    const { user, logout, loading: authLoading } = useAuth();
     const { city, setCity } = useCity();
     const { count: cartCount } = useCart();
     const navigate = useNavigate();
@@ -116,8 +116,10 @@ export default function Header() {
                         )}
                     </div>
 
-                    {/* Sell — outline pill on white */}
-                    {!isSeller && !isAdmin && (
+                    {/* Sell — outline pill on white. Hidden entirely while the
+                        session is still being checked so logged-in users never
+                        see a flash of "Sell". */}
+                    {!authLoading && !isSeller && !isAdmin && (
                         <NavLink
                             to="/sell"
                             className="hidden sm:inline-flex items-center text-[13px] font-semibold px-4 h-9 rounded-lg text-[#0A0A0B] hover:bg-black/[0.04] transition-colors"
@@ -128,7 +130,13 @@ export default function Header() {
                         </NavLink>
                     )}
 
-                    {!user ? (
+                    {authLoading ? (
+                        /* Neutral navbar while session is verified — no auth buttons,
+                           just a subtle placeholder so the layout doesn't jump. */
+                        <div className="flex items-center gap-2" data-testid="header-auth-loading" aria-hidden="true">
+                            <div className="w-9 h-9 rounded-full bg-black/[0.05] animate-pulse" />
+                        </div>
+                    ) : !user ? (
                         <>
                             <button
                                 onClick={() => navigate("/login")}

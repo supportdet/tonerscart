@@ -578,13 +578,41 @@ export default function SupplierDashboard() {
                             )}
                         </div>
                     ) : catalog === "printers" ? (
-                        <Button className="btn-cta inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-printer"))} data-testid="add-printer-cta-btn">
-                            <Plus size={16} /> Add printer
-                        </Button>
+                        <div className="relative" onBlur={() => setTimeout(() => setAddMenuOpen(false), 150)} tabIndex={-1}>
+                            <Button className="btn-cta inline-flex items-center gap-2" onClick={() => setAddMenuOpen((o) => !o)} data-testid="add-printer-cta-btn">
+                                <Plus size={16} /> Add printer <ChevronDown size={14} />
+                            </Button>
+                            {addMenuOpen && (
+                                <div className="absolute right-0 top-full mt-2 w-60 bg-white text-[#1D1D1F] rounded-xl shadow-xl border border-black/[0.08] py-2 z-30" data-testid="add-printer-menu">
+                                    <button onMouseDown={() => { setAddMenuOpen(false); window.dispatchEvent(new CustomEvent("tc-open-add-printer")); }} className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]" data-testid="add-single-printer-btn">
+                                        <div className="font-semibold">Add single printer</div>
+                                        <div className="text-[11.5px] text-[#86868B]">One listing with images & specs</div>
+                                    </button>
+                                    <button onMouseDown={() => { setAddMenuOpen(false); window.dispatchEvent(new CustomEvent("tc-open-bulk-printer")); }} className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]" data-testid="bulk-upload-printer-btn">
+                                        <div className="font-semibold">Bulk upload</div>
+                                        <div className="text-[11.5px] text-[#86868B]">Spreadsheet or CSV — many at once</div>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     ) : catalog === "papers" ? (
-                        <Button className="btn-cta inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-paper"))} data-testid="add-paper-cta-btn">
-                            <Plus size={16} /> Add paper
-                        </Button>
+                        <div className="relative" onBlur={() => setTimeout(() => setAddMenuOpen(false), 150)} tabIndex={-1}>
+                            <Button className="btn-cta inline-flex items-center gap-2" onClick={() => setAddMenuOpen((o) => !o)} data-testid="add-paper-cta-btn">
+                                <Plus size={16} /> Add paper <ChevronDown size={14} />
+                            </Button>
+                            {addMenuOpen && (
+                                <div className="absolute right-0 top-full mt-2 w-60 bg-white text-[#1D1D1F] rounded-xl shadow-xl border border-black/[0.08] py-2 z-30" data-testid="add-paper-menu">
+                                    <button onMouseDown={() => { setAddMenuOpen(false); window.dispatchEvent(new CustomEvent("tc-open-add-paper")); }} className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]" data-testid="add-single-paper-btn">
+                                        <div className="font-semibold">Add single paper</div>
+                                        <div className="text-[11.5px] text-[#86868B]">One SKU with images & specs</div>
+                                    </button>
+                                    <button onMouseDown={() => { setAddMenuOpen(false); window.dispatchEvent(new CustomEvent("tc-open-bulk-paper")); }} className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]" data-testid="bulk-upload-paper-btn">
+                                        <div className="font-semibold">Bulk upload</div>
+                                        <div className="text-[11.5px] text-[#86868B]">Spreadsheet or CSV — many at once</div>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     ) : null}
                 </div>
 

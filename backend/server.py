@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, UploadFile, File
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ValidationError
 
 from supabase_client import sb_admin, sb_anon, get_user_from_token
 from email_service import (
@@ -705,6 +705,15 @@ _CITY_EQUIV = {
 def _city_key(c: Optional[str]) -> str:
     k = (c or "").strip().lower()
     return _CITY_EQUIV.get(k, k)
+
+
+def _fmt_validation_error(ve: ValidationError) -> str:
+    """Turn a Pydantic ValidationError into a short, dealer-friendly message."""
+    parts = []
+    for e in ve.errors()[:4]:
+        loc = ".".join(str(x) for x in e.get("loc", []) if x != "body") or "field"
+        parts.append(f"{loc}: {e.get('msg', 'invalid')}")
+    return "; ".join(parts) or "Invalid row"
 
 
 def _sort_by_near_city(rows: list, near_city: Optional[str]) -> list:
@@ -1729,6 +1738,30 @@ def delete_printer(printer_id: str, user: dict = Depends(require_user)):
     sid = _supplier_id_for(user)
     sb_admin.table("printer_listings").delete().eq("id", printer_id).eq("supplier_id", sid).execute()
     return {"ok": True}
+
+
+@api.post("/supplier/printers/bulk")
+def create_printers_bulk(payload: List[dict], user: dict = Depends(require_role("supplier"))):
+    """Create many printer listings at once. Validates EACH row independently
+    (Pydantic + business rules) so one bad row never fails the whole batch.
+    Returns per-row failures so the dealer can fix only the bad rows."""
+    if not payload:
+        raise HTTPException(400, "No rows provided")
+    if len(payload) > 200:
+        raise HTTPException(400, "Bulk upload is limited to 200 rows per request")
+    created: List[dict] = []
+    errors: List[dict] = []
+    for idx, raw in enumerate(payload):
+        try:
+            row = PrinterListingCreate(**raw)
+            created.append(create_printer(row, user=user))
+        except ValidationError as ve:
+            errors.append({"row": idx, "message": _fmt_validation_error(ve)})
+        except HTTPException as he:
+            errors.append({"row": idx, "message": he.detail if isinstance(he.detail, str) else str(he.detail)})
+        except Exception as e:
+            errors.append({"row": idx, "message": str(e)[:240]})
+    return {"created": created, "errors": errors, "total": len(payload), "succeeded": len(created), "failed": len(errors)}
 
 
 @api.get("/supplier/printers/mine")
@@ -3150,6 +3183,7 @@ class PaperCreate(BaseModel):
     thickness_microns: Optional[int] = None
     acid_free: Optional[bool] = None
     suitable_for: List[str] = Field(default_factory=list)
+    description: Optional[str] = None
     intercity_delivery_charge: Optional[float] = 0
     gst_rate: Optional[int] = 18
     # Wave 10 — D2D marketplace
@@ -3181,6 +3215,7 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
         "thickness_microns": payload.thickness_microns,
         "acid_free": payload.acid_free,
         "suitable_for": payload.suitable_for or None,
+        "description": (payload.description or "").strip() or None,
         "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
         "d2d_enabled": bool(payload.d2d_enabled) if payload.d2d_enabled is not None else None,
@@ -3196,7 +3231,7 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("image_urls", "brightness", "thickness_microns", "acid_free", "suitable_for", "intercity_delivery_charge", "gst_rate", "d2d_enabled", "d2d_price"):
+            for k in ("image_urls", "brightness", "thickness_microns", "acid_free", "suitable_for", "description", "intercity_delivery_charge", "gst_rate", "d2d_enabled", "d2d_price"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True
@@ -3205,6 +3240,30 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
                 continue
             logger.warning("create_paper failed: %s", e)
             raise HTTPException(503, "paper_listings table not yet migrated — run supabase_schema_papers.sql") from e
+
+
+@api.post("/supplier/papers/bulk")
+def create_papers_bulk(payload: List[dict], user: dict = Depends(require_role("supplier"))):
+    """Create many paper listings at once. Validates EACH row independently
+    (Pydantic + business rules) so one bad row never fails the whole batch.
+    Returns per-row failures so the dealer can fix only the bad rows."""
+    if not payload:
+        raise HTTPException(400, "No rows provided")
+    if len(payload) > 200:
+        raise HTTPException(400, "Bulk upload is limited to 200 rows per request")
+    created: List[dict] = []
+    errors: List[dict] = []
+    for idx, raw in enumerate(payload):
+        try:
+            row = PaperCreate(**raw)
+            created.append(create_paper(row, user=user))
+        except ValidationError as ve:
+            errors.append({"row": idx, "message": _fmt_validation_error(ve)})
+        except HTTPException as he:
+            errors.append({"row": idx, "message": he.detail if isinstance(he.detail, str) else str(he.detail)})
+        except Exception as e:
+            errors.append({"row": idx, "message": str(e)[:240]})
+    return {"created": created, "errors": errors, "total": len(payload), "succeeded": len(created), "failed": len(errors)}
 
 
 @api.get("/supplier/papers/mine")

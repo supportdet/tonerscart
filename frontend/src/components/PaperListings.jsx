@@ -4,11 +4,13 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
-import { Plus, Trash2, Package, Copy, Check, Pencil } from "lucide-react";
+import { Plus, Trash2, Package, Copy, Check, Pencil, ChevronLeft, ImageIcon, X } from "lucide-react";
 import D2DRow from "./D2DRow";
 import { GST_RATES, gstAmount, formatINR } from "../lib/listingConstants";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
+import BulkUploadGeneric from "./BulkUploadGeneric";
+import { paperBulkConfig } from "../lib/bulkConfigs";
 
 const SIZES = ["A4", "A3", "A5", "Letter"];
 const BRANDS = ["JK Paper", "Century", "TNPL", "Bilt", "Trident", "Ballarpur", "Other"];
@@ -17,7 +19,7 @@ const GSMS = [70, 75, 80, 90, 100, 120, 150];
 const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
 
 function emptyForm() {
-    return { brand: "JK Paper", size: "A4", gsm: 75, reams_per_box: 10, price_per_ream: "", stock: "", brightness: "", thickness_microns: "", acid_free: false, suitable_for: [] };
+    return { brand: "JK Paper", size: "A4", gsm: 75, reams_per_box: 10, price_per_ream: "", stock: "", description: "", brightness: "", thickness_microns: "", acid_free: false, suitable_for: [] };
 }
 
 export default function PaperListings() {
@@ -29,6 +31,7 @@ export default function PaperListings() {
     const [editingId, setEditingId] = useState(null);
     const [imageFiles, setImageFiles] = useState([]);
     const [imagePreviews, setImagePreviews] = useState([]);
+    const [bulkOpen, setBulkOpen] = useState(false);
 
     const openAdd = () => { setEditingId(null); setForm(emptyForm()); setImageFiles([]); setImagePreviews([]); setOpen(true); };
     const openEdit = (p) => {
@@ -40,6 +43,7 @@ export default function PaperListings() {
             reams_per_box: p.reams_per_box || 10,
             price_per_ream: String(p.price_per_ream ?? ""),
             stock: String(p.stock ?? ""),
+            description: p.description || "",
             brightness: p.brightness ? String(p.brightness) : "",
             thickness_microns: p.thickness_microns ? String(p.thickness_microns) : "",
             acid_free: !!p.acid_free,
@@ -82,15 +86,29 @@ export default function PaperListings() {
     useEffect(() => {
         const fn = () => { openAdd(); };
         window.addEventListener("tc-open-add-paper", fn);
-        return () => window.removeEventListener("tc-open-add-paper", fn);
+        const bfn = () => setBulkOpen(true);
+        window.addEventListener("tc-open-bulk-paper", bfn);
+        return () => {
+            window.removeEventListener("tc-open-add-paper", fn);
+            window.removeEventListener("tc-open-bulk-paper", bfn);
+        };
     }, []);
 
     const submit = async (e) => {
         e.preventDefault();
         if (!form.price_per_ream || !form.stock) { toast.error("Price and stock are required"); return; }
-        // Wave 12 — image upload removed. Themed ream graphic auto-renders.
         setSaving(true);
         try {
+            // Upload any newly-picked images first (service-role proxy → public URL).
+            let uploadedUrls = [];
+            if (imageFiles.length > 0) {
+                for (const file of imageFiles) {
+                    const fd = new FormData();
+                    fd.append("file", file);
+                    const { data } = await api.post("/supplier/listing-image", fd, { headers: { "Content-Type": "multipart/form-data" } });
+                    if (data?.url) uploadedUrls.push(data.url);
+                }
+            }
             const payload = {
                 brand: form.brand,
                 size: form.size,
@@ -98,12 +116,17 @@ export default function PaperListings() {
                 reams_per_box: Number(form.reams_per_box),
                 price_per_ream: Number(form.price_per_ream),
                 stock: Number(form.stock),
+                description: (form.description || "").trim() || null,
                 brightness: form.brightness ? Number(form.brightness) : null,
                 thickness_microns: form.thickness_microns ? Number(form.thickness_microns) : null,
                 acid_free: !!form.acid_free,
                 suitable_for: form.suitable_for || [],
                 gst_rate: Number(form.gst_rate || 18),
             };
+            if (uploadedUrls.length > 0) {
+                payload.image_url = uploadedUrls[0];
+                payload.image_urls = uploadedUrls;
+            }
             if (editingId) {
                 await api.put(`/supplier/papers/${editingId}`, payload);
                 toast.success("Paper listing updated");
@@ -258,8 +281,40 @@ export default function PaperListings() {
                             </div>
                         </div>
 
-                        {/* Wave 12 — paper image upload removed. Themed ream graphic
-                            auto-renders on every paper listing card. */}
+                        {/* Description */}
+                        <div>
+                            <Label>Description</Label>
+                            <textarea
+                                value={form.description}
+                                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                                rows={2}
+                                placeholder="e.g. Premium copier paper, smooth finish, jam-free."
+                                className="tc-input-lg w-full resize-none"
+                                data-testid="paper-description"
+                            />
+                        </div>
+
+                        {/* Product images (optional, up to 3) */}
+                        <div>
+                            <Label>Product images <span className="text-[#86868B] font-normal">(optional, up to 3)</span></Label>
+                            <div className="flex flex-wrap items-center gap-3 mt-1" data-testid="paper-images">
+                                {imagePreviews.map((src, i) => (
+                                    <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-[#E5E5EA]">
+                                        <img src={src} alt={`preview ${i + 1}`} className="w-full h-full object-cover" />
+                                        <button type="button" onClick={() => removeImage(i)} className="absolute top-0.5 right-0.5 w-5 h-5 grid place-items-center rounded-full bg-black/60 text-white" data-testid={`paper-image-remove-${i}`} aria-label="Remove image">
+                                            <X size={11} />
+                                        </button>
+                                    </div>
+                                ))}
+                                {imageFiles.length < 3 && (
+                                    <label className="w-20 h-20 rounded-lg border-2 border-dashed border-[#00B7C7]/50 grid place-items-center cursor-pointer hover:border-[#00B7C7] text-[#00B7C7]" data-testid="paper-image-add">
+                                        <ImageIcon size={20} />
+                                        <input type="file" accept="image/*" multiple onChange={onPickImages} className="hidden" />
+                                    </label>
+                                )}
+                            </div>
+                            <div className="text-[11px] text-[#86868B] mt-1">No image? A themed ream graphic auto-renders on your card.</div>
+                        </div>
 
                         <div className="grid grid-cols-2 gap-3 mt-2">
                             <div>
@@ -296,6 +351,10 @@ export default function PaperListings() {
                     </form>
                 </DialogContent>
             </Dialog>
+
+            {bulkOpen && (
+                <BulkUploadGeneric config={paperBulkConfig} onClose={() => setBulkOpen(false)} onSuccess={load} />
+            )}
         </div>
     );
 }
