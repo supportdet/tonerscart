@@ -14,12 +14,14 @@ import TonerCartridge from "../components/TonerCartridge";
 import PrinterListings from "../components/PrinterListings";
 import PaperListings from "../components/PaperListings";
 import SupplierEarnings from "../components/SupplierEarnings";
+import SupplierInsights from "../components/SupplierInsights";
 import CommissionBanner from "../components/CommissionBanner";
 import CommissionCalculator from "../components/CommissionCalculator";
 import { commissionFor } from "../lib/commission";
 import { Copy, Check, ChevronDown, ChevronLeft } from "lucide-react";
 import { colorSwatch as _colorSwatch } from "../lib/colors";
-import BulkUploadDialog from "../components/BulkUploadDialog";
+import BulkUploadGeneric from "../components/BulkUploadGeneric";
+import { tonerBulkConfig } from "../lib/bulkConfigs";
 import D2DRow, { D2DExplainer } from "../components/D2DRow";
 import SupplierAgreementDialog, { hasAcceptedSupplierAgreement } from "../components/SupplierAgreementDialog";
 
@@ -545,6 +547,7 @@ export default function SupplierDashboard() {
                         <button onClick={() => setCatalog("papers")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "papers" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-papers">Papers</button>
                         <button onClick={() => setCatalog("orders")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "orders" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-orders">Orders</button>
                         <button onClick={() => setCatalog("earnings")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "earnings" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-earnings">My Earnings</button>
+                        <button onClick={() => setCatalog("insights")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "insights" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-insights">Insights</button>
                     </div>
                     {catalog === "toners" ? (
                         <div className="relative" onBlur={() => setTimeout(() => setAddMenuOpen(false), 150)} tabIndex={-1}>
@@ -576,13 +579,41 @@ export default function SupplierDashboard() {
                             )}
                         </div>
                     ) : catalog === "printers" ? (
-                        <Button className="btn-cta inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-printer"))} data-testid="add-printer-cta-btn">
-                            <Plus size={16} /> Add printer
-                        </Button>
+                        <div className="relative" onBlur={() => setTimeout(() => setAddMenuOpen(false), 150)} tabIndex={-1}>
+                            <Button className="btn-cta inline-flex items-center gap-2" onClick={() => setAddMenuOpen((o) => !o)} data-testid="add-printer-cta-btn">
+                                <Plus size={16} /> Add printer <ChevronDown size={14} />
+                            </Button>
+                            {addMenuOpen && (
+                                <div className="absolute right-0 top-full mt-2 w-60 bg-white text-[#1D1D1F] rounded-xl shadow-xl border border-black/[0.08] py-2 z-30" data-testid="add-printer-menu">
+                                    <button onMouseDown={() => { setAddMenuOpen(false); window.dispatchEvent(new CustomEvent("tc-open-add-printer")); }} className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]" data-testid="add-single-printer-btn">
+                                        <div className="font-semibold">Add single printer</div>
+                                        <div className="text-[11.5px] text-[#86868B]">One listing with images & specs</div>
+                                    </button>
+                                    <button onMouseDown={() => { setAddMenuOpen(false); window.dispatchEvent(new CustomEvent("tc-open-bulk-printer")); }} className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]" data-testid="bulk-upload-printer-btn">
+                                        <div className="font-semibold">Bulk upload</div>
+                                        <div className="text-[11.5px] text-[#86868B]">Spreadsheet or CSV — many at once</div>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     ) : catalog === "papers" ? (
-                        <Button className="btn-cta inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-paper"))} data-testid="add-paper-cta-btn">
-                            <Plus size={16} /> Add paper
-                        </Button>
+                        <div className="relative" onBlur={() => setTimeout(() => setAddMenuOpen(false), 150)} tabIndex={-1}>
+                            <Button className="btn-cta inline-flex items-center gap-2" onClick={() => setAddMenuOpen((o) => !o)} data-testid="add-paper-cta-btn">
+                                <Plus size={16} /> Add paper <ChevronDown size={14} />
+                            </Button>
+                            {addMenuOpen && (
+                                <div className="absolute right-0 top-full mt-2 w-60 bg-white text-[#1D1D1F] rounded-xl shadow-xl border border-black/[0.08] py-2 z-30" data-testid="add-paper-menu">
+                                    <button onMouseDown={() => { setAddMenuOpen(false); window.dispatchEvent(new CustomEvent("tc-open-add-paper")); }} className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]" data-testid="add-single-paper-btn">
+                                        <div className="font-semibold">Add single paper</div>
+                                        <div className="text-[11.5px] text-[#86868B]">One SKU with images & specs</div>
+                                    </button>
+                                    <button onMouseDown={() => { setAddMenuOpen(false); window.dispatchEvent(new CustomEvent("tc-open-bulk-paper")); }} className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]" data-testid="bulk-upload-paper-btn">
+                                        <div className="font-semibold">Bulk upload</div>
+                                        <div className="text-[11.5px] text-[#86868B]">Spreadsheet or CSV — many at once</div>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     ) : null}
                 </div>
 
@@ -602,6 +633,11 @@ export default function SupplierDashboard() {
                     <>
                         <h2 id="earnings" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>My earnings</h2>
                         <SupplierEarnings />
+                    </>
+                ) : catalog === "insights" ? (
+                    <>
+                        <h2 id="insights" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Listing insights</h2>
+                        <SupplierInsights />
                     </>
                 ) : catalog === "orders" ? (
                     <>
@@ -909,9 +945,10 @@ export default function SupplierDashboard() {
             </Dialog>
             <RefilledWarningDialog open={refilledWarning} onClose={() => setRefilledWarning(false)} />
             {bulkOpen && (
-                <BulkUploadDialog
+                <BulkUploadGeneric
+                    config={tonerBulkConfig}
                     onClose={() => setBulkOpen(false)}
-                    onSuccess={() => { setBulkOpen(false); load(); }}
+                    onSuccess={() => { load(); }}
                 />
             )}
             <SupplierAgreementDialog

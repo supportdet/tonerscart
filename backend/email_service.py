@@ -73,6 +73,91 @@ async def _send(to: str, subject: str, body_html: str, reply_to: str | None = No
 
 # ===== Public helpers ===========================================================
 
+# Public app base for links inside emails (matches the rest of this module).
+PROC_BASE = "https://printer-supply-hub.preview.emergentagent.com"
+
+
+async def email_proc_registration_received(u: dict):
+    """Procurement registration: applicant 'under review' + admin notification."""
+    typ = "Government" if u.get("type") == "govt" else "Corporate"
+    org = u.get("org_name") or "—"
+    email_to = u.get("email")
+
+    # Applicant confirmation
+    if email_to:
+        applicant_html = f"""
+        <h2 style="margin:0 0 6px 0;font-size:18px;">Thanks {u.get('name') or 'there'} — we&apos;ve received your registration</h2>
+        <p>Your {typ.lower()} procurement account for <strong>{org}</strong> is now under review.
+        Our team verifies every government and corporate account before activation.</p>
+        <div style="margin:18px 0;padding:14px 16px;border-left:3px solid #00B7C7;background:#F0FBFC;border-radius:6px;">
+          <strong>Your account is under review.</strong> You will receive an email once it&apos;s approved.
+        </div>
+        <p style="color:#86868B;font-size:12.5px;">Questions? Just reply to this email.</p>
+        """
+        await _send(email_to, "Your TonersCart procurement registration is under review", applicant_html)
+
+    # Admin notification
+    rows = "".join(
+        f"<tr><td style='padding:6px 12px;color:#86868B;'>{k}</td>"
+        f"<td style='padding:6px 12px;'><strong>{v or '—'}</strong></td></tr>"
+        for k, v in [
+            ("Type", typ),
+            ("Name", u.get("name")),
+            ("Designation", u.get("designation")),
+            ("Department / Company", org),
+            ("Ministry / State", u.get("ministry_state")),
+            ("Employee ID", u.get("employee_id")),
+            ("GST", u.get("gst_number")),
+            ("Email", u.get("email")),
+            ("Phone", u.get("phone")),
+            ("Address", u.get("address")),
+        ]
+    )
+    admin_html = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;">New {typ} procurement account pending approval</h2>
+    <p style="margin:0 0 18px 0;color:#6E6E73;">Review at <a href="{PROC_BASE}/admin">/admin → Procurement</a>.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">{rows}</table>
+    """
+    await _send(SUPPORT_INBOX, f"[TonersCart] New {typ} procurement account — {org}", admin_html, reply_to=email_to)
+
+
+async def email_proc_approved(u: dict):
+    email_to = u.get("email")
+    if not email_to:
+        return
+    html = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;color:#0A8754;">Your procurement account is approved 🎉</h2>
+    <p>Hi {u.get('name') or 'there'},</p>
+    <p>Your TonersCart procurement account for <strong>{u.get('org_name') or ''}</strong> has been approved.
+    You can now sign in to search &amp; compare suppliers, generate quotations and place orders.</p>
+    <p style="margin:22px 0;">
+      <a href="{PROC_BASE}/procurement/login"
+         style="display:inline-block;padding:12px 22px;background:#F7C600;color:#0A0A0B;border-radius:10px;font-weight:600;text-decoration:none;">
+        Sign in to procurement portal
+      </a>
+    </p>
+    <p style="color:#6E6E73;font-size:12.5px;">Your credit limit will be set by our team — you&apos;ll see it on your dashboard.</p>
+    """
+    await _send(email_to, "Your TonersCart procurement account is approved", html)
+
+
+async def email_proc_rejected(u: dict, reason: str):
+    email_to = u.get("email")
+    if not email_to:
+        return
+    html = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;">Update on your procurement application</h2>
+    <p>Hi {u.get('name') or 'there'},</p>
+    <p>After review, we weren&apos;t able to approve your TonersCart procurement account at this time.</p>
+    <div style="margin:18px 0;padding:14px 16px;border-left:3px solid #FF3B30;background:#FFF5F5;border-radius:6px;">
+      <div style="font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#86868B;">Reason</div>
+      <div style="margin-top:6px;">{reason or 'Not specified.'}</div>
+    </div>
+    <p>If you&apos;d like to re-apply or share more details, just reply to this email.</p>
+    """
+    await _send(email_to, "Update on your TonersCart procurement application", html)
+
+
 async def email_application_received(application: dict):
     """Sends both:
        1. Notification → support inbox with full application details
@@ -105,7 +190,7 @@ async def email_application_received(application: dict):
     )
     admin_html = f"""
     <h2 style="margin:0 0 6px 0;font-size:18px;">New supplier application</h2>
-    <p style="margin:0 0 18px 0;color:#6E6E73;">Review at <a href="https://b2b-checkout-2.preview.emergentagent.com/admin">/admin</a>.</p>
+    <p style="margin:0 0 18px 0;color:#6E6E73;">Review at <a href="https://printer-supply-hub.preview.emergentagent.com/admin">/admin</a>.</p>
     <table style="width:100%;border-collapse:collapse;font-size:13px;">{rows}</table>
     """
     await _send(SUPPORT_INBOX, f"[TonersCart] New supplier application — {biz}", admin_html, reply_to=email_to_applicant)
@@ -115,7 +200,7 @@ async def email_application_received(application: dict):
         applicant_html = f"""
         <h2 style="margin:0 0 6px 0;font-size:18px;">Thanks {name or 'there'} — we&apos;ve got your application</h2>
         <p>Your business <strong>{biz}</strong> is now in TonersCart&apos;s review queue. Our team typically reviews applications within 1–2 working days.</p>
-        <p>You can sign in at <a href="https://b2b-checkout-2.preview.emergentagent.com/login">tonerscart</a> any time to track approval status.</p>
+        <p>You can sign in at <a href="https://printer-supply-hub.preview.emergentagent.com/login">tonerscart</a> any time to track approval status.</p>
         <p style="margin-top:22px;color:#86868B;font-size:12.5px;">Questions? Just reply to this email.</p>
         """
         await _send(email_to_applicant, "Your TonersCart supplier application is in review", applicant_html)
@@ -133,7 +218,7 @@ async def email_application_approved(application: dict):
     <p>Great news — your application for <strong>{biz}</strong> has been approved on TonersCart.
     You can now sign in and start listing your toner products.</p>
     <p style="margin:22px 0;">
-      <a href="https://b2b-checkout-2.preview.emergentagent.com/supplier"
+      <a href="https://printer-supply-hub.preview.emergentagent.com/supplier"
          style="display:inline-block;padding:12px 22px;background:#F7C600;color:#0A0A0B;border-radius:10px;font-weight:600;text-decoration:none;">
         Go to my dashboard
       </a>
@@ -588,6 +673,7 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
           <tr><td style='padding:4px 12px;color:#86868B;'>Order value</td><td style='padding:4px 12px;'><strong>{_money(total)}</strong></td></tr>
           {payout_line}
           <tr><td style='padding:4px 12px;color:#86868B;'>Buyer</td><td style='padding:4px 12px;'>{customer_name}{f' · {customer_phone}' if customer_phone else ''}</td></tr>
+          {("<tr><td style='padding:4px 12px;color:#86868B;'>Buyer city</td><td style='padding:4px 12px;'><strong>" + (order_city or delivery_city or '—') + "</strong>" + (" <span style='display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;background:#FFF3CD;color:#8C6A00;font-size:11px;font-weight:600;'>Intercity</span>" if is_intercity else " <span style='display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;background:#E6F7EC;color:#0A8754;font-size:11px;font-weight:600;'>Local · free delivery</span>") + "</td></tr>")}
           <tr><td style='padding:4px 12px;color:#86868B;'>Delivery</td><td style='padding:4px 12px;'>{delivery_full}</td></tr>
           {("<tr><td style='padding:4px 12px;color:#86868B;'>Delivery charge</td><td style='padding:4px 12px;'><strong>" + _money(delivery_charge) + "</strong></td></tr>") if delivery_charge > 0 else ""}
         </table>
@@ -597,7 +683,7 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
         {gst_block_s}
         <p style="margin:18px 0 4px 0;"><strong>Please dispatch within 2 business days</strong> and update tracking in your dashboard.</p>
         <p style="margin:18px 0;">
-          <a href="https://b2b-checkout-2.preview.emergentagent.com/supplier"
+          <a href="https://printer-supply-hub.preview.emergentagent.com/supplier"
              style="display:inline-block;padding:12px 22px;background:#F7C600;color:#0A0A0B;border-radius:10px;font-weight:600;text-decoration:none;">
             Open my dashboard
           </a>

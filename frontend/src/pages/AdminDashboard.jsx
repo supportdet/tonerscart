@@ -12,6 +12,7 @@ import DealersTab from "./admin/DealersTab";
 import OrdersTab from "./admin/OrdersTab";
 import ContentTab from "./admin/ContentTab";
 import FinanceTab from "./admin/FinanceTab";
+import ProcurementTab from "./admin/ProcurementTab";
 
 function aiSummary(application) {
     const ai = application?.ai_check || {};
@@ -51,6 +52,7 @@ export default function AdminDashboard() {
     const [pending, setPending] = useState([]);
     const [approved, setApproved] = useState([]);
     const [featured, setFeatured] = useState([]);
+    const [procPending, setProcPending] = useState(0);
     const [tab, setTab] = useState("analytics");
     const [reviewing, setReviewing] = useState(null);
     const [rejecting, setRejecting] = useState(null);
@@ -68,6 +70,9 @@ export default function AdminDashboard() {
             setPending(Array.isArray(p.data) ? p.data : []);
             setApproved(Array.isArray(a.data) ? a.data : []);
             setFeatured(Array.isArray(f.data) ? f.data : []);
+            api.get("/admin/procurement/pending")
+                .then((r) => setProcPending((r.data?.counts?.govt || 0) + (r.data?.counts?.corporate || 0)))
+                .catch(() => setProcPending(0));
         } catch (e) { toast.error(formatApiError(e)); }
     };
     useEffect(() => { load(); }, []);
@@ -203,6 +208,9 @@ export default function AdminDashboard() {
                         Featured {featured.filter((x) => x.status === "new").length > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-[#F5C400] text-[#0A0A0B] text-[10px] font-bold px-1.5">{featured.filter((x) => x.status === "new").length}</span>)}
                     </TabsTrigger>
                     <TabsTrigger value="content" data-testid="tab-content">Content</TabsTrigger>
+                    <TabsTrigger value="procurement" data-testid="tab-procurement">
+                        Procurement {procPending > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-[#0B1220] text-white text-[10px] font-bold px-1.5">{procPending}</span>)}
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="analytics">
@@ -223,6 +231,10 @@ export default function AdminDashboard() {
 
                 <TabsContent value="content">
                     {tab === "content" && <ContentTab />}
+                </TabsContent>
+
+                <TabsContent value="procurement">
+                    {tab === "procurement" && <ProcurementTab />}
                 </TabsContent>
 
                 <TabsContent value="pending">

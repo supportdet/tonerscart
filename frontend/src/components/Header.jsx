@@ -12,7 +12,7 @@ const CATEGORY_PILLS = [
     { to: "/consumables", label: "Consumables", color: "#FFC107" },
     { to: "/scanners", label: "Scanners", color: "#5468FF" },
     { to: "/mps", label: "MPS/Rentals", color: "#3FD267" },
-    { to: "/bulk", label: "Buy Bulk", color: "#FF7A00" },
+    { to: "/bulk", label: "Bulk Orders", color: "#FF7A00" },
     { to: "/dealer", label: "Dealer to Dealer", color: "#5E8CB5" },
     { to: "/oem", label: "OEM Marketplace", color: "#B58A75" },
 ];
@@ -31,8 +31,8 @@ function CategoryPill({ to, label, color }) {
 }
 
 export default function Header() {
-    const { user, logout } = useAuth();
-    const { city, setCity } = useCity();
+    const { user, logout, loading: authLoading } = useAuth();
+    const { city, setCity, locPrompt, dismissLocationPrompt } = useCity();
     const { count: cartCount } = useCart();
     const navigate = useNavigate();
     const [cityOpen, setCityOpen] = useState(false);
@@ -73,6 +73,37 @@ export default function Header() {
                                         data-testid={`city-option-${c}`}>{c}
                                     </button>
                                 ))}
+                            </div>
+                        )}
+
+                        {/* Location coachmark — small walkthrough hint pointing up at
+                            the city selector. Shown only when GPS was denied/unavailable. */}
+                        {locPrompt && !cityOpen && (
+                            <div className="tc-coachmark" role="dialog" aria-label="Set your location" data-testid="location-coachmark">
+                                <span className="tc-coachmark-arrow" aria-hidden="true" />
+                                <div className="flex items-start gap-2">
+                                    <MapPin size={15} className="text-[#00B7C7] mt-0.5 shrink-0" />
+                                    <div className="flex-1">
+                                        <div className="text-[12.5px] font-semibold text-[#0A0A0B] leading-snug">Set your location</div>
+                                        <div className="text-[11.5px] text-[#6E6E73] mt-0.5 leading-snug">Tap here to pick your city and see local dealers first.</div>
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <button
+                                                onClick={() => { dismissLocationPrompt(); setCityOpen(true); }}
+                                                className="text-[11.5px] font-semibold px-2.5 h-7 rounded-md bg-[#0A0A0B] text-white hover:bg-black/80 transition-colors"
+                                                data-testid="coachmark-choose-btn"
+                                            >
+                                                Choose city
+                                            </button>
+                                            <button
+                                                onClick={dismissLocationPrompt}
+                                                className="text-[11.5px] font-medium text-[#86868B] hover:text-[#0A0A0B] px-1.5 h-7"
+                                                data-testid="coachmark-dismiss-btn"
+                                            >
+                                                Not now
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>

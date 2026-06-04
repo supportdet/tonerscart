@@ -1,3 +1,71 @@
+### 2026-06-04 — Procurement Module · PHASE 1 (Govt & Corporate registration + approval + auth + dashboard shell)
+
+**Scope:** Self-contained Government & Corporate procurement portal, fully separate from the regular Supabase-Auth customer/dealer/admin flow (no overlap). All existing flows untouched.
+
+**Backend** (`procurement.py`, included in `server.py`):
+- New table `procurement_users` — migration `supabase_schema_procurement.sql` (⚠ APPLY IN SUPABASE; backend returns 503 gracefully until then).
+- Auth: own email+password — **bcrypt** hashes + backend-issued **JWT (PyJWT, HS256, `JWT_SECRET`)** sent as Bearer. `require_proc_user` (approved-only) + `require_admin` (reuses Supabase admin) dependencies.
+- Endpoints: `POST /api/procurement/register/govt` (validates official email .gov.in/.nic.in/.gov), `/register/corporate` (validates GSTIN format), `/login` (blocks pending/rejected with message), `GET/PATCH /api/procurement/me`. Admin: `GET /api/admin/procurement/pending` (separate govt + corporate lists), `/accounts`, `POST /{id}/approve`, `/{id}/reject` (reason).
+- Emails via Resend (`email_service.py`): registration-received (applicant + admin notify), approved (with login link), rejected (with reason).
+
+**Frontend:**
+- `/procurement/login` — dark portal, Government/Corporate tabs, Sign in + Register per tab, inline validation (GST format, govt email domain, password length), "Your account is under review" success state. Global Header/Footer hidden on `/procurement` (App.js `Chrome` gate + `ProcAuthProvider`).
+- `/procurement` (protected) dashboard — side nav: Search & Compare / My Quotations / My Orders (Phase 2/3 placeholders), **Credit Account** (limit/used/available + utilisation; "being set up" when 0), **Profile** (read-only details + editable phone/address). Separate `procApi` axios client + `ProcAuthContext`.
+- Regular `/login` now has a **"Government & Corporate Procurement"** entry button → `/procurement/login`.
+- Admin dashboard: new **Procurement** tab (badge = pending count) with separate Government & Corporate approval queues, Approve + Reject-with-reason.
+
+**Status:** UI verified rendering live; backend graceful states verified (503 pre-migration, validation, 403 admin-gate). **End-to-end register→approve→login pending the Supabase migration** (no direct DB access from the build env).
+
+
+### 2026-06-04 — Wave 16.2 (Toners bulk upload → unified BulkUploadGeneric)
+
+- Migrated **Toners** bulk upload to the shared `BulkUploadGeneric` component (Wave 16) via a new `tonerBulkConfig` in `lib/bulkConfigs.js` (same toner columns/payload incl. variants & D2D-compatible fields).
+- **Deleted** the old `components/BulkUploadDialog.jsx`; `SupplierDashboard.jsx` now renders `BulkUploadGeneric` with `tonerBulkConfig`.
+- Backend `POST /api/supplier/listings/bulk` refactored to `List[dict]` + per-row Pydantic validation (`_fmt_validation_error`) so one bad row no longer 422s the batch — matches printers/papers.
+- All three product types now share one consistent flow: XLSX template, per-row validation, "X uploaded, Y failed" summary, inline per-row reasons, and **Download failed rows**. Verified live: toner mixed batch → "1 toner uploaded successfully, 1 failed", "Row 1: Missing / invalid: price", failed-rows download present.
+
+
+### 2026-06-04 — Wave 16.1 (Location prompt → navbar coachmark)
+
+- Removed the wide "Set your location" bar under the hero search (was too large on web & mobile, `Landing.jsx`).
+- Replaced with a **small walkthrough coachmark** anchored to the navbar city selector with an upward arrow + gentle pulse on the city button (`Header.jsx`, `.tc-coachmark`/`.tc-loc-pulse` in index.css). Copy: "Set your location — Tap here to pick your city…" with **Choose city** (opens the city dropdown) / **Not now** (dismiss, persisted).
+- Trigger logic (`CityContext.jsx`): on first visit the browser is asked for location; the coachmark shows **only when GPS is denied / unavailable / returns an unserved city** and the user hasn't set or dismissed it. Picking a city or dismissing hides it permanently (`tc_loc_dismissed_v1`). Verified live on desktop + mobile (no overflow).
+
+
+### 2026-06-04 — Wave 16 (Papers upload page + bulk Excel for Papers/Printers + auth flicker + inline auth errors)
+
+**Tested**: backend 13/13 pytest (`test_wave16.py`) + per-row validation refactor; frontend live Playwright — papers single upload, bulk papers, bulk printers (incl. mixed valid+invalid → "X uploaded, Y failed" + failed-rows download), auth flicker, login/register inline errors all GREEN.
+
+1. **Dealer Papers upload page** (`PaperListings.jsx`) — fixed crash (missing `ChevronLeft` import); added **Description** field and **product image upload** (up to 3, via `/supplier/listing-image`). Single create persists & shows on public `/papers`.
+2. **Bulk Excel upload — Papers & Printers** — new reusable `components/BulkUploadGeneric.jsx` + `lib/bulkConfigs.js` (printer/paper column configs). Features: downloadable XLSX template, CSV/Excel parse, editable grid, **per-row validation**, success summary "X uploaded successfully, Y failed", inline reasons, and **Download failed rows** (.xlsx) for correction/re-upload. Valid rows upload even when some rows fail (client-invalid + backend-failed merged into one downloadable set). Wired via `tc-open-bulk-printer` / `tc-open-bulk-paper`; SupplierDashboard "Add printer/paper" buttons are now single/bulk dropdowns.
+   - Backend: `POST /api/supplier/printers/bulk` & `POST /api/supplier/papers/bulk` accept `List[dict]` and validate **each row independently** (per-row Pydantic via `_fmt_validation_error` + business rules) so one bad row never 422s the batch. Returns `{created, errors:[{row,message}], total, succeeded, failed}`. Guards: empty → 400, >200 rows → 400, non-supplier → 401/403.
+   - `PaperCreate` gained `description`; `create_paper` drops unknown columns gracefully.
+3. **Auth flicker fix** (`Header.jsx`) — consumes `authLoading`; renders a neutral placeholder (`header-auth-loading`) while the session is verified. `Sell` / `Sign in` / `Join free` never flash for logged-in users; account chip + Logout render only after the check resolves.
+4. **Inline auth errors** (`Login.jsx`, `Register.jsx`) — all error messages are now RED inline text inside the form (no toasts/banners): wrong credentials → below password (`login-password-error`); Register adds a **Confirm password** field with "Passwords don't match" (`register-confirm-error`), password<6 (`register-password-error`), and duplicate-email (`register-email-error`).
+
+
+### 2026-06-04 — Wave 15 (Navbar/stats/mobile polish + location-based features + Verified badge)
+
+**Tested**: 17/17 backend pytest (`/app/backend/tests/test_wave15.py`), frontend 12/12 spec items (`iteration_20.json`). No regressions.
+
+1. **Navbar text** — category pill "Buy Bulk" → **"Bulk Orders"** (`Header.jsx`).
+2. **Navbar alignment** — 9 category pills span logo-left → "Join free"-right (verified: logo_x=360, OEM pill right=1560 = Join free right=1560 @1920px). Existing `lg:justify-between` confirmed correct.
+3. **Stats strip** (`Landing.jsx`) — rebuilt as a flex row, evenly spaced; numbers now **Montserrat font-weight 300** (was Helvetica bold); **shiny gold dot (•) separators** between stats (`.tc-stat-dot` in index.css).
+4. **Mobile header** — gaps tightened (`gap-2 sm:gap-4`), user-chip truncated, `whitespace-nowrap` on Sign in / Join free; added `overflow-x:hidden` + `max-width:100vw` to html/body/#root. Verified no horizontal overflow @390px.
+5. **Mobile search bar** — `.tc-search-shell` mobile rules generalized: input becomes its own white rounded pill, **separate full-width CTA below** (yellow on hero, dark on /search). Dark input text on the white pill.
+6. **Location-based sorting + labels** —
+   - Backend `_sort_by_near_city(rows, near_city)` helper (stable same-city-first partition, city-alias aware). Added `near_city` param to `GET /listings/search/paginated`, `GET /printers`, `GET /papers`. Hard `city=` filter overrides near_city.
+   - Frontend passes user city as `near_city`; `byCityThenPrice` client sort mirrors it (`Search.jsx`). New `lib/location.js` (`cityKey`/`cityMatch`/`deliveryLabel`).
+   - Product cards (Search/Papers/Printers) show **"Local · Free delivery"** (same city) or **"Ships from <City>"**.
+   - `other-cities-banner` on /search when no local dealer ("Showing results from other cities") — products never hidden.
+   - Homepage **"Set your location" prompt** (`set-location-prompt`/`set-location-select`) shown until city explicitly set. CityContext gained `citySet` flag (localStorage `tc_city_set`).
+   - **View analytics**: `POST /listings/{id}/view` (guest-ok, best-effort) records viewer city; `GET /supplier/analytics/views` aggregates by city. New `SupplierInsights.jsx` + **Insights tab** in supplier dashboard. Migration `supabase_schema_listing_views.sql` (⚠ USER MUST APPLY — degrades gracefully to empty until then).
+   - Seller order email (`email_service.py`) now shows a prominent **Buyer city** row with Intercity / Local·free-delivery badge.
+7. **Verified dealer badge** — new `components/VerifiedBadge.jsx` (green `BadgeCheck` seal + "Verified", compact tick-only on mobile, hover/focus tooltip). Placed on Search cards, Papers cards, Dealer D2D cards, Featured Suppliers (homepage), and Product Detail supplier line.
+
+**⚠ Action item for app owner:** Apply `/app/backend/supabase_schema_listing_views.sql` in the Supabase SQL editor to enable view-analytics persistence.
+
+
 ### 2026-02-XX — Wave 14 (Polish batch: footer, emails, checkout policy, supplier agreement)
 
 **Footer**: `Footer.jsx` flipped from `bg-[#0A0A0B] text-white` to clean white with dark text + `#00B7C7` link-hover. Single thin top border, no shadow.

@@ -11,10 +11,12 @@ import OrderRequestDialog from "../components/OrderRequestDialog";
 import TonerSearchInput from "../components/TonerSearchInput";
 import TonerCartridge from "../components/TonerCartridge";
 import WhatsAppEnquiry from "../components/WhatsAppEnquiry";
+import VerifiedBadge from "../components/VerifiedBadge";
 import RefilledWarningDialog from "../components/RefilledWarningDialog";
 import PageMeta from "../components/PageMeta";
 import useReveal from "../hooks/useReveal";
 import { colorSwatch } from "../lib/colors";
+import { cityMatch, deliveryLabel } from "../lib/location";
 
 const variantColorFromName = (name) => {
     const v = colorSwatch(name);
@@ -30,13 +32,14 @@ const SidebarItem = ({ active, onClick, children, testid }) => (
     </button>
 );
 
-function ProductCard({ p, qty, setQty, onBuy, onCart }) {
+function ProductCard({ p, qty, setQty, onBuy, onCart, userCity }) {
     const typeStyle = p.toner_type === "Original"
         ? "bg-emerald-50 text-emerald-700 border-emerald-200"
         : p.toner_type === "Compatible"
         ? "bg-blue-50 text-blue-700 border-blue-200"
         : "bg-amber-50 text-amber-700 border-amber-200";
     const variants = Array.isArray(p.variants) ? p.variants : [];
+    const loc = deliveryLabel(p.city || p.supplier_city, userCity);
     return (
         <div className="tc-product-card group relative" data-testid={`product-card-${p.id}`}>
             <div className="absolute top-3 right-3 z-10">
@@ -58,11 +61,24 @@ function ProductCard({ p, qty, setQty, onBuy, onCart }) {
                     </span>
                 </div>
                 <Link to={`/toner/${p.id}`} className="font-mono text-[18px] font-semibold text-[#0A0A0B] tracking-tight hover:text-[#00B7C7] transition">{p.model_number}</Link>
-                <div className="text-[13px] text-[#1D1D1F] truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
-                    {p.supplier_name || "—"}
+                <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-[13px] text-[#1D1D1F] truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
+                        {p.supplier_name || "—"}
+                    </span>
+                    <VerifiedBadge compact />
                 </div>
-                <div className="text-[12px] text-[#6E6E73] flex items-center gap-1">
-                    <MapPin size={11} /> {p.city}
+                <div className="flex items-center justify-between gap-2">
+                    <div className="text-[12px] text-[#6E6E73] flex items-center gap-1">
+                        <MapPin size={11} /> {p.city}
+                    </div>
+                    {loc.text && (
+                        <span
+                            className={`inline-flex items-center gap-1 text-[10.5px] font-semibold px-2 py-0.5 rounded-full border ${loc.local ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-[#F4F4F6] text-[#6E6E73] border-[#E5E5EA]"}`}
+                            data-testid={`delivery-label-${p.id}`}
+                        >
+                            {loc.local ? "Local · Free delivery" : loc.text}
+                        </span>
+                    )}
                 </div>
 
                 {variants.length > 0 && (
@@ -154,7 +170,21 @@ export default function SearchPage() {
         if (params.get("city") && params.get("city") !== "all") qp.city = params.get("city");
         if (params.get("toner_type") && params.get("toner_type") !== "all") qp.toner_type = params.get("toner_type");
         if (params.get("supplier_id")) qp.supplier_id = params.get("supplier_id");
+        // Location-based ordering — surface buyer's-city listings first when not
+        // hard-filtered by a specific city.
+        if (!(params.get("city") && params.get("city") !== "all") && city) qp.near_city = city;
         return qp;
+    };
+
+    // Local-first then cheapest. Mirrors the backend near_city ordering so the
+    // client sort doesn't undo it.
+    const byCityThenPrice = (a, b) => {
+        if (city) {
+            const am = cityMatch(a?.city || a?.supplier_city, city) ? 0 : 1;
+            const bm = cityMatch(b?.city || b?.supplier_city, city) ? 0 : 1;
+            if (am !== bm) return am - bm;
+        }
+        return (a?.price ?? 0) - (b?.price ?? 0);
     };
 
     useEffect(() => {
@@ -164,7 +194,7 @@ export default function SearchPage() {
             try {
                 const r = await api.get("/listings/search/paginated", { params: { ...buildParams(), page: 1, limit: 24 } });
                 const items = Array.isArray(r.data?.results) ? [...r.data.results] : [];
-                items.sort((a, b) => (a?.price ?? 0) - (b?.price ?? 0));
+                items.sort(byCityThenPrice);
                 setProducts(items);
                 setTotalPages(r.data?.pages || 1);
             } catch {
@@ -185,7 +215,7 @@ export default function SearchPage() {
             setProducts((prev) => {
                 const seen = new Set(prev.map((x) => x.id));
                 const merged = [...prev, ...newRows.filter((x) => !seen.has(x.id))];
-                merged.sort((a, b) => (a?.price ?? 0) - (b?.price ?? 0));
+                merged.sort(byCityThenPrice);
                 return merged;
             });
             setPage(next);
@@ -229,6 +259,14 @@ export default function SearchPage() {
 
     const getQty = (pid) => qtyMap[pid] ?? 1;
     const setQty = (pid, n) => setQtyMap((m) => ({ ...m, [pid]: n }));
+
+    // True when a city is active and none of the loaded results are local —
+    // we still show everything, just with a clear "from other cities" note.
+    const showingOtherCities = useMemo(() => {
+        if (!city || loading || products.length === 0) return false;
+        if (params.get("city") && params.get("city") !== "all") return false;
+        return !products.some((p) => cityMatch(p.city || p.supplier_city, city));
+    }, [products, city, params, loading]);
 
     const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -464,10 +502,17 @@ export default function SearchPage() {
                         </div>
                     )}
 
+                    {showingOtherCities && (
+                        <div className="mb-5 flex items-center gap-2 rounded-xl bg-[#FFF8E0] border border-[#F5E5A6] px-4 py-3 text-[12.5px] text-[#8C6A00]" data-testid="other-cities-banner">
+                            <MapPin size={14} className="shrink-0" />
+                            No local dealers in <strong className="mx-1">{city}</strong> for this — showing results from other cities.
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
                         {products.map((p, idx) => (
                             <div key={p.id} className="tc-reveal" style={{ transitionDelay: `${Math.min(idx * 35, 280)}ms` }}>
-                                <ProductCard p={p} qty={getQty(p.id)} setQty={(n) => setQty(p.id, n)} onBuy={onBuy} onCart={onCart} />
+                                <ProductCard p={p} qty={getQty(p.id)} setQty={(n) => setQty(p.id, n)} onBuy={onBuy} onCart={onCart} userCity={city} />
                             </div>
                         ))}
                     </div>

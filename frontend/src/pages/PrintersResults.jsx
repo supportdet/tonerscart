@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { Printer as PrinterIcon, X, SlidersHorizontal, Search as SearchIcon, Sparkles, ShoppingCart } from "lucide-react";
 import { useCity } from "../context/CityContext";
 import WhatsAppEnquiry from "../components/WhatsAppEnquiry";
+import VerifiedBadge from "../components/VerifiedBadge";
+import { deliveryLabel } from "../lib/location";
 import { useCart } from "../context/CartContext";
 
 const CONDITIONS = [
@@ -27,6 +29,8 @@ function fmt(v) { return LABELS[v] || v; }
 function PrinterCard({ p }) {
     const navigate = useNavigate();
     const { add } = useCart();
+    const { city: userCity } = useCity();
+    const loc = deliveryLabel(p.city || p.supplier_city, userCity);
     const onAdd = (e) => {
         e.preventDefault(); e.stopPropagation();
         add(p, 1);
@@ -64,7 +68,15 @@ function PrinterCard({ p }) {
                     {p.paper_sizes?.length > 0 && <span>· {p.paper_sizes.slice(0, 3).join(", ")}</span>}
                     {p.connectivity?.length > 0 && <span>· {p.connectivity.slice(0, 2).join(" / ")}</span>}
                 </div>
-                <div className="text-[11px] text-[#86868B]">{p.supplier_name}{p.city ? ` · ${p.city}` : ""}</div>
+                <div className="text-[11px] text-[#86868B] flex items-center gap-1.5 min-w-0">
+                    <span className="truncate">{p.supplier_name}{p.city ? ` · ${p.city}` : ""}</span>
+                    <VerifiedBadge compact />
+                </div>
+                {loc.text && (
+                    <span className={`inline-flex items-center gap-1 text-[10.5px] font-semibold px-2 py-0.5 rounded-full border w-fit ${loc.local ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-[#F4F4F6] text-[#6E6E73] border-[#E5E5EA]"}`} data-testid={`printer-delivery-${p.id}`}>
+                        {loc.local ? "Local · Free delivery" : loc.text}
+                    </span>
+                )}
                 <div className="font-mono text-[18px] font-bold text-[#0A0A0B] mt-2">₹{Number(p.price).toLocaleString("en-IN")}</div>
                 <div className="text-[10.5px] text-emerald-700 font-semibold">{p.stock} in stock</div>
                 <div className="grid grid-cols-2 gap-2 pt-1">
@@ -106,6 +118,7 @@ export default function Printers() {
             if (q.trim()) usp.set("q", q.trim()); else usp.delete("q");
             if (condition) usp.set("condition", condition); else usp.delete("condition");
             // City is opt-in — only applied when explicitly present in URL params (e.g. coming from the guided finder).
+            if (!usp.get("city") && city) usp.set("near_city", city);
             const { data } = await api.get(`/printers?${usp.toString()}`);
             setListings(Array.isArray(data) ? data : []);
         } catch (err) { toast.error(formatApiError(err)); }

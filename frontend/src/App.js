@@ -1,6 +1,6 @@
 import React from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { Toaster } from "sonner";
 import { AuthProvider } from "./context/AuthContext";
@@ -42,6 +42,30 @@ import Dealer from "./pages/Dealer";
 import OEM from "./pages/OEM";
 import ErrorBoundary from "./components/ErrorBoundary";
 import VisitorTracker from "./components/VisitorTracker";
+import { ProcAuthProvider } from "./context/ProcAuthContext";
+import ProcProtectedRoute from "./components/ProcProtectedRoute";
+import ProcurementLogin from "./pages/ProcurementLogin";
+import ProcurementDashboard from "./pages/ProcurementDashboard";
+
+// Procurement portal pages render full-screen with their own chrome, so the
+// global marketplace Header/Footer/chat are hidden on /procurement routes.
+function Chrome({ children }) {
+    const { pathname } = useLocation();
+    const bare = pathname.startsWith("/procurement");
+    return (
+        <>
+            {!bare && <Header />}
+            <VisitorTracker />
+            <main className="flex-1">
+                <ErrorBoundary>{children}</ErrorBoundary>
+            </main>
+            {!bare && <Footer />}
+            {!bare && <AIChatWidget />}
+            <CookieConsent />
+            <Toaster richColors position="top-right" />
+        </>
+    );
+}
 
 function App() {
     return (
@@ -51,10 +75,8 @@ function App() {
                 <CityProvider>
                     <CartProvider>
                         <AuthProvider>
-                            <Header />
-                            <VisitorTracker />
-                            <main className="flex-1">
-                                <ErrorBoundary>
+                            <ProcAuthProvider>
+                            <Chrome>
                                 <Routes>
                                     <Route path="/" element={<Landing />} />
                                     <Route path="/search" element={<SearchPage />} />
@@ -85,17 +107,15 @@ function App() {
                                     <Route path="/paper/:id" element={<ProductDetail kind="paper" />} />
                                     <Route path="/order-confirmed/:id" element={<OrderConfirmed />} />
                                     <Route path="/order-confirmed" element={<OrderConfirmed />} />
+                                    <Route path="/procurement/login" element={<ProcurementLogin />} />
+                                    <Route path="/procurement" element={<ProcProtectedRoute><ProcurementDashboard /></ProcProtectedRoute>} />
                                     <Route path="/customer" element={<ProtectedRoute roles={["customer"]}><CustomerDashboard /></ProtectedRoute>} />
                                     <Route path="/supplier" element={<ProtectedRoute roles={["supplier"]}><SupplierDashboard /></ProtectedRoute>} />
                                     <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
                                     <Route path="*" element={<NotFound />} />
                                 </Routes>
-                                </ErrorBoundary>
-                            </main>
-                            <Footer />
-                            <AIChatWidget />
-                            <CookieConsent />
-                            <Toaster richColors position="top-right" />
+                            </Chrome>
+                            </ProcAuthProvider>
                         </AuthProvider>
                     </CartProvider>
                 </CityProvider>

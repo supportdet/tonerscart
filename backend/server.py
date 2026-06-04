@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, UploadFile, File
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ValidationError
 
 from supabase_client import sb_admin, sb_anon, get_user_from_token
 from email_service import (
@@ -689,6 +689,48 @@ def toner_master_brands():
 
 # ===== Listings (read for everyone, write for approved suppliers) =============
 
+# ---------------------------------------------------------------------------
+# Location helpers — same-city-first ordering for search / browse endpoints.
+# ---------------------------------------------------------------------------
+_CITY_EQUIV = {
+    "bangalore": "bengaluru", "bengaluru": "bengaluru",
+    "bombay": "mumbai", "mumbai": "mumbai",
+    "calcutta": "kolkata", "kolkata": "kolkata",
+    "madras": "chennai", "chennai": "chennai",
+    "gurgaon": "gurugram", "gurugram": "gurugram",
+    "pondicherry": "puducherry", "puducherry": "puducherry",
+}
+
+
+def _city_key(c: Optional[str]) -> str:
+    k = (c or "").strip().lower()
+    return _CITY_EQUIV.get(k, k)
+
+
+def _fmt_validation_error(ve: ValidationError) -> str:
+    """Turn a Pydantic ValidationError into a short, dealer-friendly message."""
+    parts = []
+    for e in ve.errors()[:4]:
+        loc = ".".join(str(x) for x in e.get("loc", []) if x != "body") or "field"
+        parts.append(f"{loc}: {e.get('msg', 'invalid')}")
+    return "; ".join(parts) or "Invalid row"
+
+
+def _sort_by_near_city(rows: list, near_city: Optional[str]) -> list:
+    """Stable partition so listings in the buyer's city come first.
+    Preserves the existing within-group order (price / recency)."""
+    want = _city_key(near_city)
+    if not want or not rows:
+        return rows
+
+    def row_city(r):
+        return _city_key(r.get("city") or r.get("supplier_city") or "")
+
+    local = [r for r in rows if row_city(r) == want]
+    other = [r for r in rows if row_city(r) != want]
+    return local + other
+
+
 @api.get("/listings/search")
 def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
                     city: Optional[str] = None, toner_type: Optional[str] = None,
@@ -1158,11 +1200,11 @@ def delete_listing(listing_id: str, user: dict = Depends(require_role("supplier"
 
 # Wave 11 — Bulk upload of toner listings (CSV / spreadsheet flow).
 @api.post("/supplier/listings/bulk")
-def create_listings_bulk(payload: List[ListingCreate], user: dict = Depends(require_role("supplier"))):
-    """Create many listings at once. Reuses the single create path per row to
-    keep validation / specs / variants / D2D logic identical. Returns
-    `{created: [...], errors: [{row, message}]}` with any per-row failures so
-    the dealer can fix only the bad rows without losing the rest.
+def create_listings_bulk(payload: List[dict], user: dict = Depends(require_role("supplier"))):
+    """Create many listings at once. Validates EACH row independently (Pydantic
+    + business rules) so one bad row never fails the whole batch. Returns
+    `{created, errors:[{row, message}], total, succeeded, failed}` so the dealer
+    can fix only the bad rows without losing the rest.
     """
     if not payload:
         raise HTTPException(400, "No rows provided")
@@ -1171,10 +1213,12 @@ def create_listings_bulk(payload: List[ListingCreate], user: dict = Depends(requ
 
     created: List[dict] = []
     errors: List[dict] = []
-    for idx, row in enumerate(payload):
+    for idx, raw in enumerate(payload):
         try:
-            listing = create_listing(row, user=user)
+            listing = create_listing(ListingCreate(**raw), user=user)
             created.append(listing)
+        except ValidationError as ve:
+            errors.append({"row": idx, "message": _fmt_validation_error(ve)})
         except HTTPException as he:
             errors.append({"row": idx, "message": he.detail if isinstance(he.detail, str) else str(he.detail)})
         except Exception as e:
@@ -1698,6 +1742,30 @@ def delete_printer(printer_id: str, user: dict = Depends(require_user)):
     return {"ok": True}
 
 
+@api.post("/supplier/printers/bulk")
+def create_printers_bulk(payload: List[dict], user: dict = Depends(require_role("supplier"))):
+    """Create many printer listings at once. Validates EACH row independently
+    (Pydantic + business rules) so one bad row never fails the whole batch.
+    Returns per-row failures so the dealer can fix only the bad rows."""
+    if not payload:
+        raise HTTPException(400, "No rows provided")
+    if len(payload) > 200:
+        raise HTTPException(400, "Bulk upload is limited to 200 rows per request")
+    created: List[dict] = []
+    errors: List[dict] = []
+    for idx, raw in enumerate(payload):
+        try:
+            row = PrinterListingCreate(**raw)
+            created.append(create_printer(row, user=user))
+        except ValidationError as ve:
+            errors.append({"row": idx, "message": _fmt_validation_error(ve)})
+        except HTTPException as he:
+            errors.append({"row": idx, "message": he.detail if isinstance(he.detail, str) else str(he.detail)})
+        except Exception as e:
+            errors.append({"row": idx, "message": str(e)[:240]})
+    return {"created": created, "errors": errors, "total": len(payload), "succeeded": len(created), "failed": len(errors)}
+
+
 @api.get("/supplier/printers/mine")
 def my_printers(user: dict = Depends(require_user)):
     sid = _supplier_id_for(user)
@@ -1721,6 +1789,7 @@ def list_printers(
     city: Optional[str] = None,
     brand: Optional[str] = None,
     supplier_id: Optional[str] = None,
+    near_city: Optional[str] = None,
     q: Optional[str] = None,
 ):
     """Public browse endpoint with optional filters from the MPS flow.
@@ -1867,6 +1936,8 @@ def list_printers(
         if relaxed:
             r["is_relaxed_match"] = True
         out.append(r)
+    if near_city and not (city and city.strip()):
+        out = _sort_by_near_city(out, near_city)
     return out
 
 
@@ -3114,6 +3185,7 @@ class PaperCreate(BaseModel):
     thickness_microns: Optional[int] = None
     acid_free: Optional[bool] = None
     suitable_for: List[str] = Field(default_factory=list)
+    description: Optional[str] = None
     intercity_delivery_charge: Optional[float] = 0
     gst_rate: Optional[int] = 18
     # Wave 10 — D2D marketplace
@@ -3145,6 +3217,7 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
         "thickness_microns": payload.thickness_microns,
         "acid_free": payload.acid_free,
         "suitable_for": payload.suitable_for or None,
+        "description": (payload.description or "").strip() or None,
         "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
         "d2d_enabled": bool(payload.d2d_enabled) if payload.d2d_enabled is not None else None,
@@ -3160,7 +3233,7 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("image_urls", "brightness", "thickness_microns", "acid_free", "suitable_for", "intercity_delivery_charge", "gst_rate", "d2d_enabled", "d2d_price"):
+            for k in ("image_urls", "brightness", "thickness_microns", "acid_free", "suitable_for", "description", "intercity_delivery_charge", "gst_rate", "d2d_enabled", "d2d_price"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True
@@ -3169,6 +3242,30 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
                 continue
             logger.warning("create_paper failed: %s", e)
             raise HTTPException(503, "paper_listings table not yet migrated — run supabase_schema_papers.sql") from e
+
+
+@api.post("/supplier/papers/bulk")
+def create_papers_bulk(payload: List[dict], user: dict = Depends(require_role("supplier"))):
+    """Create many paper listings at once. Validates EACH row independently
+    (Pydantic + business rules) so one bad row never fails the whole batch.
+    Returns per-row failures so the dealer can fix only the bad rows."""
+    if not payload:
+        raise HTTPException(400, "No rows provided")
+    if len(payload) > 200:
+        raise HTTPException(400, "Bulk upload is limited to 200 rows per request")
+    created: List[dict] = []
+    errors: List[dict] = []
+    for idx, raw in enumerate(payload):
+        try:
+            row = PaperCreate(**raw)
+            created.append(create_paper(row, user=user))
+        except ValidationError as ve:
+            errors.append({"row": idx, "message": _fmt_validation_error(ve)})
+        except HTTPException as he:
+            errors.append({"row": idx, "message": he.detail if isinstance(he.detail, str) else str(he.detail)})
+        except Exception as e:
+            errors.append({"row": idx, "message": str(e)[:240]})
+    return {"created": created, "errors": errors, "total": len(payload), "succeeded": len(created), "failed": len(errors)}
 
 
 @api.get("/supplier/papers/mine")
@@ -3201,6 +3298,7 @@ def delete_paper(paper_id: str, user: dict = Depends(require_user)):
 @api.get("/papers")
 def list_papers(brand: Optional[str] = None, size: Optional[str] = None,
                  gsm: Optional[int] = None, city: Optional[str] = None,
+                 near_city: Optional[str] = None,
                  limit: int = 200):
     try:
         qry = sb_admin.table("paper_listings").select(
@@ -3243,7 +3341,89 @@ def list_papers(brand: Optional[str] = None, size: Optional[str] = None,
         r["supplier_name"] = sup.get("business_name")
         r["supplier_city"] = sup.get("city")
         out.append(r)
+    if near_city and not (city and city.strip()):
+        out = _sort_by_near_city(out, near_city)
     return out
+
+
+# =============================================================================
+# Listing view analytics (location-based dealer insights) — Wave 15
+# =============================================================================
+
+class ListingViewPing(BaseModel):
+    kind: Optional[str] = "toner"   # toner | printer | paper
+    city: Optional[str] = None
+
+
+@api.post("/listings/{listing_id}/view")
+def record_listing_view(listing_id: str, payload: ListingViewPing, request: Request):
+    """Anonymous, best-effort product-view ping. Records the viewer's selected
+    city so dealers get basic 'who viewed me, from where' analytics.
+    Degrades silently (no error) when the listing_views table is not migrated."""
+    viewer_id = None
+    tok = get_token(request)
+    if tok:
+        try:
+            u = get_user_from_token(tok)
+            if u:
+                viewer_id = u.id
+        except Exception:
+            viewer_id = None
+    kind = (payload.kind or "toner").strip().lower()
+    if kind not in ("toner", "printer", "paper"):
+        kind = "toner"
+    row = {
+        "listing_id": listing_id,
+        "listing_kind": kind,
+        "viewer_city": (payload.city or "").strip() or None,
+        "viewer_id": viewer_id,
+    }
+    try:
+        sb_admin.table("listing_views").insert(row).execute()
+    except Exception as e:
+        # Migration pending or any insert issue — never block the page.
+        if "listing_views" not in str(e):
+            logger.warning("listing view ping failed: %s", e)
+    return {"ok": True}
+
+
+@api.get("/supplier/analytics/views")
+def supplier_view_analytics(user: dict = Depends(require_user)):
+    """Aggregated view analytics for the calling supplier's listings.
+    Returns total_views + a per-city breakdown (sorted desc)."""
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved sellers can view analytics")
+    s = sb_admin.table("suppliers").select("id").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        raise HTTPException(403, "Supplier not approved yet")
+    supplier_id = s.data["id"]
+
+    # Collect this supplier's listing ids across all three product tables.
+    listing_ids: list = []
+    for table in ("listings", "printer_listings", "paper_listings"):
+        try:
+            rows = sb_admin.table(table).select("id").eq("supplier_id", supplier_id).execute().data or []
+            listing_ids.extend([r["id"] for r in rows if r.get("id")])
+        except Exception:
+            continue
+    if not listing_ids:
+        return {"total_views": 0, "by_city": []}
+
+    try:
+        views = sb_admin.table("listing_views").select("viewer_city").in_("listing_id", listing_ids).execute().data or []
+    except Exception:
+        # listing_views table not migrated yet — graceful empty.
+        return {"total_views": 0, "by_city": []}
+
+    by_city: dict = {}
+    for v in views:
+        c = (v.get("viewer_city") or "Unknown").strip() or "Unknown"
+        by_city[c] = by_city.get(c, 0) + 1
+    breakdown = sorted(
+        [{"city": k, "count": val} for k, val in by_city.items()],
+        key=lambda x: x["count"], reverse=True,
+    )
+    return {"total_views": len(views), "by_city": breakdown}
 
 
 # =============================================================================
@@ -3255,9 +3435,14 @@ def search_listings_paginated(
     q: Optional[str] = None, brand: Optional[str] = None,
     city: Optional[str] = None, toner_type: Optional[str] = None,
     supplier_id: Optional[str] = None,
+    near_city: Optional[str] = None,
     page: int = 1, limit: int = 20,
 ):
     all_rows = search_listings(q=q, brand=brand, city=city, toner_type=toner_type, supplier_id=supplier_id, limit=2000)
+    # Location-based ordering: surface the buyer's-city listings first (only
+    # when not already hard-filtered by city).
+    if near_city and not (city and city != "all"):
+        all_rows = _sort_by_near_city(all_rows, near_city)
     total = len(all_rows)
     page = max(1, page)
     limit = max(1, min(limit, 100))
@@ -3947,13 +4132,19 @@ def _bust_landing_cache():
 
 app.include_router(api)
 
+# Procurement module (Govt & Corporate) — self-contained, separate from the
+# regular Supabase-Auth customer/dealer/admin flow.
+from procurement import proc_router, proc_admin_router  # noqa: E402
+app.include_router(proc_router)
+app.include_router(proc_admin_router)
+
 
 # CORS — explicit origin list (browsers reject the wildcard "*" combined with allow_credentials=True,
 # which silently strips the Access-Control-Allow-Origin header on the response).
 _default_origins = [
     "https://www.tonerscart.com",
     "https://tonerscart.com",
-    "https://b2b-checkout-2.preview.emergentagent.com",
+    "https://printer-supply-hub.preview.emergentagent.com",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]

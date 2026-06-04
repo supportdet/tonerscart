@@ -7,7 +7,7 @@ import { Label } from "../components/ui/label";
 import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
-import { ArrowRight, Mail, Lock, Loader2 } from "lucide-react";
+import { ArrowRight, Mail, Lock, Loader2, Landmark } from "lucide-react";
 
 const GoogleIcon = (props) => (
     <svg viewBox="0 0 48 48" width="18" height="18" {...props}>
@@ -28,6 +28,9 @@ export default function Login() {
     const [loading, setLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
     const [slowHint, setSlowHint] = useState(false);
+    const [errors, setErrors] = useState({}); // { email, password, form }
+
+    const clearErrors = () => setErrors({});
 
     React.useEffect(() => {
         if (!loading && !googleLoading) { setSlowHint(false); return; }
@@ -37,6 +40,7 @@ export default function Login() {
 
     const submit = async (e) => {
         e.preventDefault();
+        clearErrors();
         setLoading(true);
         try {
             await login(email, password);
@@ -48,17 +52,28 @@ export default function Login() {
             }
             const path = me.role === "admin" ? "/admin" : me.role === "supplier" ? "/supplier" : "/customer";
             navigate(path);
-        } catch (e) { toast.error(e.message || formatApiError(e)); }
+        } catch (err) {
+            const msg = err?.message || formatApiError(err) || "Sign-in failed";
+            // Map to the most relevant field; fall back to a form-level error.
+            if (/email/i.test(msg) && /(found|exist|registered)/i.test(msg)) {
+                setErrors({ email: msg });
+            } else if (/password|credential|incorrect/i.test(msg)) {
+                setErrors({ password: msg });
+            } else {
+                setErrors({ form: msg });
+            }
+        }
         finally { setLoading(false); }
     };
 
     const onGoogle = () => {
+        clearErrors();
         // Identical UX to logout button — flush state synchronously so the
         // overlay paints before we kick off the network call.
         flushSync(() => setGoogleLoading(true));
         (async () => {
             try { await signInWithGoogle(next || undefined); }
-            catch (e) { toast.error(e.message || "Google sign-in unavailable"); setGoogleLoading(false); }
+            catch (e) { setErrors({ form: e.message || "Google sign-in unavailable" }); setGoogleLoading(false); }
             // Note: Google OAuth redirects away — no cleanup needed on success path
         })();
     };
@@ -126,16 +141,19 @@ export default function Login() {
                                     <Label htmlFor="email">Email</Label>
                                     <div className="relative">
                                         <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B]" />
-                                        <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-9" data-testid="login-email-input" />
+                                        <Input id="email" type="email" value={email} onChange={(e) => { setEmail(e.target.value); if (errors.email || errors.form) clearErrors(); }} required className="pl-9" data-testid="login-email-input" />
                                     </div>
+                                    {errors.email && <p className="text-red-600 text-[12px] mt-1" data-testid="login-email-error">{errors.email}</p>}
                                 </div>
                                 <div>
                                     <Label htmlFor="password">Password</Label>
                                     <div className="relative">
                                         <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B]" />
-                                        <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="pl-9" data-testid="login-password-input" />
+                                        <Input id="password" type="password" value={password} onChange={(e) => { setPassword(e.target.value); if (errors.password || errors.form) clearErrors(); }} required className="pl-9" data-testid="login-password-input" />
                                     </div>
+                                    {errors.password && <p className="text-red-600 text-[12px] mt-1" data-testid="login-password-error">{errors.password}</p>}
                                 </div>
+                                {errors.form && <p className="text-red-600 text-[12px]" data-testid="login-form-error">{errors.form}</p>}
                                 <Button type="submit" className="btn-cta w-full inline-flex items-center justify-center gap-2" disabled={loading || googleLoading} data-testid="login-submit-btn">
                                     {loading ? <><Loader2 size={14} className="animate-spin" /> Signing in…</> : <>Sign in <ArrowRight size={14} /></>}
                                 </Button>
@@ -152,6 +170,20 @@ export default function Login() {
 
                             <div className="text-[13px] text-[#6E6E73] text-center mt-5">
                                 No account yet? <Link to="/register" className="text-[#00B7C7] font-semibold hover:underline" data-testid="login-to-register-link">Create one</Link>
+                            </div>
+
+                            <div className="mt-5 pt-5 border-t border-black/[0.08]">
+                                <Link
+                                    to="/procurement/login"
+                                    className="flex items-center justify-between gap-3 w-full px-4 py-3 rounded-xl bg-[#0B1220] text-white hover:bg-[#111a2e] transition-colors group"
+                                    data-testid="procurement-login-link"
+                                >
+                                    <span className="flex items-center gap-2.5">
+                                        <Landmark size={16} className="text-[#F7C600]" />
+                                        <span className="text-[13px] font-semibold">Government &amp; Corporate Procurement</span>
+                                    </span>
+                                    <ArrowRight size={15} className="opacity-70 group-hover:translate-x-0.5 transition-transform" />
+                                </Link>
                             </div>
                         </div>
 
