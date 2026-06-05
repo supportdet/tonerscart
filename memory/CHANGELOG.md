@@ -1,3 +1,9 @@
+### 2026-06 — Wave 20.3: printers questionnaire restored + footer expanded + wider search bar
+
+- **Printers flow reverted**: Printers nav pill → `/printers` (guided questionnaire). Completing the 10-step finder routes to `/printers/results` (search bar + filters). `isActivePath` reverted.
+- **UniversalSearch** taller/cleaner: 56px height, rounded-2xl, 15px text, larger icon.
+- **Footer** restructured to 4 columns (12-grid): Brand (logo + 2-line TonersCart blurb), Marketplace (Toners/Printers/Papers/Consumables/Scanners/MPS), Solutions (Bulk/Dealer-to-Dealer/OEM/Govt Portal/Sell), Company. All navbar categories now linked.
+
 ### 2026-06 — Wave 20.2: universal search bar + master brands + procurement polish + test-data purge
 
 - **Navbar search removed**: top bar is now logo · location · Sell · Sign in · cart · Join free only. Removed the navbar search form/state/handler and the `Search` icon import from `Header.jsx`.

@@ -11,7 +11,7 @@ import { LogOut, MapPin, ChevronDown, ShoppingCart, Loader2 } from "lucide-react
 
 const CATEGORY_PILLS = [
     { to: "/search", label: "Toners", color: "#FF1F75" },
-    { to: "/printers/results", label: "Printers", color: "#00D4E5" },
+    { to: "/printers", label: "Printers", color: "#00D4E5" },
     { to: "/papers", label: "Papers", color: "#C58A6E" },
     { to: "/consumables", label: "Consumables", color: "#FFC107" },
     { to: "/scanners", label: "Scanners", color: "#5468FF" },
@@ -60,7 +60,7 @@ export default function Header() {
     const isActivePath = (to) => {
         const p = location.pathname;
         if (to === "/search") return p === "/search" || p.startsWith("/toner/");
-        if (to === "/printers/results") return p === "/printers/results" || p === "/printers" || p.startsWith("/printer/") || p.startsWith("/printers/");
+        if (to === "/printers") return p === "/printers" || p.startsWith("/printer/") || p.startsWith("/printers/");
         if (to === "/papers") return p === "/papers" || p.startsWith("/paper/");
         return p === to || p.startsWith(`${to}/`);
     };

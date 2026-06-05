@@ -18,19 +18,19 @@ export default function UniversalSearch({ initial = "" }) {
 
     return (
         <form onSubmit={submit} role="search" data-testid="universal-search-form" className="w-full">
-            <div className="flex items-center gap-2 h-12 px-3.5 rounded-xl border border-[#D2D2D7] bg-white shadow-sm focus-within:border-[#0A0A0B] transition-colors">
-                <Search size={18} className="text-[#86868B] shrink-0" />
+            <div className="flex items-center gap-3 h-14 px-5 rounded-2xl border border-[#D2D2D7] bg-white shadow-sm focus-within:border-[#0A0A0B] focus-within:shadow-md transition-all">
+                <Search size={20} className="text-[#86868B] shrink-0" />
                 <input
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     placeholder="Search toners, printers, papers, consumables…"
                     aria-label="Search the marketplace"
-                    className="flex-1 min-w-0 bg-transparent outline-none text-[14px] text-[#0A0A0B] placeholder:text-[#86868B]"
+                    className="flex-1 min-w-0 bg-transparent outline-none text-[15px] text-[#0A0A0B] placeholder:text-[#86868B]"
                     data-testid="universal-search-input"
                 />
                 <button
                     type="submit"
-                    className="h-9 px-4 sm:px-5 rounded-lg bg-[#0A0A0B] text-white text-[13px] font-semibold hover:bg-[#1D1D1F] transition-colors shrink-0"
+                    className="h-10 px-6 sm:px-7 rounded-xl bg-[#0A0A0B] text-white text-[13.5px] font-semibold hover:bg-[#1D1D1F] transition-colors shrink-0"
                     data-testid="universal-search-submit"
                 >
                     Search

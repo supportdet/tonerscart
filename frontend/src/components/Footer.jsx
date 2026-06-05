@@ -9,36 +9,53 @@ export default function Footer() {
     return (
         <footer className="bg-white text-[#0A0A0B] border-t border-[#E8E8EC]" data-testid="site-footer">
             <div className="tc-container" style={{ paddingTop: 48, paddingBottom: 32 }}>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-12">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-10 md:gap-8">
                     {/* Brand column */}
-                    <div data-testid="footer-brand">
-                        <div className="inline-flex flex-col items-start">
-                            <div className="inline-flex">
-                                <img src="/TONERSCART-bg.png" alt="TonersCart" className="block h-10 w-auto" data-testid="footer-logo-img" />
-                            </div>
-                            <p className="mt-4 text-[#1D1D1F] text-[13px] max-w-xs" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-                                Buy Better. Print Smarter.
-                            </p>
-                            <p className="mt-2 text-[#6E6E73] text-[11px]">
-                                TonersCart Private Limited · Bangalore, India
-                            </p>
-                            <p className="mt-5 text-[12px] text-[#86868B]">© {year} TonersCart. All rights reserved.</p>
+                    <div data-testid="footer-brand" className="md:col-span-4">
+                        <div className="inline-flex">
+                            <img src="/TONERSCART-bg.png" alt="TonersCart" className="block h-10 w-auto" data-testid="footer-logo-img" />
                         </div>
+                        <p className="mt-4 text-[13px] text-[#6E6E73] leading-relaxed max-w-sm" data-testid="footer-about-blurb">
+                            TonersCart is India's B2B marketplace for printers, toners, papers and consumables —
+                            connecting businesses with verified suppliers for better prices, real stock and reliable
+                            delivery across the country.
+                        </p>
+                        <p className="mt-4 text-[#1D1D1F] text-[13px]" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                            Buy Better. Print Smarter.
+                        </p>
+                        <p className="mt-2 text-[#6E6E73] text-[11px]">
+                            TonersCart Private Limited · Bangalore, India
+                        </p>
+                        <p className="mt-5 text-[12px] text-[#86868B]">© {year} TonersCart. All rights reserved.</p>
                     </div>
 
                     {/* Marketplace column */}
-                    <div data-testid="footer-marketplace">
+                    <div data-testid="footer-marketplace" className="md:col-span-3">
                         <div className="text-[10px] tracking-[0.22em] uppercase font-semibold text-[#86868B] mb-3">Marketplace</div>
                         <ul className="space-y-2 text-[13.5px]">
-                            <li><Link to="/search"   className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-toners">Toners</Link></li>
-                            <li><Link to="/printers" className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-printers">Printers</Link></li>
-                            <li><Link to="/mps"      className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-mps">MPS</Link></li>
-                            <li><Link to="/sell"     className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-sell">Sell on TonersCart</Link></li>
+                            <li><Link to="/search"       className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-toners">Toners</Link></li>
+                            <li><Link to="/printers"     className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-printers">Printers</Link></li>
+                            <li><Link to="/papers"       className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-papers">Papers</Link></li>
+                            <li><Link to="/consumables"  className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-consumables">Consumables</Link></li>
+                            <li><Link to="/scanners"     className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-scanners">Scanners</Link></li>
+                            <li><Link to="/mps"          className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-mps">MPS / Rentals</Link></li>
+                        </ul>
+                    </div>
+
+                    {/* Solutions column */}
+                    <div data-testid="footer-solutions" className="md:col-span-2">
+                        <div className="text-[10px] tracking-[0.22em] uppercase font-semibold text-[#86868B] mb-3">Solutions</div>
+                        <ul className="space-y-2 text-[13.5px]">
+                            <li><Link to="/bulk"               className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-bulk">Bulk Orders</Link></li>
+                            <li><Link to="/dealer"             className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-dealer">Dealer to Dealer</Link></li>
+                            <li><Link to="/oem"                className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-oem">OEM Marketplace</Link></li>
+                            <li><Link to="/procurement/login"  className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-govt">Govt Portal</Link></li>
+                            <li><Link to="/sell"               className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-sell">Sell on TonersCart</Link></li>
                         </ul>
                     </div>
 
                     {/* Company column */}
-                    <div data-testid="footer-company">
+                    <div data-testid="footer-company" className="md:col-span-3">
                         <div className="text-[10px] tracking-[0.22em] uppercase font-semibold text-[#86868B] mb-3">Company</div>
                         <ul className="space-y-2 text-[13.5px]">
                             <li><Link to="/about"   className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-about">About Us</Link></li>
