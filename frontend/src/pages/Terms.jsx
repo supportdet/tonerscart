@@ -83,9 +83,10 @@ export default function Terms() {
                         TonersCart charges sellers a commission on successful orders, deducted from the seller&apos;s payout. The buyer-facing
                         price is unaffected. Tiers by order value:
                         <List items={[
-                            "Under ₹5,000 → 8%",
-                            "₹5,000 to ₹25,000 → 6%",
-                            "₹25,000 to ₹1,50,000 → 4%",
+                            "Under ₹10,000 → 10%",
+                            "₹10,000 to ₹25,000 → 8%",
+                            "₹25,000 to ₹75,000 → 6%",
+                            "₹75,000 to ₹1,50,000 → 4%",
                             "Above ₹1,50,000 → deal basis (agreed case-by-case)",
                         ]} />
                     </Section>

@@ -1,3 +1,8 @@
+### 2026-06 — Commission tiers updated + >₹1.5L deal-basis enquiry flow
+
+- **New commission tiers** applied everywhere: Under ₹10K → 10%, ₹10K–₹25K → 8%, ₹25K–₹75K → 6%, ₹75K–₹1.5L → 4%, Above ₹1.5L → Deal basis. Files: `lib/commission.js` (COMMISSION_TIERS + banner), backend `email_service.py` `_COMMISSION_TIERS`, `Terms.jsx` §9. Calculator/banner/supplier payout labels all read from these.
+- **Deal-basis flow**: products priced > ₹1,50,000 are auto-recognised on `ProductDetail` (`isDealBasis`); checkout CTAs are replaced by a single "Request pricing & demo" button → `DealEnquiryDialog` (name/email/phone/city/notes) posting to `/mps/inquiry` with `selections.type='deal_enquiry'`. Added a `deal_enquiry` subject branch in `email_mps_inquiry`. Endpoint verified ({ok:true}); no live >₹1.5L products exist yet to screenshot.
+
 ### 2026-06 — GA4 analytics + B2B terminology removal
 
 - **GA4**: added gtag.js (`G-GEFHGHQ074`) to `public/index.html` with `send_page_view:false`; `VisitorTracker.jsx` fires a `page_view` on every React Router route change (page_path/page_location/page_title). Verified live `/g/collect` hit with the correct tid. No new packages.

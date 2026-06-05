@@ -417,6 +417,13 @@ async def email_mps_inquiry(payload: dict):
         heading = f"New {cat} Interest Capture"
         intro = f"<p style='margin:0 0 18px 0;color:#6E6E73;'>Category: <strong>{cat}</strong></p>"
         subject = f"[TonersCart Notify] {cat} interest — {email}"
+    elif kind == "deal_enquiry":
+        product = sel.get("product") or "—"
+        price = sel.get("price")
+        heading = "New high-value (deal-basis) enquiry"
+        price_line = f" · Listed ₹{int(price):,}" if price else ""
+        intro = f"<p style='margin:0 0 18px 0;color:#6E6E73;'>Product: <strong>{product}</strong>{price_line}</p>"
+        subject = f"[TonersCart Deal] {product} — {email}"
     else:
         heading = "New Managed Print Services (MPS) enquiry"
         intro = f"<p style='margin:0 0 18px 0;color:#6E6E73;'>Estimated fleet: <strong>{estimated}</strong> printers</p>"
@@ -638,8 +645,9 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
 # ===== Order notifications =====================================================
 
 _COMMISSION_TIERS = [
-    (5000,   0.08),
-    (25000,  0.06),
+    (10000,  0.10),
+    (25000,  0.08),
+    (75000,  0.06),
     (150000, 0.04),
 ]
 
