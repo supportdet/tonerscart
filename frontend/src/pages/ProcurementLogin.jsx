@@ -153,38 +153,37 @@ export default function ProcurementLogin() {
     );
 
     return (
-        <div className="tc-hero relative min-h-screen pb-16" data-testid="procurement-login-page">
+        <div className="min-h-screen bg-[#F5F5F7] pb-16" data-testid="procurement-login-page">
             <PageMeta title="Procurement Portal — TonersCart" description="Government & Corporate procurement portal: compare suppliers, generate formal quotations and order on credit." />
-            <div className="tc-hero-grid" />
             <div className="tc-container relative pt-10 sm:pt-14">
-                <Link to="/login" className="inline-flex items-center gap-1.5 text-[13px] text-white/70 hover:text-white mb-8" data-testid="proc-back-to-login">
+                <Link to="/login" className="inline-flex items-center gap-1.5 text-[13px] text-[#6E6E73] hover:text-[#0A0A0B] mb-8 transition-colors" data-testid="proc-back-to-login">
                     <ArrowLeft size={14} /> Back to regular sign in
                 </Link>
 
                 <div className="grid lg:grid-cols-12 gap-8 lg:gap-14 items-start">
-                    {/* Left — pitch (matches /login hero) */}
+                    {/* Left — pitch */}
                     <div className="lg:col-span-5 hidden lg:block">
                         <div className="flex items-center gap-3 mb-4">
                             <span className="tc-strip" />
-                            <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-white/60">Procurement Portal</span>
+                            <span className="text-[11px] tracking-[0.22em] uppercase font-medium text-[#6E6E73]">Procurement Portal</span>
                         </div>
-                        <h1 className="text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(32px, 3.6vw, 48px)", lineHeight: 1.07, letterSpacing: "-0.03em", fontWeight: 300 }}>
-                            Government &amp; corporate procurement, <span className="text-[#00B7C7]" style={{ fontWeight: 500 }}>simplified</span>.
+                        <h1 className="text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(26px, 3vw, 34px)", lineHeight: 1.12, letterSpacing: "-0.025em", fontWeight: 300 }}>
+                            Government &amp; corporate procurement, <span className="text-[#00B7C7]" style={{ fontWeight: 400 }}>simplified</span>.
                         </h1>
-                        <p className="text-white/65 mt-5 max-w-md text-[14.5px] leading-relaxed">
+                        <p className="text-[#6E6E73] mt-5 max-w-md text-[14.5px] leading-relaxed">
                             Compare verified suppliers (L1/L2/L3), generate formal GST quotations as PDFs, and order on credit with NEFT/RTGS terms — all in one place.
                         </p>
-                        <ul className="mt-8 space-y-3 text-[13.5px] text-white/80 max-w-md">
+                        <ul className="mt-8 space-y-3 text-[13.5px] text-[#3a3a40] max-w-md">
                             {["L1/L2/L3 lowest-price comparison", "Formal PDF quotations (valid 7 days)", "Credit account with 30-day terms", "Govt PO upload & admin review"].map((t) => (
-                                <li key={t} className="flex items-center gap-2.5"><CheckCircle2 size={16} className="text-[#00B7C7] shrink-0" /> {t}</li>
+                                <li key={t} className="flex items-center gap-2.5"><CheckCircle2 size={16} className="text-[#86868B] shrink-0" /> {t}</li>
                             ))}
                         </ul>
                     </div>
 
-                    {/* Right — auth card (matches /login card) */}
+                    {/* Right — auth card */}
                     <div className="lg:col-span-7 w-full max-w-xl ml-auto">
-                        <div className="bg-white border border-black/[0.06] rounded-2xl shadow-2xl p-6 sm:p-8 text-[#0A0A0B]">
-                            <h2 className="text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "26px", fontWeight: 300, letterSpacing: "-0.02em" }}>
+                        <div className="bg-white border border-black/[0.06] rounded-2xl shadow-[0_8px_30px_-12px_rgba(10,10,11,0.18)] p-6 sm:p-8 text-[#0A0A0B]">
+                            <h2 className="text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "24px", fontWeight: 300, letterSpacing: "-0.02em" }}>
                                 {mode === "register" ? "Create your account" : "Welcome back"}
                             </h2>
                             <p className="text-[13px] text-[#6E6E73] mt-1">Government &amp; corporate buyers sign in or register here.</p>

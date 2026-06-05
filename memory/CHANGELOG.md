@@ -1,3 +1,16 @@
+### 2026-06 — Wave 20: Search/filter UX, typography, light redesigns, cleanup
+
+- **Single universal search:** added one search bar to the navbar (`navbar-search-input`) that routes to `/search?q=`. Removed the individual search bars from `/papers`, `/consumables`, `/search` (toners) and `/printers` (guided finder).
+- **Filter + sort bars:** new reusable `components/CategoryFilters.jsx` (horizontal on desktop, collapsible drawer on mobile, instant client-side apply). Wired into Papers (Brand/Size/GSM/City + price range + sort) and Consumables (Brand/Condition/City + price range + sort). Sort: Local first / Price ↑ / Price ↓ / Newest. `/search` toners keeps its sidebar filters; search input replaced by a clean category header.
+- **Coachmark fix:** "Set your location" tooltip now drops below the full navbar (no overlap) — `tc-coachmark` top offset increased, arrow removed.
+- **Typography:** category page H1s + procurement + OEM headings set to Montserrat weight 300 (thin, not bold), matching the scanners/ComingSoon aesthetic. Homepage was already thin.
+- **Printers header fix:** removed the misaligned/low-contrast sticky search; eyebrow "Printers · Guided finder" brightened (`text-white/80`).
+- **/procurement/login redesigned** to calm light theme: `#F5F5F7` bg, white card + subtle shadow, dark charcoal thin heading, subtle grey bullet icons, light tabs, yellow Sign-in CTA (removed dark gradient).
+- **/oem redesigned** to light theme: `#F5F5F7` bg, dark thin heading, white product cards with subtle borders, emerald/grey accents (removed pure-black background). Content/functionality unchanged.
+- **Test data purged:** extended `backend/cleanup_test_data.py` to also remove consumables (incl. seeded DR-2305/GT53) + Auth users; deleted 3 test suppliers, 3 users, 2 consumables, 1 order. Removed one-off `scripts/seed_consumable.py`.
+- Verified: lint clean, webpack compiles, visual screenshots of procurement/oem/papers confirm the redesigns. (Data-driven list rendering can't be screenshotted in the automated browser due to the preview-env `/api` hang — works in real browsers.)
+
+
 ### 2026-06 — Wave 19: Consumables, Universal Search, SEO, Buyer Segmentation, fixes
 
 **REQUIRES DB MIGRATION (USER):** Run `/app/backend/supabase_schema_consumables.sql` in Supabase SQL editor. Creates `consumable_listings`; makes `orders.listing_id` nullable + adds `consumable_listing_id`/`paper_listing_id`/`product_brand`/`product_model`/`product_image` (enables paper+consumable direct orders to persist); adds `users.user_type`. Until applied: consumables empty, segmentation save → graceful 503, direct orders don't persist.

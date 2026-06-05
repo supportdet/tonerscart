@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
-import { MapPin, Boxes, Plus, Minus, ShoppingCart, X, SlidersHorizontal, Search } from "lucide-react";
+import { MapPin, Boxes, Plus, Minus, ShoppingCart, X, SlidersHorizontal } from "lucide-react";
 import { Skeleton } from "../components/ui/skeleton";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -8,7 +8,6 @@ import { useAuth } from "../context/AuthContext";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import { useCart } from "../context/CartContext";
 import OrderRequestDialog from "../components/OrderRequestDialog";
-import TonerSearchInput from "../components/TonerSearchInput";
 import TonerCartridge from "../components/TonerCartridge";
 import VerifiedBadge from "../components/VerifiedBadge";
 import RefilledWarningDialog from "../components/RefilledWarningDialog";
@@ -16,7 +15,6 @@ import PageMeta from "../components/PageMeta";
 import useReveal from "../hooks/useReveal";
 import { colorSwatch } from "../lib/colors";
 import { cityMatch, deliveryLabel } from "../lib/location";
-import { categoryRoute } from "../lib/categoryRoute";
 
 const variantColorFromName = (name) => {
     const v = colorSwatch(name);
@@ -227,19 +225,6 @@ export default function SearchPage() {
         finally { setLoadingMore(false); }
     };
 
-    const apply = (override) => {
-        const useQ = override?.query ?? q;
-        // Typing a main category keyword jumps straight to that category page.
-        const route = categoryRoute(useQ);
-        if (route && route !== "/search") { navigate(route); return; }
-        const p = new URLSearchParams();
-        if (useQ) p.set("q", useQ);
-        if (brand && brand !== "all") p.set("brand", brand);
-        if (tonerType && tonerType !== "all") p.set("toner_type", tonerType);
-        if (filterCity && filterCity !== "all") p.set("city", filterCity);
-        setParams(p);
-    };
-
     const setFilter = (key, val) => {
         const p = new URLSearchParams(params);
         if (val === "all" || !val) p.delete(key); else p.set(key, val);
@@ -347,15 +332,13 @@ export default function SearchPage() {
                                   : "Buy original and compatible printer toner cartridges online in India from verified dealers. Compare prices, real stock. HP 88A, Canon 337, Brother TN-2365, Xerox toners and more."}
                 path="/search"
             />
-            <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-2 pb-3 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-black/[0.04]" data-testid="search-sticky-wrapper">
-                <div className="tc-search-shell tc-search-light" data-testid="search-bar">
-                    <TonerSearchInput value={q} onChange={setQ} onSubmit={apply} testId="search-input" placeholder="Search toners, printers, papers — brand or model…" />
-                    <button onClick={() => apply()} className="tc-search-go" data-testid="search-apply-btn">
-                        <Search size={18} className="sm:hidden" />
-                        <span className="tc-search-go-label hidden sm:inline">Search</span>
-                    </button>
-                </div>
+            <div className="flex items-center gap-3 mb-2" data-testid="search-header">
+                <span className="tc-strip" />
+                <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-[#6E6E73]">{q ? "Search results" : "Buy Toners"}</span>
             </div>
+            <h1 className="text-[28px] sm:text-[34px] text-[#0A0A0B] mb-2" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 300, letterSpacing: "-0.025em", lineHeight: 1.1 }}>
+                {q ? `Results for "${q}"` : "Toner cartridges from verified dealers"}
+            </h1>
 
             {/* Universal category tabs — appear when a search query is active */}
             {universal && (

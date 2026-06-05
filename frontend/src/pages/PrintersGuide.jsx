@@ -4,7 +4,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { Label } from "../components/ui/label";
-import { ChevronLeft, ArrowRight, Printer, CheckCircle2, ChevronDown, ChevronUp, Loader2, Search as SearchIcon } from "lucide-react";
+import { ChevronLeft, ArrowRight, Printer, CheckCircle2, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
@@ -165,16 +165,6 @@ export default function PrintersGuide() {
     const [idx, setIdx] = useState(0);
     const [phase, setPhase] = useState("quiz");  // "quiz" | "lead"
     const [dir, setDir] = useState("fwd");
-    const [stickyQuery, setStickyQuery] = useState("");
-
-    const onStickySubmit = (e) => {
-        e.preventDefault();
-        const params = new URLSearchParams();
-        if (stickyQuery.trim()) params.set("q", stickyQuery.trim());
-        if (currentCity) params.set("city", currentCity);
-        navigate(`/printers/results?${params.toString()}`);
-    };
-
     const steps = useMemo(() => visibleSteps(answers), [answers]);
     const stepKey = steps[Math.min(idx, steps.length - 1)] || "usage";
     const total = ALL_STEPS.length;
@@ -279,29 +269,10 @@ export default function PrintersGuide() {
                 path="/printers"
             />
             <div className="tc-hero-grid" />
-            {/* Sticky search bar — fixed below navbar, also lets users skip the quiz */}
-            <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-2 pb-3 bg-black/40 backdrop-blur border-b border-white/5" data-testid="printers-guide-sticky-wrapper">
-                <form onSubmit={onStickySubmit} className="tc-search-shell tc-search-light max-w-3xl mx-auto" data-testid="printers-sticky-search">
-                    <div className="flex items-center gap-2 flex-1 px-3">
-                        <SearchIcon size={16} className="text-[#86868B]" />
-                        <input
-                            value={stickyQuery}
-                            onChange={(e) => setStickyQuery(e.target.value)}
-                            placeholder="Search printers by brand or model…"
-                            className="tc-search-input flex-1 bg-transparent border-none outline-none text-[14px] h-10"
-                            data-testid="printers-sticky-search-input"
-                        />
-                    </div>
-                    <button type="submit" className="tc-search-go" data-testid="printers-sticky-search-btn">
-                        <SearchIcon size={18} className="sm:hidden" />
-                        <span className="tc-search-go-label hidden sm:inline">Search</span>
-                    </button>
-                </form>
-            </div>
-            <div className="tc-container relative pt-10 sm:pt-14 max-w-3xl">
+            <div className="tc-container relative pt-12 sm:pt-16 max-w-3xl">
                 <div className="flex items-center gap-3 mb-3">
                     <span className="tc-strip" />
-                    <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-white/60">Printers · Guided finder</span>
+                    <span className="text-[11px] tracking-[0.22em] uppercase font-medium text-white/80">Printers · Guided finder</span>
                 </div>
                 <h1 className="text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 300, letterSpacing: "-0.025em", lineHeight: 1.12 }}>
                     Find the right printer setup
