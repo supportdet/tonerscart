@@ -3,7 +3,7 @@ import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import { useCart } from "../context/CartContext";
-import { LogOut, MapPin, ChevronDown, ShoppingCart, Loader2, Search } from "lucide-react";
+import { LogOut, MapPin, ChevronDown, ShoppingCart, Loader2 } from "lucide-react";
 
 // Wave 10 — two-layer navbar.
 // Layer 1 (top, dark): brand · city · sell · sign-in · cart · join-free.
@@ -11,7 +11,7 @@ import { LogOut, MapPin, ChevronDown, ShoppingCart, Loader2, Search } from "luci
 
 const CATEGORY_PILLS = [
     { to: "/search", label: "Toners", color: "#FF1F75" },
-    { to: "/printers", label: "Printers", color: "#00D4E5" },
+    { to: "/printers/results", label: "Printers", color: "#00D4E5" },
     { to: "/papers", label: "Papers", color: "#C58A6E" },
     { to: "/consumables", label: "Consumables", color: "#FFC107" },
     { to: "/scanners", label: "Scanners", color: "#5468FF" },
@@ -43,13 +43,6 @@ export default function Header() {
     const location = useLocation();
     const [cityOpen, setCityOpen] = useState(false);
     const [loggingOut, setLoggingOut] = useState(false);
-    const [searchQ, setSearchQ] = useState("");
-
-    const onSearch = (e) => {
-        e.preventDefault();
-        const term = searchQ.trim();
-        navigate(term ? `/search?q=${encodeURIComponent(term)}` : "/search");
-    };
 
     const role = user?.role;
     const isSeller = role === "supplier";
@@ -67,7 +60,7 @@ export default function Header() {
     const isActivePath = (to) => {
         const p = location.pathname;
         if (to === "/search") return p === "/search" || p.startsWith("/toner/");
-        if (to === "/printers") return p === "/printers" || p.startsWith("/printer/") || p.startsWith("/printers/");
+        if (to === "/printers/results") return p === "/printers/results" || p === "/printers" || p.startsWith("/printer/") || p.startsWith("/printers/");
         if (to === "/papers") return p === "/papers" || p.startsWith("/paper/");
         return p === to || p.startsWith(`${to}/`);
     };
@@ -91,23 +84,6 @@ export default function Header() {
                     </Link>
 
                     <div className="flex-1 min-w-0" />
-
-                    {/* Universal search — the single platform-wide search bar */}
-                    <form onSubmit={onSearch} className="flex-1 min-w-0 max-w-[520px]" data-testid="navbar-search-form" role="search">
-                        <div className="flex items-center gap-2 h-9 sm:h-10 px-3 rounded-lg border border-[#D2D2D7] bg-[#F5F5F7] focus-within:bg-white focus-within:border-[#0A0A0B] transition-colors">
-                            <Search size={15} className="text-[#86868B] shrink-0" />
-                            <input
-                                value={searchQ}
-                                onChange={(e) => setSearchQ(e.target.value)}
-                                placeholder="Search toners, printers, papers, consumables…"
-                                aria-label="Search the marketplace"
-                                className="flex-1 min-w-0 bg-transparent outline-none text-[13.5px] text-[#0A0A0B] placeholder:text-[#86868B]"
-                                data-testid="navbar-search-input"
-                            />
-                        </div>
-                    </form>
-
-                    <div className="flex-1 min-w-0 hidden lg:block" />
 
                     {/* City */}
                     <div className="relative">

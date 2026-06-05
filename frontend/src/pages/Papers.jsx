@@ -8,8 +8,10 @@ import { toast } from "sonner";
 import PageMeta from "../components/PageMeta";
 import VerifiedBadge from "../components/VerifiedBadge";
 import CategoryFilters from "../components/CategoryFilters";
+import UniversalSearch from "../components/UniversalSearch";
 import { deliveryLabel } from "../lib/location";
 import { formatApiError } from "../lib/api";
+import { PAPER_BRANDS } from "../lib/listingConstants";
 
 const SIZES = ["A4", "A3", "A5", "Letter"];
 const GSMS = [70, 75, 80, 90, 100, 120];
@@ -73,10 +75,7 @@ export default function Papers() {
     };
     useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
-    const brandOptions = useMemo(() => {
-        const set = new Set(allRows.map((r) => r.brand).filter(Boolean));
-        return [...set].sort().map((b) => ({ value: b, label: b }));
-    }, [allRows]);
+    const brandOptions = PAPER_BRANDS.map((b) => ({ value: b, label: b }));
 
     const visible = useMemo(() => {
         let out = allRows.filter((r) => {
@@ -126,6 +125,9 @@ export default function Papers() {
                 path="/papers"
             />
             <div className="tc-container py-8">
+                <div className="mb-5" data-testid="papers-universal-search">
+                    <UniversalSearch />
+                </div>
                 <div className="flex items-center gap-3 mb-2">
                     <span className="tc-strip" />
                     <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-[#6E6E73]">Buy Papers</span>
@@ -142,7 +144,7 @@ export default function Papers() {
                             { key: "gsm", label: "GSM", allLabel: "All GSM", options: GSMS.map((g) => ({ value: String(g), label: `${g} GSM` })) },
                             { key: "city", label: "City", allLabel: "All cities", options: KNOWN_CITIES.map((c) => ({ value: c, label: c })) },
                         ]}
-                        showPrice
+                        showPrice={false}
                         sortOptions={SORT_OPTIONS}
                         value={filters}
                         onChange={setFilters}
@@ -231,3 +233,4 @@ function PaperCard({ p, onAddToCart, onBuyNow, userCity }) {
         </div>
     );
 }
+

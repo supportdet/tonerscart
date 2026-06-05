@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Landmark, Building2, ArrowRight, Loader2, CheckCircle2, ArrowLeft } from "lucide-react";
+import { Landmark, Building2, ArrowRight, Loader2, CheckCircle2, ArrowLeft, FileText, CreditCard, ListChecks, ShieldCheck } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -153,7 +153,7 @@ export default function ProcurementLogin() {
     );
 
     return (
-        <div className="min-h-screen bg-[#F5F5F7] pb-16" data-testid="procurement-login-page">
+        <div className="min-h-screen bg-[#FBFBFC] pb-16" data-testid="procurement-login-page">
             <PageMeta title="Procurement Portal — TonersCart" description="Government & Corporate procurement portal: compare suppliers, generate formal quotations and order on credit." />
             <div className="tc-container relative pt-10 sm:pt-14">
                 <Link to="/login" className="inline-flex items-center gap-1.5 text-[13px] text-[#6E6E73] hover:text-[#0A0A0B] mb-8 transition-colors" data-testid="proc-back-to-login">
@@ -223,6 +223,45 @@ export default function ProcurementLogin() {
                             </Tabs>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                {/* How it works — fills the lower half and keeps the page balanced */}
+                <div className="mt-16 sm:mt-24" data-testid="proc-how-it-works">
+                    <div className="flex items-center gap-3 mb-7">
+                        <span className="tc-strip" />
+                        <span className="text-[11px] tracking-[0.22em] uppercase font-medium text-[#6E6E73]">How it works</span>
+                    </div>
+                    <div className="grid sm:grid-cols-3 gap-4">
+                        {[
+                            { n: "01", Icon: ListChecks, title: "Register & get verified", body: "Sign up with your government or corporate credentials. Our team reviews and approves your account, usually within 1 business day." },
+                            { n: "02", Icon: FileText, title: "Compare & quote", body: "Compare verified suppliers ranked L1 / L2 / L3 on lowest price, then download formal GST quotations as PDFs (valid 7 days)." },
+                            { n: "03", Icon: CreditCard, title: "Order on credit", body: "Place orders against a 30-day credit account with NEFT / RTGS terms, upload your PO, and track delivery end-to-end." },
+                        ].map(({ n, Icon, title, body }) => (
+                            <div key={n} className="bg-white border border-black/[0.06] rounded-2xl p-6 shadow-[0_8px_30px_-18px_rgba(10,10,11,0.18)]" data-testid={`proc-step-${n}`}>
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="w-10 h-10 rounded-xl grid place-items-center bg-[#00B7C7]/[0.08] text-[#00838f]">
+                                        <Icon size={18} />
+                                    </div>
+                                    <span className="text-[13px] font-medium text-[#C8C8CD]" style={{ fontFamily: "'Montserrat', sans-serif" }}>{n}</span>
+                                </div>
+                                <div className="text-[16px] text-[#0A0A0B] mb-1.5" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 400, letterSpacing: "-0.01em" }}>{title}</div>
+                                <p className="text-[13px] text-[#6E6E73] leading-relaxed">{body}</p>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="mt-5 bg-white border border-black/[0.06] rounded-2xl px-6 py-5 flex flex-wrap items-center gap-x-8 gap-y-3" data-testid="proc-trust-band">
+                        {[
+                            { Icon: ShieldCheck, label: "Only verified suppliers" },
+                            { Icon: FileText, label: "GST-compliant invoices" },
+                            { Icon: CreditCard, label: "30-day credit terms" },
+                            { Icon: Landmark, label: "Govt PO upload & review" },
+                        ].map(({ Icon, label }) => (
+                            <span key={label} className="inline-flex items-center gap-2 text-[13px] text-[#3a3a40]">
+                                <Icon size={15} className="text-[#86868B]" /> {label}
+                            </span>
+                        ))}
                     </div>
                 </div>
             </div>

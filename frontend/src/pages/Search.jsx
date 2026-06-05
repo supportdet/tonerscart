@@ -13,6 +13,8 @@ import VerifiedBadge from "../components/VerifiedBadge";
 import RefilledWarningDialog from "../components/RefilledWarningDialog";
 import PageMeta from "../components/PageMeta";
 import CategoryFilters from "../components/CategoryFilters";
+import UniversalSearch from "../components/UniversalSearch";
+import { PRINTER_TONER_BRANDS } from "../lib/listingConstants";
 import useReveal from "../hooks/useReveal";
 import { colorSwatch } from "../lib/colors";
 import { cityMatch, deliveryLabel } from "../lib/location";
@@ -130,7 +132,6 @@ export default function SearchPage() {
     const [filterCity, setFilterCity] = useState(params.get("city") || "all");
     const [tonerType, setTonerType] = useState(params.get("toner_type") || "all");
     const [refilledWarn, setRefilledWarn] = useState(false);
-    const [facets, setFacets] = useState({ brands: [], cities: [] });
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -159,12 +160,6 @@ export default function SearchPage() {
         })();
         return () => { cancelled = true; };
     }, [params]);
-
-    useEffect(() => {
-        api.get("/listings/facets")
-            .then((r) => setFacets(r.data || {}))
-            .catch(() => setFacets({}));
-    }, []);
 
     const buildParams = () => {
         const qp = {};
@@ -310,6 +305,9 @@ export default function SearchPage() {
                                   : "Buy original and compatible printer toner cartridges online in India from verified dealers. Compare prices, real stock. HP 88A, Canon 337, Brother TN-2365, Xerox toners and more."}
                 path="/search"
             />
+            <div className="mb-5" data-testid="toners-universal-search">
+                <UniversalSearch initial={q} />
+            </div>
             <div className="flex items-center gap-3 mb-2" data-testid="search-header">
                 <span className="tc-strip" />
                 <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-[#6E6E73]">{q ? "Search results" : "Buy Toners"}</span>
@@ -473,8 +471,8 @@ export default function SearchPage() {
                     <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-3 pb-3 bg-[#F5F5F7]/95 backdrop-blur" data-testid="toners-filters-wrapper">
                         <CategoryFilters
                             selects={[
-                                { key: "brand", label: "Brand", allLabel: "All brands", options: (facets?.brands || []).map((b) => ({ value: b, label: b })) },
-                                { key: "type", label: "Type", allLabel: "All types", options: [{ value: "Original", label: "Original" }, { value: "Compatible", label: "Compatible" }, { value: "Refilled", label: "Refilled" }] },
+                                { key: "brand", label: "Brand", allLabel: "All brands", options: PRINTER_TONER_BRANDS.map((b) => ({ value: b, label: b })) },
+                                { key: "type", label: "Condition", allLabel: "All conditions", options: [{ value: "Original", label: "Original" }, { value: "Compatible", label: "Compatible" }, { value: "Refilled", label: "Refilled" }] },
                                 { key: "city", label: "City", allLabel: "All cities", options: KNOWN_CITIES.map((c) => ({ value: c, label: c })) },
                             ]}
                             showPrice

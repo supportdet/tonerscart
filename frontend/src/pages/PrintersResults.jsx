@@ -7,6 +7,8 @@ import { Printer as PrinterIcon, X, Sparkles, ShoppingCart } from "lucide-react"
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import VerifiedBadge from "../components/VerifiedBadge";
 import CategoryFilters from "../components/CategoryFilters";
+import UniversalSearch from "../components/UniversalSearch";
+import { PRINTER_TONER_BRANDS } from "../lib/listingConstants";
 import { deliveryLabel } from "../lib/location";
 import { useCart } from "../context/CartContext";
 
@@ -14,6 +16,21 @@ const PRINTER_CONDITIONS = [
     { value: "new", label: "Brand New" },
     { value: "refurbished", label: "Refurbished" },
 ];
+const PRINTER_TYPES = [
+    { value: "laser", label: "Laser" },
+    { value: "inkjet", label: "Inkjet" },
+    { value: "mfd", label: "MFD (All-in-one)" },
+];
+const matchType = (p, t) => {
+    if (!t) return true;
+    const cat = String(p.category || "").toLowerCase();
+    const fn = String(p.function_ || p.function || "").toLowerCase();
+    const fns = (p.functions || []).map((x) => String(x).toLowerCase());
+    if (t === "laser") return cat === "laser";
+    if (t === "inkjet") return ["inkjet", "tank", "ink"].includes(cat);
+    if (t === "mfd") return cat === "mfd" || ["all_in_one", "print_scan"].includes(fn) || fns.some((x) => ["all_in_one", "print_scan"].includes(x));
+    return true;
+};
 const PRINTER_SORT_OPTIONS = [
     { value: "local", label: "Local suppliers first" },
     { value: "price_asc", label: "Price: Low to High" },
@@ -101,7 +118,7 @@ export default function Printers() {
     const [listings, setListings] = useState([]);
     const [loading, setLoading] = useState(false);
     const [filters, setFilters] = useState({
-        brand: "", condition: "", city: "", minPrice: "", maxPrice: "", sort: "local",
+        brand: "", type: "", condition: "", city: "", minPrice: "", maxPrice: "", sort: "local",
     });
 
     // Chips reflect the guided-finder selections passed in the URL (category,
@@ -137,14 +154,12 @@ export default function Printers() {
 
     const clearAll = () => { setParams({}, { replace: true }); };
 
-    const brandOptions = useMemo(() => {
-        const set = new Set(listings.map((p) => p.brand).filter(Boolean));
-        return [...set].sort().map((b) => ({ value: b, label: b }));
-    }, [listings]);
+    const brandOptions = PRINTER_TONER_BRANDS.map((b) => ({ value: b, label: b }));
 
     const visible = useMemo(() => {
         let out = listings.filter((p) => {
             if (filters.brand && p.brand !== filters.brand) return false;
+            if (!matchType(p, filters.type)) return false;
             if (filters.condition && (p.condition || "") !== filters.condition) return false;
             const rc = p.supplier_city || p.city;
             if (filters.city && rc !== filters.city) return false;
@@ -195,10 +210,14 @@ export default function Printers() {
             </div>
 
             <div className="tc-container py-8">
+                <div className="mb-5" data-testid="printers-universal-search">
+                    <UniversalSearch />
+                </div>
                 <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-3 pb-3 bg-[#F5F5F7]/95 backdrop-blur" data-testid="printers-filters-wrapper">
                     <CategoryFilters
                         selects={[
                             { key: "brand", label: "Brand", allLabel: "All brands", options: brandOptions },
+                            { key: "type", label: "Type", allLabel: "All types", options: PRINTER_TYPES },
                             { key: "condition", label: "Condition", allLabel: "All conditions", options: PRINTER_CONDITIONS },
                             { key: "city", label: "City", allLabel: "All cities", options: KNOWN_CITIES.map((c) => ({ value: c, label: c })) },
                         ]}

@@ -46,6 +46,20 @@ export const PRINTER_SPECIAL_FEATURES = [
     { id: "Wireless",              label: "Wireless" },
 ];
 
+// Master brand lists used by the category Filter/Sort bars. We intentionally
+// show the FULL master list (not just brands that currently have listings) so
+// buyers can filter by any known brand even before stock is onboarded.
+export const PRINTER_TONER_BRANDS = [
+    "HP", "Canon", "Brother", "Epson", "Xerox", "Ricoh", "Kyocera", "Samsung",
+    "Konica Minolta", "Lexmark", "Sharp", "Toshiba", "Panasonic", "Dell",
+    "OKI", "Pantum", "Riso", "TVS Electronics", "Develop", "Olivetti",
+];
+
+export const PAPER_BRANDS = [
+    "JK Paper", "Century", "BILT", "Trident", "Bindal", "ITC (Classmate)",
+    "Double A", "Sinarline", "Ballarpur", "Xerox", "Spectra", "Orient",
+];
+
 export const PRINTER_USAGE_TYPES = [
     { id: "home",       label: "Home" },
     { id: "corporate",  label: "Corporate" },

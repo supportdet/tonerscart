@@ -8,8 +8,10 @@ import { toast } from "sonner";
 import PageMeta from "../components/PageMeta";
 import VerifiedBadge from "../components/VerifiedBadge";
 import CategoryFilters from "../components/CategoryFilters";
+import UniversalSearch from "../components/UniversalSearch";
 import { deliveryLabel } from "../lib/location";
 import { CONSUMABLE_SUBCATEGORIES, CONSUMABLE_CONDITIONS } from "../lib/consumableConstants";
+import { PRINTER_TONER_BRANDS } from "../lib/listingConstants";
 
 const fmtMoney = (n) => `₹${Number(n).toLocaleString("en-IN")}`;
 const SORT_OPTIONS = [
@@ -69,10 +71,7 @@ export default function Consumables() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { load(); }, [sub]);
 
-    const brandOptions = useMemo(() => {
-        const set = new Set(rows.map((r) => r.brand).filter(Boolean));
-        return [...set].sort().map((b) => ({ value: b, label: b }));
-    }, [rows]);
+    const brandOptions = PRINTER_TONER_BRANDS.map((b) => ({ value: b, label: b }));
 
     const visible = useMemo(() => {
         let out = rows.filter((r) => {
@@ -120,6 +119,9 @@ export default function Consumables() {
                 path="/consumables"
             />
             <div className="tc-container py-8">
+                <div className="mb-5" data-testid="consumables-universal-search">
+                    <UniversalSearch />
+                </div>
                 <div className="flex items-center gap-3 mb-2">
                     <span className="tc-strip" />
                     <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-[#6E6E73]">Buy Consumables</span>

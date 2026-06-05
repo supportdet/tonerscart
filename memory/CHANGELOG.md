@@ -1,3 +1,14 @@
+### 2026-06 — Wave 20.2: universal search bar + master brands + procurement polish + test-data purge
+
+- **Navbar search removed**: top bar is now logo · location · Sell · Sign in · cart · Join free only. Removed the navbar search form/state/handler and the `Search` icon import from `Header.jsx`.
+- **Universal search bar** (`components/UniversalSearch.jsx`): one identical bar rendered at the top of `/search`, `/printers/results`, `/papers`, `/consumables`. Always searches across ALL categories by routing to `/search?q=`. Homepage hero search and `/dealer` (D2D) left untouched.
+- **Printers pill** now routes to `/printers/results` (the browse page with filters); guided finder still reachable at `/printers` via the "guided finder" links. `isActivePath` updated.
+- **Master brand lists** (`lib/listingConstants.js`): added `PRINTER_TONER_BRANDS` + `PAPER_BRANDS`. Brand filter on toners/printers/consumables/papers now uses the full master list instead of brands derived from current listings.
+- **Printers Type filter** added (Laser / Inkjet / MFD) with client-side `matchType`. Papers filter set = Brand/Size(+Legal)/GSM/City (price range removed per spec). Toners "Type" filter relabelled "Condition".
+- **Procurement Login** (`ProcurementLogin.jsx`): whiter background (`#FBFBFC`), added a "How it works" 3-step section + trust band to fill the empty lower half.
+- **Test-data purge**: removed 18 test/bot accounts (test/seed/demo/etc. emails) + their suppliers_pending / user_agreements rows + Supabase Auth users. Admin account untouched.
+- Removed the now-dead `/listings/facets` fetch + `facets` state from `Search.jsx`.
+
 ### 2026-06 — Wave 20.1: filter-bar consistency + navy hero
 
 - **`/search` (toners)**: replaced the left sidebar + mobile drawer with the shared horizontal `CategoryFilters` bar (Brand / Type / City + price range + sort). Brand/Type/City stay server-driven; price + sort apply client-side instantly. Removed `FiltersBlock`/`SidebarItem`/old mobile drawer.
