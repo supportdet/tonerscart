@@ -24,6 +24,15 @@
         <link rel="icon" href="/favicon.png" />
         <title>TonersCart — India's digital marketplace for printers, toners &amp; MFDs.</title>
         <script>window.addEventListener("error",function(e){if(e.error instanceof DOMException&&e.error.name==="DataCloneError"&&e.message&&e.message.includes("PerformanceServerTiming")){e.stopImmediatePropagation();e.preventDefault()}},true);</script>
+        <!-- Google Analytics 4 (gtag.js) -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-GEFHGHQ074"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            // SPA: disable automatic page_view; React Router fires page_view on every route change.
+            gtag('config', 'G-GEFHGHQ074', { send_page_view: false });
+        </script>
     </head>
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>

@@ -1,3 +1,8 @@
+### 2026-06 — GA4 analytics + B2B terminology removal
+
+- **GA4**: added gtag.js (`G-GEFHGHQ074`) to `public/index.html` with `send_page_view:false`; `VisitorTracker.jsx` fires a `page_view` on every React Router route change (page_path/page_location/page_title). Verified live `/g/collect` hit with the correct tid. No new packages.
+- **"B2B" removed everywhere** (frontend copy, SEO meta/keywords, emails, procurement PDF, chatbot/AI prompts, comments) — replaced with inclusive wording ("India's marketplace for printers, toners and supplies — for offices and homes"; "B2B invoicing" → "GST invoicing").
+
 ### 2026-06 — Wave 20.3: printers questionnaire restored + footer expanded + wider search bar
 
 - **Printers flow reverted**: Printers nav pill → `/printers` (guided questionnaire). Completing the 10-step finder routes to `/printers/results` (search bar + filters). `isActivePath` reverted.

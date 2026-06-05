@@ -23,6 +23,16 @@ export default function VisitorTracker() {
     const location = useLocation();
     const { user } = useAuth();
 
+    // Google Analytics 4 — fire a page_view on every SPA route change.
+    useEffect(() => {
+        if (typeof window === "undefined" || typeof window.gtag !== "function") return;
+        window.gtag("event", "page_view", {
+            page_path: location.pathname + (location.search || ""),
+            page_location: window.location.href,
+            page_title: document.title,
+        });
+    }, [location.pathname, location.search]);
+
     useEffect(() => {
         if (user?.role === "admin") return;
         // Skip noisy paths
