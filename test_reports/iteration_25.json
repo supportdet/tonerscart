@@ -1,0 +1,41 @@
+{
+  "summary": "Wave 19 backend + frontend testing complete. 19/19 pytest backend tests pass (100%). Critical UI flows validated: /consumables list with subcategory tabs, /consumable/:id detail with SEO meta, universal search at /search?q=Brother shows correct counts across all 5 categories, footer legal badge shows correct version/date text, and the Buy Now 404 bug fix is confirmed — guests clicking Buy now on consumable detail get AuthRequiredDialog and 'Create account' navigates to /register?next=... (no 404).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/consumables/{id}/public (joins)", "issue": "Backend logs show transient 'column suppliers.contact_email does not exist' postgrest error from a related joined query path; functional endpoints still return 200 due to graceful fallback. Worth cleaning up the select list."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "All pages header", "issues": ["A 'Set your location' tooltip/popover overlays the top navigation on every page load and partially covers the OEM Marketplace pill. Consider auto-dismissing or repositioning so it doesn't sit over nav items."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave19.py",
+    "/app/test_reports/pytest/wave19.xml",
+    "/app/scripts/seed_consumable.py"
+  ],
+  "action_items": [
+    "Optional cleanup: Remove the dangling 'contact_email' column reference in suppliers join inside consumable-related endpoint (visible in backend.err.log).",
+    "Optional UX: Auto-dismiss / reposition the city tooltip so it doesn't overlay the nav row."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 4627 lines — exceeds the 700-line guideline. Strongly recommend splitting into routers (consumables.py, search.py, orders.py, suppliers.py, auth.py) and a services module. Currently all routes live in one giant file.",
+    "create_consumable uses an exception-driven retry loop that pops keys when Postgres complains they don't exist. This works but masks schema drift; prefer a single introspection at startup that builds the allowed-column set and trims the insert row up front.",
+    "In-memory rate limiter (_RATE_BUCKETS) won't survive process restart or scale across multiple workers — fine for now, but flag for production hardening."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_wave19.py (new)",
+    "/app/scripts/seed_consumable.py (new — seeds Brother DR-2305 + HP GT53 for UI)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Admin admin@tonerscart.in/Admin@123; existing seeded supplier TEST.w16.sup.1780576350@tonerscarttest.com/Test@12345 (rotates to a fresh approved supplier when stale). Buyer/customer accounts created on-the-fly via /api/auth/signup-customer.",
+  "seed_data_creation": "Seeded two persistent consumables for FE UI: Brother DR-2305 (Drums, ₹3499, stock 20) and HP GT53 (Ink Cartridges, ₹799, stock 50). Both in Bangalore under a fresh TEST_W19 supplier. All pytest-created TEST_W19 rows are cleaned up via delete in fixture teardown.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Two seeded consumables remain in DB for UI: Brother DR-2305 (id=deead827-f8ad-4c4f-ae76-ca4c9f0ae0bc) and HP GT53 (id=4dcf2860-93ef-460a-b810-0f989d72fc39). The supplier owning them is the fresh TEST_W19 supplier created during bootstrap. Universal search q=Brother surfaces DR-2305 under consumables; q=HP surfaces GT53. Note: Supabase signup of synthetic emails like @tonerscarttest.com is blocked by Supabase email-validity check — always go through POST /api/auth/signup-customer (which uses admin.create_user with email_confirm=true) rather than calling supabase /auth/v1/signup directly. Skipped (intentional) tests: none — full 19/19 pass.",
+  "rca of the issue": "Buy Now 404 RCA confirmed: AuthRequiredDialog previously linked to wrong routes; now points to /register and /login (verified — 'Create account' goes to /register?next=<original>). No regression."
+}

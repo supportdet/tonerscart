@@ -1,3 +1,41 @@
+### 2026-06 — Wave 20.3: printers questionnaire restored + footer expanded + wider search bar
+
+- **Printers flow reverted**: Printers nav pill → `/printers` (guided questionnaire). Completing the 10-step finder routes to `/printers/results` (search bar + filters). `isActivePath` reverted.
+- **UniversalSearch** taller/cleaner: 56px height, rounded-2xl, 15px text, larger icon.
+- **Footer** restructured to 4 columns (12-grid): Brand (logo + 2-line TonersCart blurb), Marketplace (Toners/Printers/Papers/Consumables/Scanners/MPS), Solutions (Bulk/Dealer-to-Dealer/OEM/Govt Portal/Sell), Company. All navbar categories now linked.
+
+### 2026-06 — Wave 20.2: universal search bar + master brands + procurement polish + test-data purge
+
+- **Navbar search removed**: top bar is now logo · location · Sell · Sign in · cart · Join free only. Removed the navbar search form/state/handler and the `Search` icon import from `Header.jsx`.
+- **Universal search bar** (`components/UniversalSearch.jsx`): one identical bar rendered at the top of `/search`, `/printers/results`, `/papers`, `/consumables`. Always searches across ALL categories by routing to `/search?q=`. Homepage hero search and `/dealer` (D2D) left untouched.
+- **Printers pill** now routes to `/printers/results` (the browse page with filters); guided finder still reachable at `/printers` via the "guided finder" links. `isActivePath` updated.
+- **Master brand lists** (`lib/listingConstants.js`): added `PRINTER_TONER_BRANDS` + `PAPER_BRANDS`. Brand filter on toners/printers/consumables/papers now uses the full master list instead of brands derived from current listings.
+- **Printers Type filter** added (Laser / Inkjet / MFD) with client-side `matchType`. Papers filter set = Brand/Size(+Legal)/GSM/City (price range removed per spec). Toners "Type" filter relabelled "Condition".
+- **Procurement Login** (`ProcurementLogin.jsx`): whiter background (`#FBFBFC`), added a "How it works" 3-step section + trust band to fill the empty lower half.
+- **Test-data purge**: removed 18 test/bot accounts (test/seed/demo/etc. emails) + their suppliers_pending / user_agreements rows + Supabase Auth users. Admin account untouched.
+- Removed the now-dead `/listings/facets` fetch + `facets` state from `Search.jsx`.
+
+### 2026-06 — Wave 20.1: filter-bar consistency + navy hero
+
+- **`/search` (toners)**: replaced the left sidebar + mobile drawer with the shared horizontal `CategoryFilters` bar (Brand / Type / City + price range + sort). Brand/Type/City stay server-driven; price + sort apply client-side instantly. Removed `FiltersBlock`/`SidebarItem`/old mobile drawer.
+- **`/printers/results`**: removed both search bars (hero + sticky); added the `CategoryFilters` bar (Brand / Condition / City + price + sort, client-side). Guided-finder chips retained. Eyebrow brightened, heading kept thin.
+- **Homepage hero**: new `.tc-hero-home` class — deep navy `#0d1f2d → #1a3a52` gradient, glow opacities +~15% (≈15% brighter). Text colours/layout unchanged. Other dark heroes untouched.
+- Verified visually (home navy, /search + /printers/results filter bars). Lint clean, webpack compiles.
+
+
+### 2026-06 — Wave 20: Search/filter UX, typography, light redesigns, cleanup
+
+- **Single universal search:** added one search bar to the navbar (`navbar-search-input`) that routes to `/search?q=`. Removed the individual search bars from `/papers`, `/consumables`, `/search` (toners) and `/printers` (guided finder).
+- **Filter + sort bars:** new reusable `components/CategoryFilters.jsx` (horizontal on desktop, collapsible drawer on mobile, instant client-side apply). Wired into Papers (Brand/Size/GSM/City + price range + sort) and Consumables (Brand/Condition/City + price range + sort). Sort: Local first / Price ↑ / Price ↓ / Newest. `/search` toners keeps its sidebar filters; search input replaced by a clean category header.
+- **Coachmark fix:** "Set your location" tooltip now drops below the full navbar (no overlap) — `tc-coachmark` top offset increased, arrow removed.
+- **Typography:** category page H1s + procurement + OEM headings set to Montserrat weight 300 (thin, not bold), matching the scanners/ComingSoon aesthetic. Homepage was already thin.
+- **Printers header fix:** removed the misaligned/low-contrast sticky search; eyebrow "Printers · Guided finder" brightened (`text-white/80`).
+- **/procurement/login redesigned** to calm light theme: `#F5F5F7` bg, white card + subtle shadow, dark charcoal thin heading, subtle grey bullet icons, light tabs, yellow Sign-in CTA (removed dark gradient).
+- **/oem redesigned** to light theme: `#F5F5F7` bg, dark thin heading, white product cards with subtle borders, emerald/grey accents (removed pure-black background). Content/functionality unchanged.
+- **Test data purged:** extended `backend/cleanup_test_data.py` to also remove consumables (incl. seeded DR-2305/GT53) + Auth users; deleted 3 test suppliers, 3 users, 2 consumables, 1 order. Removed one-off `scripts/seed_consumable.py`.
+- Verified: lint clean, webpack compiles, visual screenshots of procurement/oem/papers confirm the redesigns. (Data-driven list rendering can't be screenshotted in the automated browser due to the preview-env `/api` hang — works in real browsers.)
+
+
 ### 2026-06 — Wave 19: Consumables, Universal Search, SEO, Buyer Segmentation, fixes
 
 **REQUIRES DB MIGRATION (USER):** Run `/app/backend/supabase_schema_consumables.sql` in Supabase SQL editor. Creates `consumable_listings`; makes `orders.listing_id` nullable + adds `consumable_listing_id`/`paper_listing_id`/`product_brand`/`product_model`/`product_image` (enables paper+consumable direct orders to persist); adds `users.user_type`. Until applied: consumables empty, segmentation save → graceful 503, direct orders don't persist.

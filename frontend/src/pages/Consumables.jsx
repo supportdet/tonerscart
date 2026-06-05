@@ -1,18 +1,25 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import api, { formatApiError } from "../lib/api";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import { useCart } from "../context/CartContext";
 import { useNavigate, Link } from "react-router-dom";
-import { Loader2, Boxes, Search, MapPin, ShoppingCart, Zap } from "lucide-react";
-import { Input } from "../components/ui/input";
-import { Button } from "../components/ui/button";
+import { Loader2, Boxes, MapPin, ShoppingCart, Zap } from "lucide-react";
 import { toast } from "sonner";
 import PageMeta from "../components/PageMeta";
 import VerifiedBadge from "../components/VerifiedBadge";
+import CategoryFilters from "../components/CategoryFilters";
+import UniversalSearch from "../components/UniversalSearch";
 import { deliveryLabel } from "../lib/location";
-import { CONSUMABLE_SUBCATEGORIES } from "../lib/consumableConstants";
+import { CONSUMABLE_SUBCATEGORIES, CONSUMABLE_CONDITIONS } from "../lib/consumableConstants";
+import { PRINTER_TONER_BRANDS } from "../lib/listingConstants";
 
 const fmtMoney = (n) => `₹${Number(n).toLocaleString("en-IN")}`;
+const SORT_OPTIONS = [
+    { value: "local", label: "Local suppliers first" },
+    { value: "price_asc", label: "Price: Low to High" },
+    { value: "price_desc", label: "Price: High to Low" },
+    { value: "newest", label: "Newest first" },
+];
 
 // Map a consumable row into the generic cart-product shape so the existing
 // Cart + Checkout flow works unchanged (kind="consumable" routes the order).
@@ -43,17 +50,16 @@ export default function Consumables() {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [sub, setSub] = useState("all");
-    const [brand, setBrand] = useState("");
-    const [filterCity, setFilterCity] = useState(appCity || "");
+    const [filters, setFilters] = useState({
+        brand: "", condition: "", city: "", minPrice: "", maxPrice: "", sort: "local",
+    });
 
     const load = async () => {
         setLoading(true);
         try {
             const params = {};
             if (sub && sub !== "all") params.subcategory = sub;
-            if (brand) params.brand = brand;
-            if (filterCity) params.city = filterCity;
-            if (!filterCity && appCity) params.near_city = appCity;
+            if (appCity) params.near_city = appCity;
             const { data } = await api.get("/consumables", { params });
             setRows(Array.isArray(data) ? data : []);
         } catch (e) {
@@ -64,6 +70,33 @@ export default function Consumables() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { load(); }, [sub]);
+
+    const brandOptions = PRINTER_TONER_BRANDS.map((b) => ({ value: b, label: b }));
+
+    const visible = useMemo(() => {
+        let out = rows.filter((r) => {
+            if (filters.brand && r.brand !== filters.brand) return false;
+            if (filters.condition && (r.condition || "New") !== filters.condition) return false;
+            const rc = r.supplier_city || r.city;
+            if (filters.city && rc !== filters.city) return false;
+            const price = Number(r.price || 0);
+            if (filters.minPrice && price < Number(filters.minPrice)) return false;
+            if (filters.maxPrice && price > Number(filters.maxPrice)) return false;
+            return true;
+        });
+        const priceOf = (r) => Number(r.price || 0);
+        if (filters.sort === "price_asc") out = [...out].sort((a, b) => priceOf(a) - priceOf(b));
+        else if (filters.sort === "price_desc") out = [...out].sort((a, b) => priceOf(b) - priceOf(a));
+        else if (filters.sort === "newest") out = [...out].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        else if (filters.sort === "local" && appCity) {
+            out = [...out].sort((a, b) => {
+                const al = (a.supplier_city || a.city) === appCity ? 0 : 1;
+                const bl = (b.supplier_city || b.city) === appCity ? 0 : 1;
+                return al - bl;
+            });
+        }
+        return out;
+    }, [rows, filters, appCity]);
 
     const onAddToCart = (c) => {
         const prod = toCartProduct(c);
@@ -86,11 +119,14 @@ export default function Consumables() {
                 path="/consumables"
             />
             <div className="tc-container py-8">
+                <div className="mb-5" data-testid="consumables-universal-search">
+                    <UniversalSearch />
+                </div>
                 <div className="flex items-center gap-3 mb-2">
                     <span className="tc-strip" />
                     <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-[#6E6E73]">Buy Consumables</span>
                 </div>
-                <h1 className="text-[28px] sm:text-[34px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", letterSpacing: "-0.025em", lineHeight: 1.1 }}>
+                <h1 className="text-[28px] sm:text-[34px] text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 300, letterSpacing: "-0.025em", lineHeight: 1.1 }}>
                     Inks, drums, fusers &amp; kits from verified dealers
                 </h1>
 
@@ -100,7 +136,7 @@ export default function Consumables() {
                         <button
                             key={t.key}
                             onClick={() => setSub(t.key)}
-                            className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold border transition ${sub === t.key ? "bg-[#0A0A0B] text-white border-[#0A0A0B]" : "bg-white text-[#0A0A0B] border-[#D2D2D7] hover:border-[#0A0A0B]"}`}
+                            className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-medium border transition ${sub === t.key ? "bg-[#0A0A0B] text-white border-[#0A0A0B]" : "bg-white text-[#0A0A0B] border-[#D2D2D7] hover:border-[#0A0A0B]"}`}
                             data-testid={`consumables-tab-${t.key.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
                         >
                             {t.label}
@@ -108,23 +144,24 @@ export default function Consumables() {
                     ))}
                 </div>
 
-                <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-3 pb-3 mt-5 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-black/[0.04]" data-testid="consumables-sticky-wrapper">
-                    <div className="flex flex-wrap gap-3 items-center bg-white border border-black/[0.06] rounded-xl p-3 shadow-sm">
-                        <div className="relative flex-1 min-w-[180px]">
-                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B]" />
-                            <Input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Brand or model…" className="pl-9" data-testid="consumables-brand-input" />
-                        </div>
-                        <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)} className="h-10 px-3 rounded-md border border-[#D2D2D7] bg-white text-[13px]" data-testid="consumables-city-select">
-                            <option value="">All cities</option>
-                            {KNOWN_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                        <Button onClick={load} className="btn-cta" data-testid="consumables-apply-btn">Apply</Button>
-                    </div>
+                <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-3 pb-3 mt-5 bg-[#F5F5F7]/95 backdrop-blur" data-testid="consumables-filters-wrapper">
+                    <CategoryFilters
+                        selects={[
+                            { key: "brand", label: "Brand", allLabel: "All brands", options: brandOptions },
+                            { key: "condition", label: "Condition", allLabel: "All conditions", options: CONSUMABLE_CONDITIONS.map((c) => ({ value: c, label: c })) },
+                            { key: "city", label: "City", allLabel: "All cities", options: KNOWN_CITIES.map((c) => ({ value: c, label: c })) },
+                        ]}
+                        showPrice
+                        sortOptions={SORT_OPTIONS}
+                        value={filters}
+                        onChange={setFilters}
+                        resultCount={visible.length}
+                    />
                 </div>
 
                 {loading ? (
                     <div className="py-20 text-center text-[#6E6E73] flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Loading consumables…</div>
-                ) : rows.length === 0 ? (
+                ) : visible.length === 0 ? (
                     <div className="mt-10 bg-white border border-black/[0.06] rounded-2xl p-10 text-center" data-testid="consumables-empty">
                         <Boxes size={28} className="mx-auto text-[#86868B]" />
                         <div className="mt-3 text-[15px] font-semibold text-[#0A0A0B]">No consumable listings yet</div>
@@ -132,7 +169,7 @@ export default function Consumables() {
                     </div>
                 ) : (
                     <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {rows.map((c) => (
+                        {visible.map((c) => (
                             <ConsumableCard key={c.id} c={c} onAddToCart={onAddToCart} onBuyNow={onBuyNow} userCity={appCity} />
                         ))}
                     </div>

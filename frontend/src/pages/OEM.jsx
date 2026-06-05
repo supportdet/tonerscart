@@ -12,30 +12,30 @@ function ProductCard({ product, brand, onEnquire }) {
     return (
         <div
             className="rounded-[18px] overflow-hidden flex flex-col text-left"
-            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)" }}
+            style={{ background: "#FFFFFF", border: "1px solid rgba(10,10,11,0.08)", boxShadow: "0 4px 16px -10px rgba(10,10,11,0.15)" }}
             data-testid={`oem-product-${product.id}`}
         >
-            <div className="aspect-[4/3] w-full bg-white/[0.06] flex items-center justify-center overflow-hidden">
+            <div className="aspect-[4/3] w-full bg-black/[0.03] flex items-center justify-center overflow-hidden">
                 {product.image_url ? (
                     <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
                 ) : (
-                    <Package size={28} className="text-white/30" />
+                    <Package size={28} className="text-[#D2D2D7]" />
                 )}
             </div>
             <div className="p-4 flex flex-col flex-1">
                 <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-[10px] tracking-[0.14em] uppercase font-semibold px-2 py-0.5 rounded-full" style={{ background: `${ACCENT}40`, color: "#E6D4CB" }}>
+                    <span className="text-[10px] tracking-[0.14em] uppercase font-semibold px-2 py-0.5 rounded-full" style={{ background: `${ACCENT}1A`, color: "#8a5a2b" }}>
                         {CAT_LABEL[product.category] || "Product"}
                     </span>
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-300" data-testid="oem-official-brand-badge">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600" data-testid="oem-official-brand-badge">
                         <BadgeCheck size={12} /> Official Brand
                     </span>
                 </div>
-                <div className="text-[15px] font-semibold text-white leading-tight">{product.name}</div>
-                {product.model_number && <div className="text-[12px] text-white/55 mt-0.5">Model: {product.model_number}</div>}
-                {product.description && <div className="text-[12.5px] text-white/65 mt-2 leading-relaxed line-clamp-3">{product.description}</div>}
-                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[12px] text-white/60">
-                    {product.moq && <span>MOQ: <strong className="text-white/80">{product.moq}</strong></span>}
+                <div className="text-[15px] font-semibold text-[#0A0A0B] leading-tight">{product.name}</div>
+                {product.model_number && <div className="text-[12px] text-[#86868B] mt-0.5">Model: {product.model_number}</div>}
+                {product.description && <div className="text-[12.5px] text-[#6E6E73] mt-2 leading-relaxed line-clamp-3">{product.description}</div>}
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[12px] text-[#6E6E73]">
+                    {product.moq && <span>MOQ: <strong className="text-[#0A0A0B]">{product.moq}</strong></span>}
                     {product.price_note && <span>{product.price_note}</span>}
                 </div>
                 <div className="flex-1" />
@@ -143,27 +143,27 @@ export default function OEM() {
     return (
         <>
             <PageMeta title="OEM Printer Brands India — Official Products | TonersCart" description="Discover products directly from verified manufacturers. Official brands, verified authenticity." path="/oem" />
-            <div className="min-h-[80vh]" style={{ background: "#0A0A0B", color: "#F5F5F7" }} data-testid="oem-page">
+            <div className="min-h-[80vh]" style={{ background: "#F5F5F7", color: "#0A0A0B" }} data-testid="oem-page">
                 {/* Hero */}
                 <div className="tc-container max-w-[1100px] py-16 sm:py-20 text-center">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] tracking-[0.18em] uppercase font-semibold mb-6" style={{ background: `${ACCENT}26`, color: "#D7C2B8" }}>
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] tracking-[0.18em] uppercase font-semibold mb-6" style={{ background: `${ACCENT}1A`, color: "#8a5a2b" }}>
                         <Sparkles size={11} /> OEM Marketplace
                     </div>
-                    <h1 className="mb-5" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(34px, 6vw, 64px)", fontWeight: 300, letterSpacing: "-0.03em", lineHeight: 1.05 }} data-testid="oem-heading">
+                    <h1 className="mb-5 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(30px, 5vw, 52px)", fontWeight: 300, letterSpacing: "-0.03em", lineHeight: 1.06 }} data-testid="oem-heading">
                         OEM Partner Showcase
                     </h1>
-                    <p className="text-[16px] sm:text-[17px] text-white/70 max-w-[640px] mx-auto leading-relaxed mb-10" data-testid="oem-subheading">
+                    <p className="text-[16px] sm:text-[17px] text-[#6E6E73] max-w-[640px] mx-auto leading-relaxed mb-10" data-testid="oem-subheading">
                         Products direct from verified manufacturers — official brands, verified authenticity. Enquire directly with the brand.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
                         <button onClick={() => setOpen(true)} className="h-12 px-7 rounded-xl text-[14px] font-semibold inline-flex items-center justify-center gap-2" style={{ background: "#FFC107", color: "#0A0A0B" }} data-testid="oem-apply-btn">
                             Apply to showcase
                         </button>
-                        <a href="mailto:support@tonerscart.com" className="h-12 px-6 rounded-xl text-[13.5px] font-medium inline-flex items-center justify-center gap-2 text-white/85 hover:text-white" style={{ border: "1px solid rgba(255,255,255,0.18)" }} data-testid="oem-contact-mail">
+                        <a href="mailto:support@tonerscart.com" className="h-12 px-6 rounded-xl text-[13.5px] font-medium inline-flex items-center justify-center gap-2 text-[#0A0A0B] hover:bg-black/[0.04] transition-colors" style={{ border: "1px solid #D2D2D7" }} data-testid="oem-contact-mail">
                             <Mail size={14} /> Contact support
                         </a>
                     </div>
-                    <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-3 text-[12.5px] text-white/55 max-w-[760px] mx-auto">
+                    <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-3 text-[12.5px] text-[#6E6E73] max-w-[760px] mx-auto">
                         <div className="flex items-center gap-2 justify-center"><ShieldCheck size={14} /> Verified manufacturers only</div>
                         <div className="flex items-center gap-2 justify-center"><BadgeCheck size={14} /> Official brand products</div>
                         <div className="flex items-center gap-2 justify-center"><Building2 size={14} /> Direct dealer reach</div>
@@ -173,7 +173,7 @@ export default function OEM() {
                 {/* Showcase */}
                 <div className="tc-container max-w-[1100px] pb-20">
                     {loading ? (
-                        <div className="py-16 text-center text-white/55 flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Loading showcase…</div>
+                        <div className="py-16 text-center text-[#6E6E73] flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Loading showcase…</div>
                     ) : hasProducts ? (
                         <div className="space-y-12">
                             {partners.map((p) => (
@@ -182,19 +182,19 @@ export default function OEM() {
                                         {p.logo_url ? (
                                             <img src={p.logo_url} alt={p.brand} className="w-10 h-10 rounded-lg object-cover" />
                                         ) : (
-                                            <div className="w-10 h-10 rounded-lg grid place-items-center" style={{ background: `${ACCENT}33`, color: "#D7C2B8" }}><Building2 size={16} /></div>
+                                            <div className="w-10 h-10 rounded-lg grid place-items-center" style={{ background: `${ACCENT}1A`, color: "#8a5a2b" }}><Building2 size={16} /></div>
                                         )}
                                         <div>
                                             <div className="flex items-center gap-2">
-                                                <h2 className="text-[20px] font-semibold text-white" style={{ fontFamily: "'Montserrat', sans-serif" }}>{p.brand}</h2>
-                                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-300 px-2 py-0.5 rounded-full bg-emerald-400/10"><BadgeCheck size={11} /> Official Brand</span>
+                                                <h2 className="text-[20px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>{p.brand}</h2>
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200"><BadgeCheck size={11} /> Official Brand</span>
                                             </div>
-                                            {p.company && p.company !== p.brand && <div className="text-[12px] text-white/50">{p.company}</div>}
+                                            {p.company && p.company !== p.brand && <div className="text-[12px] text-[#86868B]">{p.company}</div>}
                                         </div>
                                     </div>
                                     {/* Verified Manufacturer trust strip */}
-                                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mb-5 text-[12px] text-white/60" data-testid={`oem-trust-strip-${p.id}`}>
-                                        <span className="inline-flex items-center gap-1.5 text-emerald-300 font-medium"><ShieldCheck size={13} /> Verified Manufacturer</span>
+                                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mb-5 text-[12px] text-[#6E6E73]" data-testid={`oem-trust-strip-${p.id}`}>
+                                        <span className="inline-flex items-center gap-1.5 text-emerald-700 font-medium"><ShieldCheck size={13} /> Verified Manufacturer</span>
                                         <span className="inline-flex items-center gap-1.5"><BadgeCheck size={13} /> Official brand products</span>
                                         <span className="inline-flex items-center gap-1.5"><Building2 size={13} /> Direct from the brand</span>
                                     </div>
@@ -207,10 +207,10 @@ export default function OEM() {
                             ))}
                         </div>
                     ) : (
-                        <div className="rounded-[20px] p-10 text-center" style={{ background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.18)" }} data-testid="oem-empty">
-                            <div className="w-12 h-12 mx-auto rounded-xl grid place-items-center mb-4" style={{ background: `${ACCENT}33`, color: "#D7C2B8" }}><Building2 size={20} /></div>
-                            <h3 className="text-[18px] font-semibold text-white mb-2">No brands showcasing yet</h3>
-                            <p className="text-[13.5px] text-white/55 max-w-[460px] mx-auto mb-6">Be the first verified manufacturer to showcase products directly to dealers across India.</p>
+                        <div className="rounded-[20px] p-10 text-center bg-white" style={{ border: "1px dashed #D2D2D7" }} data-testid="oem-empty">
+                            <div className="w-12 h-12 mx-auto rounded-xl grid place-items-center mb-4" style={{ background: `${ACCENT}1A`, color: "#8a5a2b" }}><Building2 size={20} /></div>
+                            <h3 className="text-[18px] font-semibold text-[#0A0A0B] mb-2">No brands showcasing yet</h3>
+                            <p className="text-[13.5px] text-[#6E6E73] max-w-[460px] mx-auto mb-6">Be the first verified manufacturer to showcase products directly to dealers across India.</p>
                             <button onClick={() => setOpen(true)} className="h-11 px-6 rounded-xl text-[13.5px] font-semibold inline-flex items-center justify-center gap-2" style={{ background: "#FFC107", color: "#0A0A0B" }} data-testid="oem-empty-apply-btn">
                                 Apply to showcase
                             </button>

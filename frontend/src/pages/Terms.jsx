@@ -20,7 +20,7 @@ export default function Terms() {
 
                 <div className="prose mt-8 text-[#1D1D1F] text-[14.5px] leading-[1.75]" style={{ fontFamily: "'Inter', sans-serif" }}>
                     <Section title="1. About TonersCart & Acceptance">
-                        TonersCart Private Limited operates an India-focused online marketplace (B2B and B2C) connecting
+                        TonersCart Private Limited operates an India-focused online marketplace connecting
                         verified third-party suppliers of printer toners, printers, papers and related consumables with buyers.
                         By accessing or using the Platform, registering an account, or placing an order, you confirm that you
                         have read, understood and agree to be bound by these Terms and our{" "}

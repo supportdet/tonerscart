@@ -97,7 +97,7 @@ export default function GetFeatured() {
                     Feature your brand on TonersCart
                 </h1>
                 <p className="mt-3 text-[14.5px] text-white/70 max-w-2xl">
-                    Join India&apos;s fastest growing B2B printer marketplace. Get prime placement in front of verified buyers.
+                    Join India&apos;s fastest growing printer marketplace. Get prime placement in front of verified buyers.
                 </p>
 
                 {done ? (

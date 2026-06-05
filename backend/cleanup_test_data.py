@@ -107,8 +107,8 @@ def run(apply: bool = False) -> dict:
         ).execute().data or []
     listings_to_delete = list({*fake_listing_ids, *[L["id"] for L in sup_listings]})
 
-    # Printer/paper listings tied to test suppliers
-    printer_ids, paper_ids = [], []
+    # Printer/paper/consumable listings tied to test suppliers
+    printer_ids, paper_ids, consumable_ids = [], [], []
     if test_supplier_ids:
         try:
             pr = sb.table("printer_listings").select("id").in_("supplier_id", test_supplier_ids).execute().data or []
@@ -120,6 +120,19 @@ def run(apply: bool = False) -> dict:
             paper_ids = [r["id"] for r in pp]
         except Exception:
             pass
+        try:
+            cc = sb.table("consumable_listings").select("id").in_("supplier_id", test_supplier_ids).execute().data or []
+            consumable_ids = [r["id"] for r in cc]
+        except Exception:
+            pass
+    # Also purge known Wave-19 seeded consumables by model number (any owner)
+    try:
+        seeded = sb.table("consumable_listings").select("id").in_(
+            "model_number", ["DR-2305", "GT53"]
+        ).execute().data or []
+        consumable_ids = list({*consumable_ids, *[r["id"] for r in seeded]})
+    except Exception:
+        pass
 
     # Orders attached to test suppliers OR listings
     order_ids = []
@@ -150,20 +163,32 @@ def run(apply: bool = False) -> dict:
         "listings": len(listings_to_delete),
         "printers": len(printer_ids),
         "papers": len(paper_ids),
+        "consumables": len(consumable_ids),
         "orders": len(order_ids),
         "quotations": len(quot_ids),
     }
 
     # Order of deletion to respect FKs
     report["deleted"] = {
-        "orders":     _delete_many("orders", order_ids, apply),
-        "quotations": _delete_many("quotations", quot_ids, apply),
-        "listings":   _delete_many("listings", listings_to_delete, apply),
-        "printers":   _delete_many("printer_listings", printer_ids, apply),
-        "papers":     _delete_many("paper_listings", paper_ids, apply),
-        "suppliers":  _delete_many("suppliers", test_supplier_ids, apply),
-        "users":      _delete_many("users", test_user_ids, apply),
+        "orders":      _delete_many("orders", order_ids, apply),
+        "quotations":  _delete_many("quotations", quot_ids, apply),
+        "listings":    _delete_many("listings", listings_to_delete, apply),
+        "printers":    _delete_many("printer_listings", printer_ids, apply),
+        "papers":      _delete_many("paper_listings", paper_ids, apply),
+        "consumables": _delete_many("consumable_listings", consumable_ids, apply),
+        "suppliers":   _delete_many("suppliers", test_supplier_ids, apply),
+        "users":       _delete_many("users", test_user_ids, apply),
     }
+    # Finally remove the Supabase Auth accounts for the test users
+    if apply and test_user_ids:
+        auth_deleted = 0
+        for uid in test_user_ids:
+            try:
+                sb.auth.admin.delete_user(uid)
+                auth_deleted += 1
+            except Exception as e:
+                logger.warning("Failed to delete auth user %s: %s", uid, e)
+        report["deleted"]["auth_users"] = auth_deleted
     logger.info("Cleanup result: %s", report)
     return report
 

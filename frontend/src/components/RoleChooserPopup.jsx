@@ -87,7 +87,7 @@ export default function RoleChooserPopup() {
                         Welcome to TonersCart
                     </h2>
                     <p className="mt-2 text-[14px] text-[#6E6E73]">
-                        India&apos;s focused B2B marketplace for printer toners. Tell us what you&apos;re here for.
+                        India&apos;s focused marketplace for printers &amp; toners. Tell us what you&apos;re here for.
                     </p>
                 </div>
 

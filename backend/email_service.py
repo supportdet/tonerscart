@@ -37,7 +37,7 @@ def _envelope(subject: str, body_html: str) -> str:
           <div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">
             <span style="color:#0A0A0B;">Toners</span><span style="color:#00B7C7;">Cart</span>
           </div>
-          <div style="font-size:12px;color:#86868B;margin-top:2px;">India&apos;s B2B printer-toner marketplace</div>
+          <div style="font-size:12px;color:#86868B;margin-top:2px;">India&apos;s printer, toner &amp; supplies marketplace</div>
         </td></tr>
         <tr><td style="padding:28px 32px;font-size:14.5px;line-height:1.55;">
           {body_html}
@@ -472,7 +472,7 @@ def _quote_money(n) -> str:
 
 
 async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplier_label: str = "Verified Supplier on TonersCart"):
-    """Send a B2B-style quotation email to the buyer + BCC copy to support.
+    """Send a formal quotation email to the buyer + BCC copy to support.
     `item` keys expected:
         brand, model_number, type/color, unit_price, qty, total, listing_type, notes
     `buyer` keys expected: name, email, phone, gst

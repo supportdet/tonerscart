@@ -65,7 +65,7 @@ export default function BuyerTypeGate() {
                             </button>
                             <label className="text-[13px] font-semibold text-[#0A0A0B]">GST Number <span className="text-[#86868B] font-normal">(optional)</span></label>
                             <Input value={gst} onChange={(e) => setGst(e.target.value.toUpperCase())} placeholder="22AAAAA0000A1Z5" maxLength={15} className="mt-1.5 h-11" data-testid="buyer-type-gst-input" />
-                            <p className="text-[11.5px] text-[#86868B] mt-1.5">Adding GST unlocks B2B invoicing and bulk pricing visibility.</p>
+                            <p className="text-[11.5px] text-[#86868B] mt-1.5">Adding GST unlocks GST invoicing and bulk pricing visibility.</p>
                             <div className="mt-5 grid grid-cols-2 gap-3">
                                 <button onClick={() => save("corporate")} disabled={busy} className="h-11 rounded-xl border border-[#D2D2D7] text-[13px] font-semibold text-[#0A0A0B] hover:bg-black/[0.03] disabled:opacity-50" data-testid="buyer-type-corporate-skip">Skip for now</button>
                                 <button onClick={() => save("corporate", { gst: gst.trim() })} disabled={busy} className="h-11 rounded-xl bg-[#0A0A0B] text-white text-[13px] font-semibold hover:bg-[#1D1D1F] inline-flex items-center justify-center gap-2 disabled:opacity-50" data-testid="buyer-type-corporate-continue">

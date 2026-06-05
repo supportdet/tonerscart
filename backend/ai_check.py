@@ -15,7 +15,7 @@ GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_
 
 PROMPT = (
     "You are reviewing a document or photo a supplier uploaded for KYC verification on a "
-    "B2B printer-toner marketplace. Look at the image and return STRICT JSON ONLY (no markdown), "
+    "printer, toner & supplies marketplace. Look at the image and return STRICT JSON ONLY (no markdown), "
     "of shape: {\"clear\": true/false, \"kind\": \"<short label>\", \"notes\": \"<one short sentence>\"}. "
     "`clear` should be false if the image is blank, blurry, cropped, illegible, or clearly not a "
     "real document. `kind` should be a 1-3 word guess of what's shown (e.g., \"GST certificate\", "

@@ -83,7 +83,7 @@ export default function Header() {
                         />
                     </Link>
 
-                    <div className="flex-1" />
+                    <div className="flex-1 min-w-0" />
 
                     {/* City */}
                     <div className="relative">
