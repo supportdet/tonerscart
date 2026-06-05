@@ -605,7 +605,7 @@ def me(user: dict = Depends(require_user)):
     Roles: 'admin' | 'supplier' (= seller) | 'customer' (= buyer).
     application_status: 'pending' | 'rejected' | None — derived from suppliers_pending."""
     out = dict(user)
-    # Buyer GSTIN (optional, used for B2B invoicing on orders) + segmentation type
+    # Buyer GSTIN (optional, used for GST invoicing on orders) + segmentation type
     try:
         u = sb_admin.table("users").select("gst_number,user_type").eq("id", user["id"]).maybe_single().execute()
         out["gst_number"] = (u.data or {}).get("gst_number") if u else None
@@ -682,7 +682,7 @@ _GSTIN_RE = re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$")
 
 @api.patch("/auth/me")
 def update_me(payload: ProfileUpdate, user: dict = Depends(require_user)):
-    """Buyer can save an optional GST number for B2B invoicing.
+    """Buyer can save an optional GST number for GST invoicing.
     Pass an empty string to clear. Format is validated server-side."""
     updates: dict = {}
     if payload.gst_number is not None:
@@ -2605,10 +2605,10 @@ class ChatRequest(BaseModel):
 
 
 CHAT_SYSTEM = (
-    "You are TonerBot, a concise expert assistant for TonersCart — India's B2B printer-toner marketplace. "
+    "You are TonerBot, a concise expert assistant for TonersCart — India's printer, toner & supplies marketplace for offices and homes. "
     "You help buyers identify the right toner cartridge for their printer, explain Original vs Compatible, "
     "estimate page yield expectations, recommend trusted brands (HP, Canon, Brother, Samsung, Ricoh, Epson, Xerox, Kyocera), "
-    "and answer bulk-purchase / sourcing questions in the Indian B2B context. "
+    "and answer bulk-purchase / sourcing questions in the Indian context. "
     "Keep replies short (under 120 words) and practical. When you suggest a toner, mention the model number "
     "(e.g., HP 88A, Canon 925, Brother TN-2365) and ask the buyer to search it on TonersCart. "
     "If the user asks about anything unrelated to printers/toners, politely steer back to toner queries."

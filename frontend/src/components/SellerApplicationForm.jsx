@@ -287,7 +287,7 @@ export default function SellerApplicationForm() {
                     <div>
                         <Label>GSTIN<span className="text-red-500"> *</span></Label>
                         <Input value={s.gst_number} onChange={(e) => setS({ ...s, gst_number: e.target.value.toUpperCase() })} placeholder="22AAAAA0000A1Z5" required data-testid="apply-gst" maxLength={15} />
-                        <div className="text-[11px] text-[#6E6E73] mt-1">Required for B2B invoicing. Format: 22AAAAA0000A1Z5 (15 alphanumeric characters).</div>
+                        <div className="text-[11px] text-[#6E6E73] mt-1">Required for GST invoicing. Format: 22AAAAA0000A1Z5 (15 alphanumeric characters).</div>
                         {s.gst_number && !GSTIN_RE.test(s.gst_number.trim().toUpperCase()) && (
                             <div className="text-[11px] text-red-600 mt-1">Enter a valid 15-character GSTIN</div>
                         )}

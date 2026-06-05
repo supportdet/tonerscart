@@ -60,7 +60,7 @@ def build_quotation_pdf(quotation: dict, user: dict) -> bytes:
 
     # ---- Header band ----
     brand = Paragraph('Toners<font color="#00B7C7">Cart</font>', ss["Brand"])
-    tag = Paragraph("India&apos;s B2B printer-toner marketplace", ss["Tag"])
+    tag = Paragraph("India&apos;s printer, toner &amp; supplies marketplace", ss["Tag"])
     meta = Paragraph(
         f"<b>TAX QUOTATION</b><br/>Ref: <b>{ref}</b><br/>Date: {created}<br/>"
         f'Valid until: <b>{valid}</b> (7 days)',

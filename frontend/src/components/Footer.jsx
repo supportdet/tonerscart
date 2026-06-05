@@ -16,7 +16,7 @@ export default function Footer() {
                             <img src="/TONERSCART-bg.png" alt="TonersCart" className="block h-10 w-auto" data-testid="footer-logo-img" />
                         </div>
                         <p className="mt-4 text-[13px] text-[#6E6E73] leading-relaxed max-w-sm" data-testid="footer-about-blurb">
-                            TonersCart is India's B2B marketplace for printers, toners, papers and consumables —
+                            TonersCart is India's marketplace for printers, toners, papers and consumables —
                             connecting businesses with verified suppliers for better prices, real stock and reliable
                             delivery across the country.
                         </p>

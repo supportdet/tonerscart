@@ -53,7 +53,7 @@ export default function BuyerGSTCard() {
                     )}
                     {!editing && !currentGst && (
                         <div className="text-[12.5px] text-[#6E6E73] mt-1.5 max-w-md">
-                            Add your GST number to receive proper B2B invoices from suppliers.
+                            Add your GST number to receive proper GST invoices from suppliers.
                         </div>
                     )}
                 </div>

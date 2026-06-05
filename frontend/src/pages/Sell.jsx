@@ -35,7 +35,7 @@ export default function Sell() {
             <div className="tc-hero relative pb-16" data-testid="sell-guest">
                 <PageMeta
                     title="Sell Toners & Printers Online — Become a TonersCart Supplier"
-                    description="List your printer toner cartridges and printers on TonersCart. Reach thousands of B2B buyers across India. Free listing, easy setup, real orders."
+                    description="List your printer toner cartridges and printers on TonersCart. Reach thousands of buyers across India. Free listing, easy setup, real orders."
                     path="/sell"
                 />
                 <div className="tc-hero-grid" />

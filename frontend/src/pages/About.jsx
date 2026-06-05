@@ -8,7 +8,7 @@ export default function About() {
         <div className="bg-white min-h-screen" data-testid="about-page">
             <PageMeta
                 title="About TonersCart — India's Verified Printer Marketplace"
-                description="TonersCart Private Limited is India's digital marketplace connecting verified printer-toner suppliers with B2B buyers across the country. Headquartered in Bangalore, Karnataka."
+                description="TonersCart Private Limited is India's digital marketplace connecting verified printer-toner suppliers with buyers — from large organisations to individual customers — across the country. Headquartered in Bangalore, Karnataka."
                 path="/about"
             />
 
@@ -38,7 +38,7 @@ export default function About() {
                         <div className="space-y-4 mt-5 text-[14.5px] text-[#3a3a40] leading-relaxed">
                             <p>India&apos;s printer-supplies market has been fragmented for decades — buyers chase calls and quotes, dealers waste days on price discovery, and inventory data lives nowhere except scattered chats and offline ledgers.</p>
                             <p>TonersCart brings that fragmented market online: real stock from <strong>verified suppliers</strong>, transparent prices, GST-compliant invoicing handled by the seller, and a clean dashboard for both sides of the transaction.</p>
-                            <p>We don&apos;t hold inventory. We don&apos;t mark up prices. We connect verified dealers with serious B2B buyers and take a transparent platform commission only on completed orders.</p>
+                            <p>We don&apos;t hold inventory. We don&apos;t mark up prices. We connect verified dealers with serious buyers — businesses and individuals alike — and take a transparent platform commission only on completed orders.</p>
                         </div>
                     </div>
 
@@ -52,7 +52,7 @@ export default function About() {
                                 { Icon: Target,   t: "Transparent pricing",  d: "No middlemen markup. Buyers see the dealer's price, the platform commission, and zero hidden fees." },
                                 { Icon: Shield,   t: "Verified suppliers",   d: "Every dealer is KYC-verified — GST, PAN, address proof, AI-checked business documents." },
                                 { Icon: Sparkles, t: "Real stock, real time", d: "Live inventory from dealers, not stale catalogues. Orders are placed against actual on-shelf stock." },
-                                { Icon: Users,    t: "Built for B2B",       d: "GST invoicing, bulk orders, MPS sourcing, fleet management — built for procurement teams, not marketplaces." },
+                                { Icon: Users,    t: "Built for everyone",       d: "GST invoicing, bulk orders, MPS sourcing, fleet management — built for offices, businesses and homes alike." },
                             ].map(({ Icon, t, d }, i) => (
                                 <li key={i} className="flex items-start gap-3">
                                     <span className="mt-0.5 w-9 h-9 grid place-items-center rounded-lg bg-[#FFFBEB] border border-[#F5E5A6] text-[#8C6A00]"><Icon size={16} /></span>
@@ -74,7 +74,7 @@ export default function About() {
                         TonersCart Private Limited
                     </h2>
                     <p className="text-[14.5px] text-[#3a3a40] max-w-3xl mt-4 leading-relaxed">
-                        TonersCart is operated by <strong>TonersCart Private Limited</strong>, an independent, Bangalore-headquartered private limited company building digital infrastructure for India&apos;s B2B trade. We bring print-industry expertise and product engineering together to move legacy procurement online.
+                        TonersCart is operated by <strong>TonersCart Private Limited</strong>, an independent, Bangalore-headquartered private limited company building digital infrastructure for India&apos;s print-supply trade. We bring print-industry expertise and product engineering together to move legacy procurement online.
                     </p>
                     <div className="mt-8 grid sm:grid-cols-3 gap-4">
                         <div className="bg-white border border-black/[0.06] rounded-2xl p-5">

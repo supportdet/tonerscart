@@ -106,8 +106,8 @@ export default function Landing() {
                 title={`TonersCart — India's Marketplace for Printers, Toners & MFDs | Buy & Sell Online${city ? ` · ${city}` : ""}`}
                 description={city
                     ? `Buy HP, Canon, Brother toner cartridges and printers from verified suppliers in ${city}. Compare prices, real stock, same-day dispatch available.`
-                    : "India's trusted B2B marketplace to buy printer toners and printers online. HP, Canon, Brother, Xerox toners from verified suppliers in Bangalore, Mumbai, Delhi, Chennai, Hyderabad and across India."}
-                keywords="buy toner cartridges online india, printer toner suppliers bangalore, b2b printer marketplace india, buy hp toner online, canon toner dealers india, compatible toner cartridges, original toner suppliers"
+                    : "India's trusted marketplace to buy printers, toners and supplies online — for offices and homes. HP, Canon, Brother, Xerox toners from verified suppliers in Bangalore, Mumbai, Delhi, Chennai, Hyderabad and across India."}
+                keywords="buy toner cartridges online india, printer toner suppliers bangalore, printer marketplace india, buy hp toner online, canon toner dealers india, compatible toner cartridges, original toner suppliers"
                 path="/"
                 jsonLd={ldOrg}
             />
@@ -279,7 +279,7 @@ export default function Landing() {
                                 <div className="text-white text-[14.5px] sm:text-[15.5px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>
                                     Get your brand featured here
                                 </div>
-                                <div className="text-white/65 text-[12.5px] mt-0.5">Reach thousands of B2B buyers across India.</div>
+                                <div className="text-white/65 text-[12.5px] mt-0.5">Reach thousands of buyers across India.</div>
                             </div>
                         </div>
                         <button
