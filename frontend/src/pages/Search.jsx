@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
-import { MapPin, Boxes, Plus, Minus, ShoppingCart, X, SlidersHorizontal } from "lucide-react";
+import { MapPin, Boxes, Plus, Minus, ShoppingCart, X } from "lucide-react";
 import { Skeleton } from "../components/ui/skeleton";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -12,6 +12,7 @@ import TonerCartridge from "../components/TonerCartridge";
 import VerifiedBadge from "../components/VerifiedBadge";
 import RefilledWarningDialog from "../components/RefilledWarningDialog";
 import PageMeta from "../components/PageMeta";
+import CategoryFilters from "../components/CategoryFilters";
 import useReveal from "../hooks/useReveal";
 import { colorSwatch } from "../lib/colors";
 import { cityMatch, deliveryLabel } from "../lib/location";
@@ -21,14 +22,12 @@ const variantColorFromName = (name) => {
     return v.startsWith("linear") ? "#C8C8CD" : v;
 };
 
-const SidebarItem = ({ active, onClick, children, testid }) => (
-    <button onClick={onClick} data-testid={testid}
-        className={`block w-full text-left px-3 py-1.5 rounded-lg text-[13.5px] transition-colors ${
-            active ? "bg-black/[0.05] text-[#0A0A0B] font-semibold" : "text-[#1D1D1F] hover:bg-black/[0.03]"
-        }`}>
-        {children}
-    </button>
-);
+const TONER_SORT_OPTIONS = [
+    { value: "local", label: "Local suppliers first" },
+    { value: "price_asc", label: "Price: Low to High" },
+    { value: "price_desc", label: "Price: High to Low" },
+    { value: "newest", label: "Newest first" },
+];
 
 function ProductCard({ p, qty, setQty, onBuy, onCart, userCity }) {
     const typeStyle = p.toner_type === "Original"
@@ -140,7 +139,10 @@ export default function SearchPage() {
     const [orderProduct, setOrderProduct] = useState(null);
     const [orderQty, setOrderQty] = useState(1);
     const [qtyMap, setQtyMap] = useState({});
-    const { items: cartItems, addItem } = useCart();
+    const [minPrice, setMinPrice] = useState("");
+    const [maxPrice, setMaxPrice] = useState("");
+    const [sortBy, setSortBy] = useState("local");
+    const { addItem } = useCart();
     const rootRef = useReveal([products.length]);
 
     // Wave 9 — Universal 3-section results: only when q is set and no filters applied
@@ -237,16 +239,7 @@ export default function SearchPage() {
         }
     };
 
-    const clearAll = () => { setQ(""); setBrand("all"); setTonerType("all"); setFilterCity("all"); setParams(new URLSearchParams()); };
-
-    const activeFilters = useMemo(() => {
-        const out = [];
-        if (params.get("q")) out.push({ k: "q", label: `"${params.get("q")}"` });
-        if (params.get("brand")) out.push({ k: "brand", label: params.get("brand") });
-        if (params.get("city")) out.push({ k: "city", label: params.get("city") });
-        if (params.get("toner_type")) out.push({ k: "toner_type", label: params.get("toner_type") });
-        return out;
-    }, [params]);
+    const clearAll = () => { setQ(""); setBrand("all"); setTonerType("all"); setFilterCity("all"); setMinPrice(""); setMaxPrice(""); setSortBy("local"); setParams(new URLSearchParams()); };
 
     const getQty = (pid) => qtyMap[pid] ?? 1;
     const setQty = (pid, n) => setQtyMap((m) => ({ ...m, [pid]: n }));
@@ -259,55 +252,40 @@ export default function SearchPage() {
         return !products.some((p) => cityMatch(p.city || p.supplier_city, city));
     }, [products, city, params, loading]);
 
-    const [filtersOpen, setFiltersOpen] = useState(false);
+    // Horizontal filter bar value + handlers. Brand/Type/City are server-driven
+    // (refetch via URL params); price + sort are applied client-side on the
+    // loaded results so they apply instantly.
+    const tonerFilterValue = {
+        brand: brand === "all" ? "" : brand,
+        type: tonerType === "all" ? "" : tonerType,
+        city: filterCity === "all" ? "" : filterCity,
+        minPrice, maxPrice, sort: sortBy,
+    };
+    const onTonerFilterChange = (next) => {
+        if ((next.brand || "") !== (tonerFilterValue.brand || "")) setFilter("brand", next.brand || "all");
+        if ((next.city || "") !== (tonerFilterValue.city || "")) setFilter("city", next.city || "all");
+        if ((next.type || "") !== (tonerFilterValue.type || "")) {
+            if (next.type === "Refilled") { setRefilledWarn(true); }
+            else setFilter("toner_type", next.type || "all");
+        }
+        setMinPrice(next.minPrice || "");
+        setMaxPrice(next.maxPrice || "");
+        setSortBy(next.sort || "local");
+    };
 
-    const FiltersBlock = () => (
-        <>
-            <div className="tc-card-flat p-5">
-                <div className="flex items-center gap-2 mb-3">
-                    <span className="w-1 h-4 rounded-full bg-[#00B7C7]" />
-                    <span className="text-[12px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Brand</span>
-                </div>
-                <div className="space-y-0.5">
-                    <SidebarItem active={brand === "all"} onClick={() => setFilter("brand", "all")} testid="filter-brand-all">All brands</SidebarItem>
-                    {(facets?.brands || []).map((b) => (<SidebarItem key={b} active={brand === b} onClick={() => setFilter("brand", b)} testid={`filter-brand-${b}`}>{b}</SidebarItem>))}
-                </div>
-            </div>
-
-            <div className="tc-card-flat p-5">
-                <div className="flex items-center gap-2 mb-3">
-                    <span className="w-1 h-4 rounded-full bg-[#E6007E]" />
-                    <span className="text-[12px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>City</span>
-                </div>
-                <div className="space-y-0.5 max-h-72 overflow-auto pr-1">
-                    <SidebarItem active={filterCity === "all"} onClick={() => setFilter("city", "all")} testid="filter-city-all">All cities</SidebarItem>
-                    {KNOWN_CITIES.map((c) => (<SidebarItem key={c} active={filterCity === c} onClick={() => setFilter("city", c)} testid={`filter-city-${c}`}>{c}</SidebarItem>))}
-                </div>
-            </div>
-
-            <div className="tc-card-flat p-5">
-                <div className="flex items-center gap-2 mb-3">
-                    <span className="w-1 h-4 rounded-full bg-[#F5C400]" />
-                    <span className="text-[12px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Toner type</span>
-                </div>
-                <div className="space-y-0.5">
-                    {["all", "Original", "Compatible", "Refilled"].map((t) => (
-                        <SidebarItem
-                            key={t}
-                            active={tonerType === t}
-                            onClick={() => {
-                                if (t === "Refilled") { setRefilledWarn(true); return; }
-                                setFilter("toner_type", t);
-                            }}
-                            testid={`filter-type-${t}`}
-                        >
-                            {t === "all" ? "All types" : t}
-                        </SidebarItem>
-                    ))}
-                </div>
-            </div>
-        </>
-    );
+    const visibleProducts = useMemo(() => {
+        let out = products.filter((p) => {
+            const price = Number(p.price || 0);
+            if (minPrice && price < Number(minPrice)) return false;
+            if (maxPrice && price > Number(maxPrice)) return false;
+            return true;
+        });
+        if (sortBy === "price_asc") out = [...out].sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+        else if (sortBy === "price_desc") out = [...out].sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+        else if (sortBy === "newest") out = [...out].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        else out = [...out].sort(byCityThenPrice);
+        return out;
+    }, [products, minPrice, maxPrice, sortBy]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const onBuy = (p, qty) => {
         if (user && user.role === "admin") {
@@ -490,76 +468,37 @@ export default function SearchPage() {
             )}
 
             {/* Detailed toner browse (full filters) — default view & the "Toners" tab */}
-            {(!params.get("q") || cat === "toners") && (<>
-            {/* Mobile filter trigger row */}
-            <div className="lg:hidden flex items-center justify-between mt-4 gap-3">
-                <button
-                    onClick={() => setFiltersOpen(true)}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[#D2D2D7] bg-white text-[13px] font-semibold text-[#0A0A0B] hover:bg-black/[0.03]"
-                    data-testid="mobile-filters-btn"
-                >
-                    <SlidersHorizontal size={14} /> Filters {activeFilters.length > 0 && (<span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-[#0A0A0B] text-white text-[10px] font-bold">{activeFilters.length}</span>)}
-                </button>
-                <div className="text-[12px] text-[#6E6E73]" data-testid="mobile-results-count">
-                    {loading ? "Loading…" : `${products.length} listings`}
-                </div>
-            </div>
+            {(!params.get("q") || cat === "toners") && (
+                <div className="mt-4">
+                    <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-3 pb-3 bg-[#F5F5F7]/95 backdrop-blur" data-testid="toners-filters-wrapper">
+                        <CategoryFilters
+                            selects={[
+                                { key: "brand", label: "Brand", allLabel: "All brands", options: (facets?.brands || []).map((b) => ({ value: b, label: b })) },
+                                { key: "type", label: "Type", allLabel: "All types", options: [{ value: "Original", label: "Original" }, { value: "Compatible", label: "Compatible" }, { value: "Refilled", label: "Refilled" }] },
+                                { key: "city", label: "City", allLabel: "All cities", options: KNOWN_CITIES.map((c) => ({ value: c, label: c })) },
+                            ]}
+                            showPrice
+                            sortOptions={TONER_SORT_OPTIONS}
+                            value={tonerFilterValue}
+                            onChange={onTonerFilterChange}
+                            resultCount={visibleProducts.length}
+                        />
+                    </div>
 
-            {activeFilters.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 mt-4 sm:mt-5">
-                    <span className="text-[11px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73]">Active</span>
-                    {activeFilters.map((f) => (
-                        <button key={f.k} onClick={() => setFilter(f.k, "all")} className="tc-badge tc-badge-gray flex items-center gap-1 hover:bg-black/[0.06]" data-testid={`active-filter-${f.k}`}>
-                            {f.label} <X size={10} />
-                        </button>
-                    ))}
-                    <button onClick={clearAll} className="text-[12px] text-[#00B7C7] font-semibold hover:underline" data-testid="clear-filters-btn">Clear all</button>
-                </div>
-            )}
-
-            <div className="grid lg:grid-cols-12 gap-6 lg:gap-8 mt-6 lg:mt-8">
-                {/* Desktop sidebar */}
-                <aside className="hidden lg:block lg:col-span-3 lg:sticky lg:top-24 lg:self-start space-y-5" data-testid="search-sidebar">
-                    <FiltersBlock />
-
-                    {cartItems.length > 0 && (
-                        <div className="tc-card-flat p-5" data-testid="cart-summary">
-                            <div className="flex items-center gap-2 mb-3">
-                                <ShoppingCart size={14} className="text-[#0A0A0B]" />
-                                <span className="text-[12px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Cart ({cartItems.length})</span>
-                            </div>
-                            <div className="space-y-2 mb-3">
-                                {cartItems.slice(0, 3).map((it) => (
-                                    <div key={it.id} className="flex items-center justify-between text-[12px]">
-                                        <span className="truncate">{it.product.model_number} ×{it.qty}</span>
-                                        <span className="font-mono">₹{(Number(it.product.price) * it.qty).toLocaleString('en-IN')}</span>
-                                    </div>
-                                ))}
-                                {cartItems.length > 3 && <div className="text-[11px] text-[#6E6E73]">+{cartItems.length - 3} more</div>}
-                            </div>
-                            <button onClick={() => navigate("/cart")} className="btn-cta w-full text-[12.5px] py-2" data-testid="cart-summary-view-btn">View cart</button>
-                        </div>
-                    )}
-                </aside>
-
-                <main className="lg:col-span-9">
-                    <div className="hidden lg:flex items-end justify-between mb-6">
-                        <div>
-                            <div className="tc-eyebrow"><span className="tc-strip mr-2 align-middle" />Results</div>
-                            <h1 className="mt-2 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(24px, 2.6vw, 34px)", fontWeight: 300, letterSpacing: "-0.015em", lineHeight: 1.14 }} data-testid="search-results-count">
-                                {loading ? "Loading…" : `${products.length} listings${filterCity !== "all" ? ` · ${filterCity}` : ""}`}
-                            </h1>
+                    <div className="flex items-center justify-between mt-5 mb-1">
+                        <div className="text-[13px] text-[#6E6E73]" data-testid="search-results-count">
+                            {loading ? "Loading…" : `${visibleProducts.length} listing${visibleProducts.length === 1 ? "" : "s"}${filterCity !== "all" ? ` · ${filterCity}` : ""}`}
                         </div>
                     </div>
 
                     {loading && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-                            {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-72 rounded-2xl" />)}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 mt-4">
+                            {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-72 rounded-2xl" />)}
                         </div>
                     )}
 
-                    {!loading && products.length === 0 && (
-                        <div className="tc-card p-8 sm:p-16 text-center" data-testid="search-empty-state">
+                    {!loading && visibleProducts.length === 0 && (
+                        <div className="tc-card p-8 sm:p-16 text-center mt-4" data-testid="search-empty-state">
                             <Boxes className="mx-auto text-[#D2D2D7]" size={48} />
                             <div className="mt-4 text-[#0A0A0B] text-xl font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>No matching toners</div>
                             <div className="text-[#6E6E73] text-[14px] mt-1">Try a different model or clear filters.</div>
@@ -568,14 +507,14 @@ export default function SearchPage() {
                     )}
 
                     {showingOtherCities && (
-                        <div className="mb-5 flex items-center gap-2 rounded-xl bg-[#FFF8E0] border border-[#F5E5A6] px-4 py-3 text-[12.5px] text-[#8C6A00]" data-testid="other-cities-banner">
+                        <div className="mb-5 mt-4 flex items-center gap-2 rounded-xl bg-[#FFF8E0] border border-[#F5E5A6] px-4 py-3 text-[12.5px] text-[#8C6A00]" data-testid="other-cities-banner">
                             <MapPin size={14} className="shrink-0" />
                             No local dealers in <strong className="mx-1">{city}</strong> for this — showing results from other cities.
                         </div>
                     )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-                        {products.map((p, idx) => (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 mt-4">
+                        {visibleProducts.map((p, idx) => (
                             <div key={p.id} className="tc-reveal" style={{ transitionDelay: `${Math.min(idx * 35, 280)}ms` }}>
                                 <ProductCard p={p} qty={getQty(p.id)} setQty={(n) => setQty(p.id, n)} onBuy={onBuy} onCart={onCart} userCity={city} />
                             </div>
@@ -594,30 +533,6 @@ export default function SearchPage() {
                             </button>
                         </div>
                     )}
-                </main>
-            </div>
-            </>)}
-
-            {/* Mobile filter drawer */}
-            {filtersOpen && (
-                <div className="fixed inset-0 z-[80] lg:hidden" data-testid="mobile-filters-drawer">
-                    <div className="absolute inset-0 bg-black/40" onClick={() => setFiltersOpen(false)} />
-                    <div className="absolute inset-x-0 bottom-0 bg-white rounded-t-2xl max-h-[85vh] overflow-auto p-5 space-y-4 shadow-2xl">
-                        <div className="flex items-center justify-between sticky top-0 bg-white pb-3 -mx-1 px-1 border-b border-black/[0.06]">
-                            <div>
-                                <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B]">Refine</div>
-                                <div className="text-[18px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Filters</div>
-                            </div>
-                            <button onClick={() => setFiltersOpen(false)} className="w-9 h-9 grid place-items-center rounded-full hover:bg-black/[0.05]" aria-label="Close" data-testid="mobile-filters-close-btn">
-                                <X size={18} />
-                            </button>
-                        </div>
-                        <FiltersBlock />
-                        <div className="grid grid-cols-2 gap-2 pt-2">
-                            <button onClick={() => { clearAll(); setFiltersOpen(false); }} className="btn-light text-[13px] py-2.5" data-testid="mobile-filters-clear-btn">Clear all</button>
-                            <button onClick={() => setFiltersOpen(false)} className="btn-cta text-[13px] py-2.5" data-testid="mobile-filters-apply-btn">Show {products.length} results</button>
-                        </div>
-                    </div>
                 </div>
             )}
 

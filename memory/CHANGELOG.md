@@ -1,3 +1,11 @@
+### 2026-06 — Wave 20.1: filter-bar consistency + navy hero
+
+- **`/search` (toners)**: replaced the left sidebar + mobile drawer with the shared horizontal `CategoryFilters` bar (Brand / Type / City + price range + sort). Brand/Type/City stay server-driven; price + sort apply client-side instantly. Removed `FiltersBlock`/`SidebarItem`/old mobile drawer.
+- **`/printers/results`**: removed both search bars (hero + sticky); added the `CategoryFilters` bar (Brand / Condition / City + price + sort, client-side). Guided-finder chips retained. Eyebrow brightened, heading kept thin.
+- **Homepage hero**: new `.tc-hero-home` class — deep navy `#0d1f2d → #1a3a52` gradient, glow opacities +~15% (≈15% brighter). Text colours/layout unchanged. Other dark heroes untouched.
+- Verified visually (home navy, /search + /printers/results filter bars). Lint clean, webpack compiles.
+
+
 ### 2026-06 — Wave 20: Search/filter UX, typography, light redesigns, cleanup
 
 - **Single universal search:** added one search bar to the navbar (`navbar-search-input`) that routes to `/search?q=`. Removed the individual search bars from `/papers`, `/consumables`, `/search` (toners) and `/printers` (guided finder).

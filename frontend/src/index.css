@@ -428,6 +428,16 @@
     -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 0%, transparent 80%);
 }
 
+/* Homepage hero — deep navy (#0d1f2d), ~15% brighter than the default near-black
+   hero. Text colours/layout are untouched (inherited from .tc-hero). */
+.tc-hero-home {
+    background:
+        radial-gradient(60% 80% at 80% 10%, rgba(0,183,199,0.185) 0%, transparent 60%),
+        radial-gradient(50% 70% at 10% 90%, rgba(230,0,126,0.14) 0%, transparent 60%),
+        radial-gradient(40% 50% at 50% 100%, rgba(245,196,0,0.115) 0%, transparent 60%),
+        linear-gradient(180deg, #0d1f2d 0%, #1a3a52 100%);
+}
+
 /* CMYK pattern (used in popup hero) */
 .tc-cmyk-pattern {
     background:

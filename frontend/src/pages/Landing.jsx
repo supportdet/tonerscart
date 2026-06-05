@@ -112,7 +112,7 @@ export default function Landing() {
                 jsonLd={ldOrg}
             />
             {/* ============================== HERO ============================== */}
-            <section className="tc-hero relative pt-8 pb-12 sm:pt-12 sm:pb-20 lg:pt-16 lg:pb-24">
+            <section className="tc-hero tc-hero-home relative pt-8 pb-12 sm:pt-12 sm:pb-20 lg:pt-16 lg:pb-24">
                 <div className="tc-hero-grid" />
                 <div className="tc-container relative">
                     {/* Search bar — full-width with side gutters */}
