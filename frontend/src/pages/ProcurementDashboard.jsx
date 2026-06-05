@@ -12,7 +12,11 @@ import procApi, { formatApiError } from "../lib/procApi";
 import { useProcAuth } from "../context/ProcAuthContext";
 import SearchCompare from "../components/procurement/SearchCompare";
 import MyQuotations from "../components/procurement/MyQuotations";
+import AgreementGate from "../components/AgreementGate";
 import PageMeta from "../components/PageMeta";
+
+const procAgreementStatus = () => procApi.get("/procurement/agreement").then((r) => r.data);
+const procAgreementAccept = () => procApi.post("/procurement/agreement/accept").then(() => {});
 
 const inr = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
 
@@ -64,6 +68,7 @@ export default function ProcurementDashboard() {
     return (
         <div className="min-h-screen bg-[#F5F5F7]" data-testid="procurement-dashboard">
             <PageMeta title="Procurement Dashboard — TonersCart" />
+            <AgreementGate ready={!!user} statusFn={procAgreementStatus} acceptFn={procAgreementAccept} />
             {/* Top bar */}
             <div className="bg-[#0B1220] text-white">
                 <div className="mx-auto max-w-6xl px-4 sm:px-6 h-16 flex items-center justify-between">

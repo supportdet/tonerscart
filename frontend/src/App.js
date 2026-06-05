@@ -1,9 +1,11 @@
-import React from "react";
+import React, { useCallback } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import api from "./lib/api";
+import AgreementGate from "./components/AgreementGate";
 import { CityProvider } from "./context/CityContext";
 import { CartProvider } from "./context/CartContext";
 import Header from "./components/Header";
@@ -83,6 +85,16 @@ function AuthGate({ children }) {
     return children;
 }
 
+// Mounts the blocking agreement modal for logged-in Supabase users
+// (customer / supplier / oem). Procurement users are gated separately.
+function SupabaseAgreementGate() {
+    const { user, loading } = useAuth();
+    const statusFn = useCallback(() => api.get("/agreements/status").then((r) => r.data), []);
+    const acceptFn = useCallback(() => api.post("/agreements/accept").then(() => {}), []);
+    const ready = !loading && !!user && ["customer", "supplier", "oem"].includes(user.role);
+    return <AgreementGate ready={ready} statusFn={statusFn} acceptFn={acceptFn} />;
+}
+
 function App() {
     return (
         <HelmetProvider>
@@ -133,6 +145,7 @@ function App() {
                                     <Route path="*" element={<NotFound />} />
                                 </Routes>
                             </Chrome>
+                            <SupabaseAgreementGate />
                             </AuthGate>
                             </ProcAuthProvider>
                         </AuthProvider>

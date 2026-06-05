@@ -4143,6 +4143,11 @@ from oem import oem_router, oem_admin_router  # noqa: E402
 app.include_router(oem_router)
 app.include_router(oem_admin_router)
 
+# User agreement acceptance tracking.
+from agreements import agreements_router, agreements_admin_router  # noqa: E402
+app.include_router(agreements_router)
+app.include_router(agreements_admin_router)
+
 
 # CORS — explicit origin list (browsers reject the wildcard "*" combined with allow_credentials=True,
 # which silently strips the Access-Control-Allow-Origin header on the response).

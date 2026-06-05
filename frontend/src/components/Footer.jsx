@@ -17,7 +17,7 @@ export default function Footer() {
                                 Buy Better. Print Smarter.
                             </p>
                             <p className="mt-2 text-[#6E6E73] text-[11px]">
-                                A brand of Digital Edge Technologies | Bangalore
+                                TonersCart Private Limited · Bangalore, India
                             </p>
                             <p className="mt-5 text-[12px] text-[#86868B]">© {year} TonersCart. All rights reserved.</p>
                         </div>
@@ -51,7 +51,7 @@ export default function Footer() {
                 <div className="mt-10 pt-6 border-t border-[#E8E8EC] text-[12px] text-[#6E6E73] leading-relaxed" data-testid="footer-grievance">
                     <span className="font-semibold text-[#0A0A0B]">For grievances contact:</span>{" "}
                     <a href="mailto:support@tonerscart.com" className="text-[#1D1D1F] hover:text-[#00B7C7] transition">support@tonerscart.com</a>
-                    {" · "}Digital Edge Technologies, Bangalore
+                    {" · "}TonersCart Private Limited, Bangalore
                     {" · "}Response within 48 hours
                 </div>
             </div>

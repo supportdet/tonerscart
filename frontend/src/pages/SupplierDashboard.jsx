@@ -53,7 +53,7 @@ function PendingScreen({ application }) {
                 </h1>
                 <p className="text-[14px] text-[#6E6E73] mt-3 max-w-md mx-auto">
                     {isRejected
-                        ? application?.rejection_reason || "Your supplier application was not approved this time. Please contact support@digitaledgeinida.com if you'd like to discuss."
+                        ? application?.rejection_reason || "Your supplier application was not approved this time. Please contact support@tonerscart.com if you'd like to discuss."
                         : "Thanks for applying! Our admin team is reviewing your business details. You'll be able to add product listings as soon as you're approved."}
                 </p>
                 {application?.business_name && (

@@ -85,7 +85,6 @@ export default function Landing() {
                 "name": "TonersCart",
                 "url": "https://www.tonerscart.com",
                 "logo": "https://www.tonerscart.com/TONERSCART-bg.png",
-                "telephone": "+91-97422-70585",
                 "email": "support@tonerscart.com",
                 "sameAs": ["https://www.linkedin.com/company/tonerscart"],
             },

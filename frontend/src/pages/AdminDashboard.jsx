@@ -14,6 +14,7 @@ import ContentTab from "./admin/ContentTab";
 import FinanceTab from "./admin/FinanceTab";
 import ProcurementTab from "./admin/ProcurementTab";
 import OemTab from "./admin/OemTab";
+import AgreementsTab from "./admin/AgreementsTab";
 
 function aiSummary(application) {
     const ai = application?.ai_check || {};
@@ -219,6 +220,7 @@ export default function AdminDashboard() {
                     <TabsTrigger value="oem" data-testid="tab-oem">
                         OEM {oemPending > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-[#6d4c41] text-white text-[10px] font-bold px-1.5">{oemPending}</span>)}
                     </TabsTrigger>
+                    <TabsTrigger value="agreements" data-testid="tab-agreements">Agreements</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="analytics">
@@ -247,6 +249,10 @@ export default function AdminDashboard() {
 
                 <TabsContent value="oem">
                     {tab === "oem" && <OemTab />}
+                </TabsContent>
+
+                <TabsContent value="agreements">
+                    {tab === "agreements" && <AgreementsTab />}
                 </TabsContent>
 
                 <TabsContent value="pending">

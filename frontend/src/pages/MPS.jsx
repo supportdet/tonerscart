@@ -5,7 +5,7 @@ import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
-import { CheckCircle2, Phone, Mail, Headphones } from "lucide-react";
+import { CheckCircle2, Mail, Headphones, Clock } from "lucide-react";
 import PhonePrefixInput from "../components/PhonePrefixInput";
 import PageMeta from "../components/PageMeta";
 
@@ -113,14 +113,7 @@ export default function MPS() {
                         <div className="inline-flex items-center gap-2 text-[11px] tracking-[0.16em] uppercase font-semibold text-white/70 mb-4">
                             <Headphones size={13} /> Need help right now?
                         </div>
-                        <p className="text-[13px] text-white/65 leading-relaxed mb-5">For further assistance, contact:</p>
-                        <a href="tel:+919742270585" className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] transition mb-2" data-testid="mps-phone-link">
-                            <Phone size={16} className="text-[#00B7C7]" />
-                            <div>
-                                <div className="text-[10px] tracking-[0.12em] uppercase text-white/50">Phone</div>
-                                <div className="text-[14px] font-semibold">+91 97422 70585</div>
-                            </div>
-                        </a>
+                        <p className="text-[13px] text-white/65 leading-relaxed mb-5">For further assistance, email us — we respond within 48 hours:</p>
                         <a href="mailto:support@tonerscart.com" className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] transition" data-testid="mps-email-link">
                             <Mail size={16} className="text-[#00B7C7]" />
                             <div>
@@ -128,6 +121,13 @@ export default function MPS() {
                                 <div className="text-[14px] font-semibold">support@tonerscart.com</div>
                             </div>
                         </a>
+                        <div className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.06] mt-2" data-testid="mps-hours">
+                            <Clock size={16} className="text-[#00B7C7]" />
+                            <div>
+                                <div className="text-[10px] tracking-[0.12em] uppercase text-white/50">Hours</div>
+                                <div className="text-[14px] font-semibold">Mon–Sat · 9 AM – 7 PM IST</div>
+                            </div>
+                        </div>
                     </aside>
                 </div>
             </div>
