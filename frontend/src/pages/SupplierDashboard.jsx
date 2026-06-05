@@ -13,6 +13,7 @@ import RefilledWarningDialog from "../components/RefilledWarningDialog";
 import TonerCartridge from "../components/TonerCartridge";
 import PrinterListings from "../components/PrinterListings";
 import PaperListings from "../components/PaperListings";
+import ConsumableListings from "../components/ConsumableListings";
 import SupplierEarnings from "../components/SupplierEarnings";
 import SupplierInsights from "../components/SupplierInsights";
 import CommissionBanner from "../components/CommissionBanner";
@@ -53,7 +54,7 @@ function PendingScreen({ application }) {
                 </h1>
                 <p className="text-[14px] text-[#6E6E73] mt-3 max-w-md mx-auto">
                     {isRejected
-                        ? application?.rejection_reason || "Your supplier application was not approved this time. Please contact support@digitaledgeinida.com if you'd like to discuss."
+                        ? application?.rejection_reason || "Your supplier application was not approved this time. Please contact support@tonerscart.com if you'd like to discuss."
                         : "Thanks for applying! Our admin team is reviewing your business details. You'll be able to add product listings as soon as you're approved."}
                 </p>
                 {application?.business_name && (
@@ -545,6 +546,7 @@ export default function SupplierDashboard() {
                         <button onClick={() => setCatalog("toners")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "toners" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-toners">Toners</button>
                         <button onClick={() => setCatalog("printers")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "printers" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-printers">Printers</button>
                         <button onClick={() => setCatalog("papers")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "papers" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-papers">Papers</button>
+                        <button onClick={() => setCatalog("consumables")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "consumables" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-consumables">Consumables</button>
                         <button onClick={() => setCatalog("orders")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "orders" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-orders">Orders</button>
                         <button onClick={() => setCatalog("earnings")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "earnings" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-earnings">My Earnings</button>
                         <button onClick={() => setCatalog("insights")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "insights" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-insights">Insights</button>
@@ -614,6 +616,24 @@ export default function SupplierDashboard() {
                                 </div>
                             )}
                         </div>
+                    ) : catalog === "consumables" ? (
+                        <div className="relative" onBlur={() => setTimeout(() => setAddMenuOpen(false), 150)} tabIndex={-1}>
+                            <Button className="btn-cta inline-flex items-center gap-2" onClick={() => setAddMenuOpen((o) => !o)} data-testid="add-consumable-cta-btn">
+                                <Plus size={16} /> Add consumable <ChevronDown size={14} />
+                            </Button>
+                            {addMenuOpen && (
+                                <div className="absolute right-0 top-full mt-2 w-60 bg-white text-[#1D1D1F] rounded-xl shadow-xl border border-black/[0.08] py-2 z-30" data-testid="add-consumable-menu">
+                                    <button onMouseDown={() => { setAddMenuOpen(false); window.dispatchEvent(new CustomEvent("tc-open-add-consumable")); }} className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]" data-testid="add-single-consumable-btn">
+                                        <div className="font-semibold">Add single consumable</div>
+                                        <div className="text-[11.5px] text-[#86868B]">One SKU with images & specs</div>
+                                    </button>
+                                    <button onMouseDown={() => { setAddMenuOpen(false); window.dispatchEvent(new CustomEvent("tc-open-bulk-consumable")); }} className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]" data-testid="bulk-upload-consumable-btn">
+                                        <div className="font-semibold">Bulk upload</div>
+                                        <div className="text-[11.5px] text-[#86868B]">Spreadsheet or CSV — many at once</div>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     ) : null}
                 </div>
 
@@ -628,6 +648,12 @@ export default function SupplierDashboard() {
                         <h2 id="papers" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your papers</h2>
                         <D2DExplainer />
                         <PaperListings />
+                    </>
+                ) : catalog === "consumables" ? (
+                    <>
+                        <h2 id="consumables" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your consumables</h2>
+                        <D2DExplainer />
+                        <ConsumableListings />
                     </>
                 ) : catalog === "earnings" ? (
                     <>

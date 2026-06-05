@@ -274,7 +274,7 @@ export default function PrintersGuide() {
     return (
         <div className="tc-hero relative pb-20" data-testid="printers-guide-page">
             <PageMeta
-                title="Buy Printers Online B2B India — Laser, Inkjet, MFD | TonersCart"
+                title="Buy Printers Online India — Verified Dealers | TonersCart"
                 description="Buy laser printers, inkjet printers, all-in-one MFDs for home and office in India. Compare prices from verified dealers in Bangalore, Mumbai, Delhi and across India."
                 path="/printers"
             />

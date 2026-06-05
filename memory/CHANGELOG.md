@@ -1,3 +1,27 @@
+### 2026-06 — Wave 19: Consumables, Universal Search, SEO, Buyer Segmentation, fixes
+
+**REQUIRES DB MIGRATION (USER):** Run `/app/backend/supabase_schema_consumables.sql` in Supabase SQL editor. Creates `consumable_listings`; makes `orders.listing_id` nullable + adds `consumable_listing_id`/`paper_listing_id`/`product_brand`/`product_model`/`product_image` (enables paper+consumable direct orders to persist); adds `users.user_type`. Until applied: consumables empty, segmentation save → graceful 503, direct orders don't persist.
+
+- **Buy Now → 404 fixed:** `AuthRequiredDialog` pointed to non-existent `/auth/login` & `/auth/signup` → fixed to `/login` & `/register`.
+- **401 console noise fixed:** `AuthContext.refresh` skips `/auth/me` for guests via new `getAccessToken()` in `lib/api.js`.
+- **Consumables line (mirrors Papers):** `/consumables` (subcategory tabs), `/consumable/:id` detail, dealer single + bulk upload, add-to-cart/buy-now via checkout. Backend `/api/supplier/consumables*` + `/api/consumables*` (graceful when table missing). Files: `pages/Consumables.jsx`, `components/ConsumableListings.jsx`, `lib/consumableConstants.js`, `bulkConfigs.js`, SupplierDashboard tab.
+- **Universal search:** `/search` category tabs (All/Toners/Printers/Papers/Consumables/OEM); `/api/search/universal` now returns consumables + oem too.
+- **SEO:** PageMeta added to Terms/Privacy/Contact; spec titles on Landing/Search/Papers/Printers/OEM/About/Consumables; Schema.org Product JSON-LD on product pages.
+- **Buyer segmentation:** one-time `BuyerTypeGate` modal (Personal/Corporate+GST/Dealer→/sell/Government→/procurement). `POST /api/auth/user-type`, `GET /api/admin/user-segments`, `user_type` in `/auth/me`.
+- **Legal footer badge:** Terms v2.0 · Privacy v2.0 · Last updated June 2026.
+- **Checkout UI cleanup:** spacing, labels above inputs, h-11 inputs, single-column mobile.
+- Razorpay/Twilio untouched (mocked). Backend lint clean, verified via curl. Frontend e2e blocked by preview-env automated-browser `/api` hang (unchanged Papers hangs identically) — run testing agent after SQL applied.
+
+
+### 2026-06-04 — Rebrand to TonersCart Pvt Ltd · remove phones/WhatsApp · legal rewrite · agreement-acceptance system
+
+- **Rebrand:** every "Digital Edge Technologies / DET" → **TonersCart Private Limited** across Footer, About, Contact, Terms, Privacy, SellerApplicationForm, SupplierDashboard, and all `email_service.py` templates.
+- **Contact cleanup:** removed both phone numbers, all personal names, and ALL WhatsApp links/buttons (Contact, About, MPS, OrderConfirmed, Search/Printers product cards, emails, JSON-LD telephone). Deleted `WhatsAppEnquiry.jsx`. Only `support@tonerscart.com` public. Contact form still works.
+- **Terms of Service** (`Terms.jsx`) rewritten — 20-section India-compliant doc (intermediary/Sec 79, IT Act + Intermediary Rules 2021 + CPA 2019 + E-Comm Rules 2020 + GST + Contract Act, 18+/GST eligibility, price-lock, Razorpay <₹1.5L, commission 8/6/4%, returns 7d toners/3d DOA printers, dispute 48h+mediation, IP, liability capped at commission, Karnataka/Bangalore jurisdiction, grievance officer 48h, amendments).
+- **Privacy Policy** (`Privacy.jsx`) rewritten — DPDPA 2023 + IT Rules 2011 + RBI compliant (data inventory, purposes, legal basis, 7-yr retention, Supabase/Resend/Razorpay/Google processors w/ no-sale, DPDPA rights, functional-only cookies, signed-URL security, cross-border, children, grievance officer).
+- **Agreement-acceptance system** (NEW): `supabase_schema_agreements.sql` → `user_agreements` (user_id, agreement_type, version, accepted_at, ip). Backend `agreements.py` (status/accept/admin) + procurement endpoints in `procurement.py`; fails OPEN pre-migration. Frontend `AgreementGate.jsx` + `lib/agreements.js` — blocking, versioned, can't-dismiss modal for Seller/OEM/Procurement/Customer; mounted globally (SupabaseAgreementGate in App.js) and in ProcurementDashboard. Admin → **Agreements** tab (`AgreementsTab.jsx`) shows per-user acceptances with filters.
+- Verified: backend Python E2E (status→accept→status→admin record) + frontend E2E iteration_24.json (**100%** on all 5 scenarios — legal pages, contact form, customer + procurement blocking gates, admin view). All test data purged after.
+
 ### 2026-06-04 — OEM logo upload + "Verified Manufacturer" trust strip
 
 - Backend: added `POST /api/oem/logo` (uploads to `printer-images`, persists `logo_url` on `oem_partners`).

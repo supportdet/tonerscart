@@ -458,8 +458,7 @@ async def email_featured_applicant_reply(app: dict):
       <div style="margin-top:8px;font-size:11.5px;color:#6E6E73;">All prices exclusive of GST. Custom packages available on request.</div>
     </div>
 
-    <p>For urgent queries call <a href="tel:+919742270585" style="color:#0A0A0B;font-weight:600;">+91 97422 70585</a>
-    or reply to this email.</p>
+    <p>For urgent queries, reply to this email or write to <a href="mailto:support@tonerscart.com" style="color:#0A0A0B;font-weight:600;">support@tonerscart.com</a>.</p>
     <p style="margin-top:22px;color:#86868B;font-size:12.5px;">— Team TonersCart</p>
     """
     await _send(to_email, f"We received your featured placement request, {company}", html)
@@ -568,10 +567,9 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
         <div style="font-size:12px;color:#6E6E73;margin-top:2px;">Issued: {today}</div>
       </div>
       <div style="text-align:right;font-size:12.5px;color:#0A0A0B;line-height:1.5;">
-        <div style="font-weight:700;">TonersCart</div>
-        <div style="color:#6E6E73;">A brand of Digital Edge Technologies, Bangalore</div>
+        <div style="font-weight:700;">TonersCart Private Limited</div>
+        <div style="color:#6E6E73;">Bangalore, Karnataka, India</div>
         <div style="color:#6E6E73;">support@tonerscart.com</div>
-        <div style="color:#6E6E73;">+91 97422 70585 · +91 89717 68796</div>
       </div>
     </div>
     </div>
@@ -625,7 +623,7 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
     </div>
 
     <p style="margin-top:22px;color:#86868B;font-size:11.5px;">
-      TonersCart — A brand of <strong>Digital Edge Technologies, Bangalore</strong> · GST invoice raised by the supplier on order confirmation.
+      TonersCart — operated by <strong>TonersCart Private Limited, Bangalore</strong> · GST invoice raised by the supplier on order confirmation.
     </p>
     """
 
@@ -759,9 +757,9 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
         {gst_block_b}
         <p style="margin:18px 0 4px 0;">Seller will dispatch within <strong>2 business days</strong>. You&apos;ll receive tracking once shipped.</p>
         <p style="margin:18px 0;">
-          <a href="https://wa.me/919742270585?text=Order%20%23{order_id_short}%20support"
-             style="display:inline-block;padding:12px 20px;background:#25D366;color:#fff;border-radius:10px;font-weight:600;text-decoration:none;">
-            Chat with support on WhatsApp
+          <a href="mailto:support@tonerscart.com?subject=Order%20%23{order_id_short}%20support"
+             style="display:inline-block;padding:12px 20px;background:#0A0A0B;color:#fff;border-radius:10px;font-weight:600;text-decoration:none;">
+            Email support
           </a>
         </p>
         <p style="color:#6E6E73;font-size:12.5px;">Prices are locked at order time and never change after placement.</p>
@@ -823,7 +821,7 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
 
 async def email_order_shipped(order: dict, listing: dict, buyer: dict):
     """Notify buyer that their order has shipped — includes tracking number,
-    product details, and a WhatsApp support link."""
+    product details, and an email support link."""
     short_id = str(order.get("id", ""))[:8].upper()
     brand = (listing or {}).get("brand") or ""
     model = (listing or {}).get("model_number") or ""
@@ -858,9 +856,7 @@ async def email_order_shipped(order: dict, listing: dict, buyer: dict):
     </p>
 
     <p style="margin-top:16px;font-size:12.5px;color:#3a3a40;">
-      Need help? Chat with us on
-      <a href="https://wa.me/919742270585" style="color:#0A0A0B;font-weight:600;">WhatsApp +91 97422 70585</a>
-      or email <a href="mailto:support@tonerscart.com" style="color:#0A0A0B;font-weight:600;">support@tonerscart.com</a>.
+      Need help? Email <a href="mailto:support@tonerscart.com" style="color:#0A0A0B;font-weight:600;">support@tonerscart.com</a>.
     </p>
     <p style="margin-top:22px;color:#86868B;font-size:11.5px;">— Team TonersCart</p>
     """

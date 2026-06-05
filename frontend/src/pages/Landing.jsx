@@ -76,7 +76,6 @@ export default function Landing() {
         navigate(`/search?${params.toString()}`);
     };
 
-    const titleCity = city || "India";
     const ldOrg = {
         "@context": "https://schema.org",
         "@graph": [
@@ -85,7 +84,6 @@ export default function Landing() {
                 "name": "TonersCart",
                 "url": "https://www.tonerscart.com",
                 "logo": "https://www.tonerscart.com/TONERSCART-bg.png",
-                "telephone": "+91-97422-70585",
                 "email": "support@tonerscart.com",
                 "sameAs": ["https://www.linkedin.com/company/tonerscart"],
             },
@@ -105,7 +103,7 @@ export default function Landing() {
     return (
         <div ref={rootRef} data-testid="landing-page">
             <PageMeta
-                title={`TonersCart — Buy Printers & Toners Online B2B${city ? ` in ${city}` : ""} | Verified Suppliers ${titleCity}`}
+                title={`TonersCart — India's Marketplace for Printers, Toners & MFDs | Buy & Sell Online${city ? ` · ${city}` : ""}`}
                 description={city
                     ? `Buy HP, Canon, Brother toner cartridges and printers from verified suppliers in ${city}. Compare prices, real stock, same-day dispatch available.`
                     : "India's trusted B2B marketplace to buy printer toners and printers online. HP, Canon, Brother, Xerox toners from verified suppliers in Bangalore, Mumbai, Delhi, Chennai, Hyderabad and across India."}

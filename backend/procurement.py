@@ -276,6 +276,28 @@ def proc_update_me(payload: ProcProfileUpdate, user: dict = Depends(require_proc
     return _public({**user, **updates})
 
 
+# ----- Procurement agreement acceptance (one-time, versioned) ----------------
+@proc_router.get("/agreement")
+def proc_agreement_status(request: Request, user: dict = Depends(require_proc_user)):
+    from agreements import AGREEMENT_VERSIONS, has_accepted
+    version = AGREEMENT_VERSIONS["procurement"]
+    return {"required": True, "agreement_type": "procurement", "version": version,
+            "accepted": has_accepted(user["id"], "procurement", version)}
+
+
+@proc_router.post("/agreement/accept")
+def proc_agreement_accept(request: Request, user: dict = Depends(require_proc_user)):
+    from agreements import AGREEMENT_VERSIONS, record_acceptance, client_ip
+    version = AGREEMENT_VERSIONS["procurement"]
+    try:
+        record_acceptance(user["id"], "procurement", version, client_ip(request))
+    except Exception as e:
+        if "user_agreements" in str(e):
+            raise HTTPException(503, "Agreement tracking not enabled — run supabase_schema_agreements.sql") from e
+        raise
+    return {"ok": True, "version": version}
+
+
 # ===== Admin: approval queues =================================================
 
 @proc_admin_router.get("/pending")

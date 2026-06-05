@@ -1,0 +1,36 @@
+{
+  "summary": "Frontend-only E2E testing of TonersCart rebrand + DPDPA legal pages + one-time agreement gate system + admin Agreements view. All 5 review scenarios PASS end-to-end on the preview URL. Legal pages render TonersCart Private Limited with only support@tonerscart.com, no phone numbers, 20 numbered Terms sections incl. 8%/6%/4% commission tiers, 7-day toner / 3-day DOA returns, Bangalore/Karnataka jurisdiction & grievance officer, and DPDPA-2023 Privacy with Supabase/Resend/Razorpay/Google processors. Contact form submits and shows 'Thanks, we'll be in touch' success state with NO phone cards and NO WhatsApp button. Customer signup → blocking 'Welcome to TonersCart' AgreementGate appears, Accept disabled until checkbox ticked, click-outside intercepted, after Accept it closes and does NOT re-appear on reload. Procurement Govt login (agree.gov@test.gov.in) → 'Procurement User Agreement' gate appears with bullet points (legitimate procurement, genuine POs, 30-day credit), same disabled-until-checked behaviour, persists across reload. Admin /admin → Agreements tab renders table with filter chips All (2), Seller (0), OEM (0), Procurement (1), Customer (1) — exactly matching the two acceptances created during this run; rows show truncated user ID, agreement type, v1.0, accepted-at timestamp, IP.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AboutPage", "issue": "Body text contains the word 'WhatsApp' in a narrative sentence ('...inventory data lives nowhere except WhatsApp chats. TonersCart brings that fragmented market online...'). The spec required NO occurrence of the text 'WhatsApp' anywhere. It is narrative copy (not a link/button), so it is informational rather than a contact channel — but it still violates the literal requirement. Suggest replacing with a neutral phrasing like 'scattered chats and offline inventory'.", "selector": "/about main copy", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Customer signup landing route", "issue": "After successful email/password registration the customer is redirected to /search instead of /customer (the review request expected /customer). The global SupabaseAgreementGate still mounts on /search, so the BLOCKING agreement modal correctly fires and behaves identically; functionally the user can still reach /customer manually. Worth confirming with product whether /customer is the intended post-signup landing page.", "affected_selectors": ["agreement-gate"]}
+    ],
+    "design_issues": [
+      {"screen": "All public pages", "issues": ["Console pollution from background 401 calls on initial load (likely /me or auth-protected endpoints called before Supabase session resolves) — functionally harmless but noisy."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Low) Replace the literal word 'WhatsApp' on /about with neutral phrasing to fully meet the brief.",
+    "(Low) Confirm intended customer post-signup route (/customer vs current /search redirect).",
+    "(Optional) Suppress unauthenticated /me-style requests to clean up 401 console noise on public pages."
+  ],
+  "critical_code_review_comments": [
+    "Agreement gate mechanism is correctly generic: same AgreementGate component drives all four roles via lib/agreements.js content lookup; Supabase users go through SupabaseAgreementGate in App.js while procurement uses its own JWT-protected gate inside ProcurementDashboard.jsx — clean separation of auth domains.",
+    "All key elements expose stable data-testid (agreement-gate, agreement-title, agreement-checkbox, agreement-accept-btn, admin-agreements-tab, agreements-filter-*, agreement-row-*, contact-* fields) which made testing straightforward.",
+    "Admin Agreements view correctly proxies through the public Supabase RPC / admin endpoint — counts updated immediately after fresh acceptances without manual refresh.",
+    "Click-outside is properly blocked on the modal (verified by attempting to click navbar pill — Playwright reports element intercepted by overlay), confirming the z-1000 backdrop truly gates the page behind it.",
+    "Reload behaviour confirmed: after accepting once, the gate does NOT re-appear for the same user in the same session — one-time, versioned acceptance is being persisted correctly to Supabase user_agreements."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "skipped (per request)", "frontend": "100% on required scenarios" },
+  "test_credentials": "Admin admin@tonerscart.in/Admin@123 — worked. Procurement agree.gov@test.gov.in/AgreeGov123 — worked. New customer registered for this test: qa.cust.1780681613@example.com / QaCust@1234 (acceptance recorded).",
+  "seed_data_creation": "Created during this run: (a) one Supabase customer account qa.cust.1780681613@example.com with an accepted Customer agreement v1.0; (b) one Procurement agreement v1.0 acceptance against the seeded agree.gov@test.gov.in user; (c) one Contact form submission from QA Tester / qa.contact.<ts>@example.com. Main agent may want to purge the test customer + contact submission afterwards.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All 5 scenarios from review request passed. The only literal-spec violation found was the word 'WhatsApp' surviving in the /about narrative copy (not a link/button). Customer signup currently lands on /search rather than /customer but the global agreement gate fires regardless. Admin filter chip counts increment in real time after acceptances.",
+  "rca of the issue": "n/a — no blocking bugs found. Two minor observations only: (1) /about copy still literally contains the string 'WhatsApp' (narrative context, not a contact channel) and (2) post-signup redirect goes to /search instead of /customer (the agreement gate still triggers globally, so functionality is unaffected)."
+}

@@ -72,6 +72,7 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
             await ensureAuth();
             const { data: created } = await api.post("/orders", {
                 listing_id: product.id,
+                listing_kind: product?.kind || "toner",
                 qty: Number(qty),
                 customer_name: name,
                 customer_phone: phoneFull,

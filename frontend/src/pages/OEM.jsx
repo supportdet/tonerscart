@@ -142,7 +142,7 @@ export default function OEM() {
 
     return (
         <>
-            <PageMeta title="OEM Marketplace · TonersCart" description="Discover products directly from verified manufacturers. Official brands, verified authenticity." />
+            <PageMeta title="OEM Printer Brands India — Official Products | TonersCart" description="Discover products directly from verified manufacturers. Official brands, verified authenticity." path="/oem" />
             <div className="min-h-[80vh]" style={{ background: "#0A0A0B", color: "#F5F5F7" }} data-testid="oem-page">
                 {/* Hero */}
                 <div className="tc-container max-w-[1100px] py-16 sm:py-20 text-center">

@@ -10,7 +10,6 @@ import { useCart } from "../context/CartContext";
 import OrderRequestDialog from "../components/OrderRequestDialog";
 import TonerSearchInput from "../components/TonerSearchInput";
 import TonerCartridge from "../components/TonerCartridge";
-import WhatsAppEnquiry from "../components/WhatsAppEnquiry";
 import VerifiedBadge from "../components/VerifiedBadge";
 import RefilledWarningDialog from "../components/RefilledWarningDialog";
 import PageMeta from "../components/PageMeta";
@@ -43,9 +42,6 @@ function ProductCard({ p, qty, setQty, onBuy, onCart, userCity }) {
     const loc = deliveryLabel(p.city || p.supplier_city, userCity);
     return (
         <div className="tc-product-card group relative" data-testid={`product-card-${p.id}`}>
-            <div className="absolute top-3 right-3 z-10">
-                <WhatsAppEnquiry brand={p.brand} model={p.model_number} />
-            </div>
             <Link to={`/toner/${p.id}`} className="tc-product-img block hover:opacity-95 transition" data-testid={`product-link-${p.id}`}>
                 <span className="tc-product-img-label">{p.brand}</span>
                 {p.image_url ? (
@@ -126,6 +122,12 @@ export default function SearchPage() {
     const navigate = useNavigate();
     const { user } = useAuth();
     const { city, setCity } = useCity();
+    const cat = params.get("cat") || "all";
+    const setCat = (next) => {
+        const p = new URLSearchParams(params);
+        if (next === "all") p.delete("cat"); else p.set("cat", next);
+        setParams(p);
+    };
     const [q, setQ] = useState(params.get("q") || "");
     const [brand, setBrand] = useState(params.get("brand") || "all");
     const [filterCity, setFilterCity] = useState(params.get("city") || "all");
@@ -151,7 +153,7 @@ export default function SearchPage() {
         let cancelled = false;
         (async () => {
             try {
-                const r = await api.get("/search/universal", { params: { q: qq, limit_per_type: 6 } });
+                const r = await api.get("/search/universal", { params: { q: qq, limit_per_type: 12 } });
                 if (!cancelled) setUniversal(r.data || null);
             } catch { if (!cancelled) setUniversal(null); }
         })();
@@ -337,12 +339,12 @@ export default function SearchPage() {
     return (
         <div className="tc-container py-6 sm:py-10" ref={rootRef} data-testid="search-page">
             <PageMeta
-                title={q ? `Buy ${q} Toner Cartridge Online India — TonersCart`
-                          : `Buy Printer Toner Cartridges Online${city ? ` in ${city}` : ""} — HP, Canon, Brother, Xerox | TonersCart`}
-                description={q ? `Compare prices for ${q} toner cartridge from verified suppliers across India. Original and compatible options available.`
+                title={q ? `${q} Price India — TonersCart`
+                          : `Buy Toner Cartridges Online India — Verified Dealers | TonersCart`}
+                description={q ? `Compare prices for ${q} from verified suppliers across India. Original and compatible options available.`
                                 : city
                                   ? `Buy HP, Canon, Brother toner cartridges from verified suppliers in ${city}. Compare prices, real stock, same-day dispatch available.`
-                                  : "Buy original and compatible printer toner cartridges online in India. Compare prices from verified suppliers. HP 88A, Canon 337, Brother TN-2365, Xerox toners and more."}
+                                  : "Buy original and compatible printer toner cartridges online in India from verified dealers. Compare prices, real stock. HP 88A, Canon 337, Brother TN-2365, Xerox toners and more."}
                 path="/search"
             />
             <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-2 pb-3 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-black/[0.04]" data-testid="search-sticky-wrapper">
@@ -355,16 +357,39 @@ export default function SearchPage() {
                 </div>
             </div>
 
-            {/* Universal 3-section results — shown above filter-driven toner grid when q is set */}
-            {universal && (universal.counts?.toners + universal.counts?.printers + universal.counts?.papers) > 0 && (
+            {/* Universal category tabs — appear when a search query is active */}
+            {universal && (
+                <div className="mt-5 flex flex-wrap gap-2" data-testid="universal-category-tabs">
+                    {[
+                        { key: "all", label: "All", n: (universal.counts?.toners || 0) + (universal.counts?.printers || 0) + (universal.counts?.papers || 0) + (universal.counts?.consumables || 0) + (universal.counts?.oem || 0) },
+                        { key: "toners", label: "Toners", n: universal.counts?.toners || 0 },
+                        { key: "printers", label: "Printers", n: universal.counts?.printers || 0 },
+                        { key: "papers", label: "Papers", n: universal.counts?.papers || 0 },
+                        { key: "consumables", label: "Consumables", n: universal.counts?.consumables || 0 },
+                        { key: "oem", label: "OEM", n: universal.counts?.oem || 0 },
+                    ].map((t) => (
+                        <button
+                            key={t.key}
+                            onClick={() => setCat(t.key)}
+                            className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold border transition ${cat === t.key ? "bg-[#0A0A0B] text-white border-[#0A0A0B]" : "bg-white text-[#0A0A0B] border-[#D2D2D7] hover:border-[#0A0A0B]"}`}
+                            data-testid={`universal-tab-${t.key}`}
+                        >
+                            {t.label} <span className={cat === t.key ? "text-white/70" : "text-[#86868B]"}>{t.n}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {/* Universal multi-category results — gated by the active category tab */}
+            {universal && (universal.counts?.toners + universal.counts?.printers + universal.counts?.papers + (universal.counts?.consumables || 0) + (universal.counts?.oem || 0)) > 0 && (
                 <div className="mt-6 space-y-8" data-testid="universal-results">
-                    {universal.counts.toners > 0 && (
+                    {cat === "all" && universal.counts.toners > 0 && (
                         <section data-testid="universal-section-toners">
                             <div className="flex items-baseline justify-between mb-3">
                                 <h2 className="text-[18px] font-semibold tracking-tight text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>
                                     Toners <span className="text-[13px] font-normal text-[#86868B]">· {universal.counts.toners} found</span>
                                 </h2>
-                                <button onClick={() => navigate(`/search?q=${encodeURIComponent(universal.q)}`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-toners">View all →</button>
+                                <button onClick={() => setCat("toners")} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-toners">View all →</button>
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                                 {universal.toners.map((t) => (
@@ -382,13 +407,13 @@ export default function SearchPage() {
                             </div>
                         </section>
                     )}
-                    {universal.counts.printers > 0 && (
+                    {(cat === "all" || cat === "printers") && universal.counts.printers > 0 && (
                         <section data-testid="universal-section-printers">
                             <div className="flex items-baseline justify-between mb-3">
                                 <h2 className="text-[18px] font-semibold tracking-tight text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>
                                     Printers <span className="text-[13px] font-normal text-[#86868B]">· {universal.counts.printers} found</span>
                                 </h2>
-                                <button onClick={() => navigate(`/printers/results?q=${encodeURIComponent(universal.q)}`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-printers">View all →</button>
+                                <button onClick={() => navigate(`/printers/results?q=${encodeURIComponent(universal.q)}`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-printers">Browse printers →</button>
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                                 {universal.printers.map((p) => (
@@ -406,13 +431,13 @@ export default function SearchPage() {
                             </div>
                         </section>
                     )}
-                    {universal.counts.papers > 0 && (
+                    {(cat === "all" || cat === "papers") && universal.counts.papers > 0 && (
                         <section data-testid="universal-section-papers">
                             <div className="flex items-baseline justify-between mb-3">
                                 <h2 className="text-[18px] font-semibold tracking-tight text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>
                                     Papers <span className="text-[13px] font-normal text-[#86868B]">· {universal.counts.papers} found</span>
                                 </h2>
-                                <button onClick={() => navigate(`/papers?q=${encodeURIComponent(universal.q)}`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-papers">View all →</button>
+                                <button onClick={() => navigate(`/papers?q=${encodeURIComponent(universal.q)}`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-papers">Browse papers →</button>
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                                 {universal.papers.map((p) => (
@@ -430,9 +455,59 @@ export default function SearchPage() {
                             </div>
                         </section>
                     )}
+                    {(cat === "all" || cat === "consumables") && (universal.counts.consumables || 0) > 0 && (
+                        <section data-testid="universal-section-consumables">
+                            <div className="flex items-baseline justify-between mb-3">
+                                <h2 className="text-[18px] font-semibold tracking-tight text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                                    Consumables <span className="text-[13px] font-normal text-[#86868B]">· {universal.counts.consumables} found</span>
+                                </h2>
+                                <button onClick={() => navigate(`/consumables`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-consumables">Browse consumables →</button>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {universal.consumables.map((c) => (
+                                    <Link key={c.id} to={`/consumable/${c.id}`} className="block bg-white border border-black/[0.06] rounded-xl overflow-hidden hover:shadow-md transition" data-testid={`universal-consumable-${c.id}`}>
+                                        <div className="aspect-square bg-black/[0.03] grid place-items-center">
+                                            {c.image_url ? <img src={c.image_url} alt={`${c.brand} ${c.model_number}`} className="w-full h-full object-cover" loading="lazy" /> : <Boxes size={28} className="text-[#D2D2D7]" />}
+                                        </div>
+                                        <div className="p-2.5">
+                                            <div className="text-[11px] text-[#86868B] uppercase tracking-wider truncate">{c.brand} · {c.subcategory}</div>
+                                            <div className="text-[12.5px] font-semibold text-[#0A0A0B] truncate">{c.model_number}</div>
+                                            <div className="text-[13px] font-mono text-[#0A0A0B] mt-1">₹{Number(c.price || 0).toLocaleString("en-IN")}</div>
+                                        </div>
+                                    </Link>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+                    {(cat === "all" || cat === "oem") && (universal.counts.oem || 0) > 0 && (
+                        <section data-testid="universal-section-oem">
+                            <div className="flex items-baseline justify-between mb-3">
+                                <h2 className="text-[18px] font-semibold tracking-tight text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                                    OEM Marketplace <span className="text-[13px] font-normal text-[#86868B]">· {universal.counts.oem} found</span>
+                                </h2>
+                                <button onClick={() => navigate(`/oem`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-oem">Browse OEM →</button>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {universal.oem.map((o) => (
+                                    <Link key={o.id} to={`/oem`} className="block bg-white border border-black/[0.06] rounded-xl overflow-hidden hover:shadow-md transition" data-testid={`universal-oem-${o.id}`}>
+                                        <div className="aspect-square bg-black/[0.03] grid place-items-center">
+                                            {o.image_url ? <img src={o.image_url} alt={`${o.brand} ${o.name}`} className="w-full h-full object-contain" loading="lazy" /> : <Boxes size={28} className="text-[#D2D2D7]" />}
+                                        </div>
+                                        <div className="p-2.5">
+                                            <div className="text-[11px] text-[#86868B] uppercase tracking-wider truncate">{o.brand}</div>
+                                            <div className="text-[12.5px] font-semibold text-[#0A0A0B] truncate">{o.name || o.model_number}</div>
+                                            <div className="text-[11.5px] font-semibold text-[#00B7C7] mt-1">Enquiry only →</div>
+                                        </div>
+                                    </Link>
+                                ))}
+                            </div>
+                        </section>
+                    )}
                 </div>
             )}
 
+            {/* Detailed toner browse (full filters) — default view & the "Toners" tab */}
+            {(!params.get("q") || cat === "toners") && (<>
             {/* Mobile filter trigger row */}
             <div className="lg:hidden flex items-center justify-between mt-4 gap-3">
                 <button
@@ -538,6 +613,7 @@ export default function SearchPage() {
                     )}
                 </main>
             </div>
+            </>)}
 
             {/* Mobile filter drawer */}
             {filtersOpen && (

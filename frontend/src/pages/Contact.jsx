@@ -5,8 +5,9 @@ import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
-import { CheckCircle2, Phone, Mail, MessageCircle, Clock } from "lucide-react";
+import { CheckCircle2, Mail, Clock, MapPin } from "lucide-react";
 import PhonePrefixInput from "../components/PhonePrefixInput";
+import PageMeta from "../components/PageMeta";
 
 export default function Contact() {
     const [form, setForm] = useState({
@@ -44,13 +45,14 @@ export default function Contact() {
 
     return (
         <div className="bg-white" data-testid="contact-page">
+            <PageMeta title="Contact TonersCart — Support & Dealer Enquiries" description="Contact TonersCart Private Limited for support, dealer onboarding and bulk order enquiries. Email support@tonerscart.com." path="/contact" />
             <div className="tc-container py-12 sm:py-16 max-w-5xl">
                 <div className="tc-eyebrow"><span className="tc-strip mr-2 align-middle" />Contact</div>
                 <h1 className="mt-3 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 300, letterSpacing: "-0.02em", lineHeight: 1.12 }}>
                     Get in touch
                 </h1>
                 <p className="mt-1.5 text-[12.5px] tracking-[0.04em] text-[#86868B]" data-testid="contact-attribution">
-                    TonersCart — A brand of <strong className="text-[#0A0A0B]">Digital Edge Technologies</strong> | Bangalore
+                    TonersCart — operated by <strong className="text-[#0A0A0B]">TonersCart Private Limited</strong> | Bangalore, Karnataka, India
                 </p>
                 <p className="mt-3 text-[14.5px] text-[#6E6E73] max-w-xl">
                     For dealer onboarding, bulk orders, or support — our team is one message away.
@@ -59,36 +61,23 @@ export default function Contact() {
                 <div className="grid lg:grid-cols-5 gap-8 mt-10">
                     {/* Left — channels */}
                     <div className="lg:col-span-2 space-y-4">
-                        <a href="tel:+919742270585" className="block bg-white border border-black/[0.06] rounded-2xl p-5 hover:border-[#00B7C7] transition" data-testid="contact-phone-1">
-                            <div className="inline-flex items-center gap-2 text-[10px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73]"><Phone size={12} className="text-[#00B7C7]" /> Phone</div>
-                            <div className="mt-1 font-mono text-[18px] font-semibold text-[#0A0A0B]">+91 97422 70585</div>
-                        </a>
-                        <a href="tel:+918971768796" className="block bg-white border border-black/[0.06] rounded-2xl p-5 hover:border-[#00B7C7] transition" data-testid="contact-phone-2">
-                            <div className="inline-flex items-center gap-2 text-[10px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73]"><Phone size={12} className="text-[#00B7C7]" /> Alternate</div>
-                            <div className="mt-1 font-mono text-[18px] font-semibold text-[#0A0A0B]">+91 89717 68796</div>
-                        </a>
                         <a href="mailto:support@tonerscart.com" className="block bg-white border border-black/[0.06] rounded-2xl p-5 hover:border-[#00B7C7] transition" data-testid="contact-email">
                             <div className="inline-flex items-center gap-2 text-[10px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73]"><Mail size={12} className="text-[#00B7C7]" /> Email</div>
                             <div className="mt-1 text-[15.5px] font-semibold text-[#0A0A0B]">support@tonerscart.com</div>
                         </a>
+                        <div className="bg-white border border-black/[0.06] rounded-2xl p-5" data-testid="contact-office">
+                            <div className="inline-flex items-center gap-2 text-[10px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73]"><MapPin size={12} className="text-[#00B7C7]" /> Office</div>
+                            <div className="mt-1 text-[14.5px] font-semibold text-[#0A0A0B]">Bangalore, Karnataka, India</div>
+                        </div>
                         <div className="bg-[#FFFBEB] border border-[#F5E5A6] rounded-2xl p-5 text-[12.5px] text-[#5C4A00]" data-testid="contact-grievance">
                             <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#8C6A00] mb-1">Grievances</div>
                             <div className="text-[13.5px] text-[#0A0A0B]">For grievances contact: <a href="mailto:support@tonerscart.com" className="font-semibold hover:underline">support@tonerscart.com</a></div>
-                            <div className="text-[11.5px] text-[#6E6E73] mt-1">Digital Edge Technologies, Bangalore · response within 48 hours</div>
+                            <div className="text-[11.5px] text-[#6E6E73] mt-1">TonersCart Private Limited, Bangalore · response within 48 hours</div>
                         </div>
                         <div className="bg-[#F4F4F6] rounded-2xl p-5 inline-flex items-center gap-2 text-[12.5px] text-[#3a3a40]" data-testid="contact-hours">
                             <Clock size={14} className="text-[#6E6E73]" />
-                            <span><strong>Mon&ndash;Sat</strong> · 9 AM &ndash; 7 PM IST</span>
+                            <span><strong>Mon&ndash;Sat</strong> · 9 AM &ndash; 7 PM IST · response within 48 hours</span>
                         </div>
-                        <a
-                            href="https://wa.me/919742270585"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-center gap-2 w-full h-12 rounded-xl bg-[#25D366] hover:bg-[#1FB855] text-white font-semibold text-[14.5px] transition"
-                            data-testid="contact-whatsapp"
-                        >
-                            <MessageCircle size={16} /> Chat on WhatsApp
-                        </a>
                     </div>
 
                     {/* Right — enquiry form */}

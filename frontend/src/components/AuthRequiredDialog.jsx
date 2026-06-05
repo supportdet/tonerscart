@@ -27,10 +27,10 @@ export default function AuthRequiredDialog({ open, onClose, intent }) {
                 </DialogHeader>
                 <p className="text-[13.5px] text-[#3a3a40] leading-relaxed">{copy.body}</p>
                 <DialogFooter className="flex sm:justify-end gap-2 mt-2">
-                    <Button variant="outline" onClick={() => goto("/auth/signup")} data-testid="auth-dialog-signup">
+                    <Button variant="outline" onClick={() => goto("/register")} data-testid="auth-dialog-signup">
                         <UserPlus size={14} className="mr-1.5" /> Create account
                     </Button>
-                    <Button onClick={() => goto("/auth/login")} className="btn-cta" data-testid="auth-dialog-login">
+                    <Button onClick={() => goto("/login")} className="btn-cta" data-testid="auth-dialog-login">
                         <LogIn size={14} className="mr-1.5" /> Sign in
                     </Button>
                 </DialogFooter>

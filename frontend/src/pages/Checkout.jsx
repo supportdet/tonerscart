@@ -103,6 +103,7 @@ export default function Checkout() {
                 const breakdown = deliveryBreakdown.find((d) => d.id === it.id);
                 const { data: created } = await api.post("/orders", {
                     listing_id: it.id,
+                    listing_kind: it.product?.kind || "toner",
                     qty: it.qty,
                     customer_name: name,
                     customer_phone: phoneFull,
@@ -173,65 +174,67 @@ export default function Checkout() {
 
                 <div className="grid lg:grid-cols-12 gap-6 mt-8 text-[#0A0A0B]">
                     {step === 1 ? (
-                        <form onSubmit={proceedToSummary} className="lg:col-span-7 bg-white border border-black/[0.06] rounded-2xl p-5 sm:p-7 space-y-4">
-                            <div className="text-[12px] font-semibold uppercase tracking-wider text-[#0A0A0B]">Buyer details</div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div><Label>Your name</Label><Input value={name} onChange={(e) => setName(e.target.value)} required data-testid="checkout-name" /></div>
-                                <div><Label>Contact phone</Label><PhonePrefixInput value={phone} onChange={setPhone} required testId="checkout-phone" /></div>
+                        <form onSubmit={proceedToSummary} className="lg:col-span-7 bg-white border border-black/[0.06] rounded-2xl p-6 sm:p-8 space-y-7">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#86868B]">Buyer details</div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                <div className="space-y-1.5"><Label className="text-[12.5px] font-medium text-[#3a3a40]">Your name</Label><Input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Full name" className="h-11" data-testid="checkout-name" /></div>
+                                <div className="space-y-1.5"><Label className="text-[12.5px] font-medium text-[#3a3a40]">Contact phone</Label><PhonePrefixInput value={phone} onChange={setPhone} required testId="checkout-phone" /></div>
                             </div>
 
-                            <div className="text-[12px] font-semibold uppercase tracking-wider text-[#0A0A0B] pt-2">Delivery address</div>
-                            <div className="grid grid-cols-1 gap-3">
-                                <div>
-                                    <Label>Street address / House no.</Label>
-                                    <Input value={streetAddress} onChange={(e) => setStreetAddress(e.target.value)} required placeholder="e.g. #245, 12th Cross, Indiranagar" data-testid="checkout-street" />
-                                </div>
-                                <div>
-                                    <Label>Area / Locality</Label>
-                                    <Input value={area} onChange={(e) => setArea(e.target.value)} required placeholder="e.g. HSR Layout Sector 7" data-testid="checkout-area" />
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div>
-                                        <Label>City</Label>
-                                        <Input list="ck-cities" value={orderCity} onChange={(e) => setOrderCity(e.target.value)} required placeholder="Bangalore" data-testid="checkout-city" />
-                                        <datalist id="ck-cities">
-                                            {KNOWN_CITIES.map((c) => <option key={c} value={c} />)}
-                                        </datalist>
+                            <div className="pt-1">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#86868B] mb-4">Delivery address</div>
+                                <div className="grid grid-cols-1 gap-5">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-[12.5px] font-medium text-[#3a3a40]">Street address / House no.</Label>
+                                        <Input value={streetAddress} onChange={(e) => setStreetAddress(e.target.value)} required placeholder="e.g. #245, 12th Cross, Indiranagar" className="h-11" data-testid="checkout-street" />
                                     </div>
-                                    <div>
-                                        <Label>State</Label>
-                                        <Input list="ck-states" value={orderState} onChange={(e) => setOrderState(e.target.value)} required placeholder="Karnataka" data-testid="checkout-state" />
-                                        <datalist id="ck-states">
-                                            {INDIAN_STATES.map((s) => <option key={s} value={s} />)}
-                                        </datalist>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-[12.5px] font-medium text-[#3a3a40]">Area / Locality</Label>
+                                        <Input value={area} onChange={(e) => setArea(e.target.value)} required placeholder="e.g. HSR Layout Sector 7" className="h-11" data-testid="checkout-area" />
                                     </div>
-                                    <div>
-                                        <Label>Pincode</Label>
-                                        <Input value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} required inputMode="numeric" maxLength={6} placeholder="560034" data-testid="checkout-pincode" />
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[12.5px] font-medium text-[#3a3a40]">City</Label>
+                                            <Input list="ck-cities" value={orderCity} onChange={(e) => setOrderCity(e.target.value)} required placeholder="Bangalore" className="h-11" data-testid="checkout-city" />
+                                            <datalist id="ck-cities">
+                                                {KNOWN_CITIES.map((c) => <option key={c} value={c} />)}
+                                            </datalist>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[12.5px] font-medium text-[#3a3a40]">State</Label>
+                                            <Input list="ck-states" value={orderState} onChange={(e) => setOrderState(e.target.value)} required placeholder="Karnataka" className="h-11" data-testid="checkout-state" />
+                                            <datalist id="ck-states">
+                                                {INDIAN_STATES.map((s) => <option key={s} value={s} />)}
+                                            </datalist>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[12.5px] font-medium text-[#3a3a40]">Pincode</Label>
+                                            <Input value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} required inputMode="numeric" maxLength={6} placeholder="560034" className="h-11" data-testid="checkout-pincode" />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div><Label>Notes for suppliers (optional)</Label><Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special instructions" data-testid="checkout-notes" /></div>
+                            <div className="space-y-1.5"><Label className="text-[12.5px] font-medium text-[#3a3a40]">Notes for suppliers (optional)</Label><Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special instructions" data-testid="checkout-notes" /></div>
 
                             {!user && (
-                                <div className="pt-3 border-t border-black/[0.06]">
-                                    <div className="text-[12px] font-semibold uppercase tracking-wider text-[#0A0A0B] flex items-center gap-2">
+                                <div className="pt-6 border-t border-black/[0.06]">
+                                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#86868B] flex items-center gap-2">
                                         <Lock size={12} /> Quick sign-in
                                     </div>
-                                    <p className="text-[12px] text-[#6E6E73] mt-1">We create a buyer account in one tap so suppliers can reach you. No OTP, no friction.</p>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                                        <div><Label>Email</Label><Input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} required placeholder="you@company.com" data-testid="checkout-auth-email" /></div>
-                                        <div><Label>Password</Label><Input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required minLength={6} placeholder="6+ characters" data-testid="checkout-auth-password" /></div>
+                                    <p className="text-[12.5px] text-[#6E6E73] mt-1.5">We create a buyer account in one tap so suppliers can reach you. No OTP, no friction.</p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-4">
+                                        <div className="space-y-1.5"><Label className="text-[12.5px] font-medium text-[#3a3a40]">Email</Label><Input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} required placeholder="you@company.com" className="h-11" data-testid="checkout-auth-email" /></div>
+                                        <div className="space-y-1.5"><Label className="text-[12.5px] font-medium text-[#3a3a40]">Password</Label><Input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required minLength={6} placeholder="6+ characters" className="h-11" data-testid="checkout-auth-password" /></div>
                                     </div>
-                                    <p className="text-[11px] text-[#86868B] mt-2">Already have an account? Use the same email & password — we&apos;ll sign you in automatically.</p>
+                                    <p className="text-[11.5px] text-[#86868B] mt-2.5">Already have an account? Use the same email &amp; password — we&apos;ll sign you in automatically.</p>
                                 </div>
                             )}
 
-                            <div className="flex items-center gap-2 text-[12.5px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md p-2.5">
+                            <div className="flex items-center gap-2 text-[12.5px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
                                 <CheckCircle2 size={14} className="shrink-0" /> Next: review your order summary, then confirm.
                             </div>
-                            <Button type="submit" className="btn-cta w-full inline-flex items-center justify-center gap-2" data-testid="checkout-continue-btn">
+                            <Button type="submit" className="btn-cta w-full h-12 inline-flex items-center justify-center gap-2" data-testid="checkout-continue-btn">
                                 Continue to review <ArrowRight size={14} />
                             </Button>
                         </form>

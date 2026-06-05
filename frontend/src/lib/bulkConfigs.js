@@ -206,7 +206,86 @@ export const printerBulkConfig = {
     }),
 };
 
-// ============================ PAPERS ============================
+// ============================ CONSUMABLES ============================
+
+const CONSUMABLE_SUBS = [
+    "Ink Cartridges", "Drums", "Fusers", "Maintenance Kits",
+    "Staple Cartridges", "Transfer Belts", "Other",
+];
+const CONSUMABLE_CONDITIONS = ["New", "Refurbished", "Compatible"];
+
+const CONSUMABLE_COLUMNS = [
+    { key: "subcategory", label: "Subcategory", required: true, type: "select", w: 150 },
+    { key: "subcategory_other", label: "If Other, specify", required: false, w: 150 },
+    { key: "brand", label: "Brand", required: true, w: 130 },
+    { key: "model_number", label: "Model Number", required: true, w: 160 },
+    { key: "compatible_models", label: "Compatible Printers", required: false, w: 200 },
+    { key: "condition", label: "Condition", required: false, type: "select", w: 130 },
+    { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
+    { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
+    { key: "stock", label: "Stock", required: true, type: "number", w: 90 },
+    { key: "intercity_delivery_charge", label: "Intercity Delivery (₹)", required: false, type: "number", w: 140 },
+    { key: "description", label: "Description", required: false, w: 220 },
+];
+
+const consumableEmptyRow = () => ({
+    subcategory: "Ink Cartridges", subcategory_other: "", brand: "", model_number: "",
+    compatible_models: "", condition: "New", price: "", gst_rate: "18", stock: "",
+    intercity_delivery_charge: "0", description: "",
+});
+
+const consumableIsRowEmpty = (r) =>
+    !["brand", "model_number", "price", "stock", "compatible_models", "description"]
+        .some((k) => String(r[k] ?? "").trim() !== "");
+
+const consumableRowErrors = (r) => {
+    const errs = new Set();
+    if (consumableIsRowEmpty(r)) return errs;
+    for (const k of ["subcategory", "brand", "model_number", "price", "stock"]) {
+        if (String(r[k] ?? "").trim() === "") errs.add(k);
+    }
+    if (r.price !== "" && Number(r.price) <= 0) errs.add("price");
+    if (r.stock !== "" && Number(r.stock) < 0) errs.add("stock");
+    if (r.subcategory && !CONSUMABLE_SUBS.includes(r.subcategory)) errs.add("subcategory");
+    return errs;
+};
+
+export const consumableBulkConfig = {
+    title: "Bulk upload consumables",
+    subtitle: "Fill the table or upload a CSV / Excel. Required: Subcategory, Brand, Model, Price, Stock.",
+    sheetName: "Consumables",
+    templateFilename: "tonerscart_bulk_consumables_template.xlsx",
+    currentFilename: "tonerscart_bulk_consumables.xlsx",
+    unitLabel: "consumable",
+    endpoint: "/supplier/consumables/bulk",
+    columns: CONSUMABLE_COLUMNS,
+    selectOptions: { subcategory: CONSUMABLE_SUBS, condition: CONSUMABLE_CONDITIONS },
+    emptyRow: consumableEmptyRow,
+    templateExample: {
+        subcategory: "Drums", subcategory_other: "", brand: "Brother", model_number: "DR-2305",
+        compatible_models: "HL-L2321D, DCP-L2541DW", condition: "New", price: "2200",
+        gst_rate: "18", stock: "12", intercity_delivery_charge: "150",
+        description: "Genuine drum unit, 12000-page yield.",
+    },
+    requiredKeys: ["subcategory", "brand", "model_number", "price", "stock"],
+    isRowEmpty: consumableIsRowEmpty,
+    rowErrors: consumableRowErrors,
+    toPayload: (r) => ({
+        subcategory: r.subcategory || "Other",
+        subcategory_other: r.subcategory_other?.trim() || null,
+        brand: r.brand.trim(),
+        model_number: r.model_number.trim(),
+        compatible_models: r.compatible_models?.trim() || null,
+        condition: r.condition || "New",
+        price: Number(r.price),
+        stock: Number(r.stock),
+        gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
+        intercity_delivery_charge: r.intercity_delivery_charge !== "" ? Number(r.intercity_delivery_charge) : 0,
+        description: (r.description || "").trim() || null,
+        image_url: "",
+        image_urls: [],
+    }),
+};
 
 const PAPER_SIZES = ["A4", "A3", "A5", "Letter", "Legal"];
 const PAPER_BRANDS_HINT = "JK Paper";

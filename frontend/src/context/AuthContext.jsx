@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { supabase } from "../lib/supabase";
-import api, { formatApiError } from "../lib/api";
+import api, { formatApiError, getAccessToken } from "../lib/api";
 
 const AuthContext = createContext(null);
 
@@ -10,6 +10,10 @@ export const AuthProvider = ({ children }) => {
 
     const refresh = useCallback(async () => {
         try {
+            // Guests have no token — skip /auth/me entirely so we never emit a
+            // 401 on public pages (keeps the console clean, no false redirects).
+            const token = await getAccessToken();
+            if (!token) { setUser(null); setLoading(false); return; }
             const { data } = await api.get("/auth/me", { timeout: 8000 });
             setUser(data);
         } catch (err) {

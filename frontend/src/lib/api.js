@@ -22,6 +22,16 @@ const api = axios.create({
     baseURL: API_BASE,
 });
 
+// Resolve the current access token, awaiting the initial session restore once.
+// Returns null for guests — callers can use this to skip authed-only requests
+// (e.g. /auth/me) and avoid noisy 401s in the console on public pages.
+export async function getAccessToken() {
+    if (cachedToken == null) {
+        try { await sessionReady; } catch { /* ignore */ }
+    }
+    return cachedToken;
+}
+
 api.interceptors.request.use(async (cfg) => {
     // Ensure the initial Supabase session restore has finished before attaching
     // the token. For guests this resolves quickly with a null token (no block).

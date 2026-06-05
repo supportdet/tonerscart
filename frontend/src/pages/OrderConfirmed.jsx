@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useLocation, useNavigate, Link } from "react-router-dom";
-import { CheckCircle2, MessageCircle, Package, MapPin, User, Clock, FileText } from "lucide-react";
+import { CheckCircle2, Mail, Package, MapPin, User, Clock, FileText } from "lucide-react";
 import api from "../lib/api";
 import ReturnPolicyBox from "../components/ReturnPolicyBox";
 
@@ -57,8 +57,7 @@ export default function OrderConfirmed() {
     const buyerGst = order?.buyer_gst_number;
     const sellerGst = order?.suppliers?.gst_number || order?.supplier_gst_number;
 
-    const waText = `Hi, I just placed order #${shortId} on TonersCart and need help.`;
-    const waHref = `https://wa.me/919742270585?text=${encodeURIComponent(waText)}`;
+    const supportHref = `mailto:support@tonerscart.com?subject=${encodeURIComponent(`Order #${shortId} support`)}`;
 
     return (
         <div className="bg-white min-h-[70vh]" data-testid="order-confirmed-page">
@@ -117,8 +116,8 @@ export default function OrderConfirmed() {
 
                 {/* CTA row */}
                 <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <a href={waHref} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-[#25D366] hover:bg-[#1FB855] text-white font-semibold text-[14px] transition" data-testid="oc-whatsapp-btn">
-                        <MessageCircle size={16} /> Chat with support
+                    <a href={supportHref} className="inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-[#0A0A0B] hover:bg-black text-white font-semibold text-[14px] transition" data-testid="oc-support-btn">
+                        <Mail size={16} /> Email support
                     </a>
                     <Link to="/customer" className="btn-cta inline-flex items-center justify-center gap-2 h-12" data-testid="oc-track-btn">
                         Track your order

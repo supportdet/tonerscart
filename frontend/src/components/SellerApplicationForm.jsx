@@ -440,7 +440,7 @@ export default function SellerApplicationForm() {
                     data-testid="apply-agreement-checkbox"
                 />
                 <label htmlFor="apply-agreement-cb" className="text-[12.5px] text-[#1D1D1F] cursor-pointer leading-relaxed">
-                    I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-[#00B7C7] hover:underline font-semibold">TonersCart Seller Terms</a> operated by <strong>Digital Edge Technologies</strong>.
+                    I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-[#00B7C7] hover:underline font-semibold">TonersCart Seller Terms</a> operated by <strong>TonersCart Private Limited</strong>.
                 </label>
             </div>
             {step === 4 && !agreed && (
