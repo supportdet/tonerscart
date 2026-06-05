@@ -3,7 +3,7 @@ import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import { useCart } from "../context/CartContext";
-import { LogOut, MapPin, ChevronDown, ShoppingCart, Loader2 } from "lucide-react";
+import { LogOut, MapPin, ChevronDown, ShoppingCart, Loader2, LayoutDashboard } from "lucide-react";
 
 // Wave 10 — two-layer navbar.
 // Layer 1 (top, dark): brand · city · sell · sign-in · cart · join-free.
@@ -216,10 +216,12 @@ export default function Header() {
                             )}
                             <button
                                 onClick={() => navigate(isSeller ? "/supplier" : isAdmin ? "/admin" : isOem ? "/oem-dashboard" : "/customer")}
-                                className="text-[13px] font-medium text-[#1D1D1F] hover:text-[#0A0A0B] px-2 sm:px-3 h-9 rounded-lg hover:bg-black/[0.04] transition-colors max-w-[88px] sm:max-w-none truncate"
+                                className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#0A0A0B] px-2.5 sm:px-3.5 h-9 rounded-lg border border-[#E5E5E7] hover:border-[#0A0A0B] hover:bg-black/[0.03] transition-colors whitespace-nowrap"
                                 data-testid="header-user-chip"
+                                title={user.name ? `${user.name} — open dashboard` : "Open dashboard"}
                             >
-                                {(user.name || "Account").split(" ")[0]}
+                                <LayoutDashboard size={15} />
+                                <span>Dashboard</span>
                             </button>
                             <button
                                 onClick={handleLogout}
