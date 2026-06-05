@@ -821,7 +821,7 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
 
 async def email_order_shipped(order: dict, listing: dict, buyer: dict):
     """Notify buyer that their order has shipped — includes tracking number,
-    product details, and a WhatsApp support link."""
+    product details, and an email support link."""
     short_id = str(order.get("id", ""))[:8].upper()
     brand = (listing or {}).get("brand") or ""
     model = (listing or {}).get("model_number") or ""

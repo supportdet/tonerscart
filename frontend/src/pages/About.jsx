@@ -36,7 +36,7 @@ export default function About() {
                             Why we built TonersCart
                         </h2>
                         <div className="space-y-4 mt-5 text-[14.5px] text-[#3a3a40] leading-relaxed">
-                            <p>India&apos;s printer-supplies market has been fragmented for decades — buyers chase calls and quotes, dealers waste days on price discovery, and inventory data lives nowhere except WhatsApp chats.</p>
+                            <p>India&apos;s printer-supplies market has been fragmented for decades — buyers chase calls and quotes, dealers waste days on price discovery, and inventory data lives nowhere except scattered chats and offline ledgers.</p>
                             <p>TonersCart brings that fragmented market online: real stock from <strong>verified suppliers</strong>, transparent prices, GST-compliant invoicing handled by the seller, and a clean dashboard for both sides of the transaction.</p>
                             <p>We don&apos;t hold inventory. We don&apos;t mark up prices. We connect verified dealers with serious B2B buyers and take a transparent platform commission only on completed orders.</p>
                         </div>
