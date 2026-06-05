@@ -7,7 +7,7 @@ export default function About() {
     return (
         <div className="bg-white min-h-screen" data-testid="about-page">
             <PageMeta
-                title="About TonersCart — India's B2B Marketplace for Printers, Toners & MFDs"
+                title="About TonersCart — India's Verified Printer Marketplace"
                 description="TonersCart Private Limited is India's digital marketplace connecting verified printer-toner suppliers with B2B buyers across the country. Headquartered in Bangalore, Karnataka."
                 path="/about"
             />

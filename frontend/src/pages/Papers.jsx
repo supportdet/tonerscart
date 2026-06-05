@@ -86,7 +86,7 @@ export default function Papers() {
     return (
         <div className="min-h-screen bg-[#F5F5F7]">
             <PageMeta
-                title="Buy A4 / A3 papers in bulk · TonersCart"
+                title="Buy Printing Paper Online India — Verified Dealers | TonersCart"
                 description="Buy A4, A3, A5 and Letter-size papers in bulk from verified suppliers across India. Compare GSM, price per ream and box from real stock."
                 path="/papers"
             />

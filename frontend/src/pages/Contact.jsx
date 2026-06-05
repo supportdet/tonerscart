@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
 import { CheckCircle2, Mail, Clock, MapPin } from "lucide-react";
 import PhonePrefixInput from "../components/PhonePrefixInput";
+import PageMeta from "../components/PageMeta";
 
 export default function Contact() {
     const [form, setForm] = useState({
@@ -44,6 +45,7 @@ export default function Contact() {
 
     return (
         <div className="bg-white" data-testid="contact-page">
+            <PageMeta title="Contact TonersCart — Support & Dealer Enquiries" description="Contact TonersCart Private Limited for support, dealer onboarding and bulk order enquiries. Email support@tonerscart.com." path="/contact" />
             <div className="tc-container py-12 sm:py-16 max-w-5xl">
                 <div className="tc-eyebrow"><span className="tc-strip mr-2 align-middle" />Contact</div>
                 <h1 className="mt-3 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 300, letterSpacing: "-0.02em", lineHeight: 1.12 }}>

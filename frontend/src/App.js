@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import api from "./lib/api";
 import AgreementGate from "./components/AgreementGate";
+import BuyerTypeGate from "./components/BuyerTypeGate";
 import { CityProvider } from "./context/CityContext";
 import { CartProvider } from "./context/CartContext";
 import Header from "./components/Header";
@@ -40,6 +41,7 @@ import ProductDetail from "./pages/ProductDetail";
 import NotFound from "./pages/NotFound";
 import ComingSoon from "./pages/ComingSoon";
 import Bulk from "./pages/Bulk";
+import Consumables from "./pages/Consumables";
 import Dealer from "./pages/Dealer";
 import OEM from "./pages/OEM";
 import OemDashboard from "./pages/OemDashboard";
@@ -121,7 +123,7 @@ function App() {
                                     <Route path="/printers" element={<PrintersGuide />} />
                                     <Route path="/printers/results" element={<PrintersResults />} />
                                     <Route path="/papers" element={<Papers />} />
-                                    <Route path="/consumables" element={<ComingSoon category="Consumables" accent="#f9a825" blurb="Inks, drums, fusers, maintenance kits and more — sourced directly from verified dealers. Be the first to know when we go live." />} />
+                                    <Route path="/consumables" element={<Consumables />} />
                                     <Route path="/scanners" element={<ComingSoon category="Scanners" accent="#5c6bc0" blurb="Desktop, network and production scanners from leading brands — coming to TonersCart soon. Get notified when we launch." />} />
                                     <Route path="/bulk" element={<Bulk />} />
                                     <Route path="/dealer" element={<Dealer />} />
@@ -134,6 +136,7 @@ function App() {
                                     <Route path="/toner/:id" element={<ProductDetail kind="toner" />} />
                                     <Route path="/printer/:id" element={<ProductDetail kind="printer" />} />
                                     <Route path="/paper/:id" element={<ProductDetail kind="paper" />} />
+                                    <Route path="/consumable/:id" element={<ProductDetail kind="consumable" />} />
                                     <Route path="/order-confirmed/:id" element={<OrderConfirmed />} />
                                     <Route path="/order-confirmed" element={<OrderConfirmed />} />
                                     <Route path="/procurement/login" element={<ProcurementLogin />} />
@@ -146,6 +149,7 @@ function App() {
                                 </Routes>
                             </Chrome>
                             <SupabaseAgreementGate />
+                            <BuyerTypeGate />
                             </AuthGate>
                             </ProcAuthProvider>
                         </AuthProvider>

@@ -1,3 +1,18 @@
+### 2026-06 — Wave 19: Consumables, Universal Search, SEO, Buyer Segmentation, fixes
+
+**REQUIRES DB MIGRATION (USER):** Run `/app/backend/supabase_schema_consumables.sql` in Supabase SQL editor. Creates `consumable_listings`; makes `orders.listing_id` nullable + adds `consumable_listing_id`/`paper_listing_id`/`product_brand`/`product_model`/`product_image` (enables paper+consumable direct orders to persist); adds `users.user_type`. Until applied: consumables empty, segmentation save → graceful 503, direct orders don't persist.
+
+- **Buy Now → 404 fixed:** `AuthRequiredDialog` pointed to non-existent `/auth/login` & `/auth/signup` → fixed to `/login` & `/register`.
+- **401 console noise fixed:** `AuthContext.refresh` skips `/auth/me` for guests via new `getAccessToken()` in `lib/api.js`.
+- **Consumables line (mirrors Papers):** `/consumables` (subcategory tabs), `/consumable/:id` detail, dealer single + bulk upload, add-to-cart/buy-now via checkout. Backend `/api/supplier/consumables*` + `/api/consumables*` (graceful when table missing). Files: `pages/Consumables.jsx`, `components/ConsumableListings.jsx`, `lib/consumableConstants.js`, `bulkConfigs.js`, SupplierDashboard tab.
+- **Universal search:** `/search` category tabs (All/Toners/Printers/Papers/Consumables/OEM); `/api/search/universal` now returns consumables + oem too.
+- **SEO:** PageMeta added to Terms/Privacy/Contact; spec titles on Landing/Search/Papers/Printers/OEM/About/Consumables; Schema.org Product JSON-LD on product pages.
+- **Buyer segmentation:** one-time `BuyerTypeGate` modal (Personal/Corporate+GST/Dealer→/sell/Government→/procurement). `POST /api/auth/user-type`, `GET /api/admin/user-segments`, `user_type` in `/auth/me`.
+- **Legal footer badge:** Terms v2.0 · Privacy v2.0 · Last updated June 2026.
+- **Checkout UI cleanup:** spacing, labels above inputs, h-11 inputs, single-column mobile.
+- Razorpay/Twilio untouched (mocked). Backend lint clean, verified via curl. Frontend e2e blocked by preview-env automated-browser `/api` hang (unchanged Papers hangs identically) — run testing agent after SQL applied.
+
+
 ### 2026-06-04 — Rebrand to TonersCart Pvt Ltd · remove phones/WhatsApp · legal rewrite · agreement-acceptance system
 
 - **Rebrand:** every "Digital Edge Technologies / DET" → **TonersCart Private Limited** across Footer, About, Contact, Terms, Privacy, SellerApplicationForm, SupplierDashboard, and all `email_service.py` templates.

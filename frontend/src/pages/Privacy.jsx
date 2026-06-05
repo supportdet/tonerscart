@@ -1,11 +1,13 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import PageMeta from "../components/PageMeta";
 
 export const PRIVACY_VERSION = "2.0";
 
 export default function Privacy() {
     return (
         <div className="bg-white" data-testid="privacy-page">
+            <PageMeta title="Privacy Policy — TonersCart" description="How TonersCart Private Limited collects, uses and protects your data in compliance with the DPDPA 2023 and IT Rules 2021." path="/privacy" />
             <div className="tc-container py-12 sm:py-16 max-w-3xl">
                 <div className="tc-eyebrow"><span className="tc-strip mr-2 align-middle" />Legal</div>
                 <h1 className="mt-3 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 300, letterSpacing: "-0.02em", lineHeight: 1.15 }}>

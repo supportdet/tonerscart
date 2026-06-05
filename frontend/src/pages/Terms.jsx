@@ -1,11 +1,13 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import PageMeta from "../components/PageMeta";
 
 export const TERMS_VERSION = "2.0";
 
 export default function Terms() {
     return (
         <div className="bg-white" data-testid="terms-page">
+            <PageMeta title="Terms of Service — TonersCart" description="Read the Terms of Service for TonersCart Private Limited — India's verified marketplace for printers, toners, papers and consumables." path="/terms" />
             <div className="tc-container py-12 sm:py-16 max-w-3xl">
                 <div className="tc-eyebrow"><span className="tc-strip mr-2 align-middle" />Legal</div>
                 <h1 className="mt-3 text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 300, letterSpacing: "-0.02em", lineHeight: 1.15 }}>

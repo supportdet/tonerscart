@@ -130,6 +130,7 @@ class SignupCustomer(BaseModel):
     name: str
     phone: Optional[str] = ""
     city: Optional[str] = ""
+    user_type: Optional[str] = None  # personal | corporate | dealer | referred_to_procurement
 
 
 class SellerApplication(BaseModel):
@@ -232,6 +233,7 @@ class ListingUpdate(BaseModel):
 
 class OrderCreate(BaseModel):
     listing_id: str
+    listing_kind: Optional[str] = "toner"  # toner | paper | consumable
     qty: int = Field(gt=0)
     customer_name: str
     customer_phone: str
@@ -347,6 +349,7 @@ def signup_customer(payload: SignupCustomer):
         "role": "customer",
         "phone": payload.phone or None,
         "city": payload.city or None,
+        **({"user_type": payload.user_type} if payload.user_type in _VALID_USER_TYPES else {}),
     }, on_conflict="id").execute()
 
     return {"ok": True, "user_id": uid}
@@ -602,12 +605,14 @@ def me(user: dict = Depends(require_user)):
     Roles: 'admin' | 'supplier' (= seller) | 'customer' (= buyer).
     application_status: 'pending' | 'rejected' | None — derived from suppliers_pending."""
     out = dict(user)
-    # Buyer GSTIN (optional, used for B2B invoicing on orders)
+    # Buyer GSTIN (optional, used for B2B invoicing on orders) + segmentation type
     try:
-        u = sb_admin.table("users").select("gst_number").eq("id", user["id"]).maybe_single().execute()
+        u = sb_admin.table("users").select("gst_number,user_type").eq("id", user["id"]).maybe_single().execute()
         out["gst_number"] = (u.data or {}).get("gst_number") if u else None
+        out["user_type"] = (u.data or {}).get("user_type") if u else None
     except Exception:
         out["gst_number"] = None
+        out["user_type"] = None
     # Approved supplier?
     if user.get("role") == "supplier":
         s = sb_admin.table("suppliers").select(
@@ -648,6 +653,28 @@ def me(user: dict = Depends(require_user)):
 
 class ProfileUpdate(BaseModel):
     gst_number: Optional[str] = None
+
+
+class UserTypeUpdate(BaseModel):
+    user_type: str  # personal | corporate | dealer | referred_to_procurement
+
+
+_VALID_USER_TYPES = {"personal", "corporate", "dealer", "referred_to_procurement"}
+
+
+@api.post("/auth/user-type")
+def set_user_type(payload: UserTypeUpdate, user: dict = Depends(require_user)):
+    """One-time buyer segmentation. Stored on users.user_type; the onboarding
+    screen shows only when this is null. Idempotent — re-setting just updates."""
+    if payload.user_type not in _VALID_USER_TYPES:
+        raise HTTPException(400, "Invalid user_type")
+    try:
+        sb_admin.table("users").update({"user_type": payload.user_type}).eq("id", user["id"]).execute()
+    except Exception as e:
+        if "user_type" in str(e):
+            raise HTTPException(503, "user_type column not migrated — run supabase_schema_consumables.sql") from e
+        raise
+    return {"ok": True, "user_type": payload.user_type}
 
 
 _GSTIN_RE = re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$")
@@ -1010,15 +1037,56 @@ def search_universal(q: str, limit_per_type: int = 12):
     except Exception as e:
         logger.warning("universal search papers failed: %s", e)
 
+    # --- Consumables ---
+    consumables: list = []
+    try:
+        c_rows = sb_admin.table("consumable_listings").select(
+            "*,suppliers(business_name,city,is_suspended)"
+        ).or_(
+            f"brand.ilike.%{q_norm}%,model_number.ilike.%{q_norm}%,compatible_models.ilike.%{q_norm}%"
+        ).gt("stock", 0).limit(200).execute().data or []
+        for r in c_rows:
+            sup = r.pop("suppliers", None) or {}
+            if sup.get("is_suspended"):
+                continue
+            r["supplier_name"] = sup.get("business_name") or ""
+            r["city"] = sup.get("city") or ""
+            consumables.append(r)
+        consumables = _rank(consumables)[:limit_per_type]
+    except Exception as e:
+        if "consumable_listings" not in str(e):
+            logger.warning("universal search consumables failed: %s", e)
+
+    # --- OEM products (enquiry-only showcase, approved partners) ---
+    oem: list = []
+    try:
+        partners = sb_admin.table("oem_partners").select("id,brand,company").eq("status", "approved").execute().data or []
+        approved_ids = {p["id"] for p in partners}
+        if approved_ids:
+            o_rows = sb_admin.table("oem_products").select("*").or_(
+                f"name.ilike.%{q_norm}%,brand.ilike.%{q_norm}%,model_number.ilike.%{q_norm}%"
+            ).limit(200).execute().data or []
+            for r in o_rows:
+                if r.get("oem_id") in approved_ids:
+                    oem.append(r)
+            oem = _rank(oem, brand_key="brand", model_key="name")[:limit_per_type]
+    except Exception as e:
+        if "oem_p" not in str(e):
+            logger.warning("universal search oem failed: %s", e)
+
     return {
         "q": q_norm,
         "toners": toners,
         "printers": printers,
         "papers": papers,
+        "consumables": consumables,
+        "oem": oem,
         "counts": {
             "toners": len(toners),
             "printers": len(printers),
             "papers": len(papers),
+            "consumables": len(consumables),
+            "oem": len(oem),
         },
     }
 
@@ -1228,10 +1296,107 @@ def create_listings_bulk(payload: List[dict], user: dict = Depends(require_role(
 
 # ===== Orders ==================================================================
 
+async def _create_direct_order(payload: "OrderCreate", user: dict, kind: str):
+    """Order path for direct-purchase products that live outside the `listings`
+    table (papers, consumables). Inserts an order with the matching
+    {kind}_listing_id + denormalised product columns and decrements stock."""
+    table = "paper_listings" if kind == "paper" else "consumable_listings"
+    lst = sb_admin.table(table).select("*").eq("id", payload.listing_id).maybe_single().execute()
+    if not lst or not lst.data:
+        raise HTTPException(404, "Listing not found")
+    L = lst.data
+    available = int(L.get("stock") or 0)
+    if payload.qty > available:
+        raise HTTPException(400, "Insufficient stock")
+    if kind == "paper":
+        unit_price = float(L.get("price_per_ream") or 0)
+        brand = L.get("brand")
+        model = f"{L.get('size')} · {L.get('gsm')} GSM"
+    else:
+        unit_price = float(L.get("price") or 0)
+        brand = L.get("brand")
+        model = L.get("model_number")
+    total = unit_price * payload.qty
+
+    row = {
+        "customer_id": user["id"],
+        "supplier_id": L["supplier_id"],
+        "listing_id": None,
+        f"{kind}_listing_id": L["id"],
+        "product_brand": brand,
+        "product_model": model,
+        "product_image": L.get("image_url"),
+        "qty": payload.qty,
+        "unit_price": unit_price,
+        "total": total,
+        "customer_name": payload.customer_name,
+        "customer_phone": payload.customer_phone,
+        "delivery_address": payload.delivery_address,
+        "notes": payload.notes or None,
+        "status": "requested",
+    }
+    for k, v in {
+        "street_address": payload.street_address,
+        "area": payload.area,
+        "order_city": payload.order_city,
+        "order_state": payload.order_state,
+        "pincode": payload.pincode,
+        "delivery_charge": (float(payload.delivery_charge) if payload.delivery_charge else None),
+        "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
+        "gst_amount": (float(payload.gst_amount) if payload.gst_amount is not None else None),
+    }.items():
+        if v is not None and v != "":
+            row[k] = v
+
+    res = None
+    while True:
+        try:
+            res = sb_admin.table("orders").insert(row).execute()
+            break
+        except Exception as e:
+            msg = str(e)
+            dropped = False
+            for k in ("consumable_listing_id", "paper_listing_id", "product_brand", "product_model",
+                      "product_image", "street_address", "area", "order_city", "order_state",
+                      "pincode", "delivery_charge", "gst_rate", "gst_amount"):
+                if k in msg and k in row:
+                    row.pop(k, None)
+                    dropped = True
+                    break
+            if not dropped:
+                raise
+    created = res.data[0] if res and res.data else row
+    try:
+        sb_admin.table(table).update({"stock": max(0, available - payload.qty)}).eq("id", L["id"]).execute()
+    except Exception as e:
+        logger.warning("direct order stock decrement failed: %s", e)
+
+    # Confirmation emails (best effort)
+    try:
+        sup = sb_admin.table("suppliers").select(
+            "business_name,city,gst_number,contact_email"
+        ).eq("id", L["supplier_id"]).maybe_single().execute()
+        buyer_row = sb_admin.table("users").select("email,name,gst_number").eq("id", user["id"]).maybe_single().execute()
+        order_for_email = dict(created)
+        order_for_email["buyer_gst_number"] = (buyer_row.data or {}).get("gst_number") if buyer_row else None
+        order_for_email["supplier_gst_number"] = (sup.data or {}).get("gst_number") if sup else None
+        await email_order_placed(
+            order=order_for_email,
+            listing={"brand": brand, "model_number": model, "toner_type": kind.title()},
+            supplier=(sup.data if sup else {}) or {},
+            buyer=(buyer_row.data if buyer_row else {}) or {},
+        )
+    except Exception:
+        logger.exception("direct order confirmation email failed (non-fatal)")
+    return created
+
+
 @api.post("/orders")
 async def create_order(payload: OrderCreate, user: dict = Depends(require_user)):
     if user["role"] not in ("customer", "supplier"):
         raise HTTPException(403, "Only signed-in buyers and sellers can place orders")
+    if (payload.listing_kind or "toner") in ("paper", "consumable"):
+        return await _create_direct_order(payload, user, payload.listing_kind)
     lst = sb_admin.table("listings").select("*").eq("id", payload.listing_id).maybe_single().execute()
     if not lst or not lst.data:
         raise HTTPException(404, "Listing not found")
@@ -1343,6 +1508,20 @@ async def create_order(payload: OrderCreate, user: dict = Depends(require_user))
     return created
 
 
+def _attach_direct_product(rows: list):
+    """For direct (paper/consumable) orders the listings join is null — synthesise
+    a `listings` dict from the denormalised product_* columns so dashboards render."""
+    for r in rows:
+        if not r.get("listings") and (r.get("product_brand") or r.get("product_model")):
+            r["listings"] = {
+                "brand": r.get("product_brand"),
+                "model_number": r.get("product_model"),
+                "toner_type": "Consumable" if r.get("consumable_listing_id") else "Paper",
+                "image_url": r.get("product_image"),
+            }
+    return rows
+
+
 @api.get("/orders/mine")
 def my_orders(user: dict = Depends(require_user)):
     if user["role"] == "customer":
@@ -1355,9 +1534,11 @@ def my_orders(user: dict = Depends(require_user)):
             buyer_gst = None
         for r in rows:
             r["buyer_gst_number"] = buyer_gst
+        _attach_direct_product(rows)
     elif user["role"] == "supplier":
         s = _approved_supplier(user)
         rows = sb_admin.table("orders").select("*,listings(model_number,brand,toner_type,image_url)").eq("supplier_id", s["id"]).order("created_at", desc=True).execute().data or []
+        _attach_direct_product(rows)
         if rows:
             buyer_ids = list({r["customer_id"] for r in rows if r.get("customer_id")})
             buyer_map: dict = {}
@@ -1528,6 +1709,20 @@ def admin_documents(pending_id: str, user: dict = Depends(require_role("admin"))
     if not p or not p.data:
         raise HTTPException(404, "Pending application not found")
     return {"documents": _signed_doc_urls(p.data, ttl=300), "ai_check": p.data.get("ai_check") or {}}
+
+
+@api.get("/admin/user-segments")
+def admin_user_segments(user: dict = Depends(require_role("admin"))):
+    """Buyer segmentation breakdown for the admin analytics dashboard."""
+    try:
+        rows = sb_admin.table("users").select("user_type,role").execute().data or []
+    except Exception:
+        return {"segments": {}, "total": 0}
+    seg: dict = {"personal": 0, "corporate": 0, "dealer": 0, "referred_to_procurement": 0, "unspecified": 0}
+    for r in rows:
+        t = r.get("user_type") or "unspecified"
+        seg[t] = seg.get(t, 0) + 1
+    return {"segments": seg, "total": len(rows)}
 
 
 @api.get("/admin/stats")
@@ -3344,6 +3539,263 @@ def list_papers(brand: Optional[str] = None, size: Optional[str] = None,
     if near_city and not (city and city.strip()):
         out = _sort_by_near_city(out, near_city)
     return out
+
+
+# =============================================================================
+# Consumables (ink cartridges, drums, fusers, maintenance kits, etc.) — Wave 19
+# =============================================================================
+
+CONSUMABLE_SUBCATEGORIES = {
+    "Ink Cartridges", "Drums", "Fusers", "Maintenance Kits",
+    "Staple Cartridges", "Transfer Belts", "Other",
+}
+
+
+class ConsumableCreate(BaseModel):
+    subcategory: str
+    subcategory_other: Optional[str] = None
+    brand: str = Field(min_length=1, max_length=80)
+    model_number: str = Field(min_length=1, max_length=80)
+    compatible_models: Optional[str] = None
+    condition: Optional[str] = "New"   # New | Refurbished | Compatible
+    price: float = Field(gt=0)
+    gst_rate: Optional[int] = 18
+    stock: int = Field(ge=0, default=0)
+    description: Optional[str] = None
+    city: Optional[str] = None
+    image_url: Optional[str] = None
+    image_urls: List[str] = Field(default_factory=list)
+    intercity_delivery_charge: Optional[float] = 0
+    d2d_enabled: Optional[bool] = False
+    d2d_price: Optional[float] = None
+
+
+def _consumable_supplier(user: dict) -> dict:
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved sellers can list consumables")
+    s = sb_admin.table("suppliers").select("id,city").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        raise HTTPException(403, "Supplier not approved yet")
+    return s.data
+
+
+@api.post("/supplier/consumables")
+def create_consumable(payload: ConsumableCreate, user: dict = Depends(require_user)):
+    s = _consumable_supplier(user)
+    sub = payload.subcategory if payload.subcategory in CONSUMABLE_SUBCATEGORIES else "Other"
+    brand = sanitize(payload.brand, 80)
+    model = sanitize(payload.model_number, 80)
+    row = {
+        "supplier_id": s["id"],
+        "subcategory": sub,
+        "brand": brand,
+        "model_number": model,
+        "condition": payload.condition or "New",
+        "price": float(payload.price),
+        "stock": int(payload.stock),
+        "city": payload.city or s.get("city"),
+        "image_url": payload.image_url or (payload.image_urls[0] if payload.image_urls else None),
+        "search_norm": re.sub(r"[^a-z0-9]", "", f"{brand}{model}".lower()),
+    }
+    optional_cols = {
+        "subcategory_other": (payload.subcategory_other or "").strip() or None,
+        "compatible_models": (payload.compatible_models or "").strip() or None,
+        "description": (payload.description or "").strip() or None,
+        "image_urls": payload.image_urls or None,
+        "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
+        "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
+        "d2d_enabled": bool(payload.d2d_enabled) if payload.d2d_enabled is not None else None,
+        "d2d_price": (float(payload.d2d_price) if payload.d2d_price else None),
+    }
+    for k, v in optional_cols.items():
+        if v is not None:
+            row[k] = v
+    while True:
+        try:
+            res = sb_admin.table("consumable_listings").insert(row).execute()
+            return res.data[0] if res.data else row
+        except Exception as e:
+            msg = str(e)
+            dropped = False
+            for k in ("subcategory_other", "compatible_models", "description", "image_urls",
+                      "gst_rate", "intercity_delivery_charge", "d2d_enabled", "d2d_price", "search_norm"):
+                if k in msg and k in row:
+                    row.pop(k, None)
+                    dropped = True
+                    break
+            if dropped:
+                continue
+            logger.warning("create_consumable failed: %s", e)
+            raise HTTPException(503, "consumable_listings table not yet migrated — run supabase_schema_consumables.sql") from e
+
+
+@api.post("/supplier/consumables/bulk")
+def create_consumables_bulk(payload: List[dict], user: dict = Depends(require_role("supplier"))):
+    if not payload:
+        raise HTTPException(400, "No rows provided")
+    if len(payload) > 200:
+        raise HTTPException(400, "Bulk upload is limited to 200 rows per request")
+    created: List[dict] = []
+    errors: List[dict] = []
+    for idx, raw in enumerate(payload):
+        try:
+            created.append(create_consumable(ConsumableCreate(**raw), user=user))
+        except ValidationError as ve:
+            errors.append({"row": idx, "message": _fmt_validation_error(ve)})
+        except HTTPException as he:
+            errors.append({"row": idx, "message": he.detail if isinstance(he.detail, str) else str(he.detail)})
+        except Exception as e:
+            errors.append({"row": idx, "message": str(e)[:240]})
+    return {"created": created, "errors": errors, "total": len(payload), "succeeded": len(created), "failed": len(errors)}
+
+
+@api.get("/supplier/consumables/mine")
+def my_consumables(user: dict = Depends(require_user)):
+    if user.get("role") != "supplier":
+        return []
+    s = sb_admin.table("suppliers").select("id").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        return []
+    try:
+        return sb_admin.table("consumable_listings").select("*").eq("supplier_id", s.data["id"]).order(
+            "created_at", desc=True
+        ).execute().data or []
+    except Exception:
+        return []
+
+
+class ConsumablePatch(BaseModel):
+    subcategory: Optional[str] = None
+    subcategory_other: Optional[str] = None
+    brand: Optional[str] = None
+    model_number: Optional[str] = None
+    compatible_models: Optional[str] = None
+    condition: Optional[str] = None
+    price: Optional[float] = None
+    gst_rate: Optional[int] = None
+    stock: Optional[int] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    image_urls: Optional[List[str]] = None
+    intercity_delivery_charge: Optional[float] = None
+    d2d_enabled: Optional[bool] = None
+    d2d_price: Optional[float] = None
+
+
+@api.put("/supplier/consumables/{consumable_id}")
+def update_consumable(consumable_id: str, payload: ConsumablePatch, user: dict = Depends(require_user)):
+    s = _consumable_supplier(user)
+    upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
+    if not upd:
+        return {"ok": True}
+    while True:
+        try:
+            sb_admin.table("consumable_listings").update(upd).eq("id", consumable_id).eq("supplier_id", s["id"]).execute()
+            return {"ok": True}
+        except Exception as e:
+            msg = str(e)
+            dropped = False
+            for k in list(upd.keys()):
+                if k in msg:
+                    upd.pop(k, None)
+                    dropped = True
+                    break
+            if not dropped or not upd:
+                raise HTTPException(503, "consumable_listings update failed — run supabase_schema_consumables.sql") from e
+
+
+@api.delete("/supplier/consumables/{consumable_id}")
+def delete_consumable(consumable_id: str, user: dict = Depends(require_user)):
+    s = _consumable_supplier(user)
+    sb_admin.table("consumable_listings").delete().eq("id", consumable_id).eq("supplier_id", s["id"]).execute()
+    return {"ok": True}
+
+
+@api.get("/consumables")
+def list_consumables(subcategory: Optional[str] = None, brand: Optional[str] = None,
+                     q: Optional[str] = None, city: Optional[str] = None,
+                     near_city: Optional[str] = None, limit: int = 200):
+    def _run(select_cols):
+        qry = sb_admin.table("consumable_listings").select(select_cols).gt("stock", 0).order(
+            "created_at", desc=True
+        ).limit(limit)
+        if subcategory and subcategory != "all":
+            qry = qry.eq("subcategory", subcategory)
+        if brand:
+            qry = qry.ilike("brand", f"%{brand}%")
+        if city:
+            qry = qry.eq("city", city)
+        if q:
+            qry = qry.ilike("search_norm", f"%{normalize(q)}%")
+        return qry.execute().data or []
+    try:
+        rows = _run("*,suppliers(business_name,city,is_suspended)")
+    except Exception as e:
+        msg = str(e)
+        if "consumable_listings" in msg and "does not exist" in msg:
+            return []
+        if "is_suspended" in msg:
+            try:
+                rows = _run("*,suppliers(business_name,city)")
+            except Exception:
+                return []
+        elif "search_norm" in msg:
+            # search_norm column missing — drop q filter
+            try:
+                qry = sb_admin.table("consumable_listings").select("*,suppliers(business_name,city)").gt("stock", 0).order("created_at", desc=True).limit(limit)
+                if subcategory and subcategory != "all":
+                    qry = qry.eq("subcategory", subcategory)
+                if brand:
+                    qry = qry.ilike("brand", f"%{brand}%")
+                if city:
+                    qry = qry.eq("city", city)
+                rows = qry.execute().data or []
+            except Exception:
+                return []
+        else:
+            return []
+    out = []
+    for r in rows:
+        sup = r.pop("suppliers", None) or {}
+        if sup.get("is_suspended"):
+            continue
+        r["supplier_name"] = sup.get("business_name")
+        r["supplier_city"] = sup.get("city")
+        out.append(r)
+    if near_city and not (city and city.strip()):
+        out = _sort_by_near_city(out, near_city)
+    return out
+
+
+@api.get("/consumables/subcategories")
+def consumable_subcategories():
+    """Returns subcategories with live counts (for tab badges)."""
+    try:
+        rows = sb_admin.table("consumable_listings").select("subcategory").gt("stock", 0).execute().data or []
+    except Exception:
+        rows = []
+    counts: dict = {}
+    for r in rows:
+        sub = r.get("subcategory") or "Other"
+        counts[sub] = counts.get(sub, 0) + 1
+    return {"counts": counts, "total": sum(counts.values())}
+
+
+@api.get("/consumables/{consumable_id}/public")
+def get_consumable_public(consumable_id: str):
+    try:
+        r = sb_admin.table("consumable_listings").select(
+            "*,suppliers(business_name,city,is_suspended)"
+        ).eq("id", consumable_id).maybe_single().execute()
+    except Exception:
+        r = sb_admin.table("consumable_listings").select("*").eq("id", consumable_id).maybe_single().execute()
+    if not r or not r.data:
+        raise HTTPException(404, "Consumable not found")
+    data = dict(r.data)
+    sup = data.pop("suppliers", None) or {}
+    data["supplier_name"] = sup.get("business_name")
+    data["supplier_city"] = sup.get("city")
+    return data
 
 
 # =============================================================================
