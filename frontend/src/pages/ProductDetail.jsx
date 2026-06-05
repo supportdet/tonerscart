@@ -8,6 +8,7 @@ import { useCart } from "../context/CartContext";
 import { Skeleton } from "../components/ui/skeleton";
 import PageMeta from "../components/PageMeta";
 import OrderRequestDialog from "../components/OrderRequestDialog";
+import DealEnquiryDialog from "../components/DealEnquiryDialog";
 import AuthRequiredDialog from "../components/AuthRequiredDialog";
 import VerifiedBadge from "../components/VerifiedBadge";
 import { colorSwatch, isLightSwatch } from "../lib/colors";
@@ -27,6 +28,7 @@ export default function ProductDetail({ kind = "toner" }) {
     const [qty, setQty] = useState(1);
     const [activeImg, setActiveImg] = useState(0);
     const [orderDialog, setOrderDialog] = useState(false);
+    const [dealDialog, setDealDialog] = useState(false);
     const [authDialog, setAuthDialog] = useState(null); // {intent: 'buy'|'cart'|'quote'}
     const [quoting, setQuoting] = useState(false);
 
@@ -64,11 +66,13 @@ export default function ProductDetail({ kind = "toner" }) {
         return Number(data.price ?? data.price_per_ream ?? 0);
     }, [data, selectedVariant]);
 
-    const displayStock = useMemo(() => {
-        if (!data) return 0;
+    const displayStock = useMemo(() => {        if (!data) return 0;
         if (selectedVariant) return Number(selectedVariant.stock);
         return Number(data.stock ?? 0);
     }, [data, selectedVariant]);
+
+    // Products above ₹1,50,000 are deal-basis: no online checkout, route to enquiry/demo form.
+    const isDealBasis = Number(displayPrice) > 150000;
 
     const productTitle = useMemo(() => {
         if (!data) return "";
@@ -332,21 +336,35 @@ export default function ProductDetail({ kind = "toner" }) {
                         </div>
 
                         {/* CTAs — left aligned */}
-                        <div className="mt-5 flex flex-wrap items-center justify-start gap-3">
-                            <button onClick={onAddToCart} disabled={displayStock <= 0} className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-[#0A0A0B] text-white text-[13.5px] font-semibold hover:bg-[#1D1D1F] disabled:opacity-40 disabled:cursor-not-allowed transition" data-testid="add-to-cart-btn">
-                                <ShoppingCart size={15} /> Add to cart
-                            </button>
-                            <button onClick={onBuyNow} disabled={displayStock <= 0} className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-[#F5C400] text-[#0A0A0B] text-[13.5px] font-semibold hover:bg-[#FFD90A] disabled:opacity-40 disabled:cursor-not-allowed transition shadow-sm" data-testid="buy-now-btn">
-                                <Zap size={15} /> Buy now
-                            </button>
-                            <button onClick={onQuotation} disabled={quoting} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full border border-[#D2D2D7] text-[12.5px] font-semibold text-[#0A0A0B] hover:bg-black/[0.03] disabled:opacity-50 transition" data-testid="get-quotation-btn">
-                                {quoting ? <Loader2 size={13} className="animate-spin" /> : <Quote size={13} />} Get quotation
-                            </button>
-                        </div>
+                        {isDealBasis ? (
+                            <div className="mt-5 w-full max-w-[480px]" data-testid="deal-basis-cta">
+                                <button onClick={() => setDealDialog(true)} className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#F5C400] text-[#0A0A0B] text-[13.5px] font-semibold hover:bg-[#FFD90A] transition shadow-sm" data-testid="request-demo-btn">
+                                    <Zap size={15} /> Request pricing &amp; demo
+                                </button>
+                                <div className="mt-3 inline-flex items-start gap-2 bg-[#F0FBFC] border border-[#BFEAEF] rounded-lg px-3 py-2 text-[12.5px] text-[#0A6B75]" data-testid="deal-basis-note">
+                                    <CheckCircle2 size={14} className="mt-0.5 shrink-0" />
+                                    <div>This is a high-value item handled on a <strong>deal basis</strong>. Share your details and our team will send custom pricing and arrange a demo.</div>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="mt-5 flex flex-wrap items-center justify-start gap-3">
+                                    <button onClick={onAddToCart} disabled={displayStock <= 0} className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-[#0A0A0B] text-white text-[13.5px] font-semibold hover:bg-[#1D1D1F] disabled:opacity-40 disabled:cursor-not-allowed transition" data-testid="add-to-cart-btn">
+                                        <ShoppingCart size={15} /> Add to cart
+                                    </button>
+                                    <button onClick={onBuyNow} disabled={displayStock <= 0} className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-[#F5C400] text-[#0A0A0B] text-[13.5px] font-semibold hover:bg-[#FFD90A] disabled:opacity-40 disabled:cursor-not-allowed transition shadow-sm" data-testid="buy-now-btn">
+                                        <Zap size={15} /> Buy now
+                                    </button>
+                                    <button onClick={onQuotation} disabled={quoting} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full border border-[#D2D2D7] text-[12.5px] font-semibold text-[#0A0A0B] hover:bg-black/[0.03] disabled:opacity-50 transition" data-testid="get-quotation-btn">
+                                        {quoting ? <Loader2 size={13} className="animate-spin" /> : <Quote size={13} />} Get quotation
+                                    </button>
+                                </div>
 
-                        <div className="mt-3 text-[11.5px] text-[#86868B] leading-snug text-left max-w-[480px]" data-testid="delivery-note">
-                            Delivery within city included. Intercity delivery charges to be confirmed by supplier before dispatch.
-                        </div>
+                                <div className="mt-3 text-[11.5px] text-[#86868B] leading-snug text-left max-w-[480px]" data-testid="delivery-note">
+                                    Delivery within city included. Intercity delivery charges to be confirmed by supplier before dispatch.
+                                </div>
+                            </>
+                        )}
 
                         {/* Specs (left-aligned for readability) */}
                         <div className="w-full mt-8 text-left">
@@ -374,6 +392,13 @@ export default function ProductDetail({ kind = "toner" }) {
                         kind,
                     } : null}
                     initialQty={qty}
+                />
+            )}
+
+            {dealDialog && (
+                <DealEnquiryDialog
+                    onClose={() => setDealDialog(false)}
+                    product={{ id: data.id, title: productTitle, price: displayPrice, qty, city: data.supplier_city || data.city, kind }}
                 />
             )}
 
