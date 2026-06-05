@@ -1374,7 +1374,7 @@ async def _create_direct_order(payload: "OrderCreate", user: dict, kind: str):
     # Confirmation emails (best effort)
     try:
         sup = sb_admin.table("suppliers").select(
-            "business_name,city,gst_number,contact_email"
+            "business_name,city,gst_number"
         ).eq("id", L["supplier_id"]).maybe_single().execute()
         buyer_row = sb_admin.table("users").select("email,name,gst_number").eq("id", user["id"]).maybe_single().execute()
         order_for_email = dict(created)
@@ -1490,7 +1490,7 @@ async def create_order(payload: OrderCreate, user: dict = Depends(require_user))
     # Fire confirmation emails (best effort — never block the order)
     try:
         sup = sb_admin.table("suppliers").select(
-            "business_name,city,gst_number,contact_email"
+            "business_name,city,gst_number"
         ).eq("id", L["supplier_id"]).maybe_single().execute()
         buyer_row = sb_admin.table("users").select("email,name,gst_number").eq("id", user["id"]).maybe_single().execute()
         order_for_email = dict(created)
