@@ -253,7 +253,7 @@ export default function Landing() {
                                 </div>
 
                                 <button
-                                    onClick={() => navigate(`/search?supplier_id=${s.id}`)}
+                                    onClick={() => navigate(`/store/${s.id}`)}
                                     className="mt-5 w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#F5C400] hover:bg-[#FFD119] text-[#0A0A0B] text-[13px] font-semibold py-2.5 transition"
                                     data-testid={`featured-cta-${s.id}`}
                                 >

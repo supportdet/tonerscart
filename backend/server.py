@@ -89,8 +89,36 @@ DOC_FIELDS = [
     "doc_gst",
     "doc_pan",
     "doc_bank_proof",
+    "doc_id_proof",
     "doc_address_proof",
 ]
+
+# Columns that require the bank-details / ID-proof migration. We strip these on
+# the fly if the migration has not been run yet, so seller onboarding never breaks.
+_BANK_OPT_COLS = (
+    "account_holder_name", "account_number", "ifsc_code",
+    "bank_name", "bank_branch", "doc_id_proof",
+)
+
+
+def _exec_dropping_cols(builder, payload: dict, optional_cols=_BANK_OPT_COLS):
+    """Run a Supabase write; if it fails because an optional column is missing
+    (migration not run), drop that column and retry. Returns the response."""
+    p = dict(payload)
+    for _ in range(len(optional_cols) + 2):
+        try:
+            return builder(p)
+        except Exception as e:
+            msg = str(e).lower()
+            dropped = False
+            for c in optional_cols:
+                if c in p and c in msg and any(t in msg for t in ("column", "does not exist", "schema cache", "could not find")):
+                    p.pop(c, None)
+                    dropped = True
+                    break
+            if not dropped:
+                raise
+    return builder(p)
 
 
 def _signed_doc_urls(application: dict, ttl: int = SIGNED_URL_TTL) -> dict:
@@ -158,6 +186,12 @@ class SellerApplication(BaseModel):
     doc_pan: Optional[str] = ""
     doc_bank_proof: Optional[str] = ""
     doc_address_proof: Optional[str] = ""
+    doc_id_proof: Optional[str] = ""
+    account_holder_name: Optional[str] = ""
+    account_number: Optional[str] = ""
+    ifsc_code: Optional[str] = ""
+    bank_name: Optional[str] = ""
+    bank_branch: Optional[str] = ""
     agreed_to_terms: bool = False
 
 
@@ -186,6 +220,12 @@ class SignupSupplier(BaseModel):
     doc_pan: Optional[str] = ""
     doc_bank_proof: Optional[str] = ""
     doc_address_proof: Optional[str] = ""
+    doc_id_proof: Optional[str] = ""
+    account_holder_name: Optional[str] = ""
+    account_number: Optional[str] = ""
+    ifsc_code: Optional[str] = ""
+    bank_name: Optional[str] = ""
+    bank_branch: Optional[str] = ""
 
 
 class ListingVariantIn(BaseModel):
@@ -408,10 +448,16 @@ async def signup_supplier(payload: SignupSupplier):
         "doc_gst": payload.doc_gst or None,
         "doc_pan": payload.doc_pan or None,
         "doc_bank_proof": payload.doc_bank_proof or None,
+        "doc_id_proof": payload.doc_id_proof or None,
         "doc_address_proof": payload.doc_address_proof or None,
+        "account_holder_name": payload.account_holder_name or None,
+        "account_number": payload.account_number or None,
+        "ifsc_code": payload.ifsc_code or None,
+        "bank_name": payload.bank_name or None,
+        "bank_branch": payload.bank_branch or None,
         "status": "pending",
     }
-    sb_admin.table("suppliers_pending").upsert(application, on_conflict="user_id").execute()
+    _exec_dropping_cols(lambda a: sb_admin.table("suppliers_pending").upsert(a, on_conflict="user_id").execute(), application)
 
     # Fire-and-forget AI document check (best effort) + email notifications
     try:
@@ -434,6 +480,7 @@ class SupplierDocPaths(BaseModel):
     doc_pan: Optional[str] = None
     doc_bank_proof: Optional[str] = None
     doc_address_proof: Optional[str] = None
+    doc_id_proof: Optional[str] = None
 
 
 @api.post("/auth/apply-seller")
@@ -470,11 +517,17 @@ async def apply_seller(payload: SellerApplication, user: dict = Depends(require_
         "doc_gst": payload.doc_gst or None,
         "doc_pan": payload.doc_pan or None,
         "doc_bank_proof": payload.doc_bank_proof or None,
+        "doc_id_proof": payload.doc_id_proof or None,
         "doc_address_proof": payload.doc_address_proof or None,
+        "account_holder_name": payload.account_holder_name or None,
+        "account_number": payload.account_number or None,
+        "ifsc_code": payload.ifsc_code or None,
+        "bank_name": payload.bank_name or None,
+        "bank_branch": payload.bank_branch or None,
         "status": "pending",
         "rejection_reason": None,
     }
-    sb_admin.table("suppliers_pending").upsert(application, on_conflict="user_id").execute()
+    _exec_dropping_cols(lambda a: sb_admin.table("suppliers_pending").upsert(a, on_conflict="user_id").execute(), application)
 
     async def _bg_ai():
         try:
@@ -499,7 +552,7 @@ async def supplier_documents_patch(payload: SupplierDocPaths, user: dict = Depen
     upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v}
     if not upd:
         return {"ok": True}
-    sb_admin.table("suppliers_pending").update(upd).eq("user_id", user["id"]).execute()
+    _exec_dropping_cols(lambda a: sb_admin.table("suppliers_pending").update(a).eq("user_id", user["id"]).execute(), upd)
     p = sb_admin.table("suppliers_pending").select("*").eq("user_id", user["id"]).maybe_single().execute()
     if p and p.data:
         async def _bg_ai():
@@ -522,7 +575,7 @@ async def supplier_document_upload(
     Returns the storage path which the client then sends to /auth/supplier-documents."""
     allowed = {
         "doc_brand_authorization", "doc_shop_photo", "doc_gst",
-        "doc_pan", "doc_bank_proof", "doc_address_proof",
+        "doc_pan", "doc_bank_proof", "doc_id_proof", "doc_address_proof",
     }
     if field not in allowed:
         raise HTTPException(400, "Invalid document field")
@@ -1781,7 +1834,7 @@ async def admin_approve(pending_id: str, user: dict = Depends(require_role("admi
     P = p.data
     if P["status"] != "pending":
         raise HTTPException(400, f"Already {P['status']}")
-    sb_admin.table("suppliers").upsert({
+    _exec_dropping_cols(lambda a: sb_admin.table("suppliers").upsert(a, on_conflict="user_id").execute(), {
         "user_id": P["user_id"],
         "business_name": P["business_name"],
         "contact_person": P["contact_person"],
@@ -1799,9 +1852,15 @@ async def admin_approve(pending_id: str, user: dict = Depends(require_role("admi
         "seller_types": P.get("seller_types") or [],
         "compatible_brands": P.get("compatible_brands") or [],
         "testing_before_delivery": P.get("testing_before_delivery") or False,
+        "account_holder_name": P.get("account_holder_name"),
+        "account_number": P.get("account_number"),
+        "ifsc_code": P.get("ifsc_code"),
+        "bank_name": P.get("bank_name"),
+        "bank_branch": P.get("bank_branch"),
+        "doc_id_proof": P.get("doc_id_proof"),
         "approved_by": user["id"],
         "approved_at": datetime.now(timezone.utc).isoformat(),
-    }, on_conflict="user_id").execute()
+    })
     sb_admin.table("suppliers_pending").update({
         "status": "approved",
         "reviewed_by": user["id"],
@@ -2464,6 +2523,72 @@ def featured_suppliers_public(limit: int = 6):
                     item["featured_image_url"] = None
         out.append(item)
     return out
+
+
+@api.get("/suppliers/{supplier_id}/storefront")
+def supplier_storefront(supplier_id: str, limit: int = 60):
+    """Public dealer storefront — business info + that dealer's in-stock listings
+    across all categories (toners, printers, papers, consumables)."""
+    try:
+        s = sb_admin.table("suppliers").select(
+            "id,business_name,city,state,business_logo,featured_image_url,tagline,is_suspended"
+        ).eq("id", supplier_id).single().execute().data
+    except Exception:
+        try:
+            s = sb_admin.table("suppliers").select(
+                "id,business_name,city,state,business_logo,is_suspended"
+            ).eq("id", supplier_id).single().execute().data
+        except Exception:
+            s = None
+    if not s or s.get("is_suspended"):
+        raise HTTPException(status_code=404, detail="Dealer not found")
+
+    logo_url = None
+    if s.get("business_logo"):
+        try:
+            signed = sb_admin.storage.from_("supplier-documents").create_signed_url(s["business_logo"], 60 * 60)
+            logo_url = signed.get("signedURL") or signed.get("signed_url")
+        except Exception:
+            logo_url = None
+
+    def _q(table, sel):
+        try:
+            return sb_admin.table(table).select(sel).eq("supplier_id", supplier_id).gt("stock", 0).limit(limit).execute().data or []
+        except Exception as e:
+            logger.warning("storefront %s failed: %s", table, e)
+            return []
+
+    toners = _q("listings", "id,brand,model_number,toner_type,color,price,stock,image_url,image_urls")
+    printers = _q("printer_listings", "id,brand,model_number,description,price,stock,image_url,image_urls,condition,category")
+    papers = _q("paper_listings", "id,brand,size,gsm,reams_per_box,price_per_ream,stock,image_url,image_urls")
+    consumables = _q("consumable_listings", "id,brand,model_number,subcategory,condition,price,stock,image_url,image_urls")
+
+    biz = s.get("business_name") or "Dealer"
+    city = s.get("city") or ""
+    for arr in (toners, printers, papers, consumables):
+        for r in arr:
+            r["supplier_name"] = biz
+            r["supplier_id"] = supplier_id
+            r["city"] = city
+
+    return {
+        "supplier": {
+            "id": supplier_id,
+            "business_name": biz,
+            "city": city,
+            "state": s.get("state") or "",
+            "tagline": s.get("tagline") or None,
+            "logo_url": logo_url,
+        },
+        "toners": toners,
+        "printers": printers,
+        "papers": papers,
+        "consumables": consumables,
+        "counts": {
+            "toners": len(toners), "printers": len(printers),
+            "papers": len(papers), "consumables": len(consumables),
+        },
+    }
 
 
 @api.get("/admin/featured/applications")

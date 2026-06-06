@@ -43,6 +43,7 @@ import ComingSoon from "./pages/ComingSoon";
 import Bulk from "./pages/Bulk";
 import Consumables from "./pages/Consumables";
 import Dealer from "./pages/Dealer";
+import DealerStore from "./pages/DealerStore";
 import OEM from "./pages/OEM";
 import OemDashboard from "./pages/OemDashboard";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -127,6 +128,7 @@ function App() {
                                     <Route path="/scanners" element={<ComingSoon category="Scanners" accent="#5c6bc0" blurb="Desktop, network and production scanners from leading brands — coming to TonersCart soon. Get notified when we launch." />} />
                                     <Route path="/bulk" element={<Bulk />} />
                                     <Route path="/dealer" element={<Dealer />} />
+                                    <Route path="/store/:supplierId" element={<DealerStore />} />
                                     <Route path="/oem" element={<OEM />} />
                                     <Route path="/terms" element={<Terms />} />
                                     <Route path="/privacy" element={<Privacy />} />

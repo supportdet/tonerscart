@@ -1,6 +1,6 @@
 import React from "react";
 import { Info } from "lucide-react";
-import { COMMISSION_BANNER_TEXT } from "../lib/commission";
+import { COMMISSION_BANNER_TEXT, COMMISSION_PAYOUT_NOTE } from "../lib/commission";
 
 export default function CommissionBanner({ className = "" }) {
     return (
@@ -10,7 +10,7 @@ export default function CommissionBanner({ className = "" }) {
             data-testid="commission-banner"
         >
             <Info size={14} className="mt-0.5 shrink-0 text-[#B07A00]" />
-            <span>{COMMISSION_BANNER_TEXT}</span>
+            <span><strong className="font-semibold">{COMMISSION_PAYOUT_NOTE}</strong> {COMMISSION_BANNER_TEXT}</span>
         </div>
     );
 }

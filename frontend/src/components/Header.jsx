@@ -12,10 +12,10 @@ import { LogOut, MapPin, ChevronDown, ShoppingCart, Loader2, LayoutDashboard } f
 const CATEGORY_PILLS = [
     { to: "/search", label: "Toners", color: "#FF1F75" },
     { to: "/printers", label: "Printers", color: "#00D4E5" },
-    { to: "/papers", label: "Papers", color: "#C58A6E" },
+    { to: "/mps", label: "MPS/Rentals", color: "#3FD267" },
     { to: "/consumables", label: "Consumables", color: "#FFC107" },
     { to: "/scanners", label: "Scanners", color: "#5468FF" },
-    { to: "/mps", label: "MPS/Rentals", color: "#3FD267" },
+    { to: "/papers", label: "Papers", color: "#C58A6E" },
     { to: "/bulk", label: "Bulk Orders", color: "#FF7A00" },
     { to: "/dealer", label: "Dealer to Dealer", color: "#5E8CB5" },
     { to: "/oem", label: "OEM Marketplace", color: "#B58A75" },
