@@ -15,6 +15,10 @@ import FinanceTab from "./admin/FinanceTab";
 import ProcurementTab from "./admin/ProcurementTab";
 import OemTab from "./admin/OemTab";
 import AgreementsTab from "./admin/AgreementsTab";
+import CustomersTab from "./admin/CustomersTab";
+import DisputesTab from "./admin/DisputesTab";
+import ActivityLogTab from "./admin/ActivityLogTab";
+import MessagesTab from "./admin/MessagesTab";
 
 function aiSummary(application) {
     const ai = application?.ai_check || {};
@@ -208,8 +212,12 @@ export default function AdminDashboard() {
                         Pending {pending.length > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5">{pending.length}</span>)}
                     </TabsTrigger>
                     <TabsTrigger value="dealers" data-testid="tab-dealers">Dealers</TabsTrigger>
+                    <TabsTrigger value="customers" data-testid="tab-customers">Customers</TabsTrigger>
                     <TabsTrigger value="orders" data-testid="tab-orders">Orders</TabsTrigger>
+                    <TabsTrigger value="disputes" data-testid="tab-disputes">Disputes</TabsTrigger>
                     <TabsTrigger value="finance" data-testid="tab-finance">Finance</TabsTrigger>
+                    <TabsTrigger value="messages" data-testid="tab-messages">Messages</TabsTrigger>
+                    <TabsTrigger value="activity" data-testid="tab-activity">Activity</TabsTrigger>
                     <TabsTrigger value="featured" data-testid="tab-featured">
                         Featured {featured.filter((x) => x.status === "new").length > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-[#F5C400] text-[#0A0A0B] text-[10px] font-bold px-1.5">{featured.filter((x) => x.status === "new").length}</span>)}
                     </TabsTrigger>
@@ -231,12 +239,28 @@ export default function AdminDashboard() {
                     {tab === "dealers" && <DealersTab />}
                 </TabsContent>
 
+                <TabsContent value="customers">
+                    {tab === "customers" && <CustomersTab />}
+                </TabsContent>
+
                 <TabsContent value="orders">
                     {tab === "orders" && <OrdersTab />}
                 </TabsContent>
 
+                <TabsContent value="disputes">
+                    {tab === "disputes" && <DisputesTab />}
+                </TabsContent>
+
                 <TabsContent value="finance">
                     {tab === "finance" && <FinanceTab />}
+                </TabsContent>
+
+                <TabsContent value="messages">
+                    {tab === "messages" && <MessagesTab />}
+                </TabsContent>
+
+                <TabsContent value="activity">
+                    {tab === "activity" && <ActivityLogTab />}
                 </TabsContent>
 
                 <TabsContent value="content">

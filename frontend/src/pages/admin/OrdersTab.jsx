@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import api, { formatApiError } from "../../lib/api";
 import { toast } from "sonner";
-import { Search, Loader2, Download, FileText } from "lucide-react";
+import { Search, Loader2, Download, FileText, Flag } from "lucide-react";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
@@ -59,6 +59,15 @@ export default function OrdersTab() {
         } catch (e) { toast.error(formatApiError(e)); }
     };
 
+    const flagOrder = async (orderId, flag) => {
+        try {
+            await api.post(`/admin/orders/${orderId}/flag`, { flag });
+            toast.success(flag ? "Order flagged — see Disputes tab" : "Order unflagged");
+            setRows((rs) => rs.map((r) => (r.id === orderId ? { ...r, is_flagged: flag } : r)));
+            setActiveOrder((o) => (o && o.id === orderId ? { ...o, is_flagged: flag } : o));
+        } catch (e) { toast.error(formatApiError(e)); }
+    };
+
     const totalPages = useMemo(() => Math.max(1, Math.ceil(total / 50)), [total]);
 
     return (
@@ -107,6 +116,7 @@ export default function OrdersTab() {
                                 <th className="text-right p-3">Payout</th>
                                 <th className="text-left p-3">Status</th>
                                 <th className="text-left p-3">Date</th>
+                                <th className="text-center p-3">Flag</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -125,6 +135,16 @@ export default function OrdersTab() {
                                     <td className="p-3 text-right font-mono">{fmtMoney(o.payout)}</td>
                                     <td className="p-3"><StatusPill status={o.status} /></td>
                                     <td className="p-3 text-[11px] text-[#6E6E73]">{o.created_at ? new Date(o.created_at).toLocaleDateString() : "—"}</td>
+                                    <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                        <button
+                                            onClick={() => flagOrder(o.id, !o.is_flagged)}
+                                            className={`inline-grid place-items-center w-8 h-8 rounded-lg transition-colors ${o.is_flagged ? "bg-red-50 text-red-600" : "text-[#C0C0C5] hover:text-red-500 hover:bg-red-50"}`}
+                                            title={o.is_flagged ? "Flagged — click to unflag" : "Flag this order for dispute"}
+                                            data-testid={`order-flag-${o.id}`}
+                                        >
+                                            <Flag size={15} fill={o.is_flagged ? "currentColor" : "none"} />
+                                        </button>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -140,7 +160,7 @@ export default function OrdersTab() {
                 </div>
             )}
 
-            <OrderDetailDialog order={activeOrder} onClose={() => setActiveOrder(null)} onChange={updateStatus} />
+            <OrderDetailDialog order={activeOrder} onClose={() => setActiveOrder(null)} onChange={updateStatus} onFlag={flagOrder} />
         </div>
     );
 }
@@ -157,7 +177,7 @@ function StatusPill({ status }) {
     return <span className={`inline-flex px-2 py-0.5 rounded-full border text-[10.5px] font-semibold uppercase tracking-[0.06em] ${map[status] || "bg-slate-50 text-slate-700 border-slate-200"}`}>{status}</span>;
 }
 
-function OrderDetailDialog({ order, onClose, onChange }) {
+function OrderDetailDialog({ order, onClose, onChange, onFlag }) {
     if (!order) return null;
     return (
         <Dialog open={!!order} onOpenChange={(v) => !v && onClose()}>
@@ -189,6 +209,16 @@ function OrderDetailDialog({ order, onClose, onChange }) {
                                 </button>
                             ))}
                         </div>
+                    </div>
+                    <div className="pt-1">
+                        <button
+                            onClick={() => onFlag(order.id, !order.is_flagged)}
+                            className={`inline-flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-lg border ${order.is_flagged ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-[#6E6E73] border-[#D2D2D7] hover:border-red-300 hover:text-red-600"}`}
+                            data-testid="admin-order-flag-btn"
+                        >
+                            <Flag size={13} fill={order.is_flagged ? "currentColor" : "none"} />
+                            {order.is_flagged ? "Flagged for dispute — unflag" : "Flag for dispute"}
+                        </button>
                     </div>
                 </div>
             </DialogContent>

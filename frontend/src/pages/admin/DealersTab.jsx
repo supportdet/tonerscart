@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api, { formatApiError } from "../../lib/api";
 import { toast } from "sonner";
-import { Search, Loader2, Trash2, PauseCircle, PlayCircle, Pencil, Check, X, AlertTriangle } from "lucide-react";
+import { Search, Loader2, Trash2, PauseCircle, PlayCircle, Pencil, Check, X, AlertTriangle, ExternalLink } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
@@ -9,6 +10,7 @@ import { Button } from "../../components/ui/button";
 const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
 
 export default function DealersTab() {
+    const navigate = useNavigate();
     const [dealers, setDealers] = useState([]);
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -132,13 +134,22 @@ export default function DealersTab() {
                                             )}
                                         </td>
                                         <td className="p-3">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); toggleSuspend(d); }}
-                                                className="text-[11.5px] font-semibold inline-flex items-center gap-1 text-[#0A0A0B] hover:underline"
-                                                data-testid={`dealer-suspend-${d.id}`}
-                                            >
-                                                {d.is_suspended ? <><PlayCircle size={12} /> Unsuspend</> : <><PauseCircle size={12} /> Suspend</>}
-                                            </button>
+                                            <div className="flex items-center gap-3">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); navigate(`/admin/dealers/${d.id}`); }}
+                                                    className="text-[11.5px] font-semibold inline-flex items-center gap-1 text-[#00838f] hover:underline whitespace-nowrap"
+                                                    data-testid={`dealer-view-profile-${d.id}`}
+                                                >
+                                                    <ExternalLink size={12} /> View Full Profile
+                                                </button>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); toggleSuspend(d); }}
+                                                    className="text-[11.5px] font-semibold inline-flex items-center gap-1 text-[#0A0A0B] hover:underline whitespace-nowrap"
+                                                    data-testid={`dealer-suspend-${d.id}`}
+                                                >
+                                                    {d.is_suspended ? <><PlayCircle size={12} /> Unsuspend</> : <><PauseCircle size={12} /> Suspend</>}
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 );

@@ -9,17 +9,20 @@ const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")
 export default function FinanceTab() {
     const [summary, setSummary] = useState([]);
     const [dealers, setDealers] = useState([]);
+    const [dues, setDues] = useState([]);
     const [loading, setLoading] = useState(true);
 
     const load = async () => {
         setLoading(true);
         try {
-            const [s, d] = await Promise.all([
+            const [s, d, p] = await Promise.all([
                 api.get("/admin/finance/summary"),
                 api.get("/admin/finance/dealers"),
+                api.get("/admin/finance/procurement-dues"),
             ]);
             setSummary(Array.isArray(s.data) ? s.data : []);
             setDealers(Array.isArray(d.data) ? d.data : []);
+            setDues(p.data?.rows || []);
         } catch (e) { toast.error(formatApiError(e)); }
         finally { setLoading(false); }
     };
@@ -124,6 +127,7 @@ export default function FinanceTab() {
                                     <th className="text-right p-3">GMV</th>
                                     <th className="text-right p-3">Commission</th>
                                     <th className="text-right p-3">Net payout</th>
+                                    <th className="text-right p-3">Pending payout</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -135,6 +139,42 @@ export default function FinanceTab() {
                                         <td className="p-3 text-right font-mono">{fmtMoney(r.gmv)}</td>
                                         <td className="p-3 text-right font-mono text-emerald-700">{fmtMoney(r.commission)}</td>
                                         <td className="p-3 text-right font-mono text-blue-700 font-semibold">{fmtMoney(r.payout)}</td>
+                                        <td className="p-3 text-right font-mono text-amber-700 font-semibold">{fmtMoney(r.pending_payout)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </section>
+
+            <section>
+                <h2 className="text-[16px] font-semibold text-[#0A0A0B] mb-3" style={{ fontFamily: "'Montserrat', sans-serif" }}>Procurement overdue payments</h2>
+                {dues.length === 0 ? (
+                    <div className="tc-card-flat p-10 text-center text-[#6E6E73]" data-testid="finance-dues-empty">No procurement accounts owe money right now.</div>
+                ) : (
+                    <div className="tc-card-flat p-0 overflow-x-auto">
+                        <table className="w-full text-[13px]" data-testid="finance-dues-table">
+                            <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">
+                                <tr>
+                                    <th className="text-left p-3">Account</th>
+                                    <th className="text-left p-3">Type</th>
+                                    <th className="text-right p-3">Credit limit</th>
+                                    <th className="text-right p-3">Available</th>
+                                    <th className="text-right p-3">Amount owed</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {dues.map((r) => (
+                                    <tr key={r.id} className="border-t border-black/[0.05]" data-testid={`finance-due-${r.id}`}>
+                                        <td className="p-3">
+                                            <div className="font-semibold">{r.org_name || r.name || "—"}</div>
+                                            <div className="text-[11px] text-[#86868B]">{r.email}</div>
+                                        </td>
+                                        <td className="p-3 text-[#6E6E73] capitalize">{r.type || "—"}</td>
+                                        <td className="p-3 text-right font-mono">{fmtMoney(r.credit_limit)}</td>
+                                        <td className="p-3 text-right font-mono">{fmtMoney(r.available)}</td>
+                                        <td className="p-3 text-right font-mono text-red-700 font-semibold">{fmtMoney(r.owed)}</td>
                                     </tr>
                                 ))}
                             </tbody>
