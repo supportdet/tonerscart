@@ -1,3 +1,9 @@
+### 2026-06 — Seller ID trust mark on buyer quotations
+
+- **Quotation email** (`email_quotation` in `email_service.py`) now renders a green **"✓ Verified Seller · TC-DLR-YYYY-NNNN"** pill inside the "Sold by" box. Dealer name/contact remain intentionally hidden — only the anonymised verified-seller code is shown as a trust mark. New `seller_id` kwarg (defaults to "", badge omitted when unset).
+- **`POST /api/quotation`** (`server.py`) looks up `suppliers.seller_id` from the listing's `supplier_id` (best-effort, wrapped in try/except) and passes it to `email_quotation`.
+- Verified: `email_quotation` renders the badge with the ID and no leaks; endpoint lookup resolves real listing → `DET` → `TC-DLR-2026-0004`. Backend healthy, syntax clean.
+
 ### 2026-06 — 🔴 CRITICAL FIX: backend crash-loop (email_service f-string) + Seller ID display verified
 
 - **Root cause**: `email_service.py` `email_order_placed()` had a nested f-string with `\"` backslash escapes **inside** the `{...}` expression part (the "Your Seller ID" row) — a `SyntaxError` in Python 3.11 ("f-string expression part cannot include a backslash"). This was introduced by the prior session's Seller ID email edit and prevented `server.py` from importing at all → the **entire backend was crash-looping** (preview "not responding", all `/api` calls failing).

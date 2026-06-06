@@ -488,7 +488,7 @@ def _quote_money(n) -> str:
         return f"₹{n}"
 
 
-async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplier_label: str = "Verified Supplier on TonersCart"):
+async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplier_label: str = "Verified Supplier on TonersCart", seller_id: str = ""):
     """Send a formal quotation email to the buyer + BCC copy to support.
     `item` keys expected:
         brand, model_number, type/color, unit_price, qty, total, listing_type, notes
@@ -572,9 +572,16 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
         </div>
         """
 
+    verified_seller_html = ""
+    if seller_id:
+        verified_seller_html = (
+            "<div style='margin-top:6px;display:inline-block;padding:3px 10px;border-radius:999px;"
+            "background:#E6F7EC;border:1px solid #0A8754;color:#0A8754;font-size:11px;font-weight:700;letter-spacing:0.03em;'>"
+            f"&#10003; Verified Seller &middot; <span style='font-family:monospace;'>{seller_id}</span></div>"
+        )
+
     body = f"""
-    <div style="border-top:4px solid #00B7C7;background:#FFFFFF;padding:24px 0 8px 0;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid #E5E5EA;">
+    <div style="border-top:4px solid #00B7C7;background:#FFFFFF;padding:24px 0 8px 0;">    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid #E5E5EA;">
       <div>
         <div style="font-family:'Montserrat',sans-serif;font-size:22px;font-weight:700;letter-spacing:-0.02em;">
           <span style="color:#0A0A0B;">Toners</span><span style="color:#00B7C7;">Cart</span>
@@ -603,6 +610,7 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
         <div style="font-size:10.5px;letter-spacing:0.18em;text-transform:uppercase;color:#86868B;font-weight:700;">Sold by</div>
         <div style="font-size:14px;font-weight:600;color:#0A0A0B;margin-top:4px;">{supplier_label}</div>
         <div style="font-size:12.5px;color:#3a3a40;">via tonerscart.com</div>
+        {verified_seller_html}
       </div>
     </div>
 

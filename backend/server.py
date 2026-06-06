@@ -2832,6 +2832,16 @@ async def create_quotation(payload: QuotationRequest, user: dict = Depends(requi
 
     qnum = _gen_quote_number()
 
+    # Verified seller code (anonymised trust mark — name/contact stay hidden)
+    seller_id = ""
+    try:
+        sup = sb_admin.table("suppliers").select("seller_id").eq(
+            "id", L.get("supplier_id")
+        ).maybe_single().execute()
+        seller_id = (sup.data or {}).get("seller_id") or "" if sup else ""
+    except Exception:
+        seller_id = ""
+
     # Audit row (best-effort, no failure to the user)
     try:
         sb_admin.table("quotations").insert({
@@ -2889,6 +2899,7 @@ async def create_quotation(payload: QuotationRequest, user: dict = Depends(requi
                 "gst": buyer.get("gst_number"),
             },
             item=item,
+            seller_id=seller_id,
         )
     except Exception as e:
         logger.exception("quotation email failed")
