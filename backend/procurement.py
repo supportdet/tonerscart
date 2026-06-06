@@ -408,6 +408,7 @@ def _comparison_from_rows(rows: list) -> list:
             "listing_id": r.get("id"),
             "supplier_id": r.get("supplier_id"),
             "supplier_name": r.get("supplier_name") or "Verified supplier",
+            "seller_id": r.get("seller_id"),
             "verified": True,
             "brand": r.get("brand"),
             "model_number": r.get("model_number"),
@@ -467,7 +468,10 @@ async def create_quotation(payload: QuotationCreate, user: dict = Depends(requir
     rows = []
     for lid in payload.listing_ids[:5]:
         try:
+            r = sb_admin.table("listings").select("*,suppliers(business_name,city,is_suspended,seller_id)").eq("id", lid).maybe_single().execute()
+        except Exception:
             r = sb_admin.table("listings").select("*,suppliers(business_name,city,is_suspended)").eq("id", lid).maybe_single().execute()
+        try:
             if r and r.data:
                 d = r.data
                 s = d.pop("suppliers", None) or {}
@@ -475,6 +479,7 @@ async def create_quotation(payload: QuotationCreate, user: dict = Depends(requir
                     continue
                 d["supplier_name"] = s.get("business_name")
                 d["supplier_city"] = s.get("city")
+                d["seller_id"] = s.get("seller_id")
                 rows.append(d)
         except Exception:
             continue

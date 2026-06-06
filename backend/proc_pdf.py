@@ -107,9 +107,10 @@ def build_quotation_pdf(quotation: dict, user: dict) -> bytes:
         line_total = float(it.get("total_price", 0)) * qty
         gst_amt = float(it.get("gst_amount", 0)) * qty
         verified = " ✓" if it.get("verified") else ""
+        sid_txt = f" · {it.get('seller_id')}" if it.get("seller_id") else ""
         data.append([
             Paragraph(f"<b>{it.get('rank', '')}</b>", ss["CellLb"]),
-            Paragraph(f"{it.get('supplier_name', '—')}{verified}<br/><font size=7 color='#6E6E73'>{it.get('brand', '')} {it.get('model_number', '')}</font>", ss["CellL"]),
+            Paragraph(f"{it.get('supplier_name', '—')}{verified}<br/><font size=7 color='#6E6E73'>{it.get('brand', '')} {it.get('model_number', '')}{sid_txt}</font>", ss["CellL"]),
             Paragraph(rs(it.get("unit_price")), ss["CellL"]),
             Paragraph(f"{it.get('gst_rate', 18)}%", ss["CellL"]),
             Paragraph(rs(gst_amt), ss["CellL"]),

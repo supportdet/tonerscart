@@ -340,11 +340,21 @@ async def email_application_approved(application: dict):
     email_to_applicant = application.get("email")
     if not email_to_applicant:
         return
+    sid = application.get("seller_id")
+    sid_block = (
+        f"""<div style="margin:16px 0;padding:14px 16px;background:#F0FBFC;border:1px solid #BFEAEF;border-radius:10px;">
+      <div style="font-size:12px;color:#6E6E73;">Your Seller ID</div>
+      <div style="font-size:18px;font-weight:700;font-family:monospace;color:#00838f;letter-spacing:0.5px;">{sid}</div>
+      <div style="font-size:11.5px;color:#86868B;margin-top:2px;">Use this in all communication with TonersCart.</div>
+    </div>"""
+        if sid else ""
+    )
     html = f"""
     <h2 style="margin:0 0 6px 0;font-size:18px;color:#0A8754;">You&apos;re approved 🎉</h2>
     <p>Hi {name or 'there'},</p>
     <p>Great news — your application for <strong>{biz}</strong> has been approved on TonersCart.
     You can now sign in and start listing your toner products.</p>
+    {sid_block}
     <p style="margin:22px 0;">
       <a href="https://printer-supply-hub.preview.emergentagent.com/supplier"
          style="display:inline-block;padding:12px 22px;background:#F7C600;color:#0A0A0B;border-radius:10px;font-weight:600;text-decoration:none;">
@@ -686,6 +696,8 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
     toner_type = (listing or {}).get("toner_type", "")
     seller_biz = (supplier or {}).get("business_name") or "Seller"
     seller_city = (supplier or {}).get("city") or ""
+    seller_id = (supplier or {}).get("seller_id") or order.get("seller_id") or ""
+    seller_id_html = f" · <span style=\"font-family:monospace;color:#00838f;\">{seller_id}</span>" if seller_id else ""
     seller_gst = (supplier or {}).get("gst_number") or order.get("supplier_gst_number")
     buyer_gst = order.get("buyer_gst_number") or buyer.get("gst_number")
     order_id_short = str(order.get("id", ""))[:8].upper()
@@ -758,7 +770,7 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
           <tr><td style='padding:4px 12px;color:#86868B;'>Total <span style="font-weight:400;color:#86868B;">(locked)</span></td><td style='padding:4px 12px;'><strong>{_money(total)}</strong></td></tr>
           <tr><td style='padding:4px 12px;color:#86868B;'>Delivery</td><td style='padding:4px 12px;'>{delivery_full}</td></tr>
           {("<tr><td style='padding:4px 12px;color:#86868B;'>Delivery charge</td><td style='padding:4px 12px;'><strong>" + _money(delivery_charge) + "</strong></td></tr>") if delivery_charge > 0 else ""}
-          <tr><td style='padding:4px 12px;color:#86868B;'>Seller</td><td style='padding:4px 12px;'><strong>{seller_biz}</strong>{f' · {seller_city}' if seller_city else ''}</td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Seller</td><td style='padding:4px 12px;'><strong>{seller_biz}</strong>{f' · {seller_city}' if seller_city else ''}{seller_id_html}</td></tr>
         </table>
         <div style="margin:14px 0;padding:12px 14px;background:#FFFBEB;border:1px solid #F5E5A6;border-radius:10px;font-size:12.5px;color:#8C6A00;">
           {delivery_note_buyer}
@@ -807,6 +819,7 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
           <tr><td style='padding:4px 12px;color:#86868B;'>Quantity</td><td style='padding:4px 12px;'><strong>{qty}</strong></td></tr>
           <tr><td style='padding:4px 12px;color:#86868B;'>Order value</td><td style='padding:4px 12px;'><strong>{_money(total)}</strong></td></tr>
           {payout_line}
+          {f"<tr><td style='padding:4px 12px;color:#86868B;'>Your Seller ID</td><td style='padding:4px 12px;'><strong style=\"font-family:monospace;color:#00838f;\">{seller_id}</strong></td></tr>" if seller_id else ''}
           <tr><td style='padding:4px 12px;color:#86868B;'>Buyer</td><td style='padding:4px 12px;'>{customer_name}{f' · {customer_phone}' if customer_phone else ''}</td></tr>
           {("<tr><td style='padding:4px 12px;color:#86868B;'>Buyer city</td><td style='padding:4px 12px;'><strong>" + (order_city or delivery_city or '—') + "</strong>" + (" <span style='display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;background:#FFF3CD;color:#8C6A00;font-size:11px;font-weight:600;'>Intercity</span>" if is_intercity else " <span style='display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;background:#E6F7EC;color:#0A8754;font-size:11px;font-weight:600;'>Local · free delivery</span>") + "</td></tr>")}
           <tr><td style='padding:4px 12px;color:#86868B;'>Delivery</td><td style='padding:4px 12px;'>{delivery_full}</td></tr>

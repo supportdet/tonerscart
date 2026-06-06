@@ -97,7 +97,7 @@ DOC_FIELDS = [
 # the fly if the migration has not been run yet, so seller onboarding never breaks.
 _BANK_OPT_COLS = (
     "account_holder_name", "account_number", "ifsc_code",
-    "bank_name", "bank_branch", "doc_id_proof",
+    "bank_name", "bank_branch", "doc_id_proof", "seller_id",
 )
 
 
@@ -119,6 +119,25 @@ def _exec_dropping_cols(builder, payload: dict, optional_cols=_BANK_OPT_COLS):
             if not dropped:
                 raise
     return builder(p)
+
+
+def _generate_seller_id() -> Optional[str]:
+    """Next sequential human-readable dealer ID: TC-DLR-{year}-{NNNN}.
+    Returns None if the seller_id column hasn't been migrated yet."""
+    year = datetime.now(timezone.utc).year
+    prefix = f"TC-DLR-{year}-"
+    nums = []
+    for tbl in ("users", "suppliers"):
+        try:
+            rows = sb_admin.table(tbl).select("seller_id").like("seller_id", f"{prefix}%").execute().data or []
+        except Exception:
+            return None  # column not migrated
+        for r in rows:
+            tail = (r.get("seller_id") or "").rsplit("-", 1)[-1]
+            if tail.isdigit():
+                nums.append(int(tail))
+    nxt = (max(nums) + 1) if nums else 1
+    return f"{prefix}{nxt:04d}"
 
 
 def _signed_doc_urls(application: dict, ttl: int = SIGNED_URL_TTL) -> dict:
@@ -669,9 +688,14 @@ def me(user: dict = Depends(require_user)):
         out["user_type"] = None
     # Approved supplier?
     if user.get("role") == "supplier":
-        s = sb_admin.table("suppliers").select(
-            "id,business_name,city,approved_at,business_logo"
-        ).eq("user_id", user["id"]).maybe_single().execute()
+        try:
+            s = sb_admin.table("suppliers").select(
+                "id,business_name,city,approved_at,business_logo,seller_id"
+            ).eq("user_id", user["id"]).maybe_single().execute()
+        except Exception:
+            s = sb_admin.table("suppliers").select(
+                "id,business_name,city,approved_at,business_logo"
+            ).eq("user_id", user["id"]).maybe_single().execute()
         if s and s.data:
             out["supplier_status"] = "approved"
             out["application_status"] = None
@@ -1562,7 +1586,7 @@ async def _create_direct_order(payload: "OrderCreate", user: dict, kind: str):
     # Confirmation emails (best effort)
     try:
         sup = sb_admin.table("suppliers").select(
-            "business_name,city,gst_number"
+            "*"
         ).eq("id", L["supplier_id"]).maybe_single().execute()
         buyer_row = sb_admin.table("users").select("email,name,gst_number").eq("id", user["id"]).maybe_single().execute()
         order_for_email = dict(created)
@@ -1678,7 +1702,7 @@ async def create_order(payload: OrderCreate, user: dict = Depends(require_user))
     # Fire confirmation emails (best effort — never block the order)
     try:
         sup = sb_admin.table("suppliers").select(
-            "business_name,city,gst_number"
+            "*"
         ).eq("id", L["supplier_id"]).maybe_single().execute()
         buyer_row = sb_admin.table("users").select("email,name,gst_number").eq("id", user["id"]).maybe_single().execute()
         order_for_email = dict(created)
@@ -1834,6 +1858,19 @@ async def admin_approve(pending_id: str, user: dict = Depends(require_role("admi
     P = p.data
     if P["status"] != "pending":
         raise HTTPException(400, f"Already {P['status']}")
+
+    # Human-readable seller ID — keep existing if already assigned, else generate
+    seller_id = None
+    try:
+        ex = sb_admin.table("users").select("seller_id").eq("id", P["user_id"]).maybe_single().execute()
+        seller_id = (ex.data or {}).get("seller_id") if ex else None
+    except Exception:
+        seller_id = None
+    if not seller_id:
+        seller_id = _generate_seller_id()
+    if seller_id:
+        P["seller_id"] = seller_id
+
     _exec_dropping_cols(lambda a: sb_admin.table("suppliers").upsert(a, on_conflict="user_id").execute(), {
         "user_id": P["user_id"],
         "business_name": P["business_name"],
@@ -1858,6 +1895,7 @@ async def admin_approve(pending_id: str, user: dict = Depends(require_role("admi
         "bank_name": P.get("bank_name"),
         "bank_branch": P.get("bank_branch"),
         "doc_id_proof": P.get("doc_id_proof"),
+        "seller_id": seller_id,
         "approved_by": user["id"],
         "approved_at": datetime.now(timezone.utc).isoformat(),
     })
@@ -1868,11 +1906,39 @@ async def admin_approve(pending_id: str, user: dict = Depends(require_role("admi
     }).eq("id", pending_id).execute()
     # Flip the user's role to supplier (= seller). This is the only place role becomes 'supplier'.
     sb_admin.table("users").update({"role": "supplier"}).eq("id", P["user_id"]).execute()
+    if seller_id:
+        _exec_dropping_cols(lambda a: sb_admin.table("users").update(a).eq("id", P["user_id"]).execute(), {"seller_id": seller_id})
     try:
         await email_application_approved(P)
     except Exception as e:
         logger.warning("approval email failed: %s", e)
-    return {"ok": True}
+    return {"ok": True, "seller_id": seller_id}
+
+
+@api.post("/admin/seller-ids/backfill")
+def admin_backfill_seller_ids(user: dict = Depends(require_role("admin"))):
+    """Assign TC-DLR-{year}-{NNNN} IDs to already-approved dealers that lack one.
+    Requires the seller_id migration to have been run."""
+    try:
+        sups = sb_admin.table("suppliers").select("id,user_id,seller_id,approved_at").execute().data or []
+    except Exception:
+        raise HTTPException(400, "seller_id column missing — run the migration first")
+    missing = [s for s in sups if not s.get("seller_id")]
+    # Stable order: oldest approvals first
+    missing.sort(key=lambda s: s.get("approved_at") or "")
+    assigned = 0
+    for s in missing:
+        sid = _generate_seller_id()
+        if not sid:
+            raise HTTPException(400, "seller_id column missing — run the migration first")
+        try:
+            sb_admin.table("suppliers").update({"seller_id": sid}).eq("id", s["id"]).execute()
+            if s.get("user_id"):
+                sb_admin.table("users").update({"seller_id": sid}).eq("id", s["user_id"]).execute()
+            assigned += 1
+        except Exception as e:
+            logger.warning("backfill seller_id failed for %s: %s", s.get("id"), e)
+    return {"ok": True, "assigned": assigned, "already_had": len(sups) - len(missing)}
 
 
 @api.post("/admin/suppliers/{pending_id}/reject")

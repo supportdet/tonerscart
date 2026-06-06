@@ -98,6 +98,7 @@ export default function DealersTab() {
                         <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">
                             <tr>
                                 <th className="text-left p-3">Business</th>
+                                <th className="text-left p-3">Seller ID</th>
                                 <th className="text-left p-3">City</th>
                                 <th className="text-left p-3">GST</th>
                                 <th className="text-left p-3">Approved</th>
@@ -113,6 +114,11 @@ export default function DealersTab() {
                                 return (
                                     <tr key={d.id} className="border-t border-black/[0.05] hover:bg-black/[0.02] cursor-pointer" data-testid={`dealer-row-${d.id}`} onClick={() => setActiveId(d.id)}>
                                         <td className="p-3 font-semibold">{d.business_name}</td>
+                                        <td className="p-3">
+                                            {d.seller_id
+                                                ? <span className="font-mono text-[12px] font-semibold text-[#00838f]" data-testid={`dealer-seller-id-${d.id}`}>{d.seller_id}</span>
+                                                : <span className="text-[11.5px] text-[#86868B] italic">Pending</span>}
+                                        </td>
                                         <td className="p-3">{d.city || "—"}</td>
                                         <td className="p-3 font-mono text-[12px]">{d.gst_number || "—"}</td>
                                         <td className="p-3 text-[11.5px] text-[#6E6E73]">{d.approved_at ? new Date(d.approved_at).toLocaleDateString() : "—"}</td>
@@ -241,7 +247,12 @@ function DealerDetailDrawer({ supplierId, open, onClose, onChanged }) {
                             ) : (
                                 <div className="flex items-center justify-between gap-3">
                                     <div>
-                                        <div className="text-[18px] font-bold text-[#0A0A0B]">{detail.supplier.business_name}</div>
+                                        <div className="text-[18px] font-bold text-[#0A0A0B] flex items-center gap-2">
+                                            {detail.supplier.business_name}
+                                            {detail.supplier.seller_id
+                                                ? <span className="font-mono text-[12px] font-semibold text-[#00838f] bg-[#00838f]/10 border border-[#00838f]/20 rounded-md px-2 py-0.5" data-testid="drawer-seller-id">{detail.supplier.seller_id}</span>
+                                                : <span className="text-[11px] text-[#86868B] italic">Seller ID pending</span>}
+                                        </div>
                                         <div className="text-[12.5px] text-[#6E6E73]">{detail.supplier.city || "—"} · {detail.supplier.gst_number || "No GST"} · {detail.supplier.phone}</div>
                                     </div>
                                     <button onClick={() => setEditing(true)} className="text-[12px] font-semibold inline-flex items-center gap-1 text-[#0A0A0B] hover:underline" data-testid="dealer-edit-toggle">

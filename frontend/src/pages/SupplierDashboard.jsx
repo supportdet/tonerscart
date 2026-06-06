@@ -516,6 +516,14 @@ export default function SupplierDashboard() {
                                 <h1 className="text-white truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(24px, 3.4vw, 44px)", fontWeight: 300, letterSpacing: "-0.025em", lineHeight: 1.1 }}>
                                     {user?.supplier?.business_name || user?.company || "Supplier dashboard"}
                                 </h1>
+                                <div className="mt-2 flex items-center gap-2" data-testid="supplier-seller-id">
+                                    <span className="text-[10px] tracking-[0.18em] uppercase font-semibold text-white/45">Seller ID</span>
+                                    {user?.supplier?.seller_id ? (
+                                        <span className="font-mono text-[13px] font-semibold text-[#F5C400] bg-white/10 border border-white/15 rounded-md px-2 py-0.5">{user.supplier.seller_id}</span>
+                                    ) : (
+                                        <span className="text-[12px] text-white/50 italic">Pending</span>
+                                    )}
+                                </div>
                                 <p className="text-[14px] text-white/65 mt-2">{user?.supplier?.city || user?.city}</p>
                             </div>
                         </div>
