@@ -9,6 +9,7 @@ a thin /api layer that:
   - Hosts the Claude AI chat endpoint (TonerBot)
 """
 import os
+import json
 import secrets
 import re
 import uuid
@@ -1090,6 +1091,140 @@ def search_universal(q: str, limit_per_type: int = 12):
         },
     }
 
+
+# =============================================================================
+# AI-powered search — Gemini parses a natural-language query into structured
+# filters, then runs the existing universal search + price/condition filters.
+# Falls back gracefully (ai=False) when no Gemini key is configured, so the
+# frontend can keep showing instant keyword results.
+# =============================================================================
+
+_AI_SEARCH_INSTRUCTION = (
+    "You parse shopping search queries for an Indian marketplace that sells printer "
+    "TONERS, PRINTERS, PAPERS and CONSUMABLES (drums/fusers/maintenance kits), plus OEM products. "
+    "Given a user's natural-language query, extract structured search filters. "
+    "Return STRICT JSON ONLY (no markdown) with exactly these keys: "
+    "category (one of 'toner','printer','paper','consumable','oem','any'), "
+    "brand (brand name string or null, e.g. HP, Canon, Brother, Epson, Xerox, Ricoh, Kyocera), "
+    "model (model/part number string or null), "
+    "min_price (integer INR or null), max_price (integer INR or null), "
+    "condition (one of 'original','compatible','new','refurbished' or null), "
+    "intent (short phrase describing the need), "
+    "keywords (a 1-4 word string best for matching a product brand/model in a database), "
+    "answer (one helpful sentence, max 160 chars, summarising what you're showing). "
+    "Infer category from context (cartridge->toner, office printer->printer, A4 sheets->paper, "
+    "drum unit->consumable). Parse prices: 'under 20000'/'below 20k' -> max_price 20000; "
+    "'k' = thousand, 'lakh'/'L' = 100000."
+)
+
+
+def _gemini_parse_query(q: str) -> Optional[dict]:
+    google_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    if not google_key:
+        return None
+    try:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=google_key)
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[types.Content(role="user", parts=[types.Part.from_text(text=q)])],
+            config=types.GenerateContentConfig(
+                system_instruction=_AI_SEARCH_INSTRUCTION,
+                response_mime_type="application/json",
+                temperature=0.1,
+            ),
+        )
+        raw = (resp.text or "").strip()
+        if not raw:
+            return None
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else None
+    except Exception as e:
+        logger.warning("Gemini query parse failed: %s", e)
+        return None
+
+
+def _row_price(row: dict, kind: str):
+    if kind == "papers":
+        return row.get("price_per_ream") or row.get("price")
+    return row.get("price")
+
+
+@api.get("/search/ai")
+async def search_ai(q: str, limit_per_type: int = 12):
+    q_norm = (q or "").strip()
+    if not q_norm:
+        return {"q": "", "ai": False, "params": None, "answer": None}
+
+    params = await asyncio.to_thread(_gemini_parse_query, q_norm)
+    if not params:
+        # No AI available / parse failed — caller falls back to keyword search.
+        return {"q": q_norm, "ai": False, "params": None, "answer": None}
+
+    brand = (params.get("brand") or "").strip()
+    model = (params.get("model") or "").strip()
+    keywords = (params.get("keywords") or "").strip()
+    # Broad-ish term so the DB ilike search still returns candidates to filter.
+    search_term = brand or keywords or model or q_norm
+    base = await asyncio.to_thread(search_universal, search_term, max(limit_per_type * 3, 36))
+
+    min_p = params.get("min_price")
+    max_p = params.get("max_price")
+    cond = (params.get("condition") or "").lower()
+    category = (params.get("category") or "any").lower()
+
+    def _filt(rows, kind):
+        out = []
+        for r in rows:
+            raw_p = _row_price(r, kind)
+            try:
+                p = float(raw_p) if raw_p is not None else None
+            except Exception:
+                p = None
+            if min_p is not None and p is not None and p < float(min_p):
+                continue
+            if max_p is not None and p is not None and p > float(max_p):
+                continue
+            if cond in ("original", "compatible") and kind == "toners":
+                if (r.get("toner_type") or "").lower() != cond:
+                    continue
+            if cond in ("new", "refurbished") and kind == "printers":
+                rc = (r.get("condition") or "").lower()
+                if cond == "new" and rc not in ("", "new", "brand new"):
+                    continue
+                if cond == "refurbished" and "refurb" not in rc:
+                    continue
+            out.append(r)
+        return out[:limit_per_type]
+
+    grouped = {
+        "toners": _filt(base.get("toners", []), "toners"),
+        "printers": _filt(base.get("printers", []), "printers"),
+        "papers": _filt(base.get("papers", []), "papers"),
+        "consumables": _filt(base.get("consumables", []), "consumables"),
+        "oem": (base.get("oem", []) or [])[:limit_per_type],
+    }
+
+    # If the AI is confident about a category and we have hits there, lead with
+    # only that category so the most relevant results surface cleanly.
+    cat_map = {"toner": "toners", "printer": "printers", "paper": "papers",
+               "consumable": "consumables", "oem": "oem"}
+    target = cat_map.get(category)
+    if target and grouped.get(target):
+        for k in list(grouped.keys()):
+            if k != target:
+                grouped[k] = []
+
+    return {
+        "q": q_norm,
+        "ai": True,
+        "params": params,
+        "answer": params.get("answer") or None,
+        **grouped,
+        "counts": {k: len(v) for k, v in grouped.items()},
+    }
 
 
 @api.get("/listings/facets")

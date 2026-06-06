@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
-import { MapPin, Boxes, Plus, Minus, ShoppingCart, X } from "lucide-react";
+import { MapPin, Boxes, Plus, Minus, ShoppingCart, X, Sparkles } from "lucide-react";
 import { Skeleton } from "../components/ui/skeleton";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import { useCart } from "../context/CartContext";
-import OrderRequestDialog from "../components/OrderRequestDialog";
 import TonerCartridge from "../components/TonerCartridge";
 import VerifiedBadge from "../components/VerifiedBadge";
 import RefilledWarningDialog from "../components/RefilledWarningDialog";
@@ -137,8 +136,6 @@ export default function SearchPage() {
     const [loadingMore, setLoadingMore] = useState(false);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
-    const [orderProduct, setOrderProduct] = useState(null);
-    const [orderQty, setOrderQty] = useState(1);
     const [qtyMap, setQtyMap] = useState({});
     const [minPrice, setMinPrice] = useState("");
     const [maxPrice, setMaxPrice] = useState("");
@@ -146,17 +143,35 @@ export default function SearchPage() {
     const { addItem } = useCart();
     const rootRef = useReveal([products.length]);
 
-    // Wave 9 — Universal 3-section results: only when q is set and no filters applied
+    // Universal multi-category results. Keyword search runs instantly; an
+    // AI-parsed search (Gemini) runs in parallel and enhances/replaces results.
     const [universal, setUniversal] = useState(null);
+    const [aiInfo, setAiInfo] = useState(null); // { answer, params } when Gemini enhanced
     useEffect(() => {
         const qq = (params.get("q") || "").trim();
-        if (!qq) { setUniversal(null); return; }
         let cancelled = false;
         (async () => {
-            try {
-                const r = await api.get("/search/universal", { params: { q: qq, limit_per_type: 12 } });
-                if (!cancelled) setUniversal(r.data || null);
-            } catch { if (!cancelled) setUniversal(null); }
+            if (!qq) {
+                if (!cancelled) { setUniversal(null); setAiInfo(null); }
+                return;
+            }
+            if (!cancelled) setAiInfo(null);
+            let aiApplied = false;
+            // 1) Instant keyword results
+            const kwP = api.get("/search/universal", { params: { q: qq, limit_per_type: 12 } })
+                .then((r) => { if (!cancelled && !aiApplied) setUniversal(r.data || null); })
+                .catch(() => { if (!cancelled && !aiApplied) setUniversal(null); });
+            // 2) AI-enhanced results in parallel — replace when ready
+            const aiP = api.get("/search/ai", { params: { q: qq, limit_per_type: 12 } })
+                .then((res) => {
+                    if (cancelled || !res.data?.ai) return;
+                    const c = res.data.counts || {};
+                    const total = (c.toners || 0) + (c.printers || 0) + (c.papers || 0) + (c.consumables || 0) + (c.oem || 0);
+                    if (total > 0) { aiApplied = true; setUniversal(res.data); }
+                    setAiInfo({ answer: res.data.answer || null, params: res.data.params || null });
+                })
+                .catch(() => { /* keep keyword results */ });
+            await Promise.allSettled([kwP, aiP]);
         })();
         return () => { cancelled = true; };
     }, [params]);
@@ -287,7 +302,8 @@ export default function SearchPage() {
             toast.error("Admins cannot place buyer orders");
             return;
         }
-        setOrderQty(qty); setOrderProduct(p);
+        addItem(p, qty);
+        navigate("/checkout");
     };
     const onCart = (p, qty) => {
         addItem(p, qty);
@@ -317,6 +333,15 @@ export default function SearchPage() {
             </h1>
 
             {/* Universal category tabs — appear when a search query is active */}
+            {aiInfo && (
+                <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-[#BFEAEF] bg-[#F5FDFE] px-4 py-3" data-testid="ai-search-banner">
+                    <span className="inline-flex items-center gap-1 shrink-0 text-[11px] font-semibold text-[#00838f] bg-white border border-[#BFEAEF] rounded-full px-2 py-0.5" data-testid="ai-powered-badge">
+                        <Sparkles size={12} /> AI-powered
+                    </span>
+                    {aiInfo.answer && <p className="text-[13px] text-[#3a3a40] leading-snug" data-testid="ai-search-answer">{aiInfo.answer}</p>}
+                </div>
+            )}
+
             {universal && (
                 <div className="mt-5 flex flex-wrap gap-2" data-testid="universal-category-tabs">
                     {[
@@ -534,9 +559,6 @@ export default function SearchPage() {
                 </div>
             )}
 
-            {orderProduct && (
-                <OrderRequestDialog product={orderProduct} initialQty={orderQty} onClose={() => setOrderProduct(null)} />
-            )}
             <RefilledWarningDialog open={refilledWarn} onClose={() => setRefilledWarn(false)} />
         </div>
     );

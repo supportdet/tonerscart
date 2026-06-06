@@ -18,7 +18,7 @@ const INDIAN_STATES = [
     "Andaman and Nicobar Islands","Chandigarh","Dadra and Nagar Haveli and Daman and Diu","Delhi","Jammu and Kashmir","Ladakh","Lakshadweep","Puducherry"
 ];
 const TURNOVER = ["< ₹10 Lakh", "₹10 – 50 Lakh", "₹50 Lakh – 2 Cr", "₹2 – 10 Cr", "₹10 Cr+"];
-const SELLER_TYPES = ["Original", "Compatible", "Refilled"];
+const SELLER_TYPES = ["Original", "Compatible"];
 const COMMON_BRANDS = ["HP", "Canon", "Brother", "Samsung", "Ricoh", "Epson", "Xerox", "Kyocera"];
 
 // Indian format validators
@@ -94,15 +94,12 @@ export default function SellerApplicationForm() {
     });
 
     const toggleSellerType = (t) => {
-        setS((prev) => {
-            const exists = prev.seller_types.includes(t);
-            const next = exists ? prev.seller_types.filter((x) => x !== t) : [...prev.seller_types, t];
-            if (!exists && next.length > 2) {
-                toast.error("Choose up to two seller types");
-                return prev;
-            }
-            return { ...prev, seller_types: next };
-        });
+        setS((prev) => ({
+            ...prev,
+            seller_types: prev.seller_types.includes(t)
+                ? prev.seller_types.filter((x) => x !== t)
+                : [...prev.seller_types, t],
+        }));
     };
 
     const toggleCompatBrand = (b) => {
@@ -148,7 +145,6 @@ export default function SellerApplicationForm() {
         if (!docs.gst || !docs.pan || !docs.bank_proof || !docs.address_proof) return false;
         // Conditional documents based on seller types
         if (s.seller_types.includes("Original") && !docs.brand_authorization) return false;
-        if (s.seller_types.includes("Refilled") && !docs.shop_photo) return false;
         return true;
     };
 
@@ -346,15 +342,15 @@ export default function SellerApplicationForm() {
                     </div>
 
                     <div>
-                        <Label>What kind of seller are you? <span className="text-[#86868B] font-normal">(choose up to 2)</span></Label>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
+                        <Label>What kind of seller are you? <span className="text-[#86868B] font-normal">(select all that apply)</span></Label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
                             {SELLER_TYPES.map((t) => (
                                 <button key={t} type="button" onClick={() => toggleSellerType(t)}
-                                    className={`p-4 rounded-lg border text-left transition ${s.seller_types.includes(t) ? "border-[#0A0A0B] bg-[#0A0A0B] text-white" : "border-[#D2D2D7] bg-white text-[#1D1D1F] hover:border-[#86868B]"}`}
+                                    className={`p-4 rounded-lg border text-left transition ${s.seller_types.includes(t) ? "border-[#F5C400] bg-[#FFFBEB] text-[#0A0A0B]" : "border-[#D2D2D7] bg-white text-[#1D1D1F] hover:border-[#86868B]"}`}
                                     data-testid={`seller-type-${t}`}>
                                     <div className="text-[14px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>{t}</div>
                                     <div className="text-[11.5px] mt-1 opacity-80">
-                                        {t === "Original" ? "Genuine OEM cartridges" : t === "Compatible" ? "Third-party compatibles" : "Refilled / locally made"}
+                                        {t === "Original" ? "Genuine OEM cartridges" : "Third-party compatibles"}
                                     </div>
                                 </button>
                             ))}
@@ -373,16 +369,6 @@ export default function SellerApplicationForm() {
                             </div>
                         </div>
                     )}
-
-                    {s.seller_types.includes("Refilled") && (
-                        <label className="flex items-start gap-3 p-3 rounded-lg border border-[#D2D2D7] bg-white cursor-pointer">
-                            <input type="checkbox" checked={s.testing_before_delivery} onChange={(e) => setS({ ...s, testing_before_delivery: e.target.checked })} className="mt-1" data-testid="testing-before-delivery" />
-                            <div>
-                                <div className="text-[13px] font-semibold text-[#0A0A0B]">I test every refilled cartridge before delivery</div>
-                                <div className="text-[11.5px] text-[#6E6E73] mt-0.5">Helps buyers trust your refilled stock.</div>
-                            </div>
-                        </label>
-                    )}
                 </div>
             )}
 
@@ -399,7 +385,6 @@ export default function SellerApplicationForm() {
                         <ul className="space-y-1.5 text-[13.5px]" style={{ fontFamily: "'Inter', sans-serif" }}>
                             <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>GST Certificate</strong> <span className="text-white/55">(required)</span></span></li>
                             <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>PAN Card</strong> <span className="text-white/55">(required)</span></span></li>
-                            <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>Shop / Office Photo</strong> <span className="text-white/55">(required for Refilled sellers)</span></span></li>
                             <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>Cancelled Cheque or Bank Passbook</strong> <span className="text-white/55">(required)</span></span></li>
                             <li className="flex items-start gap-2"><CircleDashed size={14} className="text-amber-400 mt-0.5 shrink-0" /><span><strong>Brand Authorization Letter</strong> <span className="text-white/55">(required only for Original OEM sellers)</span></span></li>
                             <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>Address Proof</strong> <span className="text-white/55">(utility bill / rent agreement)</span></span></li>
@@ -410,10 +395,6 @@ export default function SellerApplicationForm() {
                     {s.seller_types.includes("Original") && (
                         <FileSlot label="Brand Authorization Letter *" hint="Required for Original (OEM) sellers" file={docs.brand_authorization}
                             setFile={(f) => setDocs({ ...docs, brand_authorization: f })} testid="doc-brand-authorization" />
-                    )}
-                    {s.seller_types.includes("Refilled") && (
-                        <FileSlot label="Shop / Workshop photo *" hint="Required for Refilled sellers" file={docs.shop_photo}
-                            setFile={(f) => setDocs({ ...docs, shop_photo: f })} testid="doc-shop-photo" />
                     )}
                     <FileSlot label="GST certificate *" hint="Required" file={docs.gst}
                         setFile={(f) => setDocs({ ...docs, gst: f })} testid="doc-gst" />
