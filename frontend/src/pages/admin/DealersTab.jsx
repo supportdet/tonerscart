@@ -134,13 +134,22 @@ export default function DealersTab() {
                                             )}
                                         </td>
                                         <td className="p-3">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); toggleSuspend(d); }}
-                                                className="text-[11.5px] font-semibold inline-flex items-center gap-1 text-[#0A0A0B] hover:underline"
-                                                data-testid={`dealer-suspend-${d.id}`}
-                                            >
-                                                {d.is_suspended ? <><PlayCircle size={12} /> Unsuspend</> : <><PauseCircle size={12} /> Suspend</>}
-                                            </button>
+                                            <div className="flex items-center gap-3">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); navigate(`/admin/dealers/${d.id}`); }}
+                                                    className="text-[11.5px] font-semibold inline-flex items-center gap-1 text-[#00838f] hover:underline whitespace-nowrap"
+                                                    data-testid={`dealer-view-profile-${d.id}`}
+                                                >
+                                                    <ExternalLink size={12} /> View Full Profile
+                                                </button>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); toggleSuspend(d); }}
+                                                    className="text-[11.5px] font-semibold inline-flex items-center gap-1 text-[#0A0A0B] hover:underline whitespace-nowrap"
+                                                    data-testid={`dealer-suspend-${d.id}`}
+                                                >
+                                                    {d.is_suspended ? <><PlayCircle size={12} /> Unsuspend</> : <><PauseCircle size={12} /> Suspend</>}
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 );

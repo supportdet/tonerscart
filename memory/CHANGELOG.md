@@ -1,3 +1,23 @@
+### 2026-06 — Mobile overflow fix + Admin dealer profile + new admin tabs (Customers/Disputes/Messages/Activity)
+
+**Mobile / overflow**
+- `Header.jsx`: on <768px the top bar now shows only the logo + a hamburger (`header-mobile-menu-btn`). All actions (city, Sell, Sign in, Join free, cart, Dashboard, Logout) moved into a slide-in drawer (`mobile-menu-panel`). Desktop cluster wrapped in `hidden md:flex`. Verified no horizontal page overflow on /, /search, /printers, /papers, /contact (`overflow-x:hidden` already on html/body/#root). Category pills row scrolls horizontally within itself.
+
+**Admin — full dealer profile** (`/admin/dealers/:id`, `DealerProfile.jsx`)
+- "View Full Profile" button on every dealer row (`dealer-view-profile-{id}`). Page shows Business / Account / Bank / Documents (view+download signed URLs) / Agreement acceptance / Orders / Admin notes sections, plus stats (listings active/total, orders, GMV, commission earned, pending payout) and the Seller ID badge.
+- Backend: rewrote `admin_supplier_detail` to return documents (signed), agreements, papers, richer stats; added `PUT /admin/suppliers/{id}/notes` (admin_notes).
+
+**New admin tabs**
+- **Customers** (`CustomersTab.jsx`, `GET /admin/customers` + `/{id}`): list buyers (name/email/phone/city/type/joined/orders/spend) + detail drawer (profile, order history, agreement acceptance).
+- **Disputes** (`DisputesTab.jsx`): flag orders from Orders tab (`order-flag-{id}` + dialog button) → `POST /admin/orders/{id}/flag`; manage status/notes/resolve via `PUT /admin/orders/{id}/dispute`; list via `GET /admin/disputes`.
+- **Messages** (`MessagesTab.jsx`): contact submissions from `mps_inquiries` (`GET /admin/messages`), read/unread (`PUT .../read`), reply via Resend (`POST .../reply` → `email_admin_reply`).
+- **Activity** (`ActivityLogTab.jsx`, `GET /admin/activity-log`): every admin action logged via `_log_admin_action` (approve/reject/suspend/delete/order-status/flag/dispute/notes/message-reply). From-now-on only.
+- **Finance** enhanced: per-dealer **Pending payout** column + **Procurement overdue payments** section (`GET /admin/finance/procurement-dues`).
+
+**Migration (USER MUST RUN in Supabase):** `backend/supabase_schema_admin_extras.sql` — adds `admin_activity_log` table, `orders` dispute columns, `mps_inquiries.is_read`, `suppliers.admin_notes`. Until run, the WRITE endpoints (flag/dispute/message-read/dealer-notes) return a graceful HTTP 503 and the Disputes/Activity tabs show migration warnings. All READ endpoints work regardless. **No data was deleted** (per user instruction).
+
+**Testing:** iteration_27 — backend 14/14 pytest PASS; frontend mobile nav/overflow + all 14 tabs + customers + messages + finance all OK. Two flagged defects fixed/cleared: (1) "View Full Profile" button re-added (had reverted), (2) DealerProfile "spinner" was a false positive (4s API latency vs 5s test wait) — page renders fully, verified via browser.
+
 ### 2026-06 — Seller ID trust mark on buyer quotations
 
 - **Quotation email** (`email_quotation` in `email_service.py`) now renders a green **"✓ Verified Seller · TC-DLR-YYYY-NNNN"** pill inside the "Sold by" box. Dealer name/contact remain intentionally hidden — only the anonymised verified-seller code is shown as a trust mark. New `seller_id` kwarg (defaults to "", badge omitted when unset).
