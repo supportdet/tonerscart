@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api, { formatApiError } from "../../lib/api";
 import { toast } from "sonner";
-import { Search, Loader2, Trash2, PauseCircle, PlayCircle, Pencil, Check, X, AlertTriangle } from "lucide-react";
+import { Search, Loader2, Trash2, PauseCircle, PlayCircle, Pencil, Check, X, AlertTriangle, ExternalLink } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
@@ -9,6 +10,7 @@ import { Button } from "../../components/ui/button";
 const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
 
 export default function DealersTab() {
+    const navigate = useNavigate();
     const [dealers, setDealers] = useState([]);
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);

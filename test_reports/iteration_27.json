@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 27 — Mobile navbar/overflow, desktop navbar regression, 4 new admin tabs (Customers/Disputes/Messages/Activity), Finance enhancements (pending payout + procurement dues), and Dealer Profile page. Backend: 14/14 pytest PASS (all READ endpoints 200; WRITE endpoints return graceful 503 as expected). Frontend: mobile + desktop nav fully correct, no horizontal overflow on /, /search, /printers, /papers, /contact; all 14 admin tabs render; customers table+drawer, messages list (45 cards) + filters + reply dialog, disputes/activity migration warnings, finance pending-payout column + dues empty state, orders flag button — ALL OK. Two real defects on the dealer profile feature.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AdminDashboard / DealersTab",
+        "issue": "Missing 'View Full Profile' button on each dealer row. Review request requires data-testid=\"dealer-view-profile-{id}\" on every row, but DealersTab.jsx renders only dealer-row-{id}, dealer-seller-id-{id}, dealer-suspend-{id}. There is no link/button anywhere in the admin UI that navigates to /admin/dealers/:id. Users can only reach the page via direct URL.",
+        "selector": "[data-testid^=\"dealer-view-profile-\"]",
+        "priority": "HIGH"
+      },
+      {
+        "component": "DealerProfile page (/admin/dealers/:id)",
+        "issue": "Page is stuck on infinite loading spinner. The TopHeader and Footer render, but the middle area only shows Loader2 spinner and never renders the dealer-profile-page wrapper or any of the section-* blocks (business/account/bank/documents/agreement/orders/notes, profile-seller-id). Backend GET /api/admin/suppliers/{id}/detail returns 200 in pytest, so the issue is in the React component — likely the useEffect resolves but `data` is somehow falsy or shape mismatch keeps it null after .finally(setLoading(false)). Reproduced by direct-navigating to /admin/dealers/f78f4ab3-9233-4e9c-be41-2267d6250f20 (DET dealer) after admin login; spinner persists 5+ seconds with no toast.",
+        "selector": "[data-testid=\"dealer-profile-page\"]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      { "screen": "All pages header", "issues": ["'Set your location' coachmark popover still overlays the top-nav area on every page load — pre-existing from iteration 25/26."] }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration27.py",
+    "/app/test_reports/pytest/iteration_27.xml"
+  ],
+  "action_items": [
+    "Add the 'View Full Profile' button (data-testid=\"dealer-view-profile-{id}\") in /app/frontend/src/pages/admin/DealersTab.jsx — should navigate to `/admin/dealers/${d.id}`. Suggest placing it next to the existing suspend button on each row.",
+    "Debug /app/frontend/src/pages/DealerProfile.jsx — the API GET /admin/suppliers/{id}/detail returns 200 (confirmed in pytest) but the page never exits its loading state. Likely the response shape `data` (vs `data.supplier`) handling — check that the api.get destructuring `({ data })` correctly matches the FastAPI response. If the response IS `{ supplier:..., documents:..., agreements:..., orders:..., stats:... }`, the code should work; verify the actual response payload and that setData(data) is actually being called (add a console.log or check network tab). It's also possible the toast.error fires silently. Currently no toast was visible to the user.",
+    "(Optional, carry-over) Auto-dismiss the 'Set your location' coachmark."
+  ],
+  "critical_code_review_comments": [
+    "DealersTab.jsx does not implement the dealer-view-profile-{id} button promised in the review request — entry point to the new DealerProfile page is missing from the UI.",
+    "DealerProfile.jsx loading-state path has no visible error fallback: if api.get throws, only a sonner toast fires and `data` stays null, falling through to the 'Dealer not found.' branch. But here the page is stuck on the spinner (loading=true) — suggests the promise never resolves OR resolves with unexpected shape. Recommend adding a console.error in catch and a timeout guard.",
+    "server.py is still 4600+ lines (carry-over) — recommend splitting into routers."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration27.py (new)"
+  ],
+  "success_rate": { "backend": "100% (14/14 pytest)", "frontend": "~85% — nav/overflow/4 new tabs/finance all OK; dealer profile feature broken (page + missing entry button)" },
+  "test_credentials": "Admin admin@tonerscart.in / Admin@123 (Supabase). Token via POST {SUPABASE_URL}/auth/v1/token?grant_type=password with apikey header.",
+  "seed_data_creation": "None. No data deleted/modified.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend READ endpoints all 200: /api/admin/customers (+/{id}), /api/admin/finance/dealers (now includes pending_payout — verified), /api/admin/finance/procurement-dues, /api/admin/messages, /api/admin/disputes, /api/admin/activity-log, /api/admin/suppliers/{id}/detail. WRITE endpoints return graceful 503 with 'migrat' in body: POST /api/admin/orders/{id}/flag, PUT /api/admin/messages/{id}/read, PUT /api/admin/suppliers/{id}/notes — EXPECTED until SQL migration is run. Mobile (390px) navbar shows only logo-home-link + header-mobile-menu-btn; drawer (mobile-menu-panel) opens with mobile-city-select, mobile-cart-btn, mobile-nav-sell, mobile-login-btn, mobile-register-btn, mobile-menu-close — all visible. No page overflow on /, /search, /printers, /papers, /contact (scrollWidth==clientWidth==390). Desktop (1920px) shows full action cluster, hamburger hidden. Admin Tabs: all 14 present. CustomersTab: customers-table + customer-row-* + customer-detail-drawer OK. MessagesTab: 45 message-card-* rendered (note: takes ~3s to populate after tab click — race condition possible in tests; messages-filter-all/unread present; message-reply-btn-* + message-reply-dialog OK). DisputesTab: disputes-migration-warning OK. ActivityTab: activity-migration-warning OK. FinanceTab: 'Pending payout' column shown; finance-dues-empty present (no overdue orders). OrdersTab: order-flag-* present (POST returns 503 — expected). Dealer detail dialog (drawer-seller-id) still works via row-click. Use existing dealer id f78f4ab3-9233-4e9c-be41-2267d6250f20 (DET) to reproduce the DealerProfile spinner bug at /admin/dealers/f78f4ab3-9233-4e9c-be41-2267d6250f20.",
+  "rca of the issue": "Defect 1 (View Full Profile button missing): grep -rn 'view-profile' /app/frontend/src/ returns zero matches in DealersTab.jsx. Only /app/frontend/src/App.js:151 (the route) references /admin/dealers/. Main agent simply did not wire a navigation button in the table. Fix: add <Link to={`/admin/dealers/${d.id}`} data-testid={`dealer-view-profile-${d.id}`}>View Full Profile</Link> (or a Button with onClick navigate) inside the dealer row actions column. Defect 2 (DealerProfile spinner): Page loads (TopHeader + Footer render) but JSX returns the early `if (loading)` branch indefinitely. Backend endpoint /admin/suppliers/{id}/detail returns 200 in pytest, so root cause is on the frontend — likely (a) api.get response shape mismatch causing JS exception during destructuring `({ data })` from axios, or (b) toast.error fires once but `setLoading(false)` is reached in .finally so spinner should have stopped... unless the promise is genuinely pending. Recommend: temporarily add console.log inside .then/.catch/.finally and check browser DevTools network for the actual XHR. Possible auth header issue specific to this route — confirm api client attaches the Supabase token when navigating directly (not from within /admin)."
+}

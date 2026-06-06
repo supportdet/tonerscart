@@ -26,6 +26,7 @@ import Papers from "./pages/Papers";
 import CustomerDashboard from "./pages/CustomerDashboard";
 import SupplierDashboard from "./pages/SupplierDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import DealerProfile from "./pages/DealerProfile";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
 import OAuthCallback from "./pages/OAuthCallback";
@@ -147,6 +148,7 @@ function App() {
                                     <Route path="/supplier" element={<ProtectedRoute roles={["supplier"]}><SupplierDashboard /></ProtectedRoute>} />
                                     <Route path="/oem-dashboard" element={<ProtectedRoute roles={["oem"]}><OemDashboard /></ProtectedRoute>} />
                                     <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
+                                    <Route path="/admin/dealers/:id" element={<ProtectedRoute roles={["admin"]}><DealerProfile /></ProtectedRoute>} />
                                     <Route path="*" element={<NotFound />} />
                                 </Routes>
                             </Chrome>

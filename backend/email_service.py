@@ -97,6 +97,20 @@ async def email_proc_quotation(u: dict, quotation: dict, pdf_bytes: bytes):
     return await _send(email_to, f"TonersCart Quotation {ref}", html, attachments=[attachment])
 
 
+async def email_admin_reply(to: str, subject: str, message: str, name: str | None = None):
+    """Admin replies to a contact-form submission. Plain, branded message;
+    replies route back to the support inbox."""
+    if not to:
+        return False
+    safe = (message or "").replace("\n", "<br>")
+    html = f"""
+    <h2 style="margin:0 0 12px 0;font-size:18px;">Hi {name or 'there'},</h2>
+    <div style="font-size:14px;color:#1d1d1f;line-height:1.65;">{safe}</div>
+    <p style="margin-top:20px;color:#6E6E73;font-size:12.5px;">— Team TonersCart</p>
+    """
+    return await _send(to, subject or "Re: your message to TonersCart", html, reply_to=SUPPORT_INBOX)
+
+
 # ===== Public helpers ===========================================================
 
 # Public app base for links inside emails (matches the rest of this module).

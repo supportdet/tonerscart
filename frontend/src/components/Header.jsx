@@ -3,11 +3,12 @@ import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import { useCart } from "../context/CartContext";
-import { LogOut, MapPin, ChevronDown, ShoppingCart, Loader2, LayoutDashboard } from "lucide-react";
+import { LogOut, MapPin, ChevronDown, ShoppingCart, Loader2, LayoutDashboard, Menu, X } from "lucide-react";
 
 // Wave 10 — two-layer navbar.
-// Layer 1 (top, dark): brand · city · sell · sign-in · cart · join-free.
+// Layer 1 (top, white): brand · city · sell · sign-in · cart · join-free.
 // Layer 2 (white): horizontally-scrollable colored category pills.
+// Mobile (<768px): only logo + hamburger; everything else lives in a drawer.
 
 const CATEGORY_PILLS = [
     { to: "/search", label: "Toners", color: "#FF1F75" },
@@ -43,14 +44,15 @@ export default function Header() {
     const location = useLocation();
     const [cityOpen, setCityOpen] = useState(false);
     const [loggingOut, setLoggingOut] = useState(false);
+    const [mobileOpen, setMobileOpen] = useState(false);
 
     const role = user?.role;
     const isSeller = role === "supplier";
     const isAdmin = role === "admin";
     const isOem = role === "oem";
-    const isBuyer = !!user && !isSeller && !isAdmin && !isOem;
 
     const handleLogout = async () => {
+        setMobileOpen(false);
         setLoggingOut(true);
         try { await logout(); } catch { /* ignore */ }
         try { localStorage.clear(); sessionStorage.clear(); } catch { /* ignore */ }
@@ -64,6 +66,9 @@ export default function Header() {
         if (to === "/papers") return p === "/papers" || p.startsWith("/paper/");
         return p === to || p.startsWith(`${to}/`);
     };
+
+    const dashboardPath = isSeller ? "/supplier" : isAdmin ? "/admin" : isOem ? "/oem-dashboard" : "/customer";
+    const go = (path) => { setMobileOpen(false); navigate(path); };
 
     return (
         <header className="sticky top-0 z-[100] bg-white" data-testid="site-header">
@@ -85,158 +90,165 @@ export default function Header() {
 
                     <div className="flex-1 min-w-0" />
 
-                    {/* City */}
-                    <div className="relative">
-                        <button
-                            onClick={() => { setCityOpen((o) => !o); if (locPrompt) dismissLocationPrompt(); }}
-                            onBlur={() => setTimeout(() => setCityOpen(false), 150)}
-                            className={`inline-flex items-center gap-1.5 sm:gap-2 text-[13px] font-medium px-2 sm:px-3 h-9 rounded-lg text-[#1D1D1F] hover:bg-black/[0.04] transition-colors${locPrompt ? " tc-loc-pulse" : ""}`}
-                            data-testid="city-pill-btn"
-                        >
-                            <MapPin size={14} />
-                            <span className="hidden sm:inline">{city}</span>
-                            <ChevronDown size={12} className="hidden sm:block" />
-                        </button>
-                        {cityOpen && (
-                            <div
-                                className="absolute right-0 top-full mt-1.5 w-60 bg-white text-[#1D1D1F] rounded-xl shadow-xl border border-black/[0.08] py-2 max-h-72 overflow-auto z-20"
-                                data-testid="city-dropdown"
+                    {/* ===== Desktop actions (≥768px) ===== */}
+                    <div className="hidden md:flex items-center gap-2 lg:gap-4">
+                        {/* City */}
+                        <div className="relative">
+                            <button
+                                onClick={() => { setCityOpen((o) => !o); if (locPrompt) dismissLocationPrompt(); }}
+                                onBlur={() => setTimeout(() => setCityOpen(false), 150)}
+                                className={`inline-flex items-center gap-2 text-[13px] font-medium px-3 h-9 rounded-lg text-[#1D1D1F] hover:bg-black/[0.04] transition-colors${locPrompt ? " tc-loc-pulse" : ""}`}
+                                data-testid="city-pill-btn"
                             >
-                                <div className="px-3 py-1 text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B]">Choose your city</div>
-                                {KNOWN_CITIES.map((c) => (
-                                    <button
-                                        key={c}
-                                        onMouseDown={() => { setCity(c); setCityOpen(false); }}
-                                        className={`block w-full text-left px-3 py-1.5 text-[13.5px] hover:bg-black/[0.04] ${c === city ? "text-[#0A0A0B] font-semibold bg-black/[0.03]" : "text-[#1D1D1F]"}`}
-                                        data-testid={`city-option-${c}`}
-                                    >
-                                        {c}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
+                                <MapPin size={14} />
+                                <span>{city}</span>
+                                <ChevronDown size={12} />
+                            </button>
+                            {cityOpen && (
+                                <div
+                                    className="absolute right-0 top-full mt-1.5 w-60 bg-white text-[#1D1D1F] rounded-xl shadow-xl border border-black/[0.08] py-2 max-h-72 overflow-auto z-20"
+                                    data-testid="city-dropdown"
+                                >
+                                    <div className="px-3 py-1 text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B]">Choose your city</div>
+                                    {KNOWN_CITIES.map((c) => (
+                                        <button
+                                            key={c}
+                                            onMouseDown={() => { setCity(c); setCityOpen(false); }}
+                                            className={`block w-full text-left px-3 py-1.5 text-[13.5px] hover:bg-black/[0.04] ${c === city ? "text-[#0A0A0B] font-semibold bg-black/[0.03]" : "text-[#1D1D1F]"}`}
+                                            data-testid={`city-option-${c}`}
+                                        >
+                                            {c}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
 
-                        {/* Location coachmark — small walkthrough hint pointing up at
-                            the city selector. Shown only when GPS was denied/unavailable. */}
-                        {locPrompt && !cityOpen && (
-                            <div className="tc-coachmark" role="dialog" aria-label="Set your location" data-testid="location-coachmark">
-                                <span className="tc-coachmark-arrow" aria-hidden="true" />
-                                <div className="flex items-start gap-2">
-                                    <MapPin size={15} className="text-[#00B7C7] mt-0.5 shrink-0" />
-                                    <div className="flex-1">
-                                        <div className="text-[12.5px] font-semibold text-[#0A0A0B] leading-snug">Set your location</div>
-                                        <div className="text-[11.5px] text-[#6E6E73] mt-0.5 leading-snug">Tap here to pick your city and see local dealers first.</div>
-                                        <div className="flex items-center gap-2 mt-2">
-                                            <button
-                                                onClick={() => { dismissLocationPrompt(); setCityOpen(true); }}
-                                                className="text-[11.5px] font-semibold px-2.5 h-7 rounded-md bg-[#0A0A0B] text-white hover:bg-black/80 transition-colors"
-                                                data-testid="coachmark-choose-btn"
-                                            >
-                                                Choose city
-                                            </button>
-                                            <button
-                                                onClick={dismissLocationPrompt}
-                                                className="text-[11.5px] font-medium text-[#86868B] hover:text-[#0A0A0B] px-1.5 h-7"
-                                                data-testid="coachmark-dismiss-btn"
-                                            >
-                                                Not now
-                                            </button>
+                            {locPrompt && !cityOpen && (
+                                <div className="tc-coachmark" role="dialog" aria-label="Set your location" data-testid="location-coachmark">
+                                    <span className="tc-coachmark-arrow" aria-hidden="true" />
+                                    <div className="flex items-start gap-2">
+                                        <MapPin size={15} className="text-[#00B7C7] mt-0.5 shrink-0" />
+                                        <div className="flex-1">
+                                            <div className="text-[12.5px] font-semibold text-[#0A0A0B] leading-snug">Set your location</div>
+                                            <div className="text-[11.5px] text-[#6E6E73] mt-0.5 leading-snug">Tap here to pick your city and see local dealers first.</div>
+                                            <div className="flex items-center gap-2 mt-2">
+                                                <button
+                                                    onClick={() => { dismissLocationPrompt(); setCityOpen(true); }}
+                                                    className="text-[11.5px] font-semibold px-2.5 h-7 rounded-md bg-[#0A0A0B] text-white hover:bg-black/80 transition-colors"
+                                                    data-testid="coachmark-choose-btn"
+                                                >
+                                                    Choose city
+                                                </button>
+                                                <button
+                                                    onClick={dismissLocationPrompt}
+                                                    className="text-[11.5px] font-medium text-[#86868B] hover:text-[#0A0A0B] px-1.5 h-7"
+                                                    data-testid="coachmark-dismiss-btn"
+                                                >
+                                                    Not now
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
+                            )}
+                        </div>
+
+                        {!authLoading && !isSeller && !isAdmin && !isOem && (
+                            <NavLink
+                                to="/sell"
+                                className="inline-flex items-center text-[13px] font-semibold px-4 h-9 rounded-lg text-[#0A0A0B] hover:bg-black/[0.04] transition-colors"
+                                style={{ border: "1px solid #D2D2D7" }}
+                                data-testid="nav-sell"
+                            >
+                                Sell
+                            </NavLink>
+                        )}
+
+                        {authLoading ? (
+                            <div className="flex items-center gap-2" data-testid="header-auth-loading" aria-hidden="true">
+                                <div className="w-9 h-9 rounded-full bg-black/[0.05] animate-pulse" />
                             </div>
+                        ) : !user ? (
+                            <>
+                                <button
+                                    onClick={() => navigate("/login")}
+                                    className="text-[13px] rounded-lg whitespace-nowrap transition-colors h-9 px-3 font-medium text-[#1D1D1F] hover:bg-black/[0.04] hover:text-[#0A0A0B]"
+                                    data-testid="header-login-btn"
+                                >
+                                    Sign in
+                                </button>
+                                <button
+                                    onClick={() => navigate("/cart")}
+                                    className="relative w-10 h-10 grid place-items-center rounded-lg hover:bg-black/[0.04] text-[#0A0A0B] transition-colors"
+                                    aria-label="Cart"
+                                    data-testid="header-cart-btn"
+                                >
+                                    <ShoppingCart size={17} />
+                                    {cartCount > 0 && (
+                                        <span className="absolute top-0.5 right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#E6007E] text-white text-[10px] font-bold grid place-items-center" data-testid="header-cart-count">{cartCount}</span>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => navigate("/register")}
+                                    className="inline-flex items-center text-[13px] font-semibold px-4 h-9 rounded-lg transition-transform active:scale-95 whitespace-nowrap"
+                                    style={{ background: "#FFC107", color: "#0A0A0B" }}
+                                    data-testid="header-register-btn"
+                                >
+                                    Join free
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                {!isAdmin && !isOem && (
+                                    <button
+                                        onClick={() => navigate("/cart")}
+                                        className="relative w-10 h-10 grid place-items-center rounded-lg hover:bg-black/[0.04] text-[#0A0A0B] transition-colors"
+                                        aria-label="Cart"
+                                        data-testid="header-cart-btn"
+                                    >
+                                        <ShoppingCart size={17} />
+                                        {cartCount > 0 && (
+                                            <span className="absolute top-0.5 right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#E6007E] text-white text-[10px] font-bold grid place-items-center" data-testid="header-cart-count">{cartCount}</span>
+                                        )}
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => navigate(dashboardPath)}
+                                    className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#0A0A0B] px-3.5 h-9 rounded-lg border border-[#E5E5E7] hover:border-[#0A0A0B] hover:bg-black/[0.03] transition-colors whitespace-nowrap"
+                                    data-testid="header-user-chip"
+                                    title={user.name ? `${user.name} — open dashboard` : "Open dashboard"}
+                                >
+                                    <LayoutDashboard size={15} />
+                                    <span>Dashboard</span>
+                                </button>
+                                <button
+                                    onClick={handleLogout}
+                                    className="text-[#86868B] hover:text-[#0A0A0B] p-2 rounded-lg hover:bg-black/[0.04] transition-colors"
+                                    data-testid="header-logout-btn"
+                                    aria-label="Log out"
+                                >
+                                    <LogOut size={16} />
+                                </button>
+                            </>
                         )}
                     </div>
 
-                    {/* Sell — outline pill on white. Hidden entirely while the
-                        session is still being checked so logged-in users never
-                        see a flash of "Sell". */}
-                    {!authLoading && !isSeller && !isAdmin && !isOem && (
-                        <NavLink
-                            to="/sell"
-                            className="hidden sm:inline-flex items-center text-[13px] font-semibold px-4 h-9 rounded-lg text-[#0A0A0B] hover:bg-black/[0.04] transition-colors"
-                            style={{ border: "1px solid #D2D2D7" }}
-                            data-testid="nav-sell"
-                        >
-                            Sell
-                        </NavLink>
-                    )}
-
-                    {authLoading ? (
-                        /* Neutral navbar while session is verified — no auth buttons,
-                           just a subtle placeholder so the layout doesn't jump. */
-                        <div className="flex items-center gap-2" data-testid="header-auth-loading" aria-hidden="true">
-                            <div className="w-9 h-9 rounded-full bg-black/[0.05] animate-pulse" />
-                        </div>
-                    ) : !user ? (
-                        <>
-                            <button
-                                onClick={() => navigate("/login")}
-                                className="text-[13px] rounded-lg whitespace-nowrap transition-colors h-9 px-3.5 font-semibold bg-[#FFC107] text-[#0A0A0B] sm:bg-transparent sm:px-3 sm:font-medium sm:text-[#1D1D1F] sm:hover:bg-black/[0.04] sm:hover:text-[#0A0A0B]"
-                                data-testid="header-login-btn"
-                            >
-                                Sign in
-                            </button>
-                            {!isAdmin && (
-                                <button
-                                    onClick={() => navigate("/cart")}
-                                    className="relative w-10 h-10 grid place-items-center rounded-lg hover:bg-black/[0.04] text-[#0A0A0B] transition-colors"
-                                    aria-label="Cart"
-                                    data-testid="header-cart-btn"
-                                >
-                                    <ShoppingCart size={17} />
-                                    {cartCount > 0 && (
-                                        <span className="absolute top-0.5 right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#E6007E] text-white text-[10px] font-bold grid place-items-center" data-testid="header-cart-count">{cartCount}</span>
-                                    )}
-                                </button>
-                            )}
-                            <button
-                                onClick={() => navigate("/register")}
-                                className="hidden xs:inline-flex items-center text-[13px] font-semibold px-3 sm:px-4 h-9 rounded-lg transition-transform active:scale-95 whitespace-nowrap"
-                                style={{ background: "#FFC107", color: "#0A0A0B" }}
-                                data-testid="header-register-btn"
-                            >
-                                Join free
-                            </button>
-                        </>
-                    ) : (
-                        <>
-                            {!isAdmin && !isOem && (
-                                <button
-                                    onClick={() => navigate("/cart")}
-                                    className="relative w-10 h-10 grid place-items-center rounded-lg hover:bg-black/[0.04] text-[#0A0A0B] transition-colors"
-                                    aria-label="Cart"
-                                    data-testid="header-cart-btn"
-                                >
-                                    <ShoppingCart size={17} />
-                                    {cartCount > 0 && (
-                                        <span className="absolute top-0.5 right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#E6007E] text-white text-[10px] font-bold grid place-items-center" data-testid="header-cart-count">{cartCount}</span>
-                                    )}
-                                </button>
-                            )}
-                            <button
-                                onClick={() => navigate(isSeller ? "/supplier" : isAdmin ? "/admin" : isOem ? "/oem-dashboard" : "/customer")}
-                                className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#0A0A0B] px-2.5 sm:px-3.5 h-9 rounded-lg border border-[#E5E5E7] hover:border-[#0A0A0B] hover:bg-black/[0.03] transition-colors whitespace-nowrap"
-                                data-testid="header-user-chip"
-                                title={user.name ? `${user.name} — open dashboard` : "Open dashboard"}
-                            >
-                                <LayoutDashboard size={15} />
-                                <span>Dashboard</span>
-                            </button>
-                            <button
-                                onClick={handleLogout}
-                                className="text-[#86868B] hover:text-[#0A0A0B] p-2 rounded-lg hover:bg-black/[0.04] transition-colors"
-                                data-testid="header-logout-btn"
-                                aria-label="Log out"
-                            >
-                                <LogOut size={16} />
-                            </button>
-                        </>
-                    )}
+                    {/* ===== Mobile hamburger (<768px) ===== */}
+                    <button
+                        onClick={() => setMobileOpen(true)}
+                        className="md:hidden relative w-11 h-11 grid place-items-center rounded-lg text-[#0A0A0B] hover:bg-black/[0.04] transition-colors shrink-0"
+                        aria-label="Open menu"
+                        data-testid="header-mobile-menu-btn"
+                    >
+                        <Menu size={22} />
+                        {cartCount > 0 && (
+                            <span className="absolute top-1 right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-[#E6007E] text-white text-[9px] font-bold grid place-items-center">{cartCount}</span>
+                        )}
+                    </button>
                 </div>
             </div>
 
-            {/* Layer 2 — categories */}
+            {/* Layer 2 — categories (scrolls horizontally on mobile) */}
             <nav
                 className="bg-white"
                 style={{ height: 56 }}
@@ -254,6 +266,107 @@ export default function Header() {
                     </div>
                 </div>
             </nav>
+
+            {/* ===== Mobile slide-in drawer ===== */}
+            {mobileOpen && (
+                <div className="md:hidden fixed inset-0 z-[2000]" data-testid="mobile-menu-overlay">
+                    <button
+                        className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
+                        aria-label="Close menu"
+                        onClick={() => setMobileOpen(false)}
+                    />
+                    <div className="absolute right-0 top-0 h-full w-[82%] max-w-[320px] bg-white shadow-2xl flex flex-col animate-[tc-step-fwd_0.2s_ease]" data-testid="mobile-menu-panel">
+                        <div className="flex items-center justify-between px-4 h-16 border-b border-[#E8E8EC]">
+                            <span className="text-[11px] tracking-[0.2em] uppercase font-semibold text-[#86868B]">Menu</span>
+                            <button onClick={() => setMobileOpen(false)} className="w-10 h-10 grid place-items-center rounded-lg hover:bg-black/[0.04]" aria-label="Close" data-testid="mobile-menu-close">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+                            {/* Location */}
+                            <div>
+                                <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B] mb-1.5">Your city</div>
+                                <div className="relative">
+                                    <MapPin size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B]" />
+                                    <select
+                                        value={KNOWN_CITIES.includes(city) ? city : ""}
+                                        onChange={(e) => setCity(e.target.value)}
+                                        className="w-full h-11 pl-9 pr-3 rounded-lg border border-[#D2D2D7] bg-white text-[14px] font-medium text-[#0A0A0B]"
+                                        data-testid="mobile-city-select"
+                                    >
+                                        <option value="" disabled>Select your city</option>
+                                        {KNOWN_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Cart */}
+                            {!isAdmin && !isOem && (
+                                <button
+                                    onClick={() => go("/cart")}
+                                    className="w-full flex items-center justify-between px-4 h-12 rounded-lg border border-[#E5E5E7] hover:bg-black/[0.03] transition-colors"
+                                    data-testid="mobile-cart-btn"
+                                >
+                                    <span className="inline-flex items-center gap-2.5 text-[14px] font-semibold text-[#0A0A0B]"><ShoppingCart size={17} /> Cart</span>
+                                    {cartCount > 0 && <span className="min-w-[22px] h-[22px] px-1.5 rounded-full bg-[#E6007E] text-white text-[11px] font-bold grid place-items-center">{cartCount}</span>}
+                                </button>
+                            )}
+
+                            {/* Sell — only for guests / buyers */}
+                            {!authLoading && !isSeller && !isAdmin && !isOem && (
+                                <button
+                                    onClick={() => go("/sell")}
+                                    className="w-full flex items-center px-4 h-12 rounded-lg border border-[#D2D2D7] text-[14px] font-semibold text-[#0A0A0B] hover:bg-black/[0.03] transition-colors"
+                                    data-testid="mobile-nav-sell"
+                                >
+                                    Sell on TonersCart
+                                </button>
+                            )}
+
+                            {/* Auth actions */}
+                            {!authLoading && !user && (
+                                <div className="space-y-2.5 pt-1">
+                                    <button
+                                        onClick={() => go("/login")}
+                                        className="w-full h-12 rounded-lg border border-[#D2D2D7] text-[14px] font-semibold text-[#0A0A0B] hover:bg-black/[0.03] transition-colors"
+                                        data-testid="mobile-login-btn"
+                                    >
+                                        Sign in
+                                    </button>
+                                    <button
+                                        onClick={() => go("/register")}
+                                        className="w-full h-12 rounded-lg text-[14px] font-semibold transition-transform active:scale-95"
+                                        style={{ background: "#FFC107", color: "#0A0A0B" }}
+                                        data-testid="mobile-register-btn"
+                                    >
+                                        Join free
+                                    </button>
+                                </div>
+                            )}
+
+                            {!authLoading && user && (
+                                <div className="space-y-2.5 pt-1">
+                                    <button
+                                        onClick={() => go(dashboardPath)}
+                                        className="w-full inline-flex items-center justify-center gap-2 h-12 rounded-lg border border-[#0A0A0B] text-[14px] font-semibold text-[#0A0A0B] hover:bg-black/[0.03] transition-colors"
+                                        data-testid="mobile-dashboard-btn"
+                                    >
+                                        <LayoutDashboard size={16} /> Dashboard
+                                    </button>
+                                    <button
+                                        onClick={handleLogout}
+                                        className="w-full inline-flex items-center justify-center gap-2 h-12 rounded-lg text-[14px] font-semibold text-red-600 border border-red-200 hover:bg-red-50 transition-colors"
+                                        data-testid="mobile-logout-btn"
+                                    >
+                                        <LogOut size={16} /> Log out
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {loggingOut && (
                 <div className="fixed inset-0 z-[3000] bg-[#0A0A0B]/70 backdrop-blur-sm flex items-center justify-center" role="alertdialog" aria-busy="true" data-testid="logout-overlay">

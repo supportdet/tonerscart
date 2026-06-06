@@ -38,6 +38,7 @@ from email_service import (
     email_order_delivered_support,
     email_dealer_suspended,
     email_dealer_unsuspended,
+    email_admin_reply,
     _commission_breakdown,
 )
 from ai_check import check_documents
@@ -1803,6 +1804,9 @@ async def update_order_status(order_id: str, payload: OrderStatusUpdate, user: d
                 raise
     else:
         sb_admin.table("orders").update(upd).eq("id", order_id).execute()
+        if user.get("role") == "admin":
+            _log_admin_action(user, "order_status_changed", "order", order_id,
+                              {"status": payload.status})
 
     # --- Side-effects: emails ---
     if payload.status == "shipped" and payload.tracking_number:
@@ -1912,6 +1916,8 @@ async def admin_approve(pending_id: str, user: dict = Depends(require_role("admi
         await email_application_approved(P)
     except Exception as e:
         logger.warning("approval email failed: %s", e)
+    _log_admin_action(user, "supplier_approved", "supplier", pending_id,
+                      {"business_name": P.get("business_name"), "seller_id": seller_id})
     return {"ok": True, "seller_id": seller_id}
 
 
@@ -1959,6 +1965,8 @@ async def admin_reject(pending_id: str, payload: RejectPayload, user: dict = Dep
         await email_application_rejected(p.data, reason)
     except Exception as e:
         logger.warning("rejection email failed: %s", e)
+    _log_admin_action(user, "supplier_rejected", "supplier", pending_id,
+                      {"business_name": p.data.get("business_name"), "reason": reason})
     return {"ok": True}
 
 
@@ -3161,31 +3169,110 @@ def admin_supplier_detail(supplier_id: str, user: dict = Depends(require_role("a
     s = sb_admin.table("suppliers").select("*").eq("id", supplier_id).maybe_single().execute()
     if not s or not s.data:
         raise HTTPException(404, "Supplier not found")
+    sup = dict(s.data)
     toners = sb_admin.table("listings").select("*").eq("supplier_id", supplier_id).order(
         "created_at", desc=True
     ).execute().data or []
     printers = sb_admin.table("printer_listings").select("*").eq("supplier_id", supplier_id).order(
         "created_at", desc=True
     ).execute().data or []
+    try:
+        papers = sb_admin.table("paper_listings").select("*").eq("supplier_id", supplier_id).order(
+            "created_at", desc=True
+        ).execute().data or []
+    except Exception:
+        papers = []
     orders = sb_admin.table("orders").select("*,listings(brand,model_number)").eq("supplier_id", supplier_id).order(
         "created_at", desc=True
     ).limit(500).execute().data or []
     for o in orders:
         L = o.pop("listings", None) or {}
-        o["brand"] = L.get("brand")
-        o["model_number"] = L.get("model_number")
-    gmv = sum(float(o.get("total") or 0) for o in orders)
+        o["brand"] = L.get("brand") or o.get("product_brand")
+        o["model_number"] = L.get("model_number") or o.get("product_model")
+
+    gmv = 0.0
+    commission_earned = 0.0
+    pending_payout = 0.0
+    _open = {"requested", "accepted", "shipped"}
+    for o in orders:
+        total = float(o.get("total") or 0)
+        c, p, _label = _commission_breakdown(total)
+        gmv += total
+        commission_earned += float(c)
+        if (o.get("status") or "") in _open:
+            pending_payout += float(p)
+
+    # Signed document links (5 min) for KYC / bank / ID proof
+    try:
+        documents = _signed_doc_urls(sup, ttl=300)
+    except Exception:
+        documents = {}
+
+    # Agreement acceptance (most recent of any type by this dealer's user)
+    agreements = []
+    if sup.get("user_id"):
+        try:
+            agreements = sb_admin.table("user_agreements").select("*").eq(
+                "user_id", sup["user_id"]
+            ).order("accepted_at", desc=True).execute().data or []
+        except Exception:
+            agreements = []
+
+    # Account email + registration date from users
+    if sup.get("user_id"):
+        try:
+            u = sb_admin.table("users").select("email,created_at,user_type,name").eq(
+                "id", sup["user_id"]
+            ).maybe_single().execute()
+            if u and u.data:
+                sup.setdefault("email", u.data.get("email"))
+                sup["account_email"] = u.data.get("email")
+                sup["registration_date"] = u.data.get("created_at")
+                sup["user_type"] = u.data.get("user_type")
+        except Exception:
+            pass
+
+    active_toners = len([t for t in toners if int(t.get("stock") or 0) > 0])
+    active_printers = len([p for p in printers if int(p.get("stock") or 0) > 0])
+    active_papers = len([p for p in papers if int(p.get("stock") or 0) > 0])
+
     return {
-        "supplier": s.data,
+        "supplier": sup,
         "toner_listings": toners,
         "printer_listings": printers,
+        "paper_listings": papers,
         "orders": orders,
+        "documents": documents,
+        "agreements": agreements,
         "stats": {
-            "listing_count": len(toners) + len(printers),
+            "listing_count": len(toners) + len(printers) + len(papers),
+            "active_listing_count": active_toners + active_printers + active_papers,
+            "toner_count": len(toners),
+            "printer_count": len(printers),
+            "paper_count": len(papers),
             "order_count": len(orders),
             "gmv": round(gmv, 2),
+            "commission_earned": round(commission_earned, 2),
+            "pending_payout": round(pending_payout, 2),
         },
     }
+
+
+class SupplierNotes(BaseModel):
+    admin_notes: str = ""
+
+
+@api.put("/admin/suppliers/{supplier_id}/notes")
+def admin_supplier_notes(supplier_id: str, payload: SupplierNotes,
+                         user: dict = Depends(require_role("admin"))):
+    try:
+        sb_admin.table("suppliers").update({"admin_notes": payload.admin_notes}).eq("id", supplier_id).execute()
+    except Exception as e:
+        if "admin_notes" in str(e):
+            raise HTTPException(503, "admin_notes column not migrated — run supabase_schema_admin_extras.sql") from e
+        raise
+    _log_admin_action(user, "dealer_notes_updated", "supplier", supplier_id)
+    return {"ok": True}
 
 
 class SupplierEdit(BaseModel):
@@ -3231,6 +3318,7 @@ async def admin_suspend_supplier(supplier_id: str, user: dict = Depends(require_
             asyncio.create_task(email_dealer_suspended(sd))
     except Exception as e:
         logger.warning("suspend email skipped: %s", e)
+    _log_admin_action(user, "dealer_suspended", "supplier", supplier_id)
     return {"ok": True, "is_suspended": True}
 
 
@@ -3248,18 +3336,21 @@ async def admin_unsuspend_supplier(supplier_id: str, user: dict = Depends(requir
             asyncio.create_task(email_dealer_unsuspended(sd))
     except Exception as e:
         logger.warning("unsuspend email skipped: %s", e)
+    _log_admin_action(user, "dealer_unsuspended", "supplier", supplier_id)
     return {"ok": True, "is_suspended": False}
 
 
 @api.delete("/admin/listings/{listing_id}")
 def admin_delete_listing(listing_id: str, user: dict = Depends(require_role("admin"))):
     sb_admin.table("listings").delete().eq("id", listing_id).execute()
+    _log_admin_action(user, "listing_deleted", "listing", listing_id)
     return {"ok": True}
 
 
 @api.delete("/admin/printers/{printer_id}")
 def admin_delete_printer(printer_id: str, user: dict = Depends(require_role("admin"))):
     sb_admin.table("printer_listings").delete().eq("id", printer_id).execute()
+    _log_admin_action(user, "printer_deleted", "printer", printer_id)
     return {"ok": True}
 
 
@@ -3602,10 +3693,12 @@ def admin_finance_summary(user: dict = Depends(require_role("admin"))):
 @api.get("/admin/finance/dealers")
 def admin_finance_dealers(user: dict = Depends(require_role("admin"))):
     orders = _orders_with_listings()
-    suppliers = sb_admin.table("suppliers").select("id,business_name,city").execute().data or []
+    suppliers = sb_admin.table("suppliers").select("id,business_name,city,seller_id").execute().data or []
     by_sid: dict = {s["id"]: {"id": s["id"], "name": s.get("business_name") or "—", "city": s.get("city") or "—",
-                                "orders": 0, "gmv": 0.0, "commission": 0.0, "payout": 0.0}
+                                "seller_id": s.get("seller_id"),
+                                "orders": 0, "gmv": 0.0, "commission": 0.0, "payout": 0.0, "pending_payout": 0.0}
                        for s in suppliers}
+    _open = {"requested", "accepted", "shipped"}
     for o in orders:
         sid = o.get("supplier_id")
         if not sid or sid not in by_sid:
@@ -3616,11 +3709,14 @@ def admin_finance_dealers(user: dict = Depends(require_role("admin"))):
         by_sid[sid]["gmv"] += total
         by_sid[sid]["commission"] += float(c)
         by_sid[sid]["payout"] += float(p)
+        if (o.get("status") or "") in _open:
+            by_sid[sid]["pending_payout"] += float(p)
     rows = [r for r in by_sid.values() if r["orders"] > 0]
     for r in rows:
         r["gmv"] = round(r["gmv"], 2)
         r["commission"] = round(r["commission"], 2)
         r["payout"] = round(r["payout"], 2)
+        r["pending_payout"] = round(r["pending_payout"], 2)
     rows.sort(key=lambda r: r["gmv"], reverse=True)
     return rows
 
@@ -3655,6 +3751,273 @@ def admin_finance_dealers_export(user: dict = Depends(require_role("admin"))):
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="tonerscart_dealer_payouts.csv"'},
     )
+
+
+# ===== Admin activity log =====================================================
+
+def _log_admin_action(admin: dict, action: str, entity_type: str = None,
+                      entity_id=None, details: dict = None):
+    """Best-effort admin audit log. Never raises (no-op if table missing)."""
+    try:
+        sb_admin.table("admin_activity_log").insert({
+            "admin_id": admin.get("id"),
+            "admin_email": admin.get("email"),
+            "action": action,
+            "entity_type": entity_type,
+            "entity_id": str(entity_id) if entity_id is not None else None,
+            "details": details or {},
+        }).execute()
+    except Exception as e:
+        logger.info("admin_activity_log skipped: %s", str(e)[:120])
+
+
+@api.get("/admin/activity-log")
+def admin_activity_log(limit: int = 200, user: dict = Depends(require_role("admin"))):
+    try:
+        rows = sb_admin.table("admin_activity_log").select("*").order(
+            "created_at", desc=True
+        ).limit(min(max(limit, 1), 500)).execute().data or []
+        return {"rows": rows, "migrated": True}
+    except Exception:
+        return {"rows": [], "migrated": False}
+
+
+# ===== Admin customers ========================================================
+
+@api.get("/admin/customers")
+def admin_customers(user: dict = Depends(require_role("admin"))):
+    """All buyers (role=customer) with order count + total spend."""
+    try:
+        users = sb_admin.table("users").select(
+            "id,name,email,phone,city,user_type,created_at"
+        ).eq("role", "customer").order("created_at", desc=True).execute().data or []
+    except Exception:
+        users = sb_admin.table("users").select(
+            "id,name,email,phone,city,role"
+        ).eq("role", "customer").execute().data or []
+    orders = sb_admin.table("orders").select("customer_id,total").execute().data or []
+    agg: dict = {}
+    for o in orders:
+        cid = o.get("customer_id")
+        if not cid:
+            continue
+        a = agg.setdefault(cid, {"orders": 0, "spend": 0.0})
+        a["orders"] += 1
+        a["spend"] += float(o.get("total") or 0)
+    for u in users:
+        a = agg.get(u["id"], {"orders": 0, "spend": 0.0})
+        u["order_count"] = a["orders"]
+        u["total_spend"] = round(a["spend"], 2)
+    return users
+
+
+@api.get("/admin/customers/{customer_id}")
+def admin_customer_detail(customer_id: str, user: dict = Depends(require_role("admin"))):
+    u = sb_admin.table("users").select("*").eq("id", customer_id).maybe_single().execute()
+    if not u or not u.data:
+        raise HTTPException(404, "Customer not found")
+    orders = sb_admin.table("orders").select("*,listings(brand,model_number)").eq(
+        "customer_id", customer_id
+    ).order("created_at", desc=True).limit(300).execute().data or []
+    for o in orders:
+        L = o.pop("listings", None) or {}
+        o["brand"] = L.get("brand") or o.get("product_brand")
+        o["model_number"] = L.get("model_number") or o.get("product_model")
+    try:
+        agreements = sb_admin.table("user_agreements").select("*").eq(
+            "user_id", customer_id
+        ).order("accepted_at", desc=True).execute().data or []
+    except Exception:
+        agreements = []
+    spend = round(sum(float(o.get("total") or 0) for o in orders), 2)
+    return {
+        "customer": u.data,
+        "orders": orders,
+        "agreements": agreements,
+        "stats": {"order_count": len(orders), "total_spend": spend},
+    }
+
+
+# ===== Admin finance — procurement dues =======================================
+
+@api.get("/admin/finance/procurement-dues")
+def admin_procurement_dues(user: dict = Depends(require_role("admin"))):
+    """Procurement accounts that owe money (credit_used > 0)."""
+    try:
+        rows = sb_admin.table("procurement_users").select(
+            "id,org_name,name,email,type,credit_limit,credit_used,status"
+        ).execute().data or []
+    except Exception:
+        return {"rows": [], "migrated": False}
+    out = []
+    for r in rows:
+        used = float(r.get("credit_used") or 0)
+        if used <= 0:
+            continue
+        limit_v = float(r.get("credit_limit") or 0)
+        out.append({
+            "id": r.get("id"),
+            "org_name": r.get("org_name"),
+            "name": r.get("name"),
+            "email": r.get("email"),
+            "type": r.get("type"),
+            "credit_limit": round(limit_v, 2),
+            "owed": round(used, 2),
+            "available": round(limit_v - used, 2),
+        })
+    out.sort(key=lambda x: x["owed"], reverse=True)
+    return {"rows": out, "migrated": True}
+
+
+# ===== Admin order disputes ===================================================
+
+_DISPUTE_COLS = ["is_flagged", "dispute_status", "dispute_notes", "flagged_at", "flagged_by"]
+
+
+def _update_order_dispute_cols(order_id: str, upd: dict):
+    """Update dispute columns, dropping any that aren't migrated yet.
+    Raises 503 if NONE of the dispute columns exist."""
+    p = dict(upd)
+    for _ in range(len(_DISPUTE_COLS) + 2):
+        if not p:
+            raise HTTPException(503, "Dispute columns not migrated — run supabase_schema_admin_extras.sql")
+        try:
+            sb_admin.table("orders").update(p).eq("id", order_id).execute()
+            return
+        except Exception as e:
+            msg = str(e).lower()
+            dropped = False
+            for c in _DISPUTE_COLS:
+                if c in p and c in msg:
+                    p.pop(c, None)
+                    dropped = True
+                    break
+            if not dropped:
+                raise
+    raise HTTPException(503, "Dispute columns not migrated — run supabase_schema_admin_extras.sql")
+
+
+class OrderFlag(BaseModel):
+    flag: bool = True
+
+
+@api.post("/admin/orders/{order_id}/flag")
+def admin_flag_order(order_id: str, payload: OrderFlag, user: dict = Depends(require_role("admin"))):
+    o = sb_admin.table("orders").select("id").eq("id", order_id).maybe_single().execute()
+    if not o or not o.data:
+        raise HTTPException(404, "Order not found")
+    if payload.flag:
+        upd = {
+            "is_flagged": True,
+            "dispute_status": "open",
+            "flagged_at": datetime.now(timezone.utc).isoformat(),
+            "flagged_by": user["id"],
+        }
+    else:
+        upd = {"is_flagged": False, "dispute_status": None}
+    _update_order_dispute_cols(order_id, upd)
+    _log_admin_action(user, "order_flagged" if payload.flag else "order_unflagged", "order", order_id)
+    return {"ok": True, "is_flagged": payload.flag}
+
+
+class DisputeUpdate(BaseModel):
+    dispute_status: Optional[str] = None  # open | investigating | resolved
+    dispute_notes: Optional[str] = None
+
+
+@api.put("/admin/orders/{order_id}/dispute")
+def admin_update_dispute(order_id: str, payload: DisputeUpdate, user: dict = Depends(require_role("admin"))):
+    upd: dict = {}
+    if payload.dispute_status is not None:
+        if payload.dispute_status not in ("open", "investigating", "resolved"):
+            raise HTTPException(400, "Invalid dispute_status")
+        upd["dispute_status"] = payload.dispute_status
+    if payload.dispute_notes is not None:
+        upd["dispute_notes"] = payload.dispute_notes
+    if not upd:
+        return {"ok": True}
+    _update_order_dispute_cols(order_id, upd)
+    _log_admin_action(user, "dispute_updated", "order", order_id, {"status": payload.dispute_status})
+    return {"ok": True}
+
+
+@api.get("/admin/disputes")
+def admin_disputes(user: dict = Depends(require_role("admin"))):
+    try:
+        rows = sb_admin.table("orders").select("*,listings(brand,model_number)").eq(
+            "is_flagged", True
+        ).order("flagged_at", desc=True).execute().data or []
+    except Exception as e:
+        if "is_flagged" in str(e) or "flagged_at" in str(e) or "column" in str(e).lower():
+            return {"rows": [], "migrated": False}
+        raise
+    suppliers = sb_admin.table("suppliers").select("id,business_name").execute().data or []
+    sup_map = {s["id"]: s.get("business_name") for s in suppliers}
+    for r in rows:
+        L = r.pop("listings", None) or {}
+        r["brand"] = L.get("brand") or r.get("product_brand")
+        r["model_number"] = L.get("model_number") or r.get("product_model")
+        r["supplier_name"] = sup_map.get(r.get("supplier_id")) or "—"
+        c, p, lbl = _commission_breakdown(r.get("total") or 0)
+        r["commission"] = c
+        r["payout"] = p
+    return {"rows": rows, "migrated": True}
+
+
+# ===== Admin messages (contact-form submissions) ==============================
+
+@api.get("/admin/messages")
+def admin_messages(limit: int = 300, user: dict = Depends(require_role("admin"))):
+    rows = sb_admin.table("mps_inquiries").select("*").order(
+        "created_at", desc=True
+    ).limit(min(max(limit, 1), 1000)).execute().data or []
+    for r in rows:
+        sel = r.get("selections") or {}
+        if isinstance(sel, dict):
+            r["company"] = sel.get("company") or sel.get("company_name") or sel.get("organisation")
+            r["msg_type"] = sel.get("type")
+        if "is_read" not in r:
+            r["is_read"] = False
+    unread = sum(1 for r in rows if not r.get("is_read"))
+    return {"rows": rows, "unread": unread}
+
+
+class MessageRead(BaseModel):
+    is_read: bool = True
+
+
+@api.put("/admin/messages/{msg_id}/read")
+def admin_message_read(msg_id: str, payload: MessageRead, user: dict = Depends(require_role("admin"))):
+    try:
+        sb_admin.table("mps_inquiries").update({"is_read": payload.is_read}).eq("id", msg_id).execute()
+    except Exception as e:
+        if "is_read" in str(e):
+            raise HTTPException(503, "is_read column not migrated — run supabase_schema_admin_extras.sql") from e
+        raise
+    return {"ok": True, "is_read": payload.is_read}
+
+
+class MessageReply(BaseModel):
+    subject: str = Field(min_length=1)
+    message: str = Field(min_length=1)
+
+
+@api.post("/admin/messages/{msg_id}/reply")
+async def admin_message_reply(msg_id: str, payload: MessageReply, user: dict = Depends(require_role("admin"))):
+    m = sb_admin.table("mps_inquiries").select("*").eq("id", msg_id).maybe_single().execute()
+    if not m or not m.data:
+        raise HTTPException(404, "Message not found")
+    to = m.data.get("email")
+    if not to:
+        raise HTTPException(400, "This message has no email address to reply to")
+    sent = await email_admin_reply(to, payload.subject, payload.message, m.data.get("name"))
+    _log_admin_action(user, "message_replied", "message", msg_id, {"to": to})
+    try:
+        sb_admin.table("mps_inquiries").update({"is_read": True}).eq("id", msg_id).execute()
+    except Exception:
+        pass
+    return {"ok": True, "sent": sent}
+
 
 
 @api.get("/supplier/earnings")
