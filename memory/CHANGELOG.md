@@ -1,3 +1,11 @@
+### 2026-06 — Sequential Seller IDs (TC-DLR-YYYY-NNNN) — frontend display completed
+
+- Backend was already complete (prev session): `_generate_seller_id()` assigns `TC-DLR-{year}-{NNNN}` on admin approval, `/auth/me` returns `supplier.seller_id`, `POST /api/admin/seller-ids/backfill` retro-assigns IDs to existing approved dealers, email templates (`email_application_approved`, `email_order_placed`) render the Seller ID, and migration `supabase_schema_seller_id.sql` adds the `seller_id` columns + unique indexes on `users`/`suppliers`.
+- **Frontend display added this session** (the only missing piece):
+  - **Dealer Dashboard** (`SupplierDashboard.jsx`): Seller ID chip rendered under the business name (yellow mono badge; shows italic "Pending" when not yet assigned). `data-testid="supplier-seller-id"`.
+  - **Admin → Dealers** (`DealersTab.jsx`): new "Seller ID" column in the dealers table (`dealer-seller-id-{id}`) + Seller ID badge in the dealer detail drawer (`drawer-seller-id`). Both degrade gracefully to "Pending".
+- **ACTION REQUIRED (user, in Supabase SQL editor):** run `supabase_schema_seller_id.sql`, then call `POST /api/admin/seller-ids/backfill` (as admin) once to assign IDs to already-approved dealers. Until then, all surfaces show "Pending" (no errors).
+
 ### 2026-06 — Navbar reorder · dealer storefront · new commission model · seller bank details
 
 - **Navbar order**: MPS/Rentals moved next to Printers; Papers moved after Scanners → Toners · Printers · MPS · Consumables · Scanners · Papers · Bulk · D2D · OEM · Govt.
