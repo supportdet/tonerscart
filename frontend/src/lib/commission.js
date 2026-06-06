@@ -1,27 +1,24 @@
 // Commission utility — shared by Add Toner, Add Printer, Calculator, Order Detail.
-// Tiers per TonersCart commercial policy (2026):
-//   Under ₹10,000        → 10%
-//   ₹10,000 – ₹25,000    → 8%
-//   ₹25,000 – ₹75,000    → 6%
-//   ₹75,000 – ₹1,50,000  → 4%
-//   Above ₹1,50,000      → deal basis (returns null → caller shows "Contact team")
+// Tiers per TonersCart commercial policy (2026), charged on the order BILL VALUE
+// EXCLUDING GST / taxes, and deducted from the seller's payout:
+//   Under ₹15,000        → 12%
+//   ₹15,000 – ₹30,000    → 10%
+//   ₹30,000 – ₹75,000    → 8%
+//   ₹75,000 – ₹1,00,000  → 6%
+//   ₹1,00,000 & above    → 5%
 
 export const COMMISSION_TIERS = [
-    { id: "tier1", upTo: 10000,  rate: 0.10, label: "Under ₹10,000",       rateLabel: "10%" },
-    { id: "tier2", upTo: 25000,  rate: 0.08, label: "₹10,000 – ₹25,000",   rateLabel: "8%" },
-    { id: "tier3", upTo: 75000,  rate: 0.06, label: "₹25,000 – ₹75,000",   rateLabel: "6%" },
-    { id: "tier4", upTo: 150000, rate: 0.04, label: "₹75,000 – ₹1,50,000", rateLabel: "4%" },
-    { id: "tier5", upTo: Infinity, rate: null, label: "Above ₹1,50,000",    rateLabel: "Deal basis" },
+    { id: "tier1", upTo: 15000,    rate: 0.12, label: "Under ₹15,000",        rateLabel: "12%" },
+    { id: "tier2", upTo: 30000,    rate: 0.10, label: "₹15,000 – ₹30,000",    rateLabel: "10%" },
+    { id: "tier3", upTo: 75000,    rate: 0.08, label: "₹30,000 – ₹75,000",    rateLabel: "8%" },
+    { id: "tier4", upTo: 100000,   rate: 0.06, label: "₹75,000 – ₹1,00,000",  rateLabel: "6%" },
+    { id: "tier5", upTo: Infinity, rate: 0.05, label: "₹1,00,000 & above",     rateLabel: "5%" },
 ];
 
 export function commissionFor(price) {
     const p = Number(price) || 0;
     if (p <= 0) return null;
-    const tier = COMMISSION_TIERS.find((t) => p <= t.upTo);
-    if (!tier) return null;
-    if (tier.rate === null) {
-        return { price: p, rate: null, rateLabel: tier.rateLabel, commission: null, payout: null, tier };
-    }
+    const tier = COMMISSION_TIERS.find((t) => p < t.upTo) || COMMISSION_TIERS[COMMISSION_TIERS.length - 1];
     const commission = Math.round(p * tier.rate);
     return {
         price: p,
@@ -34,4 +31,7 @@ export function commissionFor(price) {
 }
 
 export const COMMISSION_BANNER_TEXT =
-    "TonersCart commission: orders under ₹10K = 10% · ₹10K–₹25K = 8% · ₹25K–₹75K = 6% · ₹75K–₹1.5L = 4% · above ₹1.5L = deal basis. Set your price so your desired margin is after commission.";
+    "TonersCart commission (on bill value, excluding GST): under ₹15K = 12% · ₹15K–₹30K = 10% · ₹30K–₹75K = 8% · ₹75K–₹1L = 6% · ₹1L & above = 5%.";
+
+export const COMMISSION_PAYOUT_NOTE =
+    "The price you set is the final price buyers pay. Our commission is deducted from your payout based on the order value — you keep the rest.";

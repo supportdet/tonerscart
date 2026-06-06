@@ -645,22 +645,23 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
 # ===== Order notifications =====================================================
 
 _COMMISSION_TIERS = [
-    (10000,  0.10),
-    (25000,  0.08),
-    (75000,  0.06),
-    (150000, 0.04),
+    (15000,  0.12),
+    (30000,  0.10),
+    (75000,  0.08),
+    (100000, 0.06),
 ]
 
 
 def _commission_breakdown(total: float) -> tuple[float, float, str]:
     """Return (commission ₹, payout ₹, rateLabel) — matches frontend rules.
-    For orders above ₹1.5 L returns (None-like 0.0, total, 'Deal basis')."""
+    Charged on bill value excluding GST; ₹1,00,000 and above is a flat 5%."""
     t = float(total or 0)
     for cap, rate in _COMMISSION_TIERS:
-        if t <= cap:
+        if t < cap:
             c = round(t * rate)
             return c, t - c, f"{int(rate * 100)}%"
-    return 0.0, t, "Deal basis"
+    c = round(t * 0.05)
+    return c, t - c, "5%"
 
 
 def _money(n) -> str:

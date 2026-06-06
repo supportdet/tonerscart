@@ -7,7 +7,6 @@ import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { Skeleton } from "../components/ui/skeleton";
 import PageMeta from "../components/PageMeta";
-import OrderRequestDialog from "../components/OrderRequestDialog";
 import DealEnquiryDialog from "../components/DealEnquiryDialog";
 import AuthRequiredDialog from "../components/AuthRequiredDialog";
 import VerifiedBadge from "../components/VerifiedBadge";
@@ -27,20 +26,25 @@ export default function ProductDetail({ kind = "toner" }) {
     const [selectedVariant, setSelectedVariant] = useState(null);
     const [qty, setQty] = useState(1);
     const [activeImg, setActiveImg] = useState(0);
-    const [orderDialog, setOrderDialog] = useState(false);
     const [dealDialog, setDealDialog] = useState(false);
-    const [authDialog, setAuthDialog] = useState(null); // {intent: 'buy'|'cart'|'quote'}
+    const [authDialog, setAuthDialog] = useState(null); // {intent: 'cart'|'quote'}
     const [quoting, setQuoting] = useState(false);
 
     const endpoint = kind === "printer" ? `/printers/${id}/public` : kind === "paper" ? `/papers/${id}/public` : kind === "consumable" ? `/consumables/${id}/public` : `/listings/${id}/public`;
 
     useEffect(() => {
         let alive = true;
-        setLoading(true);
-        api.get(endpoint)
-            .then((r) => { if (alive) { setData(r.data); setActiveImg(0); setSelectedVariant((r.data?.variants?.[0]) || null); } })
-            .catch((e) => { toast.error(formatApiError(e)); })
-            .finally(() => { if (alive) setLoading(false); });
+        (async () => {
+            setLoading(true);
+            try {
+                const r = await api.get(endpoint);
+                if (alive) { setData(r.data); setActiveImg(0); setSelectedVariant((r.data?.variants?.[0]) || null); }
+            } catch (e) {
+                toast.error(formatApiError(e));
+            } finally {
+                if (alive) setLoading(false);
+            }
+        })();
         return () => { alive = false; };
     }, [id, endpoint]);
 
@@ -123,8 +127,8 @@ export default function ProductDetail({ kind = "toner" }) {
 
     const onBuyNow = () => {
         if (displayStock <= 0) { toast.error("Out of stock"); return; }
-        if (!requireAuth("buy")) return;
-        setOrderDialog(true);
+        onAddToCart();
+        navigate("/checkout");
     };
 
     const onQuotation = async () => {
@@ -145,12 +149,12 @@ export default function ProductDetail({ kind = "toner" }) {
     useEffect(() => {
         if (!user || !authDialog) return;
         const intent = authDialog.intent;
-        setAuthDialog(null);
-        setTimeout(() => {
-            if (intent === "buy")  setOrderDialog(true);
+        const t = setTimeout(() => {
+            setAuthDialog(null);
             if (intent === "cart") onAddToCart();
             if (intent === "quote") onQuotation();
         }, 80);
+        return () => clearTimeout(t);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user]);
 
@@ -373,27 +377,6 @@ export default function ProductDetail({ kind = "toner" }) {
                     </div>
                 </div>
             </div>
-
-            {orderDialog && (
-                <OrderRequestDialog
-                    onClose={() => setOrderDialog(false)}
-                    product={data ? {
-                        id: data.id,
-                        price: displayPrice,
-                        stock: displayStock,
-                        brand: data.brand,
-                        model_number: data.model_number || data.name,
-                        color: selectedVariant?.color || data.color,
-                        toner_type: data.toner_type,
-                        image_url: images[0] || data.image_url,
-                        supplier_name: data.supplier_name,
-                        supplier_city: data.supplier_city,
-                        variant_id: selectedVariant?.id || null,
-                        kind,
-                    } : null}
-                    initialQty={qty}
-                />
-            )}
 
             {dealDialog && (
                 <DealEnquiryDialog

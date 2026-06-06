@@ -18,7 +18,7 @@ const INDIAN_STATES = [
     "Andaman and Nicobar Islands","Chandigarh","Dadra and Nagar Haveli and Daman and Diu","Delhi","Jammu and Kashmir","Ladakh","Lakshadweep","Puducherry"
 ];
 const TURNOVER = ["< ₹10 Lakh", "₹10 – 50 Lakh", "₹50 Lakh – 2 Cr", "₹2 – 10 Cr", "₹10 Cr+"];
-const SELLER_TYPES = ["Original", "Compatible", "Refilled"];
+const SELLER_TYPES = ["Original", "Compatible"];
 const COMMON_BRANDS = ["HP", "Canon", "Brother", "Samsung", "Ricoh", "Epson", "Xerox", "Kyocera"];
 
 // Indian format validators
@@ -80,6 +80,11 @@ export default function SellerApplicationForm() {
         seller_types: [],
         compatible_brands: [],
         testing_before_delivery: false,
+        account_holder_name: "",
+        account_number: "",
+        ifsc_code: "",
+        bank_name: "",
+        bank_branch: "",
     });
     const [agreed, setAgreed] = useState(false);
     const updS = (k) => (e) => setS({ ...s, [k]: e.target.value });
@@ -90,19 +95,17 @@ export default function SellerApplicationForm() {
         gst: null,
         pan: null,
         bank_proof: null,
+        id_proof: null,
         address_proof: null,
     });
 
     const toggleSellerType = (t) => {
-        setS((prev) => {
-            const exists = prev.seller_types.includes(t);
-            const next = exists ? prev.seller_types.filter((x) => x !== t) : [...prev.seller_types, t];
-            if (!exists && next.length > 2) {
-                toast.error("Choose up to two seller types");
-                return prev;
-            }
-            return { ...prev, seller_types: next };
-        });
+        setS((prev) => ({
+            ...prev,
+            seller_types: prev.seller_types.includes(t)
+                ? prev.seller_types.filter((x) => x !== t)
+                : [...prev.seller_types, t],
+        }));
     };
 
     const toggleCompatBrand = (b) => {
@@ -131,6 +134,11 @@ export default function SellerApplicationForm() {
             if (!PAN_RE.test(s.pan_number.trim().toUpperCase())) return false;
             if (!s.annual_turnover) return false;
             if (!s.years_in_business || parseInt(s.years_in_business, 10) < 0) return false;
+            if (!s.account_holder_name.trim()) return false;
+            if (!/^\d{6,18}$/.test(s.account_number.trim())) return false;
+            if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(s.ifsc_code.trim().toUpperCase())) return false;
+            if (!s.bank_name.trim()) return false;
+            if (!s.bank_branch.trim()) return false;
             return true;
         }
         if (step === 3) {
@@ -145,10 +153,9 @@ export default function SellerApplicationForm() {
 
     const allDocsValid = () => {
         // Always-required documents
-        if (!docs.gst || !docs.pan || !docs.bank_proof || !docs.address_proof) return false;
+        if (!docs.gst || !docs.pan || !docs.bank_proof || !docs.id_proof || !docs.address_proof) return false;
         // Conditional documents based on seller types
         if (s.seller_types.includes("Original") && !docs.brand_authorization) return false;
-        if (s.seller_types.includes("Refilled") && !docs.shop_photo) return false;
         return true;
     };
 
@@ -179,6 +186,7 @@ export default function SellerApplicationForm() {
                 doc_gst: "",
                 doc_pan: "",
                 doc_bank_proof: "",
+                doc_id_proof: "",
                 doc_address_proof: "",
                 agreed_to_terms: agreed,
             });
@@ -191,6 +199,7 @@ export default function SellerApplicationForm() {
                 doc_gst: docs.gst,
                 doc_pan: docs.pan,
                 doc_bank_proof: docs.bank_proof,
+                doc_id_proof: docs.id_proof,
                 doc_address_proof: docs.address_proof,
             };
             for (const [field, file] of Object.entries(docMap)) {
@@ -308,6 +317,16 @@ export default function SellerApplicationForm() {
                     </div>
                     <div><Label>Years in business<span className="text-red-500"> *</span></Label><Input type="number" min="0" max="100" value={s.years_in_business} onChange={updS("years_in_business")} required data-testid="apply-years" /></div>
                     <div className="sm:col-span-2"><Label>Business address<span className="text-red-500"> *</span></Label><Textarea rows={2} value={s.business_address} onChange={updS("business_address")} required data-testid="apply-address" /></div>
+
+                    <div className="sm:col-span-2 mt-2 pt-4 border-t border-black/[0.06]">
+                        <div className="text-[14px] text-[#0A0A0B] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>Bank account for payouts</div>
+                        <p className="text-[12.5px] text-[#6E6E73] mt-0.5">These details are used to <strong>send your payouts</strong> for completed orders. The account holder name must match your business name.</p>
+                    </div>
+                    <div className="sm:col-span-2"><Label>Account holder name<span className="text-red-500"> *</span> <span className="text-[#86868B] font-normal">(must match business name)</span></Label><Input value={s.account_holder_name} onChange={updS("account_holder_name")} required data-testid="apply-acct-holder" /></div>
+                    <div><Label>Account number<span className="text-red-500"> *</span></Label><Input value={s.account_number} onChange={(e) => setS({ ...s, account_number: e.target.value.replace(/\D/g, "").slice(0, 18) })} inputMode="numeric" placeholder="Bank account number" required data-testid="apply-acct-number" /></div>
+                    <div><Label>IFSC code<span className="text-red-500"> *</span></Label><Input value={s.ifsc_code} onChange={(e) => setS({ ...s, ifsc_code: e.target.value.toUpperCase().slice(0, 11) })} placeholder="HDFC0001234" maxLength={11} required data-testid="apply-ifsc" /></div>
+                    <div><Label>Bank name<span className="text-red-500"> *</span></Label><Input value={s.bank_name} onChange={updS("bank_name")} placeholder="e.g. HDFC Bank" required data-testid="apply-bank-name" /></div>
+                    <div><Label>Branch<span className="text-red-500"> *</span></Label><Input value={s.bank_branch} onChange={updS("bank_branch")} placeholder="e.g. MG Road, Bangalore" required data-testid="apply-bank-branch" /></div>
                 </div>
             )}
 
@@ -346,15 +365,15 @@ export default function SellerApplicationForm() {
                     </div>
 
                     <div>
-                        <Label>What kind of seller are you? <span className="text-[#86868B] font-normal">(choose up to 2)</span></Label>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
+                        <Label>What kind of seller are you? <span className="text-[#86868B] font-normal">(select all that apply)</span></Label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
                             {SELLER_TYPES.map((t) => (
                                 <button key={t} type="button" onClick={() => toggleSellerType(t)}
-                                    className={`p-4 rounded-lg border text-left transition ${s.seller_types.includes(t) ? "border-[#0A0A0B] bg-[#0A0A0B] text-white" : "border-[#D2D2D7] bg-white text-[#1D1D1F] hover:border-[#86868B]"}`}
+                                    className={`p-4 rounded-lg border text-left transition ${s.seller_types.includes(t) ? "border-[#F5C400] bg-[#FFFBEB] text-[#0A0A0B]" : "border-[#D2D2D7] bg-white text-[#1D1D1F] hover:border-[#86868B]"}`}
                                     data-testid={`seller-type-${t}`}>
                                     <div className="text-[14px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>{t}</div>
                                     <div className="text-[11.5px] mt-1 opacity-80">
-                                        {t === "Original" ? "Genuine OEM cartridges" : t === "Compatible" ? "Third-party compatibles" : "Refilled / locally made"}
+                                        {t === "Original" ? "Genuine OEM cartridges" : "Third-party compatibles"}
                                     </div>
                                 </button>
                             ))}
@@ -373,16 +392,6 @@ export default function SellerApplicationForm() {
                             </div>
                         </div>
                     )}
-
-                    {s.seller_types.includes("Refilled") && (
-                        <label className="flex items-start gap-3 p-3 rounded-lg border border-[#D2D2D7] bg-white cursor-pointer">
-                            <input type="checkbox" checked={s.testing_before_delivery} onChange={(e) => setS({ ...s, testing_before_delivery: e.target.checked })} className="mt-1" data-testid="testing-before-delivery" />
-                            <div>
-                                <div className="text-[13px] font-semibold text-[#0A0A0B]">I test every refilled cartridge before delivery</div>
-                                <div className="text-[11.5px] text-[#6E6E73] mt-0.5">Helps buyers trust your refilled stock.</div>
-                            </div>
-                        </label>
-                    )}
                 </div>
             )}
 
@@ -399,8 +408,8 @@ export default function SellerApplicationForm() {
                         <ul className="space-y-1.5 text-[13.5px]" style={{ fontFamily: "'Inter', sans-serif" }}>
                             <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>GST Certificate</strong> <span className="text-white/55">(required)</span></span></li>
                             <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>PAN Card</strong> <span className="text-white/55">(required)</span></span></li>
-                            <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>Shop / Office Photo</strong> <span className="text-white/55">(required for Refilled sellers)</span></span></li>
-                            <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>Cancelled Cheque or Bank Passbook</strong> <span className="text-white/55">(required)</span></span></li>
+                            <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>ID Proof — Aadhaar / Passport</strong> <span className="text-white/55">(required)</span></span></li>
+                            <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>Cancelled Cheque</strong> <span className="text-white/55">(proof of your payout bank account)</span></span></li>
                             <li className="flex items-start gap-2"><CircleDashed size={14} className="text-amber-400 mt-0.5 shrink-0" /><span><strong>Brand Authorization Letter</strong> <span className="text-white/55">(required only for Original OEM sellers)</span></span></li>
                             <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>Address Proof</strong> <span className="text-white/55">(utility bill / rent agreement)</span></span></li>
                         </ul>
@@ -411,15 +420,13 @@ export default function SellerApplicationForm() {
                         <FileSlot label="Brand Authorization Letter *" hint="Required for Original (OEM) sellers" file={docs.brand_authorization}
                             setFile={(f) => setDocs({ ...docs, brand_authorization: f })} testid="doc-brand-authorization" />
                     )}
-                    {s.seller_types.includes("Refilled") && (
-                        <FileSlot label="Shop / Workshop photo *" hint="Required for Refilled sellers" file={docs.shop_photo}
-                            setFile={(f) => setDocs({ ...docs, shop_photo: f })} testid="doc-shop-photo" />
-                    )}
                     <FileSlot label="GST certificate *" hint="Required" file={docs.gst}
                         setFile={(f) => setDocs({ ...docs, gst: f })} testid="doc-gst" />
                     <FileSlot label="PAN card *" hint="Required" file={docs.pan}
                         setFile={(f) => setDocs({ ...docs, pan: f })} testid="doc-pan" />
-                    <FileSlot label="Bank proof *" hint="Cancelled cheque / passbook" file={docs.bank_proof}
+                    <FileSlot label="ID proof — Aadhaar / Passport *" hint="Government photo ID of the owner" file={docs.id_proof}
+                        setFile={(f) => setDocs({ ...docs, id_proof: f })} testid="doc-id-proof" />
+                    <FileSlot label="Cancelled cheque *" hint="Proof of the payout bank account — name must match account holder" file={docs.bank_proof}
                         setFile={(f) => setDocs({ ...docs, bank_proof: f })} testid="doc-bank-proof" />
                     <FileSlot label="Address proof *" hint="Utility bill / rent agreement" file={docs.address_proof}
                         setFile={(f) => setDocs({ ...docs, address_proof: f })} testid="doc-address-proof" />
