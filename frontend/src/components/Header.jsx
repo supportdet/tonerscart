@@ -233,18 +233,39 @@ export default function Header() {
                         )}
                     </div>
 
-                    {/* ===== Mobile hamburger (<768px) ===== */}
-                    <button
-                        onClick={() => setMobileOpen(true)}
-                        className="md:hidden relative w-11 h-11 grid place-items-center rounded-lg text-[#0A0A0B] hover:bg-black/[0.04] transition-colors shrink-0"
-                        aria-label="Open menu"
-                        data-testid="header-mobile-menu-btn"
-                    >
-                        <Menu size={22} />
-                        {cartCount > 0 && (
-                            <span className="absolute top-1 right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-[#E6007E] text-white text-[9px] font-bold grid place-items-center">{cartCount}</span>
+                    {/* ===== Mobile right cluster (<768px): cart + sign-in stay outside; hamburger for the rest ===== */}
+                    <div className="md:hidden flex items-center gap-0.5 shrink-0">
+                        {!isAdmin && !isOem && (
+                            <button
+                                onClick={() => navigate("/cart")}
+                                className="relative w-10 h-10 grid place-items-center rounded-lg text-[#0A0A0B] hover:bg-black/[0.04] transition-colors"
+                                aria-label="Cart"
+                                data-testid="header-cart-btn-mobile"
+                            >
+                                <ShoppingCart size={18} />
+                                {cartCount > 0 && (
+                                    <span className="absolute top-0.5 right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-[#E6007E] text-white text-[9px] font-bold grid place-items-center">{cartCount}</span>
+                                )}
+                            </button>
                         )}
-                    </button>
+                        {!authLoading && !user && (
+                            <button
+                                onClick={() => navigate("/login")}
+                                className="text-[13px] font-semibold px-2.5 h-9 rounded-lg text-[#0A0A0B] hover:bg-black/[0.04] transition-colors"
+                                data-testid="header-login-btn-mobile"
+                            >
+                                Sign in
+                            </button>
+                        )}
+                        <button
+                            onClick={() => setMobileOpen(true)}
+                            className="w-11 h-11 grid place-items-center rounded-lg text-[#0A0A0B] hover:bg-black/[0.04] transition-colors"
+                            aria-label="Open menu"
+                            data-testid="header-mobile-menu-btn"
+                        >
+                            <Menu size={22} />
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -267,106 +288,91 @@ export default function Header() {
                 </div>
             </nav>
 
-            {/* ===== Mobile slide-in drawer ===== */}
-            {mobileOpen && (
-                <div className="md:hidden fixed inset-0 z-[2000]" data-testid="mobile-menu-overlay">
-                    <button
-                        className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
-                        aria-label="Close menu"
-                        onClick={() => setMobileOpen(false)}
-                    />
-                    <div className="absolute right-0 top-0 h-full w-[82%] max-w-[320px] bg-white shadow-2xl flex flex-col animate-[tc-step-fwd_0.2s_ease]" data-testid="mobile-menu-panel">
-                        <div className="flex items-center justify-between px-4 h-16 border-b border-[#E8E8EC]">
-                            <span className="text-[11px] tracking-[0.2em] uppercase font-semibold text-[#86868B]">Menu</span>
-                            <button onClick={() => setMobileOpen(false)} className="w-10 h-10 grid place-items-center rounded-lg hover:bg-black/[0.04]" aria-label="Close" data-testid="mobile-menu-close">
-                                <X size={20} />
-                            </button>
-                        </div>
+            {/* ===== Mobile slide-in drawer (always mounted → smooth open/close) ===== */}
+            <div
+                className={`md:hidden fixed inset-0 z-[2000] ${mobileOpen ? "" : "pointer-events-none"}`}
+                data-testid="mobile-menu-overlay"
+                aria-hidden={!mobileOpen}
+            >
+                <button
+                    className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${mobileOpen ? "opacity-100" : "opacity-0"}`}
+                    aria-label="Close menu"
+                    tabIndex={mobileOpen ? 0 : -1}
+                    onClick={() => setMobileOpen(false)}
+                />
+                <div
+                    className={`absolute right-0 top-0 h-full w-[82%] max-w-[320px] bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-out will-change-transform ${mobileOpen ? "translate-x-0" : "translate-x-full"}`}
+                    data-testid="mobile-menu-panel"
+                >
+                    <div className="flex items-center justify-between px-4 h-16 border-b border-[#E8E8EC]">
+                        <span className="text-[11px] tracking-[0.2em] uppercase font-semibold text-[#86868B]">Menu</span>
+                        <button onClick={() => setMobileOpen(false)} className="w-10 h-10 grid place-items-center rounded-lg hover:bg-black/[0.04]" aria-label="Close" data-testid="mobile-menu-close">
+                            <X size={20} />
+                        </button>
+                    </div>
 
-                        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
-                            {/* Location */}
-                            <div>
-                                <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B] mb-1.5">Your city</div>
-                                <div className="relative">
-                                    <MapPin size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B]" />
-                                    <select
-                                        value={KNOWN_CITIES.includes(city) ? city : ""}
-                                        onChange={(e) => setCity(e.target.value)}
-                                        className="w-full h-11 pl-9 pr-3 rounded-lg border border-[#D2D2D7] bg-white text-[14px] font-medium text-[#0A0A0B]"
-                                        data-testid="mobile-city-select"
-                                    >
-                                        <option value="" disabled>Select your city</option>
-                                        {KNOWN_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                </div>
+                    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+                        {/* Location */}
+                        <div>
+                            <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B] mb-1.5">Your city</div>
+                            <div className="relative">
+                                <MapPin size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B]" />
+                                <select
+                                    value={KNOWN_CITIES.includes(city) ? city : ""}
+                                    onChange={(e) => setCity(e.target.value)}
+                                    className="w-full h-11 pl-9 pr-3 rounded-lg border border-[#D2D2D7] bg-white text-[14px] font-medium text-[#0A0A0B]"
+                                    data-testid="mobile-city-select"
+                                >
+                                    <option value="" disabled>Select your city</option>
+                                    {KNOWN_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                                </select>
                             </div>
-
-                            {/* Cart */}
-                            {!isAdmin && !isOem && (
-                                <button
-                                    onClick={() => go("/cart")}
-                                    className="w-full flex items-center justify-between px-4 h-12 rounded-lg border border-[#E5E5E7] hover:bg-black/[0.03] transition-colors"
-                                    data-testid="mobile-cart-btn"
-                                >
-                                    <span className="inline-flex items-center gap-2.5 text-[14px] font-semibold text-[#0A0A0B]"><ShoppingCart size={17} /> Cart</span>
-                                    {cartCount > 0 && <span className="min-w-[22px] h-[22px] px-1.5 rounded-full bg-[#E6007E] text-white text-[11px] font-bold grid place-items-center">{cartCount}</span>}
-                                </button>
-                            )}
-
-                            {/* Sell — only for guests / buyers */}
-                            {!authLoading && !isSeller && !isAdmin && !isOem && (
-                                <button
-                                    onClick={() => go("/sell")}
-                                    className="w-full flex items-center px-4 h-12 rounded-lg border border-[#D2D2D7] text-[14px] font-semibold text-[#0A0A0B] hover:bg-black/[0.03] transition-colors"
-                                    data-testid="mobile-nav-sell"
-                                >
-                                    Sell on TonersCart
-                                </button>
-                            )}
-
-                            {/* Auth actions */}
-                            {!authLoading && !user && (
-                                <div className="space-y-2.5 pt-1">
-                                    <button
-                                        onClick={() => go("/login")}
-                                        className="w-full h-12 rounded-lg border border-[#D2D2D7] text-[14px] font-semibold text-[#0A0A0B] hover:bg-black/[0.03] transition-colors"
-                                        data-testid="mobile-login-btn"
-                                    >
-                                        Sign in
-                                    </button>
-                                    <button
-                                        onClick={() => go("/register")}
-                                        className="w-full h-12 rounded-lg text-[14px] font-semibold transition-transform active:scale-95"
-                                        style={{ background: "#FFC107", color: "#0A0A0B" }}
-                                        data-testid="mobile-register-btn"
-                                    >
-                                        Join free
-                                    </button>
-                                </div>
-                            )}
-
-                            {!authLoading && user && (
-                                <div className="space-y-2.5 pt-1">
-                                    <button
-                                        onClick={() => go(dashboardPath)}
-                                        className="w-full inline-flex items-center justify-center gap-2 h-12 rounded-lg border border-[#0A0A0B] text-[14px] font-semibold text-[#0A0A0B] hover:bg-black/[0.03] transition-colors"
-                                        data-testid="mobile-dashboard-btn"
-                                    >
-                                        <LayoutDashboard size={16} /> Dashboard
-                                    </button>
-                                    <button
-                                        onClick={handleLogout}
-                                        className="w-full inline-flex items-center justify-center gap-2 h-12 rounded-lg text-[14px] font-semibold text-red-600 border border-red-200 hover:bg-red-50 transition-colors"
-                                        data-testid="mobile-logout-btn"
-                                    >
-                                        <LogOut size={16} /> Log out
-                                    </button>
-                                </div>
-                            )}
                         </div>
+
+                        {/* Sell — only for guests / buyers */}
+                        {!authLoading && !isSeller && !isAdmin && !isOem && (
+                            <button
+                                onClick={() => go("/sell")}
+                                className="w-full flex items-center px-4 h-12 rounded-lg border border-[#D2D2D7] text-[14px] font-semibold text-[#0A0A0B] hover:bg-black/[0.03] transition-colors"
+                                data-testid="mobile-nav-sell"
+                            >
+                                Sell on TonersCart
+                            </button>
+                        )}
+
+                        {/* Auth actions */}
+                        {!authLoading && !user && (
+                            <button
+                                onClick={() => go("/register")}
+                                className="w-full h-12 rounded-lg text-[14px] font-semibold transition-transform active:scale-95"
+                                style={{ background: "#FFC107", color: "#0A0A0B" }}
+                                data-testid="mobile-register-btn"
+                            >
+                                Join free
+                            </button>
+                        )}
+
+                        {!authLoading && user && (
+                            <div className="space-y-2.5 pt-1">
+                                <button
+                                    onClick={() => go(dashboardPath)}
+                                    className="w-full inline-flex items-center justify-center gap-2 h-12 rounded-lg border border-[#0A0A0B] text-[14px] font-semibold text-[#0A0A0B] hover:bg-black/[0.03] transition-colors"
+                                    data-testid="mobile-dashboard-btn"
+                                >
+                                    <LayoutDashboard size={16} /> Dashboard
+                                </button>
+                                <button
+                                    onClick={handleLogout}
+                                    className="w-full inline-flex items-center justify-center gap-2 h-12 rounded-lg text-[14px] font-semibold text-red-600 border border-red-200 hover:bg-red-50 transition-colors"
+                                    data-testid="mobile-logout-btn"
+                                >
+                                    <LogOut size={16} /> Log out
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
-            )}
+            </div>
 
             {loggingOut && (
                 <div className="fixed inset-0 z-[3000] bg-[#0A0A0B]/70 backdrop-blur-sm flex items-center justify-center" role="alertdialog" aria-busy="true" data-testid="logout-overlay">
