@@ -488,7 +488,7 @@ def _quote_money(n) -> str:
         return f"₹{n}"
 
 
-async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplier_label: str = "Verified Supplier on TonersCart"):
+async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplier_label: str = "Verified Supplier on TonersCart", seller_id: str = ""):
     """Send a formal quotation email to the buyer + BCC copy to support.
     `item` keys expected:
         brand, model_number, type/color, unit_price, qty, total, listing_type, notes
@@ -572,9 +572,16 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
         </div>
         """
 
+    verified_seller_html = ""
+    if seller_id:
+        verified_seller_html = (
+            "<div style='margin-top:6px;display:inline-block;padding:3px 10px;border-radius:999px;"
+            "background:#E6F7EC;border:1px solid #0A8754;color:#0A8754;font-size:11px;font-weight:700;letter-spacing:0.03em;'>"
+            f"&#10003; Verified Seller &middot; <span style='font-family:monospace;'>{seller_id}</span></div>"
+        )
+
     body = f"""
-    <div style="border-top:4px solid #00B7C7;background:#FFFFFF;padding:24px 0 8px 0;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid #E5E5EA;">
+    <div style="border-top:4px solid #00B7C7;background:#FFFFFF;padding:24px 0 8px 0;">    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid #E5E5EA;">
       <div>
         <div style="font-family:'Montserrat',sans-serif;font-size:22px;font-weight:700;letter-spacing:-0.02em;">
           <span style="color:#0A0A0B;">Toners</span><span style="color:#00B7C7;">Cart</span>
@@ -603,6 +610,7 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
         <div style="font-size:10.5px;letter-spacing:0.18em;text-transform:uppercase;color:#86868B;font-weight:700;">Sold by</div>
         <div style="font-size:14px;font-weight:600;color:#0A0A0B;margin-top:4px;">{supplier_label}</div>
         <div style="font-size:12.5px;color:#3a3a40;">via tonerscart.com</div>
+        {verified_seller_html}
       </div>
     </div>
 
@@ -796,6 +804,10 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
             if rate_label != "Deal basis"
             else "<tr><td style='padding:4px 12px;color:#86868B;'>Commission</td><td style='padding:4px 12px;'>Deal basis — our team will contact you.</td></tr>"
         )
+        seller_id_row = (
+            f"<tr><td style='padding:4px 12px;color:#86868B;'>Your Seller ID</td><td style='padding:4px 12px;'><strong style='font-family:monospace;color:#00838f;'>{seller_id}</strong></td></tr>"
+            if seller_id else ""
+        )
         gst_block_s = ""
         if buyer_gst or seller_gst:
             rows_gs = ""
@@ -819,7 +831,7 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
           <tr><td style='padding:4px 12px;color:#86868B;'>Quantity</td><td style='padding:4px 12px;'><strong>{qty}</strong></td></tr>
           <tr><td style='padding:4px 12px;color:#86868B;'>Order value</td><td style='padding:4px 12px;'><strong>{_money(total)}</strong></td></tr>
           {payout_line}
-          {f"<tr><td style='padding:4px 12px;color:#86868B;'>Your Seller ID</td><td style='padding:4px 12px;'><strong style=\"font-family:monospace;color:#00838f;\">{seller_id}</strong></td></tr>" if seller_id else ''}
+          {seller_id_row}
           <tr><td style='padding:4px 12px;color:#86868B;'>Buyer</td><td style='padding:4px 12px;'>{customer_name}{f' · {customer_phone}' if customer_phone else ''}</td></tr>
           {("<tr><td style='padding:4px 12px;color:#86868B;'>Buyer city</td><td style='padding:4px 12px;'><strong>" + (order_city or delivery_city or '—') + "</strong>" + (" <span style='display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;background:#FFF3CD;color:#8C6A00;font-size:11px;font-weight:600;'>Intercity</span>" if is_intercity else " <span style='display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;background:#E6F7EC;color:#0A8754;font-size:11px;font-weight:600;'>Local · free delivery</span>") + "</td></tr>")}
           <tr><td style='padding:4px 12px;color:#86868B;'>Delivery</td><td style='padding:4px 12px;'>{delivery_full}</td></tr>

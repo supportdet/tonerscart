@@ -1,3 +1,17 @@
+### 2026-06 — Seller ID trust mark on buyer quotations
+
+- **Quotation email** (`email_quotation` in `email_service.py`) now renders a green **"✓ Verified Seller · TC-DLR-YYYY-NNNN"** pill inside the "Sold by" box. Dealer name/contact remain intentionally hidden — only the anonymised verified-seller code is shown as a trust mark. New `seller_id` kwarg (defaults to "", badge omitted when unset).
+- **`POST /api/quotation`** (`server.py`) looks up `suppliers.seller_id` from the listing's `supplier_id` (best-effort, wrapped in try/except) and passes it to `email_quotation`.
+- Verified: `email_quotation` renders the badge with the ID and no leaks; endpoint lookup resolves real listing → `DET` → `TC-DLR-2026-0004`. Backend healthy, syntax clean.
+
+### 2026-06 — 🔴 CRITICAL FIX: backend crash-loop (email_service f-string) + Seller ID display verified
+
+- **Root cause**: `email_service.py` `email_order_placed()` had a nested f-string with `\"` backslash escapes **inside** the `{...}` expression part (the "Your Seller ID" row) — a `SyntaxError` in Python 3.11 ("f-string expression part cannot include a backslash"). This was introduced by the prior session's Seller ID email edit and prevented `server.py` from importing at all → the **entire backend was crash-looping** (preview "not responding", all `/api` calls failing).
+- **Fix**: extracted the row into a pre-computed `seller_id_row` variable using single-quoted HTML attributes (no backslashes), spliced as `{seller_id_row}` into `seller_html`. Backend healthy again.
+- **Seller ID display verified E2E** (testing agent iteration_26, backend 100% / frontend 100%): Admin → Dealers shows the Seller ID column with all 7 IDs `TC-DLR-2026-0001..0007`; dealer detail drawer shows `drawer-seller-id` badge; order placement (which invokes `email_order_placed`) returns 200 → /order-confirmed, no 500s. Ran `POST /api/admin/seller-ids/backfill` → `{ok:true, assigned:0, already_had:7}` (migration already applied, all dealers carry IDs).
+- Test data created by the testing agent (2–3 `it26` customers + their orders) was purged afterward. DB back to 3 real orders.
+- Non-blocking cosmetics noted: Radix `DialogContent` aria-describedby warning on dealer-detail-dialog; "Set your location" coachmark overlays nav (pre-existing carry-over).
+
 ### 2026-06 — Sequential Seller IDs (TC-DLR-YYYY-NNNN) — frontend display completed
 
 - Backend was already complete (prev session): `_generate_seller_id()` assigns `TC-DLR-{year}-{NNNN}` on admin approval, `/auth/me` returns `supplier.seller_id`, `POST /api/admin/seller-ids/backfill` retro-assigns IDs to existing approved dealers, email templates (`email_application_approved`, `email_order_placed`) render the Seller ID, and migration `supabase_schema_seller_id.sql` adds the `seller_id` columns + unique indexes on `users`/`suppliers`.
