@@ -673,6 +673,29 @@ def supplier_business_logo_get(user: dict = Depends(require_user)):
         return {"path": path, "url": None}
 
 
+class SupplierProfileUpdate(BaseModel):
+    business_name: Optional[str] = None
+
+
+@api.put("/supplier/profile")
+def supplier_update_profile(payload: SupplierProfileUpdate, user: dict = Depends(require_user)):
+    """Approved supplier edits their own business / company name."""
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved suppliers can edit their profile")
+    upd: dict = {}
+    if payload.business_name and payload.business_name.strip():
+        upd["business_name"] = sanitize(payload.business_name.strip(), 120)
+    if not upd:
+        raise HTTPException(400, "Nothing to update")
+    sb_admin.table("suppliers").update(upd).eq("user_id", user["id"]).execute()
+    # Keep the denormalised users.company in sync (best-effort)
+    try:
+        sb_admin.table("users").update({"company": upd["business_name"]}).eq("id", user["id"]).execute()
+    except Exception:
+        pass
+    return {"ok": True, "business_name": upd.get("business_name")}
+
+
 @api.get("/auth/me")
 def me(user: dict = Depends(require_user)):
     """Returns the user profile + application status if any.
