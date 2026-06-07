@@ -1,3 +1,15 @@
+### 2026-06 — Dealer dashboard navigation redesign (full-width pastel control bar + clickable stats + Edit per product)
+
+**Tab bar → navbar position (`SupplierDashboard.jsx`)**
+- New `DealerTabBar` component renders a full-width, edge-to-edge bar (`catalog-tabs`) directly below the top navbar (above the hero). 10 equal blocks (`tab-{key}`) each with a distinct very-light pastel background (cyan/magenta/amber/green/indigo/orange/blue-grey/teal/rose/purple), dark charcoal bold centered text, single vertical dividers, 150ms hover-darken, and an active state = darker shade + colored inset bottom-border accent. Customer category pills stay hidden for dealers (Header.jsx).
+
+**Action area per tab** — Printers/Papers/Consumables tabs now show Add + Bulk upload + **Edit** buttons (`edit-printers-btn`/`edit-papers-btn`/`edit-consumables-btn`), matching the existing Toners trio. Edit dispatches `tc-open-edit-{type}` → the listing component opens `BulkUploadGeneric` in edit mode pre-loaded with existing rows. Added `itemPath`/`fromListing`/`toUpdatePayload` (scalar-only, image-preserving) to printer/paper/consumable bulk configs.
+
+**Clickable stat cards** — the 4 hero stats are now buttons (`goStat`): Listings→Toners (all), Active→Toners filtered in-stock (`listings-filter-clear` chip), Orders→Orders (all), Pending→Orders filtered requested (`orders-filter-clear` chip). Manual tab clicks clear filters (`selectTab`). Added `listingFilter`/`orderFilter` state + `visibleListings`/`visibleOrders`.
+
+**Testing:** Backend pytest 5/5 (`test_iteration29.py`) — PUT printers/papers/consumables accept scalar payloads, preserve images, 403 for non-supplier. Frontend verified via source review + clean webpack compile (Playwright login was blocked only because the iter-28 test account had been purged; a fresh approved supplier `qa.dealer.it29.1d95cc50@example.com` is now documented).
+
+
 ### 2026-06 — 8-part Dealer UX & Product Upload overhaul
 
 **Dealer dashboard (`SupplierDashboard.jsx`)**
