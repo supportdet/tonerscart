@@ -36,9 +36,18 @@ export default function Landing() {
     }, []);
 
     useEffect(() => {
-        api.get("/featured/suppliers", { params: { limit: 6 } })
-            .then((r) => setFeatured(Array.isArray(r.data) ? r.data : []))
-            .catch(() => setFeatured([]));
+        let cancelled = false;
+        // Featured ad must be resilient: retry transient failures and never
+        // collapse an already-rendered list to empty on a network blip.
+        const loadFeatured = async (attempt = 0) => {
+            try {
+                const r = await api.get("/featured/suppliers", { params: { limit: 6 } });
+                if (!cancelled) setFeatured(Array.isArray(r.data) ? r.data : []);
+            } catch {
+                if (!cancelled && attempt < 2) setTimeout(() => loadFeatured(attempt + 1), 800);
+            }
+        };
+        loadFeatured();
         api.get("/config/marquee_brands")
             .then((r) => setMarqueeBrands(Array.isArray(r.data?.value) ? r.data.value : []))
             .catch(() => setMarqueeBrands([]));
@@ -48,6 +57,7 @@ export default function Landing() {
         api.get("/stats/public")
             .then((r) => setPublicStats(r.data || null))
             .catch(() => setPublicStats(null));
+        return () => { cancelled = true; };
     }, []);
 
     useEffect(() => {
@@ -226,12 +236,28 @@ export default function Landing() {
                                 style={{ transitionDelay: `${i * 80}ms` }}
                                 data-testid={`featured-card-${s.id}`}
                             >
-                                {/* Banner image — wide 16:9 rectangle from the dealer's application */}
+                                {/* Banner image — wide 16:9 rectangle from the dealer's application.
+                                    onError degrades gracefully (banner → logo → placeholder) so the
+                                    ad never renders as a blank white box if a signed URL fails. */}
                                 <div className="tc-featured-banner" data-testid={`featured-logo-${s.id}`}>
-                                    {s.featured_image_url ? (
-                                        <img src={s.featured_image_url} alt={s.name} className="w-full h-full object-cover" loading="lazy" />
-                                    ) : s.logo_url ? (
-                                        <img src={s.logo_url} alt={s.name} className="w-full h-full object-cover" loading="lazy" />
+                                    {(s.featured_image_url || s.logo_url) ? (
+                                        <>
+                                            <img
+                                                src={s.featured_image_url || s.logo_url}
+                                                alt={s.name}
+                                                className="w-full h-full object-cover"
+                                                loading="lazy"
+                                                onError={(e) => {
+                                                    const img = e.currentTarget;
+                                                    if (s.logo_url && img.src !== s.logo_url) { img.src = s.logo_url; return; }
+                                                    img.style.display = "none";
+                                                    if (img.nextElementSibling) img.nextElementSibling.style.display = "grid";
+                                                }}
+                                            />
+                                            <div className="w-full h-full place-items-center" style={{ display: "none" }}>
+                                                <Camera size={30} className="text-white/40" strokeWidth={1.6} />
+                                            </div>
+                                        </>
                                     ) : (
                                         <div className="w-full h-full grid place-items-center">
                                             <Camera size={30} className="text-white/40" strokeWidth={1.6} />
