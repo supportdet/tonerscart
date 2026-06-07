@@ -890,6 +890,20 @@
     place-items: center;
     transition: border-color 220ms ease, background 220ms ease;
 }
+.tc-featured-banner {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 14px;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 30% 25%, rgba(255,255,255,0.10) 0%, transparent 60%),
+        linear-gradient(180deg, #2A2C32 0%, #1E2024 100%);
+    border: 1px solid rgba(255,255,255,0.10);
+    transition: border-color 220ms ease;
+}
+.tc-featured-card:hover .tc-featured-banner {
+    border-color: rgba(245,196,0,0.45);
+}
 .tc-featured-card:hover .tc-featured-logo-ph {
     border-color: rgba(245,196,0,0.55);
 }
