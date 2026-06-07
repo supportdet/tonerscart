@@ -1,3 +1,31 @@
+### 2026-06 — 8-part Dealer UX & Product Upload overhaul
+
+**Dealer dashboard (`SupplierDashboard.jsx`)**
+- Replaced the rounded pill tab bar with a clean underline tab bar (`catalog-tabs`) of 10 tabs: Toners, Printers, Papers, Consumables, Orders, My Earnings, Insights, Bulk Orders (`tab-bulk` → bulk-upload hub), Dealer to Dealer (`tab-d2d` → CTA to /dealer), OEM Marketplace (`tab-oem` → CTA to /oem).
+- Added a large centered action panel (`CenterAction`) per product tab with big buttons (Add Toner/Printer/Paper/Consumable + Bulk upload). Toner tab also has `edit-toners-btn`.
+- Added "Seller Dashboard" label (`seller-dashboard-label`) top-right of the hero.
+- **Edit business name**: pencil (`edit-business-name-btn`) → dialog (`edit-name-dialog`) → `PUT /api/supplier/profile {business_name}` (new backend endpoint, syncs `users.company`).
+
+**Toner uploads — removed Model Number**
+- Single Add Toner form: removed the "Model number" field; "Compatible printer models" (`listing-compatible-models`) is now a required Basic-info field. `model_number` is derived client-side from the first compatible model (`deriveTonerModel`).
+- Bulk toner config (`bulkConfigs.js`): dropped the Model Number column; `compatible_models` is now required.
+- Toner cards now show Brand as heading + "Compatible: …" line (`listing-compat-{id}`), no model number.
+
+**Edit Toners → inline bulk grid (item 5)**
+- `BulkUploadGeneric.jsx` gained `editMode` + `initialRows`. In edit mode it PUTs existing rows to `/supplier/listings/{id}` (scalar-only, preserves images) and POSTs new rows. Per-card Edit and `edit-toners-btn` open the grid pre-loaded with all existing toners.
+
+**Printer uploads (`PrinterListings.jsx`)**
+- Removed "Monthly recommended volume" and "Monthly duty cycle" fields (kept min/max monthly volume). Max print resolution is now a dropdown (`RESOLUTION_OPTS`). Usage type already multi-select.
+
+**Header / Govt portal**
+- `Header.jsx`: buyer category pills (`navbar-categories`) hidden for approved sellers (clean dealer navbar).
+- `App.js`: `/procurement/login` now keeps the standard site Header/Footer (logo + nav + Govt Portal pill). `ProcurementDashboard.jsx` top bar shows the TonersCart logo linking home.
+
+**Already in place (confirmed):** dealer login redirect → /supplier; City filter (`filter-city`) on all category/search pages.
+
+**Testing:** Backend pytest 6/6 (`test_iteration28.py`) — profile update (403 guard), model-less toner create, bulk without Model Number, PUT preserves images. Frontend Playwright confirmed redirect, navbar hide, seller label, edit-name persist, 10 tabs, action panel.
+
+
 ### 2026-06 — Mobile overflow fix + Admin dealer profile + new admin tabs (Customers/Disputes/Messages/Activity)
 
 **Mobile / overflow**
