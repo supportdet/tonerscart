@@ -3225,9 +3225,26 @@ def admin_supplier_detail(supplier_id: str, user: dict = Depends(require_role("a
         if (o.get("status") or "") in _open:
             pending_payout += float(p)
 
-    # Signed document links (5 min) for KYC / bank / ID proof
+    # Signed document links (5 min) for KYC / bank / ID proof.
+    # On approval only `doc_id_proof` is copied onto the `suppliers` row — the
+    # full KYC set (GST, PAN, bank proof, address proof, brand authorization,
+    # shop photo) remains on the original `suppliers_pending` application. Merge
+    # those paths in so admins can view every document the dealer uploaded.
+    doc_source = dict(sup)
+    if sup.get("user_id"):
+        try:
+            pend = sb_admin.table("suppliers_pending").select("*").eq(
+                "user_id", sup["user_id"]
+            ).maybe_single().execute()
+            prow = pend.data if pend and pend.data else None
+            if prow:
+                for f in DOC_FIELDS:
+                    if not doc_source.get(f) and prow.get(f):
+                        doc_source[f] = prow[f]
+        except Exception:
+            pass
     try:
-        documents = _signed_doc_urls(sup, ttl=300)
+        documents = _signed_doc_urls(doc_source, ttl=300)
     except Exception:
         documents = {}
 
