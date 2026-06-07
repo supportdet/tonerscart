@@ -32,6 +32,7 @@ export default function PaperListings() {
     const [imageFiles, setImageFiles] = useState([]);
     const [imagePreviews, setImagePreviews] = useState([]);
     const [bulkOpen, setBulkOpen] = useState(false);
+    const [editBulkOpen, setEditBulkOpen] = useState(false);
 
     const openAdd = () => { setEditingId(null); setForm(emptyForm()); setImageFiles([]); setImagePreviews([]); setOpen(true); };
     const openEdit = (p) => {
@@ -88,9 +89,12 @@ export default function PaperListings() {
         window.addEventListener("tc-open-add-paper", fn);
         const bfn = () => setBulkOpen(true);
         window.addEventListener("tc-open-bulk-paper", bfn);
+        const efn = () => setEditBulkOpen(true);
+        window.addEventListener("tc-open-edit-paper", efn);
         return () => {
             window.removeEventListener("tc-open-add-paper", fn);
             window.removeEventListener("tc-open-bulk-paper", bfn);
+            window.removeEventListener("tc-open-edit-paper", efn);
         };
     }, []);
 
@@ -354,6 +358,9 @@ export default function PaperListings() {
 
             {bulkOpen && (
                 <BulkUploadGeneric config={paperBulkConfig} onClose={() => setBulkOpen(false)} onSuccess={load} />
+            )}
+            {editBulkOpen && (
+                <BulkUploadGeneric config={paperBulkConfig} editMode initialRows={rows.map(paperBulkConfig.fromListing)} onClose={() => setEditBulkOpen(false)} onSuccess={load} />
             )}
         </div>
     );

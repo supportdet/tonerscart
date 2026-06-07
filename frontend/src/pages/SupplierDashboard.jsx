@@ -33,17 +33,49 @@ const colorSwatchHex = (name) => {
 };
 
 const DEALER_TABS = [
-    { key: "toners", label: "Toners" },
-    { key: "printers", label: "Printers" },
-    { key: "papers", label: "Papers" },
-    { key: "consumables", label: "Consumables" },
-    { key: "orders", label: "Orders" },
-    { key: "earnings", label: "My Earnings" },
-    { key: "insights", label: "Insights" },
-    { key: "bulk", label: "Bulk Orders" },
-    { key: "d2d", label: "Dealer to Dealer" },
-    { key: "oem", label: "OEM Marketplace" },
+    { key: "toners", label: "Toners", bg: "#ECFBFD", bgHover: "#D6F5F9", bgActive: "#C2EFF5", accent: "#0891B2" },
+    { key: "printers", label: "Printers", bg: "#FDEDF7", bgHover: "#FAD9EE", bgActive: "#F6C6E4", accent: "#DB2777" },
+    { key: "papers", label: "Papers", bg: "#FEF6E7", bgHover: "#FCEBC6", bgActive: "#FAE0A6", accent: "#D97706" },
+    { key: "consumables", label: "Consumables", bg: "#EDFBEF", bgHover: "#D7F5DC", bgActive: "#C2EFCA", accent: "#16A34A" },
+    { key: "orders", label: "Orders", bg: "#EEF0FE", bgHover: "#DDE1FC", bgActive: "#CBD2FA", accent: "#4F46E5" },
+    { key: "earnings", label: "My Earnings", bg: "#FEF1E8", bgHover: "#FCDFCB", bgActive: "#FACDAE", accent: "#EA580C" },
+    { key: "insights", label: "Insights", bg: "#EEF1F5", bgHover: "#DDE3EC", bgActive: "#CBD5E1", accent: "#475569" },
+    { key: "bulk", label: "Bulk Orders", bg: "#EAFAF6", bgHover: "#CFF3EB", bgActive: "#B4ECDF", accent: "#0D9488" },
+    { key: "d2d", label: "Dealer to Dealer", bg: "#FDEEF0", bgHover: "#FBD9DE", bgActive: "#F8C3CB", accent: "#E11D48" },
+    { key: "oem", label: "OEM Marketplace", bg: "#F4EEFD", bgHover: "#E7DBFB", bgActive: "#D9C7F8", accent: "#7C3AED" },
 ];
+
+// Full-width dealer control bar that replaces the customer category pills.
+function DealerTabBar({ active, onSelect }) {
+    return (
+        <div className="w-full bg-white border-b border-black/10" data-testid="catalog-tabs">
+            <div className="flex w-full overflow-x-auto tc-cat-scroll">
+                {DEALER_TABS.map((t) => {
+                    const isActive = active === t.key;
+                    return (
+                        <button
+                            key={t.key}
+                            onClick={() => onSelect(t.key)}
+                            data-testid={`tab-${t.key}`}
+                            aria-current={isActive ? "page" : undefined}
+                            className="flex-1 min-w-[118px] px-3 py-3.5 text-[12.5px] font-bold text-center whitespace-nowrap border-r border-black/[0.07] last:border-r-0 outline-none"
+                            style={{
+                                color: "#1F2937",
+                                backgroundColor: isActive ? t.bgActive : t.bg,
+                                boxShadow: isActive ? `inset 0 -3px 0 ${t.accent}` : "inset 0 -3px 0 transparent",
+                                transition: "background-color 150ms ease, box-shadow 150ms ease",
+                            }}
+                            onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = t.bgHover; }}
+                            onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = t.bg; }}
+                        >
+                            {t.label}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
 
 // Large center action panel shown at the top of each product tab.
 function CenterAction({ title, subtitle, children }) {
@@ -167,6 +199,8 @@ export default function SupplierDashboard() {
     const navigate = useNavigate();
     const isApproved = user?.supplier_status === "approved";
     const [catalog, setCatalog] = useState("toners"); // 'toners' | 'printers' | 'papers' | 'consumables' | 'orders' | 'earnings' | 'insights' | 'bulk' | 'd2d' | 'oem'
+    const [listingFilter, setListingFilter] = useState("all"); // 'all' | 'active' — toner listings
+    const [orderFilter, setOrderFilter] = useState("all"); // 'all' | 'pending' — orders
     const [bulkOpen, setBulkOpen] = useState(false);
     const [editBulkOpen, setEditBulkOpen] = useState(false);
     // Edit business / company name
@@ -304,6 +338,16 @@ export default function SupplierDashboard() {
     };
 
     const openEditBulk = () => setEditBulkOpen(true);
+
+    // Manual tab click clears any stat-driven filter.
+    const selectTab = (key) => { setCatalog(key); setListingFilter("all"); setOrderFilter("all"); };
+    // Clickable stat cards → jump to the relevant section (optionally filtered).
+    const goStat = (key) => {
+        if (key === "listings") { setCatalog("toners"); setListingFilter("all"); }
+        else if (key === "active") { setCatalog("toners"); setListingFilter("active"); }
+        else if (key === "orders") { setCatalog("orders"); setOrderFilter("all"); }
+        else if (key === "pending") { setCatalog("orders"); setOrderFilter("pending"); }
+    };
 
     const saveName = async () => {
         const v = nameInput.trim();
@@ -484,12 +528,23 @@ export default function SupplierDashboard() {
         pending: orders.filter((o) => o.status === "requested").length,
     }), [listings, orders]);
 
+    const visibleListings = useMemo(
+        () => (listingFilter === "active" ? listings.filter((l) => l.stock > 0) : listings),
+        [listings, listingFilter]
+    );
+    const visibleOrders = useMemo(
+        () => (orderFilter === "pending" ? orders.filter((o) => o.status === "requested") : orders),
+        [orders, orderFilter]
+    );
+
     if (!isApproved) {
         return <PendingScreen application={user?.application} />;
     }
 
     return (
         <div data-testid="supplier-dashboard" style={{ fontFamily: "'Inter', sans-serif" }}>
+            {/* Full-width dealer control bar — sits directly below the top navbar */}
+            <DealerTabBar active={catalog} onSelect={selectTab} />
             <div className="tc-hero relative pb-12">
                 <div className="tc-hero-grid" />
                 <div className="tc-container relative pt-8 sm:pt-10">
@@ -554,48 +609,39 @@ export default function SupplierDashboard() {
                         </div>
                     </div>
 
-                    {/* Stats inside hero — bordered, icon, 36px Montserrat */}
+                    {/* Stats inside hero — clickable, jump to the relevant section */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-8">
                         {[
-                            { k: "Listings", v: stats.listings, Icon: Package },
-                            { k: "Active",   v: stats.active,   Icon: CheckCircle2 },
-                            { k: "Orders",   v: stats.orders,   Icon: ShoppingCart },
-                            { k: "Pending",  v: stats.pending,  Icon: Clock },
-                        ].map(({ k, v, Icon }) => (
-                            <div key={k} className="tc-stat-card" data-testid={`supplier-stat-${k.toLowerCase()}`}>
+                            { k: "Listings", key: "listings", v: stats.listings, Icon: Package },
+                            { k: "Active",   key: "active",   v: stats.active,   Icon: CheckCircle2 },
+                            { k: "Orders",   key: "orders",   v: stats.orders,   Icon: ShoppingCart },
+                            { k: "Pending",  key: "pending",  v: stats.pending,  Icon: Clock },
+                        ].map(({ k, key, v, Icon }) => (
+                            <button
+                                key={k}
+                                type="button"
+                                onClick={() => goStat(key)}
+                                className="tc-stat-card text-left cursor-pointer transition-transform duration-150 hover:-translate-y-0.5 hover:border-[#F5C400]/60 focus:outline-none focus:ring-2 focus:ring-[#F5C400]/50"
+                                data-testid={`supplier-stat-${k.toLowerCase()}`}
+                                aria-label={`View ${k}`}
+                            >
                                 <div className="tc-stat-icon"><Icon size={16} /></div>
                                 <div className="tc-stat-value">{v}</div>
                                 <div className="tc-stat-label">{k}</div>
-                            </div>
+                            </button>
                         ))}
                     </div>
                 </div>
             </div>
 
             <div className="tc-container py-8 sm:py-10">
-                {/* Dealer dashboard tab bar */}
-                <div className="border-b border-black/[0.08] mb-6 overflow-x-auto tc-cat-scroll" data-testid="catalog-tabs">
-                    <div className="flex items-center gap-0.5 min-w-max" style={{ fontFamily: "'Inter', sans-serif" }}>
-                        {DEALER_TABS.map((t) => (
-                            <button
-                                key={t.key}
-                                onClick={() => setCatalog(t.key)}
-                                className={`relative px-4 py-3 text-[13.5px] font-semibold whitespace-nowrap transition ${catalog === t.key ? "text-[#0A0A0B]" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`}
-                                data-testid={`tab-${t.key}`}
-                            >
-                                {t.label}
-                                {catalog === t.key && <span className="absolute left-3 right-3 -bottom-px h-[2px] bg-[#0A0A0B] rounded-full" />}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
                 {catalog === "printers" ? (
                     <>
                         <h2 id="printers" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your printers</h2>
-                        <CenterAction title="Manage your printers" subtitle="Add a single printer with full specs, or upload many at once via spreadsheet.">
+                        <CenterAction title="Manage your printers" subtitle="Add a single printer with full specs, edit your catalogue inline, or upload many at once.">
                             <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-printer"))} data-testid="add-printer-cta-btn"><Plus size={16} /> Add Printer</Button>
                             <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-bulk-printer"))} data-testid="bulk-upload-printer-btn"><Upload size={15} /> Bulk upload</Button>
+                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-edit-printer"))} data-testid="edit-printers-btn"><Layers size={15} /> Edit Printers</Button>
                         </CenterAction>
                         <D2DExplainer />
                         <PrinterListings />
@@ -603,9 +649,10 @@ export default function SupplierDashboard() {
                 ) : catalog === "papers" ? (
                     <>
                         <h2 id="papers" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your papers</h2>
-                        <CenterAction title="Manage your papers" subtitle="Add a single paper SKU, or upload many at once via spreadsheet.">
+                        <CenterAction title="Manage your papers" subtitle="Add a single paper SKU, edit your catalogue inline, or upload many at once.">
                             <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-paper"))} data-testid="add-paper-cta-btn"><Plus size={16} /> Add Paper</Button>
                             <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-bulk-paper"))} data-testid="bulk-upload-paper-btn"><Upload size={15} /> Bulk upload</Button>
+                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-edit-paper"))} data-testid="edit-papers-btn"><Layers size={15} /> Edit Papers</Button>
                         </CenterAction>
                         <D2DExplainer />
                         <PaperListings />
@@ -613,9 +660,10 @@ export default function SupplierDashboard() {
                 ) : catalog === "consumables" ? (
                     <>
                         <h2 id="consumables" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your consumables</h2>
-                        <CenterAction title="Manage your consumables" subtitle="Add a single consumable SKU, or upload many at once via spreadsheet.">
+                        <CenterAction title="Manage your consumables" subtitle="Add a single consumable SKU, edit your catalogue inline, or upload many at once.">
                             <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-consumable"))} data-testid="add-consumable-cta-btn"><Plus size={16} /> Add Consumable</Button>
                             <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-bulk-consumable"))} data-testid="bulk-upload-consumable-btn"><Upload size={15} /> Bulk upload</Button>
+                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-edit-consumable"))} data-testid="edit-consumables-btn"><Layers size={15} /> Edit Consumables</Button>
                         </CenterAction>
                         <D2DExplainer />
                         <ConsumableListings />
@@ -632,10 +680,19 @@ export default function SupplierDashboard() {
                     </>
                 ) : catalog === "orders" ? (
                     <>
-                        <h2 id="orders" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Incoming orders</h2>
-                        {orders.length === 0 ? (
+                        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                            <h2 id="orders" className="text-[#0A0A0B] scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Incoming orders</h2>
+                            {orderFilter === "pending" && (
+                                <button onClick={() => setOrderFilter("all")} className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#4F46E5] bg-[#EEF0FE] border border-[#CBD2FA] rounded-full px-3 py-1.5 hover:bg-[#DDE1FC]" data-testid="orders-filter-clear">
+                                    Showing pending only · Clear
+                                </button>
+                            )}
+                        </div>
+                        {visibleOrders.length === 0 ? (
                             <div className="tc-card-flat p-10 text-center text-[#6E6E73]" data-testid="seller-orders-empty">
-                                No orders yet. Once buyers place orders against your listings, they will appear here for you to accept, reject, ship and track.
+                                {orderFilter === "pending"
+                                    ? "No pending orders right now. New order requests will appear here for you to accept or reject."
+                                    : "No orders yet. Once buyers place orders against your listings, they will appear here for you to accept, reject, ship and track."}
                             </div>
                         ) : (
                             <div className="tc-card-flat p-0 overflow-x-auto">
@@ -644,7 +701,7 @@ export default function SupplierDashboard() {
                                         <tr><th className="text-left p-3">Order #</th><th className="text-left p-3">Product</th><th className="text-left p-3">Customer</th><th className="text-left p-3">Qty</th><th className="text-left p-3">Total</th><th className="text-left p-3">Status</th><th className="text-left p-3">Action</th></tr>
                                     </thead>
                                     <tbody>
-                                        {orders.map((o) => (
+                                        {visibleOrders.map((o) => (
                                             <tr key={o.id} className="border-t border-black/[0.05]">
                                                 <td className="p-3 font-mono text-[11.5px] text-[#0A0A0B]">{o.order_number || `#${(o.id||"").slice(0,8).toUpperCase()}`}</td>
                                                 <td className="p-3 font-mono">{o.listings?.brand} {o.listings?.model_number || "—"}</td>
@@ -740,13 +797,22 @@ export default function SupplierDashboard() {
                     )}
                 </CenterAction>
                 <D2DExplainer />
-            {listings.length === 0 ? (
+                {listingFilter === "active" && (
+                    <div className="mb-4">
+                        <button onClick={() => setListingFilter("all")} className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#0891B2] bg-[#ECFBFD] border border-[#C2EFF5] rounded-full px-3 py-1.5 hover:bg-[#D6F5F9]" data-testid="listings-filter-clear">
+                            Showing active (in-stock) only · Clear
+                        </button>
+                    </div>
+                )}
+            {visibleListings.length === 0 ? (
                 <div className="tc-card-flat p-8 text-center text-[#6E6E73]">
-                    No listings yet. Tap <span className="font-semibold text-[#0A0A0B]">Add product</span> to publish your first toner.
+                    {listingFilter === "active"
+                        ? "No active listings — all your toners are out of stock. Update stock or add a new toner."
+                        : <>No listings yet. Tap <span className="font-semibold text-[#0A0A0B]">Add Toner</span> to publish your first toner.</>}
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {listings.map((l) => {
+                    {visibleListings.map((l) => {
                         const typeStyle = l.toner_type === "Original"
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                             : l.toner_type === "Compatible"

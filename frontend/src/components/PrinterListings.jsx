@@ -132,6 +132,7 @@ export default function PrinterListings() {
     const [open, setOpen] = useState(false);
     const [editing, setEditing] = useState(null); // listing object being edited
     const [bulkOpen, setBulkOpen] = useState(false);
+    const [editBulkOpen, setEditBulkOpen] = useState(false);
 
     const load = async () => {
         setLoading(true);
@@ -149,9 +150,12 @@ export default function PrinterListings() {
         window.addEventListener("tc-open-add-printer", handler);
         const bhandler = () => setBulkOpen(true);
         window.addEventListener("tc-open-bulk-printer", bhandler);
+        const ehandler = () => setEditBulkOpen(true);
+        window.addEventListener("tc-open-edit-printer", ehandler);
         return () => {
             window.removeEventListener("tc-open-add-printer", handler);
             window.removeEventListener("tc-open-bulk-printer", bhandler);
+            window.removeEventListener("tc-open-edit-printer", ehandler);
         };
     }, []);
 
@@ -167,6 +171,9 @@ export default function PrinterListings() {
         <div data-testid="printer-listings-section">
             {bulkOpen && (
                 <BulkUploadGeneric config={printerBulkConfig} onClose={() => setBulkOpen(false)} onSuccess={load} />
+            )}
+            {editBulkOpen && (
+                <BulkUploadGeneric config={printerBulkConfig} editMode initialRows={items.map(printerBulkConfig.fromListing)} onClose={() => setEditBulkOpen(false)} onSuccess={load} />
             )}
             <div className="flex items-center justify-between mb-4">
                 <div className="text-[12px] text-[#6E6E73]">{items.length} {items.length === 1 ? "printer" : "printers"} listed</div>
