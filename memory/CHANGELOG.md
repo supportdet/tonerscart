@@ -1,4 +1,16 @@
-### 2026-06 — Dealer dashboard: sticky bar, compact hero, scroll-to-section stats, combined All Listings
+### 2026-06-07 — Unified universal-search product cards + Featured Suppliers fix (16:9 banner + caching)
+
+**Unified search cards (DRY refactor)** — extracted the four category product cards into shared components under `src/components/cards/`: `TonerProductCard`, `PrinterProductCard`, `PaperProductCard`, `ConsumableProductCard`. The universal search (`/search?q=`) groups now render the SAME full cards as the category pages (with Add-to-cart / Buy-now + qty stepper), replacing the old tiny click-through tiles. Category pages (`Papers.jsx`, `Consumables.jsx`, `PrintersResults.jsx`) and `Search.jsx` (both the detailed toner browse + universal toners group) all import the shared cards now. OEM group kept as inline tiles (no shared OEM card).
+- **Bug fixed:** the old inline `PrinterCard` destructured `const { add } = useCart()` but CartContext only exports `addItem` — so printer Add-to-cart / Buy-now would crash. The shared `PrinterProductCard` correctly uses `addItem`. Verified at runtime (toast + navbar cart badge increments).
+
+**Featured Suppliers (homepage)** — root cause of the slow load: `/featured/suppliers` generated Supabase signed URLs in a sequential loop (one network call per supplier + per logo) with no caching, on every visit. Added `_FEATURED_CACHE` (120s TTL, busted on the 3 admin featured mutations) → 2nd-load dropped from ~2.8s to ~0.13s. Frontend: the featured banner is now a wide **16:9 rectangle** (`.tc-featured-banner`, was a 120px square) using the dealer's application/showcase image (`featured_image_url`, fallback logo, fallback camera placeholder) with `object-cover`.
+
+**Testing:** iteration_32 frontend-only — 100%. All four review items pass: universal cards (2 toners/2 printers/4 consumables for `xerox`) render full cards with working Add/Buy; printer add-to-cart fix confirmed; category pages intact; featured banner measured exactly 16/9 (338×190.125), section loads ~3.5s. No console errors.
+
+**Data:** verified DB has only real accounts (15 users, 0 test/example/qa) and no fake products (cleanup dry-run = 0). The stale `qa.dealer.it30.*` accounts in test_credentials had already been purged in a prior session; testing agent created no persistent data.
+
+
+
 
 **Sticky control bar** — the pastel dealer tab bar (`catalog-tabs`) is now `sticky top-[64px] z-[90]`, pinned directly under the 64px navbar while scrolling. Root cause of an initial failure: `overflow-x: hidden` on `html`/`body`/`#root` (index.css) created a scroll container that broke `position: sticky` — fixed by switching to `overflow-x: clip` (clips horizontally without a scroll container). Verified: bar top stays at 64 at scrollY=1500, no horizontal-scroll regression.
 
