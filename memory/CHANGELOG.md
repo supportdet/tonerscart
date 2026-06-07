@@ -1,3 +1,16 @@
+### 2026-06 — Dealer dashboard: sticky bar, compact hero, scroll-to-section stats, combined All Listings
+
+**Sticky control bar** — the pastel dealer tab bar (`catalog-tabs`) is now `sticky top-[64px] z-[90]`, pinned directly under the 64px navbar while scrolling. Root cause of an initial failure: `overflow-x: hidden` on `html`/`body`/`#root` (index.css) created a scroll container that broke `position: sticky` — fixed by switching to `overflow-x: clip` (clips horizontally without a scroll container). Verified: bar top stays at 64 at scrollY=1500, no horizontal-scroll regression.
+
+**Compact hero** — the black hero strip is now a single slim band (~half height): logo + business name + edit pencil + Seller ID + city on one row; the 4 stats are small inline pills (still clickable). All functionality (logo upload, edit-name dialog) intact.
+
+**Stat cards → scroll-to-section** (`goStat`): Listings → smooth-scrolls to the new All Listings section; Active → same, filtered to in-stock (chip `all-listings-filter-clear`); Orders → Orders tab + scroll to `#orders`; Pending → Orders tab filtered to requested.
+
+**New "All Listings" combined section** (`all-listings-section`, always rendered at the bottom regardless of tab) — one table across all 4 categories with columns Product name / Category badge / Price / Stock / Status (Active≥1 stock) / Actions. Edit jumps to the right tab+grid (toner→toner grid; printer/paper/consumable→that tab + `tc-open-edit-*`); Delete calls `DELETE /api/supplier/{listings|printers|papers|consumables}/{id}` then refreshes. Data via `loadAllProducts` (4 `/mine` GETs combined client-side).
+
+**Testing:** Backend pytest 12/12 (iteration 30 — /mine feeds + all 4 DELETEs + 403 guards). Frontend verified: compact hero, 4 stat pills, scroll-to-section + filter chips, combined table with edit/delete + category badges, cross-tab edit, navbar pills hidden, and (iteration 31) the sticky fix. Deleted the it29 test account per request + cleaned up throwaway it30 suppliers; kept documented `qa.dealer.it30.cd2e6adb@example.com`.
+
+
 ### 2026-06 — Dealer dashboard navigation redesign (full-width pastel control bar + clickable stats + Edit per product)
 
 **Tab bar → navbar position (`SupplierDashboard.jsx`)**
