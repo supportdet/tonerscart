@@ -117,6 +117,8 @@ export const tonerBulkConfig = {
     }),
 };
 
+const joinList = (a) => (Array.isArray(a) ? a.filter(Boolean).join(", ") : (a || ""));
+
 // ============================ PRINTERS ============================
 
 const PRINTER_CATEGORIES = [
@@ -235,6 +237,44 @@ export const printerBulkConfig = {
         image_url: "",
         image_urls: [],
     }),
+    // Edit mode
+    itemPath: "/supplier/printers",
+    fromListing: (l) => ({
+        _id: l.id,
+        brand: l.brand || "",
+        model_number: l.model_number || "",
+        category: l.category || "laser",
+        condition: l.condition || "new",
+        usage_type: (Array.isArray(l.usage_types) && l.usage_types[0]) || l.usage_type || "corporate",
+        color: l.color || "color",
+        price: String(l.price ?? ""),
+        gst_rate: String(l.gst_rate ?? 18),
+        stock: String(l.stock ?? ""),
+        print_speed_ppm: l.print_speed_ppm ? String(l.print_speed_ppm) : "",
+        monthly_volume_min: l.monthly_volume_min ? String(l.monthly_volume_min) : "",
+        monthly_volume_max: l.monthly_volume_max ? String(l.monthly_volume_max) : "",
+        connectivity: joinList(l.connectivity),
+        paper_sizes: joinList(l.paper_sizes),
+        description: l.description || "",
+    }),
+    toUpdatePayload: (r) => ({
+        brand: r.brand.trim(),
+        model_number: r.model_number.trim(),
+        category: r.category || "laser",
+        condition: r.condition || "new",
+        usage_type: r.usage_type || "corporate",
+        usage_types: [r.usage_type || "corporate"],
+        color: r.color || "color",
+        price: Number(r.price),
+        stock: Number(r.stock),
+        gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
+        print_speed_ppm: num(r.print_speed_ppm),
+        monthly_volume_min: r.monthly_volume_min !== "" ? Number(r.monthly_volume_min) : 0,
+        monthly_volume_max: r.monthly_volume_max !== "" ? Number(r.monthly_volume_max) : 0,
+        connectivity: splitList(r.connectivity),
+        paper_sizes: splitList(r.paper_sizes),
+        description: (r.description || "").trim(),
+    }),
 };
 
 // ============================ CONSUMABLES ============================
@@ -316,6 +356,35 @@ export const consumableBulkConfig = {
         image_url: "",
         image_urls: [],
     }),
+    // Edit mode
+    itemPath: "/supplier/consumables",
+    fromListing: (l) => ({
+        _id: l.id,
+        subcategory: l.subcategory || "Other",
+        subcategory_other: l.subcategory_other || "",
+        brand: l.brand || "",
+        model_number: l.model_number || "",
+        compatible_models: l.compatible_models || "",
+        condition: l.condition || "New",
+        price: String(l.price ?? ""),
+        gst_rate: String(l.gst_rate ?? 18),
+        stock: String(l.stock ?? ""),
+        intercity_delivery_charge: String(l.intercity_delivery_charge ?? 0),
+        description: l.description || "",
+    }),
+    toUpdatePayload: (r) => ({
+        subcategory: r.subcategory || "Other",
+        subcategory_other: r.subcategory_other?.trim() || null,
+        brand: r.brand.trim(),
+        model_number: r.model_number.trim(),
+        compatible_models: r.compatible_models?.trim() || null,
+        condition: r.condition || "New",
+        price: Number(r.price),
+        stock: Number(r.stock),
+        gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
+        intercity_delivery_charge: r.intercity_delivery_charge !== "" ? Number(r.intercity_delivery_charge) : 0,
+        description: (r.description || "").trim() || null,
+    }),
 };
 
 const PAPER_SIZES = ["A4", "A3", "A5", "Letter", "Legal"];
@@ -393,5 +462,32 @@ export const paperBulkConfig = {
         description: (r.description || "").trim() || null,
         image_url: null,
         image_urls: [],
+    }),
+    // Edit mode
+    itemPath: "/supplier/papers",
+    fromListing: (l) => ({
+        _id: l.id,
+        brand: l.brand || "JK Paper",
+        size: l.size || "A4",
+        gsm: String(l.gsm ?? 75),
+        reams_per_box: String(l.reams_per_box ?? 10),
+        price_per_ream: String(l.price_per_ream ?? ""),
+        gst_rate: String(l.gst_rate ?? 18),
+        stock: String(l.stock ?? ""),
+        brightness: l.brightness ? String(l.brightness) : "",
+        suitable_for: joinList(l.suitable_for),
+        description: l.description || "",
+    }),
+    toUpdatePayload: (r) => ({
+        brand: r.brand.trim(),
+        size: r.size || "A4",
+        gsm: Number(r.gsm),
+        reams_per_box: r.reams_per_box !== "" ? Number(r.reams_per_box) : 10,
+        price_per_ream: Number(r.price_per_ream),
+        stock: Number(r.stock),
+        gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
+        brightness: num(r.brightness),
+        suitable_for: splitList(r.suitable_for),
+        description: (r.description || "").trim() || null,
     }),
 };

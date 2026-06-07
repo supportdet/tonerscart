@@ -31,6 +31,7 @@ export default function ConsumableListings() {
     const [imageFiles, setImageFiles] = useState([]);
     const [imagePreviews, setImagePreviews] = useState([]);
     const [bulkOpen, setBulkOpen] = useState(false);
+    const [editBulkOpen, setEditBulkOpen] = useState(false);
 
     const openAdd = () => { setEditingId(null); setForm(emptyForm()); setImageFiles([]); setImagePreviews([]); setOpen(true); };
     const openEdit = (c) => {
@@ -85,9 +86,12 @@ export default function ConsumableListings() {
         window.addEventListener("tc-open-add-consumable", fn);
         const bfn = () => setBulkOpen(true);
         window.addEventListener("tc-open-bulk-consumable", bfn);
+        const efn = () => setEditBulkOpen(true);
+        window.addEventListener("tc-open-edit-consumable", efn);
         return () => {
             window.removeEventListener("tc-open-add-consumable", fn);
             window.removeEventListener("tc-open-bulk-consumable", bfn);
+            window.removeEventListener("tc-open-edit-consumable", efn);
         };
     }, []);
 
@@ -285,6 +289,9 @@ export default function ConsumableListings() {
 
             {bulkOpen && (
                 <BulkUploadGeneric config={consumableBulkConfig} onClose={() => setBulkOpen(false)} onSuccess={load} />
+            )}
+            {editBulkOpen && (
+                <BulkUploadGeneric config={consumableBulkConfig} editMode initialRows={rows.map(consumableBulkConfig.fromListing)} onClose={() => setEditBulkOpen(false)} onSuccess={load} />
             )}
         </div>
     );
