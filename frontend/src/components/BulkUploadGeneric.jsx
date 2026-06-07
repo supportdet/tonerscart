@@ -47,9 +47,13 @@ function parseCSV(text) {
     return rows.filter((r) => r.length > 1 || (r[0] && r[0].trim() !== ""));
 }
 
-export default function BulkUploadGeneric({ config, onClose, onSuccess }) {
+export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode = false, initialRows = null }) {
     const COLUMNS = config.columns;
-    const [rows, setRows] = useState(() => Array.from({ length: 10 }, config.emptyRow));
+    const [rows, setRows] = useState(() =>
+        (initialRows && initialRows.length)
+            ? [...initialRows, config.emptyRow()]
+            : Array.from({ length: 10 }, config.emptyRow)
+    );
     const [submitting, setSubmitting] = useState(false);
     const [progress, setProgress] = useState({ done: 0, total: 0 });
     const [result, setResult] = useState(null); // { succeeded, failed, errors }
@@ -162,6 +166,40 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess }) {
             return;
         }
 
+        // ---- Edit mode: update existing rows (PUT) + create new ones (POST), one by one.
+        if (editMode) {
+            setResult(null);
+            setFailedRows(null);
+            setSubmitting(true);
+            setProgress({ done: 0, total: clientValid.length });
+            const failures = clientFailed.map((c) => ({ ...c.data, _error: c.message }));
+            let succeeded = 0;
+            for (let i = 0; i < clientValid.length; i++) {
+                const r = clientValid[i];
+                try {
+                    if (r._id) await api.put(`${config.itemPath}/${r._id}`, config.toUpdatePayload(r));
+                    else await api.post(config.itemPath, config.toPayload(r));
+                    succeeded += 1;
+                } catch (e) {
+                    const msg = e?.response?.data?.detail || e?.message || "Save failed";
+                    failures.push({ ...r, _error: typeof msg === "string" ? msg : "Save failed" });
+                }
+                setProgress({ done: i + 1, total: clientValid.length });
+            }
+            setSubmitting(false);
+            setResult({ succeeded, failed: failures.length, errors: failures.map((f, i) => ({ row: i, message: f._error })) });
+            setFailedRows(failures.length > 0 ? failures : null);
+            if (succeeded > 0) {
+                toast.success(`${succeeded} ${config.unitLabel}${succeeded === 1 ? "" : "s"} saved${failures.length ? `, ${failures.length} failed` : ""}`);
+            }
+            if (failures.length === 0) {
+                setTimeout(() => { onSuccess?.(); onClose?.(); }, 1000);
+            } else {
+                onSuccess?.();
+            }
+            return;
+        }
+
         setResult(null);
         setFailedRows(null);
         setSubmitting(true);
@@ -208,8 +246,8 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess }) {
             <div className="bg-white text-[#0A0A0B] w-full max-w-[1200px] max-h-screen sm:max-h-[92vh] sm:rounded-[20px] flex flex-col overflow-hidden">
                 <div className="flex items-start justify-between gap-3 px-6 py-5 border-b border-black/[0.06]">
                     <div>
-                        <h2 className="text-[18px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>{config.title}</h2>
-                        <p className="text-[12.5px] text-[#6E6E73] mt-0.5">{config.subtitle}</p>
+                        <h2 className="text-[18px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>{editMode ? (config.editTitle || config.title) : config.title}</h2>
+                        <p className="text-[12.5px] text-[#6E6E73] mt-0.5">{editMode ? (config.editSubtitle || config.subtitle) : config.subtitle}</p>
                     </div>
                     <button onClick={onClose} disabled={submitting} className="p-2 rounded-lg hover:bg-black/[0.04] disabled:opacity-50" data-testid="bulk-close-btn" aria-label="Close">
                         <X size={18} />
@@ -329,7 +367,7 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess }) {
                         <button onClick={onClose} disabled={submitting} className="h-10 px-4 rounded-lg border border-[#D2D2D7] text-[13px] font-semibold hover:bg-black/[0.04] disabled:opacity-50" data-testid="bulk-cancel-btn">Cancel</button>
                         <button onClick={submit} disabled={submitting} className="h-10 px-5 rounded-lg text-[13px] font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60" style={{ background: "#0A0A0B" }} data-testid="bulk-submit-btn">
                             {submitting ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                            {submitting ? "Uploading…" : "Upload all"}
+                            {submitting ? (editMode ? "Saving…" : "Uploading…") : (editMode ? "Save changes" : "Upload all")}
                         </button>
                     </div>
                 </div>

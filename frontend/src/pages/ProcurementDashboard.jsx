@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
     Search, FileText, Package, Wallet, UserRound, LogOut, ShieldCheck,
@@ -72,14 +72,20 @@ export default function ProcurementDashboard() {
             {/* Top bar */}
             <div className="bg-[#0B1220] text-white">
                 <div className="mx-auto max-w-6xl px-4 sm:px-6 h-16 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-white/10 grid place-items-center shrink-0">
-                            {isGovt ? <Landmark size={16} className="text-[#F7C600]" /> : <Building2 size={16} className="text-[#F7C600]" />}
-                        </div>
-                        <div className="min-w-0">
-                            <div className="text-[14px] font-semibold truncate" style={{ fontFamily: "'Montserrat', sans-serif" }} data-testid="proc-org-name">{user.org_name}</div>
-                            <div className="text-[11px] text-white/55 flex items-center gap-1.5">
-                                <ShieldCheck size={11} className="text-[#3DD68C]" /> {isGovt ? "Government" : "Corporate"} · Approved
+                    <div className="flex items-center gap-3 min-w-0">
+                        <Link to="/" className="shrink-0 bg-white rounded-md px-2 py-1 hover:opacity-90 transition" data-testid="proc-home-logo" aria-label="TonersCart home">
+                            <img src="/TONERSCART-bg.png" alt="TonersCart" className="h-6 w-auto" />
+                        </Link>
+                        <span className="hidden sm:block w-px h-7 bg-white/15" />
+                        <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-lg bg-white/10 grid place-items-center shrink-0">
+                                {isGovt ? <Landmark size={16} className="text-[#F7C600]" /> : <Building2 size={16} className="text-[#F7C600]" />}
+                            </div>
+                            <div className="min-w-0">
+                                <div className="text-[14px] font-semibold truncate" style={{ fontFamily: "'Montserrat', sans-serif" }} data-testid="proc-org-name">{user.org_name}</div>
+                                <div className="text-[11px] text-white/55 flex items-center gap-1.5">
+                                    <ShieldCheck size={11} className="text-[#3DD68C]" /> {isGovt ? "Government" : "Corporate"} · Approved
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -269,7 +269,10 @@ export default function Header() {
                 </div>
             </div>
 
-            {/* Layer 2 — categories (scrolls horizontally on mobile) */}
+            {/* Layer 2 — categories (scrolls horizontally on mobile).
+                Hidden for approved sellers so the dealer gets a focused
+                Seller Dashboard experience instead of buyer category pills. */}
+            {!isSeller && (
             <nav
                 className="bg-white"
                 style={{ height: 56 }}
@@ -287,6 +290,7 @@ export default function Header() {
                     </div>
                 </div>
             </nav>
+            )}
 
             {/* ===== Mobile slide-in drawer (always mounted → smooth open/close) ===== */}
             <div

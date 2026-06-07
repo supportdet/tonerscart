@@ -58,7 +58,10 @@ import ProcurementDashboard from "./pages/ProcurementDashboard";
 // global marketplace Header/Footer/chat are hidden on /procurement routes.
 function Chrome({ children }) {
     const { pathname } = useLocation();
-    const bare = pathname.startsWith("/procurement");
+    // The procurement DASHBOARD renders full-screen with its own chrome. The
+    // public procurement LOGIN keeps the standard site Header/Footer so govt &
+    // corporate users still see the TonersCart logo + nav and can get back home.
+    const bare = pathname === "/procurement";
     return (
         <>
             {!bare && <Header />}

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/ui/button";
@@ -19,7 +20,7 @@ import SupplierInsights from "../components/SupplierInsights";
 import CommissionBanner from "../components/CommissionBanner";
 import CommissionCalculator from "../components/CommissionCalculator";
 import { commissionFor } from "../lib/commission";
-import { Copy, Check, ChevronDown, ChevronLeft } from "lucide-react";
+import { Copy, Check, ChevronLeft, Upload, ArrowRight, Store, Building2, Layers } from "lucide-react";
 import { colorSwatch as _colorSwatch } from "../lib/colors";
 import BulkUploadGeneric from "../components/BulkUploadGeneric";
 import { tonerBulkConfig } from "../lib/bulkConfigs";
@@ -30,6 +31,32 @@ const colorSwatchHex = (name) => {
     const v = _colorSwatch(name);
     return v.startsWith("linear") ? "#C8C8CD" : v;
 };
+
+const DEALER_TABS = [
+    { key: "toners", label: "Toners" },
+    { key: "printers", label: "Printers" },
+    { key: "papers", label: "Papers" },
+    { key: "consumables", label: "Consumables" },
+    { key: "orders", label: "Orders" },
+    { key: "earnings", label: "My Earnings" },
+    { key: "insights", label: "Insights" },
+    { key: "bulk", label: "Bulk Orders" },
+    { key: "d2d", label: "Dealer to Dealer" },
+    { key: "oem", label: "OEM Marketplace" },
+];
+
+// Large center action panel shown at the top of each product tab.
+function CenterAction({ title, subtitle, children }) {
+    return (
+        <div className="mb-6 rounded-2xl border border-dashed border-black/[0.14] bg-[#FAFAFB] px-5 py-6 flex flex-col items-center text-center gap-3" data-testid="tab-action-panel">
+            <div>
+                <div className="text-[16px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>{title}</div>
+                {subtitle && <div className="text-[12.5px] text-[#6E6E73] mt-1 max-w-md">{subtitle}</div>}
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3">{children}</div>
+        </div>
+    );
+}
 
 const ORDER_STATUS = {
     requested: "Requested",
@@ -137,10 +164,15 @@ function _TrackingInputLegacy() { return null; }
 
 export default function SupplierDashboard() {
     const { user, refresh } = useAuth();
+    const navigate = useNavigate();
     const isApproved = user?.supplier_status === "approved";
-    const [catalog, setCatalog] = useState("toners"); // 'toners' | 'printers' | 'papers' | 'earnings' | 'orders'
+    const [catalog, setCatalog] = useState("toners"); // 'toners' | 'printers' | 'papers' | 'consumables' | 'orders' | 'earnings' | 'insights' | 'bulk' | 'd2d' | 'oem'
     const [bulkOpen, setBulkOpen] = useState(false);
-    const [addMenuOpen, setAddMenuOpen] = useState(false);
+    const [editBulkOpen, setEditBulkOpen] = useState(false);
+    // Edit business / company name
+    const [nameDialogOpen, setNameDialogOpen] = useState(false);
+    const [nameInput, setNameInput] = useState("");
+    const [savingName, setSavingName] = useState(false);
     // Wave 14 — one-time supplier agreement gate
     const [agreementOpen, setAgreementOpen] = useState(false);
     const [pendingAddAction, setPendingAddAction] = useState(null); // 'single' | 'bulk' | null
@@ -167,10 +199,9 @@ export default function SupplierDashboard() {
     const [editingId, setEditingId] = useState(null);
     const [existingImages, setExistingImages] = useState([]); // urls already saved on this listing
 
-    // Brand dropdown + free-text model
+    // Brand dropdown
     const [brands, setBrands] = useState([]);
     const [brand, setBrand] = useState("");
-    const [modelNumber, setModelNumber] = useState("");
     const [color, setColor] = useState("Black");
 
     // Form
@@ -242,7 +273,7 @@ export default function SupplierDashboard() {
     };
 
     const reset = () => {
-        setBrand(""); setModelNumber(""); setColor("Black");
+        setBrand(""); setColor("Black");
         setPrice(""); setStock(""); setTonerType("Original"); setPageYield("");
         setImageFiles([]); setImagePreviews([]);
         setBrochureFile(null);
@@ -272,47 +303,22 @@ export default function SupplierDashboard() {
         else if (kind === "single") openDialog();
     };
 
-    const openEditDialog = (l) => {
-        reset();
-        setEditingId(l.id);
-        setBrand(l.brand || "");
-        setModelNumber(l.model_number || "");
-        setColor(l.color || "Black");
-        setPrice(String(l.price ?? ""));
-        setStock(String(l.stock ?? ""));
-        setTonerType(l.toner_type || "Original");
-        setPageYield(l.page_yield ? String(l.page_yield) : "");
-        setCompatibleModels(l.compatible_models || "");
-        setOemPartNumber(l.oem_part_number || "");
-        setCartridgeWeight(l.cartridge_weight ? String(l.cartridge_weight) : "");
-        // Warranty: if matches preset use preset, else "Other"
-        const wPresets = ["3 months", "6 months", "1 year"];
-        if (l.warranty && wPresets.includes(l.warranty)) {
-            setWarranty(l.warranty);
-            setWarrantyOther("");
-        } else if (l.warranty) {
-            setWarranty("Other");
-            setWarrantyOther(l.warranty.replace(/\s*months?/i, "").trim());
-        } else {
-            setWarranty("");
+    const openEditBulk = () => setEditBulkOpen(true);
+
+    const saveName = async () => {
+        const v = nameInput.trim();
+        if (!v) { toast.error("Enter a business name"); return; }
+        setSavingName(true);
+        try {
+            await api.put("/supplier/profile", { business_name: v });
+            toast.success("Business name updated");
+            setNameDialogOpen(false);
+            refresh();
+        } catch (e) {
+            toast.error(formatApiError(e));
+        } finally {
+            setSavingName(false);
         }
-        setPrintTechnology(l.print_technology || "Laser");
-        setIntercityCharge(String(l.intercity_delivery_charge ?? 0));
-        setGstRate(Number(l.gst_rate ?? 18));
-        // Variants
-        if (Array.isArray(l.variants) && l.variants.length > 0) {
-            setVariants(l.variants.map((v) => ({
-                color: v.color || "",
-                price: String(v.price ?? ""),
-                stock: String(v.stock ?? ""),
-            })));
-        } else {
-            setVariants([{ color: l.color || "Black", price: String(l.price ?? ""), stock: String(l.stock ?? "") }]);
-        }
-        // Existing images
-        const imgs = Array.isArray(l.image_urls) ? l.image_urls.filter(Boolean) : (l.image_url ? [l.image_url] : []);
-        setExistingImages(imgs);
-        setOpen(true);
     };
 
     const onPickFileAt = (idx, e) => {
@@ -377,7 +383,7 @@ export default function SupplierDashboard() {
     const submit = async (e) => {
         e.preventDefault();
         if (!brand) { toast.error("Please select a brand"); return; }
-        if (!modelNumber.trim()) { toast.error("Please enter a model number"); return; }
+        if (!compatibleModels.trim()) { toast.error("Please enter the compatible printer models"); return; }
         // Wave 10 — images are optional. Animated cartridge fallback is shown
         // automatically when no image is provided.
         const cleanedVariants = variants
@@ -399,9 +405,13 @@ export default function SupplierDashboard() {
             const totalStock = cleanedVariants.reduce((s, v) => s + v.stock, 0);
             const warrantyValue = warranty === "Other" ? (warrantyOther.trim() ? `${warrantyOther.trim()} months` : null) : (warranty || null);
 
+            // Model number is no longer collected — derive a stable identifier
+            // from the first compatible printer model so search / orders work.
+            const derivedModel = (compatibleModels.split(/[,;|]/)[0] || compatibleModels || brand).trim().slice(0, 50);
+
             const payload = {
                 brand,
-                model_number: modelNumber.trim(),
+                model_number: derivedModel,
                 color: cleanedVariants[0].color,
                 price: cheapest.price,
                 stock: totalStock,
@@ -513,9 +523,20 @@ export default function SupplierDashboard() {
                                     <span className="tc-strip" />
                                     <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-emerald-300/90 inline-flex items-center gap-1.5"><CheckCircle2 size={12} /> Approved supplier</span>
                                 </div>
-                                <h1 className="text-white truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(24px, 3.4vw, 44px)", fontWeight: 300, letterSpacing: "-0.025em", lineHeight: 1.1 }}>
-                                    {user?.supplier?.business_name || user?.company || "Supplier dashboard"}
-                                </h1>
+                                <div className="flex items-center gap-2.5">
+                                    <h1 className="text-white truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(24px, 3.4vw, 44px)", fontWeight: 300, letterSpacing: "-0.025em", lineHeight: 1.1 }} data-testid="supplier-business-name">
+                                        {user?.supplier?.business_name || user?.company || "Supplier dashboard"}
+                                    </h1>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setNameInput(user?.supplier?.business_name || user?.company || ""); setNameDialogOpen(true); }}
+                                        className="shrink-0 w-8 h-8 grid place-items-center rounded-lg text-white/55 hover:text-white hover:bg-white/10 transition"
+                                        data-testid="edit-business-name-btn"
+                                        title="Edit business name"
+                                    >
+                                        <Pencil size={15} />
+                                    </button>
+                                </div>
                                 <div className="mt-2 flex items-center gap-2" data-testid="supplier-seller-id">
                                     <span className="text-[10px] tracking-[0.18em] uppercase font-semibold text-white/45">Seller ID</span>
                                     {user?.supplier?.seller_id ? (
@@ -526,6 +547,10 @@ export default function SupplierDashboard() {
                                 </div>
                                 <p className="text-[14px] text-white/65 mt-2">{user?.supplier?.city || user?.city}</p>
                             </div>
+                        </div>
+                        <div className="hidden sm:flex items-center gap-2 self-start shrink-0" data-testid="seller-dashboard-label">
+                            <span className="w-2 h-2 rounded-full bg-[#F5C400]" />
+                            <span className="text-[11px] tracking-[0.2em] uppercase font-semibold text-white/60">Seller Dashboard</span>
                         </div>
                     </div>
 
@@ -548,118 +573,50 @@ export default function SupplierDashboard() {
             </div>
 
             <div className="tc-container py-8 sm:py-10">
-                {/* Catalog tabs with contextual Add button on the right */}
-                <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
-                    <div className="inline-flex items-center rounded-full bg-black/[0.05] p-1" data-testid="catalog-tabs" style={{ fontFamily: "'Inter', sans-serif" }}>
-                        <button onClick={() => setCatalog("toners")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "toners" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-toners">Toners</button>
-                        <button onClick={() => setCatalog("printers")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "printers" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-printers">Printers</button>
-                        <button onClick={() => setCatalog("papers")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "papers" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-papers">Papers</button>
-                        <button onClick={() => setCatalog("consumables")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "consumables" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-consumables">Consumables</button>
-                        <button onClick={() => setCatalog("orders")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "orders" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-orders">Orders</button>
-                        <button onClick={() => setCatalog("earnings")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "earnings" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-earnings">My Earnings</button>
-                        <button onClick={() => setCatalog("insights")} className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition ${catalog === "insights" ? "bg-white text-[#0A0A0B] shadow-sm" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`} data-testid="tab-insights">Insights</button>
+                {/* Dealer dashboard tab bar */}
+                <div className="border-b border-black/[0.08] mb-6 overflow-x-auto tc-cat-scroll" data-testid="catalog-tabs">
+                    <div className="flex items-center gap-0.5 min-w-max" style={{ fontFamily: "'Inter', sans-serif" }}>
+                        {DEALER_TABS.map((t) => (
+                            <button
+                                key={t.key}
+                                onClick={() => setCatalog(t.key)}
+                                className={`relative px-4 py-3 text-[13.5px] font-semibold whitespace-nowrap transition ${catalog === t.key ? "text-[#0A0A0B]" : "text-[#6E6E73] hover:text-[#0A0A0B]"}`}
+                                data-testid={`tab-${t.key}`}
+                            >
+                                {t.label}
+                                {catalog === t.key && <span className="absolute left-3 right-3 -bottom-px h-[2px] bg-[#0A0A0B] rounded-full" />}
+                            </button>
+                        ))}
                     </div>
-                    {catalog === "toners" ? (
-                        <div className="relative" onBlur={() => setTimeout(() => setAddMenuOpen(false), 150)} tabIndex={-1}>
-                            <Button className="btn-cta inline-flex items-center gap-2" onClick={() => setAddMenuOpen((o) => !o)} data-testid="add-listing-btn">
-                                <Plus size={16} /> Add toner <ChevronDown size={14} />
-                            </Button>
-                            {addMenuOpen && (
-                                <div
-                                    className="absolute right-0 top-full mt-2 w-60 bg-white text-[#1D1D1F] rounded-xl shadow-xl border border-black/[0.08] py-2 z-30"
-                                    data-testid="add-toner-menu"
-                                >
-                                    <button
-                                        onMouseDown={() => { setAddMenuOpen(false); requestAddAction("single"); }}
-                                        className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]"
-                                        data-testid="add-single-toner-btn"
-                                    >
-                                        <div className="font-semibold">Add single toner</div>
-                                        <div className="text-[11.5px] text-[#86868B]">One listing with images & variants</div>
-                                    </button>
-                                    <button
-                                        onMouseDown={() => { setAddMenuOpen(false); requestAddAction("bulk"); }}
-                                        className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]"
-                                        data-testid="bulk-upload-btn"
-                                    >
-                                        <div className="font-semibold">Bulk upload</div>
-                                        <div className="text-[11.5px] text-[#86868B]">Spreadsheet or CSV — many at once</div>
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    ) : catalog === "printers" ? (
-                        <div className="relative" onBlur={() => setTimeout(() => setAddMenuOpen(false), 150)} tabIndex={-1}>
-                            <Button className="btn-cta inline-flex items-center gap-2" onClick={() => setAddMenuOpen((o) => !o)} data-testid="add-printer-cta-btn">
-                                <Plus size={16} /> Add printer <ChevronDown size={14} />
-                            </Button>
-                            {addMenuOpen && (
-                                <div className="absolute right-0 top-full mt-2 w-60 bg-white text-[#1D1D1F] rounded-xl shadow-xl border border-black/[0.08] py-2 z-30" data-testid="add-printer-menu">
-                                    <button onMouseDown={() => { setAddMenuOpen(false); window.dispatchEvent(new CustomEvent("tc-open-add-printer")); }} className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]" data-testid="add-single-printer-btn">
-                                        <div className="font-semibold">Add single printer</div>
-                                        <div className="text-[11.5px] text-[#86868B]">One listing with images & specs</div>
-                                    </button>
-                                    <button onMouseDown={() => { setAddMenuOpen(false); window.dispatchEvent(new CustomEvent("tc-open-bulk-printer")); }} className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]" data-testid="bulk-upload-printer-btn">
-                                        <div className="font-semibold">Bulk upload</div>
-                                        <div className="text-[11.5px] text-[#86868B]">Spreadsheet or CSV — many at once</div>
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    ) : catalog === "papers" ? (
-                        <div className="relative" onBlur={() => setTimeout(() => setAddMenuOpen(false), 150)} tabIndex={-1}>
-                            <Button className="btn-cta inline-flex items-center gap-2" onClick={() => setAddMenuOpen((o) => !o)} data-testid="add-paper-cta-btn">
-                                <Plus size={16} /> Add paper <ChevronDown size={14} />
-                            </Button>
-                            {addMenuOpen && (
-                                <div className="absolute right-0 top-full mt-2 w-60 bg-white text-[#1D1D1F] rounded-xl shadow-xl border border-black/[0.08] py-2 z-30" data-testid="add-paper-menu">
-                                    <button onMouseDown={() => { setAddMenuOpen(false); window.dispatchEvent(new CustomEvent("tc-open-add-paper")); }} className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]" data-testid="add-single-paper-btn">
-                                        <div className="font-semibold">Add single paper</div>
-                                        <div className="text-[11.5px] text-[#86868B]">One SKU with images & specs</div>
-                                    </button>
-                                    <button onMouseDown={() => { setAddMenuOpen(false); window.dispatchEvent(new CustomEvent("tc-open-bulk-paper")); }} className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]" data-testid="bulk-upload-paper-btn">
-                                        <div className="font-semibold">Bulk upload</div>
-                                        <div className="text-[11.5px] text-[#86868B]">Spreadsheet or CSV — many at once</div>
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    ) : catalog === "consumables" ? (
-                        <div className="relative" onBlur={() => setTimeout(() => setAddMenuOpen(false), 150)} tabIndex={-1}>
-                            <Button className="btn-cta inline-flex items-center gap-2" onClick={() => setAddMenuOpen((o) => !o)} data-testid="add-consumable-cta-btn">
-                                <Plus size={16} /> Add consumable <ChevronDown size={14} />
-                            </Button>
-                            {addMenuOpen && (
-                                <div className="absolute right-0 top-full mt-2 w-60 bg-white text-[#1D1D1F] rounded-xl shadow-xl border border-black/[0.08] py-2 z-30" data-testid="add-consumable-menu">
-                                    <button onMouseDown={() => { setAddMenuOpen(false); window.dispatchEvent(new CustomEvent("tc-open-add-consumable")); }} className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]" data-testid="add-single-consumable-btn">
-                                        <div className="font-semibold">Add single consumable</div>
-                                        <div className="text-[11.5px] text-[#86868B]">One SKU with images & specs</div>
-                                    </button>
-                                    <button onMouseDown={() => { setAddMenuOpen(false); window.dispatchEvent(new CustomEvent("tc-open-bulk-consumable")); }} className="block w-full text-left px-4 py-2 text-[13px] hover:bg-black/[0.04]" data-testid="bulk-upload-consumable-btn">
-                                        <div className="font-semibold">Bulk upload</div>
-                                        <div className="text-[11.5px] text-[#86868B]">Spreadsheet or CSV — many at once</div>
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    ) : null}
                 </div>
 
                 {catalog === "printers" ? (
                     <>
                         <h2 id="printers" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your printers</h2>
+                        <CenterAction title="Manage your printers" subtitle="Add a single printer with full specs, or upload many at once via spreadsheet.">
+                            <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-printer"))} data-testid="add-printer-cta-btn"><Plus size={16} /> Add Printer</Button>
+                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-bulk-printer"))} data-testid="bulk-upload-printer-btn"><Upload size={15} /> Bulk upload</Button>
+                        </CenterAction>
                         <D2DExplainer />
                         <PrinterListings />
                     </>
                 ) : catalog === "papers" ? (
                     <>
                         <h2 id="papers" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your papers</h2>
+                        <CenterAction title="Manage your papers" subtitle="Add a single paper SKU, or upload many at once via spreadsheet.">
+                            <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-paper"))} data-testid="add-paper-cta-btn"><Plus size={16} /> Add Paper</Button>
+                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-bulk-paper"))} data-testid="bulk-upload-paper-btn"><Upload size={15} /> Bulk upload</Button>
+                        </CenterAction>
                         <D2DExplainer />
                         <PaperListings />
                     </>
                 ) : catalog === "consumables" ? (
                     <>
                         <h2 id="consumables" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your consumables</h2>
+                        <CenterAction title="Manage your consumables" subtitle="Add a single consumable SKU, or upload many at once via spreadsheet.">
+                            <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-consumable"))} data-testid="add-consumable-cta-btn"><Plus size={16} /> Add Consumable</Button>
+                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-bulk-consumable"))} data-testid="bulk-upload-consumable-btn"><Upload size={15} /> Bulk upload</Button>
+                        </CenterAction>
                         <D2DExplainer />
                         <ConsumableListings />
                     </>
@@ -730,10 +687,58 @@ export default function SupplierDashboard() {
                             </div>
                         )}
                     </>
+                ) : catalog === "bulk" ? (
+                    <>
+                        <h2 className="text-[#0A0A0B] mb-1 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Bulk orders &amp; uploads</h2>
+                        <p className="text-[13px] text-[#6E6E73] mb-5 max-w-xl">List large quantities fast. Download a spreadsheet template, fill in your catalogue, and upload many products at once — for any category.</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" data-testid="bulk-hub">
+                            {[
+                                { label: "Toners", evt: null, onClick: () => requestAddAction("bulk"), tid: "bulk-hub-toners" },
+                                { label: "Printers", onClick: () => window.dispatchEvent(new CustomEvent("tc-open-bulk-printer")), tid: "bulk-hub-printers" },
+                                { label: "Papers", onClick: () => window.dispatchEvent(new CustomEvent("tc-open-bulk-paper")), tid: "bulk-hub-papers" },
+                                { label: "Consumables", onClick: () => window.dispatchEvent(new CustomEvent("tc-open-bulk-consumable")), tid: "bulk-hub-consumables" },
+                            ].map((b) => (
+                                <button key={b.label} onClick={b.onClick} className="tc-card-flat p-6 text-left hover:shadow-md hover:border-black/[0.12] transition group" data-testid={b.tid}>
+                                    <div className="w-10 h-10 rounded-xl bg-[#0A0A0B]/[0.05] grid place-items-center mb-3 group-hover:bg-[#0A0A0B] group-hover:text-white transition"><Upload size={18} /></div>
+                                    <div className="text-[15px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Bulk upload {b.label.toLowerCase()}</div>
+                                    <div className="text-[12px] text-[#6E6E73] mt-1 inline-flex items-center gap-1">Open spreadsheet <ArrowRight size={12} /></div>
+                                </button>
+                            ))}
+                        </div>
+                    </>
+                ) : catalog === "d2d" ? (
+                    <>
+                        <h2 className="text-[#0A0A0B] mb-1 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Dealer to Dealer</h2>
+                        <p className="text-[13px] text-[#6E6E73] mb-5 max-w-xl">Sell surplus stock to other verified dealers at special D2D prices. Turn on the <strong>D2D</strong> toggle on any product card (Toners / Printers / Papers tabs) and set a dealer price.</p>
+                        <div className="tc-card-flat p-8 text-center" data-testid="d2d-panel">
+                            <div className="w-12 h-12 rounded-2xl bg-[#5E8CB5]/15 text-[#5E8CB5] grid place-items-center mx-auto mb-4"><Store size={22} /></div>
+                            <div className="text-[16px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Browse the Dealer-to-Dealer marketplace</div>
+                            <p className="text-[13px] text-[#6E6E73] mt-2 max-w-md mx-auto">See D2D listings from other verified dealers and source stock at better prices.</p>
+                            <Button className="btn-cta h-11 px-6 mt-5 inline-flex items-center gap-2" onClick={() => navigate("/dealer")} data-testid="d2d-open-btn">Open D2D marketplace <ArrowRight size={15} /></Button>
+                        </div>
+                    </>
+                ) : catalog === "oem" ? (
+                    <>
+                        <h2 className="text-[#0A0A0B] mb-1 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>OEM Marketplace</h2>
+                        <p className="text-[13px] text-[#6E6E73] mb-5 max-w-xl">The OEM Marketplace showcases official manufacturer products. Explore brand-direct listings and partnership opportunities.</p>
+                        <div className="tc-card-flat p-8 text-center" data-testid="oem-panel">
+                            <div className="w-12 h-12 rounded-2xl bg-[#B58A75]/15 text-[#B58A75] grid place-items-center mx-auto mb-4"><Building2 size={22} /></div>
+                            <div className="text-[16px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Explore the OEM Marketplace</div>
+                            <p className="text-[13px] text-[#6E6E73] mt-2 max-w-md mx-auto">Discover official, brand-direct printer and supply products from verified manufacturers.</p>
+                            <Button className="btn-cta h-11 px-6 mt-5 inline-flex items-center gap-2" onClick={() => navigate("/oem")} data-testid="oem-open-btn">View OEM marketplace <ArrowRight size={15} /></Button>
+                        </div>
+                    </>
                 ) : (
                 <>
                 {/* Listings */}
                 <h2 id="listings" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your toners</h2>
+                <CenterAction title="Manage your toners" subtitle="Add a single toner, edit your whole catalogue inline, or upload many at once.">
+                    <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => requestAddAction("single")} data-testid="add-listing-btn"><Plus size={16} /> Add Toner</Button>
+                    <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => requestAddAction("bulk")} data-testid="bulk-upload-btn"><Upload size={15} /> Bulk upload</Button>
+                    {listings.length > 0 && (
+                        <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={openEditBulk} data-testid="edit-toners-btn"><Layers size={15} /> Edit toners</Button>
+                    )}
+                </CenterAction>
                 <D2DExplainer />
             {listings.length === 0 ? (
                 <div className="tc-card-flat p-8 text-center text-[#6E6E73]">
@@ -759,16 +764,20 @@ export default function SupplierDashboard() {
                                 </div>
                                 <div className="p-4 flex flex-col gap-2 flex-1">
                                     <div className="flex items-center justify-between">
-                                        <div className="font-mono text-[16px] font-semibold text-[#0A0A0B]">{l.model_number}</div>
+                                        <div className="text-[16px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>{l.brand}</div>
                                         <span className={`text-[10px] font-bold px-2 py-1 rounded-md border uppercase tracking-[0.08em] ${typeStyle}`}>{l.toner_type}</span>
                                     </div>
-                                    <div className="text-[12px] text-[#6E6E73]">{l.brand} · {l.color}</div>
+                                    {l.compatible_models ? (
+                                        <div className="text-[12px] text-[#6E6E73]" data-testid={`listing-compat-${l.id}`}>Compatible: {l.compatible_models}</div>
+                                    ) : (
+                                        <div className="text-[12px] text-[#6E6E73]">{l.color}</div>
+                                    )}
                                     <div className="mt-1 flex items-center justify-between">
                                         <div className="font-mono text-[18px] font-semibold text-[#0A0A0B]">₹{Number(l.price).toLocaleString("en-IN")}</div>
                                         <InlineStock stock={l.stock} onSave={(v) => patchStock(l.id, v)} testId={`stock-edit-${l.id}`} />
                                     </div>
                                     <div className="mt-2 flex items-center gap-3">
-                                        <button onClick={() => openEditDialog(l)} className="text-[12px] text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`edit-${l.id}`}>
+                                        <button onClick={openEditBulk} className="text-[12px] text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`edit-${l.id}`}>
                                             <Pencil size={12} /> Edit
                                         </button>
                                         <button onClick={() => duplicateListing(l.id)} className="text-[12px] text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`duplicate-${l.id}`}>
@@ -834,15 +843,16 @@ export default function SupplierDashboard() {
                                 </select>
                             </div>
                             <div>
-                                <Label>Model number<span className="text-red-500"> *</span></Label>
+                                <Label>Compatible printer models<span className="text-red-500"> *</span></Label>
                                 <Input
-                                    value={modelNumber}
-                                    onChange={(e) => setModelNumber(e.target.value)}
-                                    placeholder="e.g. 88A, TN-2365, 925"
+                                    value={compatibleModels}
+                                    onChange={(e) => setCompatibleModels(e.target.value)}
+                                    placeholder="e.g. HP LaserJet 1010, 1012, 1015"
                                     required
                                     className="tc-input-lg"
-                                    data-testid="listing-model-input"
+                                    data-testid="listing-compatible-models"
                                 />
+                                <div className="text-[11px] text-[#86868B] mt-1">This identifies your toner and is shown on the product card.</div>
                             </div>
                         </div>
 
@@ -901,10 +911,6 @@ export default function SupplierDashboard() {
                             <div>
                                 <Label>OEM part number</Label>
                                 <Input value={oemPartNumber} onChange={(e) => setOemPartNumber(e.target.value)} placeholder="e.g. Q2612A" className="tc-input-lg" data-testid="listing-oem" />
-                            </div>
-                            <div className="col-span-2">
-                                <Label>Compatible printer models</Label>
-                                <Input value={compatibleModels} onChange={(e) => setCompatibleModels(e.target.value)} placeholder="e.g. HP LaserJet 1010, 1012, 1015" className="tc-input-lg" data-testid="listing-compatible-models" />
                             </div>
                             <div>
                                 <Label>Cartridge weight (g)</Label>
@@ -985,6 +991,38 @@ export default function SupplierDashboard() {
                     onSuccess={() => { load(); }}
                 />
             )}
+            {editBulkOpen && (
+                <BulkUploadGeneric
+                    config={tonerBulkConfig}
+                    editMode
+                    initialRows={listings.map(tonerBulkConfig.fromListing)}
+                    onClose={() => setEditBulkOpen(false)}
+                    onSuccess={() => { load(); }}
+                />
+            )}
+            {/* Edit business / company name */}
+            <Dialog open={nameDialogOpen} onOpenChange={setNameDialogOpen}>
+                <DialogContent className="sm:max-w-md" data-testid="edit-name-dialog">
+                    <DialogHeader>
+                        <DialogTitle>Edit business name</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 pt-1">
+                        <Label>Business / company name</Label>
+                        <Input
+                            value={nameInput}
+                            onChange={(e) => setNameInput(e.target.value)}
+                            placeholder="e.g. Sharma Printer Solutions"
+                            className="tc-input-lg"
+                            data-testid="business-name-input"
+                            onKeyDown={(e) => { if (e.key === "Enter") saveName(); }}
+                        />
+                        <div className="flex justify-end gap-2 pt-2">
+                            <Button variant="outline" onClick={() => setNameDialogOpen(false)} data-testid="cancel-name-btn">Cancel</Button>
+                            <Button className="btn-cta" onClick={saveName} disabled={savingName} data-testid="save-name-btn">{savingName ? "Saving…" : "Save"}</Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
             <SupplierAgreementDialog
                 open={agreementOpen}
                 onAccept={onAgreementAccepted}

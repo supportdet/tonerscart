@@ -63,6 +63,11 @@ const MOBILE_PRINT_OPTS = [
     { id: "Wi-Fi Direct", label: "Wi-Fi Direct" }, { id: "None", label: "None" },
 ];
 
+const RESOLUTION_OPTS = [
+    "600 x 600 dpi", "1200 x 600 dpi", "1200 x 1200 dpi",
+    "2400 x 600 dpi", "4800 x 1200 dpi", "4800 x 2400 dpi", "9600 x 2400 dpi",
+];
+
 const PAPER_SIZES   = []; /* legacy — buyer-only */
 const CONNECTIVITY  = []; /* legacy — buyer-only */
 
@@ -630,14 +635,6 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                                 <Input type="number" min="0" value={f.print_speed_ppm} onChange={upd("print_speed_ppm")} placeholder="e.g. 20" className="tc-input-lg" data-testid="wizard-print-speed" />
                             </SpecGroup>
 
-                            <SpecGroup label="Monthly recommended volume" hint="e.g. Up to 1500 pages">
-                                <Input type="number" min="0" value={f.monthly_volume_recommended} onChange={upd("monthly_volume_recommended")} placeholder="1500" className="tc-input-lg" data-testid="wizard-vol-recommended" />
-                            </SpecGroup>
-
-                            <SpecGroup label="Monthly duty cycle" hint="e.g. Up to 10,000 images/month">
-                                <Input type="number" min="0" value={f.duty_cycle} onChange={upd("duty_cycle")} placeholder="10000" className="tc-input-lg" data-testid="wizard-duty-cycle" />
-                            </SpecGroup>
-
                             <SpecGroup label="Connectivity">
                                 <PillRow
                                     options={CONNECTIVITY_OPTS}
@@ -649,7 +646,10 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                             </SpecGroup>
 
                             <SpecGroup label="Maximum print resolution">
-                                <Input value={f.max_resolution} onChange={upd("max_resolution")} placeholder="e.g. 600 x 600 dpi" className="tc-input-lg" data-testid="wizard-max-resolution" />
+                                <select value={f.max_resolution} onChange={upd("max_resolution")} className="tc-input-lg w-full" data-testid="wizard-max-resolution">
+                                    <option value="">Select resolution…</option>
+                                    {RESOLUTION_OPTS.map((r) => <option key={r} value={r}>{r}</option>)}
+                                </select>
                             </SpecGroup>
 
                             <SpecGroup label="Paper sizes supported">
