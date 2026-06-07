@@ -226,17 +226,17 @@ export default function Landing() {
                                 style={{ transitionDelay: `${i * 80}ms` }}
                                 data-testid={`featured-card-${s.id}`}
                             >
-                                {/* Banner image — square 1:1 */}
-                                <div className="flex flex-col items-center">
-                                    <div className="tc-featured-logo-ph" data-testid={`featured-logo-${s.id}`}>
-                                        {s.featured_image_url ? (
-                                            <img src={s.featured_image_url} alt={s.name} className="w-full h-full object-cover" />
-                                        ) : s.logo_url ? (
-                                            <img src={s.logo_url} alt={s.name} className="w-full h-full object-cover" />
-                                        ) : (
-                                            <Camera size={28} className="text-white/45" strokeWidth={1.6} />
-                                        )}
-                                    </div>
+                                {/* Banner image — wide 16:9 rectangle from the dealer's application */}
+                                <div className="tc-featured-banner" data-testid={`featured-logo-${s.id}`}>
+                                    {s.featured_image_url ? (
+                                        <img src={s.featured_image_url} alt={s.name} className="w-full h-full object-cover" loading="lazy" />
+                                    ) : s.logo_url ? (
+                                        <img src={s.logo_url} alt={s.name} className="w-full h-full object-cover" loading="lazy" />
+                                    ) : (
+                                        <div className="w-full h-full grid place-items-center">
+                                            <Camera size={30} className="text-white/40" strokeWidth={1.6} />
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="mt-5 text-center">

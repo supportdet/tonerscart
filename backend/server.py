@@ -2565,10 +2565,20 @@ class FeaturedFromApplication(BaseModel):
     supplier_id: str
 
 
+_FEATURED_CACHE: dict = {}
+_FEATURED_TTL_SECS = 120
+
+
 @api.get("/featured/suppliers")
 def featured_suppliers_public(limit: int = 6):
     """Public — return suppliers where is_featured = true, with signed logo + banner URLs.
-    Returns [] gracefully if the migration has not been run yet."""
+    Returns [] gracefully if the migration has not been run yet.
+    Cached for a short TTL so the homepage doesn't regenerate Supabase signed URLs
+    (a sequential network call per supplier) on every visit."""
+    now = _time.time()
+    cached = _FEATURED_CACHE.get(limit)
+    if cached and (now - cached["ts"]) < _FEATURED_TTL_SECS:
+        return cached["data"]
     try:
         rows = sb_admin.table("suppliers").select(
             "id,business_name,city,state,business_logo,is_featured,seller_types,featured_image_url,tagline"
@@ -2619,6 +2629,7 @@ def featured_suppliers_public(limit: int = 6):
                 except Exception:
                     item["featured_image_url"] = None
         out.append(item)
+    _FEATURED_CACHE[limit] = {"data": out, "ts": now}
     return out
 
 
@@ -2750,6 +2761,7 @@ def admin_feature_from_application(payload: FeaturedFromApplication,
         }).eq("id", payload.application_id).execute()
     except Exception as e:
         logger.warning("featured_applications status update failed: %s", e)
+    _FEATURED_CACHE.clear()
     return {"ok": True, "supplier_id": payload.supplier_id, "featured": True}
 
 
@@ -2775,6 +2787,7 @@ def admin_toggle_supplier_featured(supplier_id: str, payload: SupplierFeaturedTo
     except Exception as e:
         logger.warning("toggle featured failed (column missing?): %s", e)
         raise HTTPException(503, "is_featured column not yet migrated — run supabase_schema_quotation_featured.sql") from e
+    _FEATURED_CACHE.clear()
     return {"ok": True, "is_featured": bool(payload.is_featured)}
 
 
@@ -3225,9 +3238,26 @@ def admin_supplier_detail(supplier_id: str, user: dict = Depends(require_role("a
         if (o.get("status") or "") in _open:
             pending_payout += float(p)
 
-    # Signed document links (5 min) for KYC / bank / ID proof
+    # Signed document links (5 min) for KYC / bank / ID proof.
+    # On approval only `doc_id_proof` is copied onto the `suppliers` row — the
+    # full KYC set (GST, PAN, bank proof, address proof, brand authorization,
+    # shop photo) remains on the original `suppliers_pending` application. Merge
+    # those paths in so admins can view every document the dealer uploaded.
+    doc_source = dict(sup)
+    if sup.get("user_id"):
+        try:
+            pend = sb_admin.table("suppliers_pending").select("*").eq(
+                "user_id", sup["user_id"]
+            ).maybe_single().execute()
+            prow = pend.data if pend and pend.data else None
+            if prow:
+                for f in DOC_FIELDS:
+                    if not doc_source.get(f) and prow.get(f):
+                        doc_source[f] = prow[f]
+        except Exception:
+            pass
     try:
-        documents = _signed_doc_urls(sup, ttl=300)
+        documents = _signed_doc_urls(doc_source, ttl=300)
     except Exception:
         documents = {}
 
@@ -5225,6 +5255,7 @@ async def admin_upload_featured_image(supplier_id: str, file: UploadFile = File(
                 sb_admin.table("suppliers").update({"business_logo": path}).eq("id", supplier_id).execute()
             else:
                 raise
+        _FEATURED_CACHE.clear()
         return {"ok": True, "path": path, "url": url}
     except HTTPException:
         raise

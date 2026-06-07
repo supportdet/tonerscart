@@ -45,10 +45,18 @@ const DEALER_TABS = [
     { key: "oem", label: "OEM Marketplace", bg: "#F4EEFD", bgHover: "#E7DBFB", bgActive: "#D9C7F8", accent: "#7C3AED" },
 ];
 
+// Category badge colours for the combined All Listings table.
+const CAT_BADGE = {
+    Toner: "bg-[#ECFBFD] text-[#0891B2] border-[#C2EFF5]",
+    Printer: "bg-[#FDEDF7] text-[#DB2777] border-[#F6C6E4]",
+    Paper: "bg-[#FEF6E7] text-[#D97706] border-[#FAE0A6]",
+    Consumable: "bg-[#EDFBEF] text-[#16A34A] border-[#C2EFCA]",
+};
+
 // Full-width dealer control bar that replaces the customer category pills.
 function DealerTabBar({ active, onSelect }) {
     return (
-        <div className="w-full bg-white border-b border-black/10" data-testid="catalog-tabs">
+        <div className="w-full bg-white border-b border-black/10 sticky top-[64px] z-[90] shadow-sm" data-testid="catalog-tabs">
             <div className="flex w-full overflow-x-auto tc-cat-scroll">
                 {DEALER_TABS.map((t) => {
                     const isActive = active === t.key;
@@ -262,6 +270,7 @@ export default function SupplierDashboard() {
     // Business logo
     const [logoUrl, setLogoUrl] = useState("");
     const [logoUploading, setLogoUploading] = useState(false);
+    const [allProducts, setAllProducts] = useState([]);
 
     const load = async () => {
         if (!isApproved) return;
@@ -276,7 +285,26 @@ export default function SupplierDashboard() {
             setBrands(Array.isArray(b.data) ? b.data : []);
         } catch (e) { toast.error(formatApiError(e)); }
     };
-    useEffect(() => { load(); /* eslint-disable-next-line */ }, [isApproved]);
+
+    // Combined "All Listings" feed — every product across all 4 categories.
+    const loadAllProducts = async () => {
+        if (!isApproved) return;
+        const reqs = await Promise.allSettled([
+            api.get("/supplier/listings"),
+            api.get("/supplier/printers/mine"),
+            api.get("/supplier/papers/mine"),
+            api.get("/supplier/consumables/mine"),
+        ]);
+        const arr = (r) => (r.status === "fulfilled" && Array.isArray(r.value.data) ? r.value.data : []);
+        const j = (...parts) => parts.filter(Boolean).join(" ").trim();
+        const toners = arr(reqs[0]).map((l) => ({ id: l.id, kind: "toner", cat: "Toner", name: j(l.brand, l.compatible_models || l.model_number), price: l.price, stock: l.stock }));
+        const printers = arr(reqs[1]).map((l) => ({ id: l.id, kind: "printer", cat: "Printer", name: j(l.brand, l.model_number), price: l.price, stock: l.stock }));
+        const papers = arr(reqs[2]).map((l) => ({ id: l.id, kind: "paper", cat: "Paper", name: j(l.brand, l.size, l.gsm ? `${l.gsm}GSM` : ""), price: l.price_per_ream, stock: l.stock }));
+        const cons = arr(reqs[3]).map((l) => ({ id: l.id, kind: "consumable", cat: "Consumable", name: j(l.brand, l.model_number), price: l.price, stock: l.stock }));
+        setAllProducts([...toners, ...printers, ...papers, ...cons]);
+    };
+
+    useEffect(() => { load(); loadAllProducts(); /* eslint-disable-next-line */ }, [isApproved]);
 
     // Initial logo URL (signed) is returned with /auth/me via user.supplier.business_logo_url
     useEffect(() => {
@@ -341,12 +369,36 @@ export default function SupplierDashboard() {
 
     // Manual tab click clears any stat-driven filter.
     const selectTab = (key) => { setCatalog(key); setListingFilter("all"); setOrderFilter("all"); };
-    // Clickable stat cards → jump to the relevant section (optionally filtered).
+    // Clickable stat cards → smooth-scroll to the relevant on-page section.
     const goStat = (key) => {
-        if (key === "listings") { setCatalog("toners"); setListingFilter("all"); }
-        else if (key === "active") { setCatalog("toners"); setListingFilter("active"); }
-        else if (key === "orders") { setCatalog("orders"); setOrderFilter("all"); }
-        else if (key === "pending") { setCatalog("orders"); setOrderFilter("pending"); }
+        if (key === "listings" || key === "active") {
+            setListingFilter(key === "active" ? "active" : "all");
+            loadAllProducts();
+            setTimeout(() => document.getElementById("all-listings")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+        } else {
+            setCatalog("orders");
+            setOrderFilter(key === "pending" ? "pending" : "all");
+            setTimeout(() => document.getElementById("orders")?.scrollIntoView({ behavior: "smooth", block: "start" }), 140);
+        }
+    };
+
+    // Combined "All Listings" — edit jumps to the right tab+grid, delete hits the API.
+    const editProduct = (p) => {
+        if (p.kind === "toner") { setCatalog("toners"); openEditBulk(); return; }
+        const tabKey = { printer: "printers", paper: "papers", consumable: "consumables" }[p.kind];
+        const evt = { printer: "tc-open-edit-printer", paper: "tc-open-edit-paper", consumable: "tc-open-edit-consumable" }[p.kind];
+        setCatalog(tabKey);
+        setTimeout(() => window.dispatchEvent(new CustomEvent(evt)), 280);
+    };
+    const deleteProduct = async (p) => {
+        if (!window.confirm(`Delete "${p.name}"? This cannot be undone.`)) return;
+        const base = { toner: "/supplier/listings", printer: "/supplier/printers", paper: "/supplier/papers", consumable: "/supplier/consumables" }[p.kind];
+        try {
+            await api.delete(`${base}/${p.id}`);
+            toast.success("Product deleted");
+            loadAllProducts();
+            load();
+        } catch (e) { toast.error(formatApiError(e)); }
     };
 
     const saveName = async () => {
@@ -536,6 +588,10 @@ export default function SupplierDashboard() {
         () => (orderFilter === "pending" ? orders.filter((o) => o.status === "requested") : orders),
         [orders, orderFilter]
     );
+    const visibleAllProducts = useMemo(
+        () => (listingFilter === "active" ? allProducts.filter((p) => Number(p.stock) > 0) : allProducts),
+        [allProducts, listingFilter]
+    );
 
     if (!isApproved) {
         return <PendingScreen application={user?.application} />;
@@ -543,96 +599,85 @@ export default function SupplierDashboard() {
 
     return (
         <div data-testid="supplier-dashboard" style={{ fontFamily: "'Inter', sans-serif" }}>
-            {/* Full-width dealer control bar — sits directly below the top navbar */}
-            <DealerTabBar active={catalog} onSelect={selectTab} />
-            <div className="tc-hero relative pb-12">
+            {/* Compact black hero strip — identity + clickable stats on one slim band */}
+            <div className="tc-hero relative">
                 <div className="tc-hero-grid" />
-                <div className="tc-container relative pt-8 sm:pt-10">
-                    <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-                        <div className="flex items-start gap-4 sm:gap-5">
-                            {/* Business logo uploader */}
+                <div className="tc-container relative py-4 sm:py-[18px]">
+                    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+                        {/* Identity — logo + name + seller ID, one compact row */}
+                        <div className="flex items-center gap-3 min-w-0">
                             <label className="relative shrink-0 cursor-pointer group" data-testid="business-logo-uploader">
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={onPickLogo}
-                                    data-testid="business-logo-input"
-                                />
-                                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-dashed border-white/25 bg-white/[0.06] backdrop-blur grid place-items-center group-hover:border-[#F5C400]/70 transition">
+                                <input type="file" accept="image/*" className="hidden" onChange={onPickLogo} data-testid="business-logo-input" />
+                                <div className="w-11 h-11 rounded-full overflow-hidden border border-dashed border-white/25 bg-white/[0.06] grid place-items-center group-hover:border-[#F5C400]/70 transition">
                                     {logoUploading ? (
-                                        <Loader2 size={22} className="text-white/70 animate-spin" />
+                                        <Loader2 size={16} className="text-white/70 animate-spin" />
                                     ) : logoUrl ? (
                                         <img src={logoUrl} alt="Business logo" className="w-full h-full object-cover" data-testid="business-logo-img" />
                                     ) : (
-                                        <Camera size={22} className="text-white/55" strokeWidth={1.6} />
+                                        <Camera size={16} className="text-white/55" strokeWidth={1.6} />
                                     )}
                                 </div>
-                                <span className="block text-center mt-1.5 text-[9px] tracking-[0.18em] uppercase font-semibold text-white/45 group-hover:text-[#F5C400] transition">
-                                    {logoUrl ? "Change logo" : "Upload logo"}
-                                </span>
                             </label>
 
                             <div className="min-w-0">
-                                <div className="flex items-center gap-3 mb-3">
-                                    <span className="tc-strip" />
-                                    <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-emerald-300/90 inline-flex items-center gap-1.5"><CheckCircle2 size={12} /> Approved supplier</span>
-                                </div>
-                                <div className="flex items-center gap-2.5">
-                                    <h1 className="text-white truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(24px, 3.4vw, 44px)", fontWeight: 300, letterSpacing: "-0.025em", lineHeight: 1.1 }} data-testid="supplier-business-name">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <h1 className="text-white truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(18px, 2.2vw, 26px)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1 }} data-testid="supplier-business-name">
                                         {user?.supplier?.business_name || user?.company || "Supplier dashboard"}
                                     </h1>
                                     <button
                                         type="button"
                                         onClick={() => { setNameInput(user?.supplier?.business_name || user?.company || ""); setNameDialogOpen(true); }}
-                                        className="shrink-0 w-8 h-8 grid place-items-center rounded-lg text-white/55 hover:text-white hover:bg-white/10 transition"
+                                        className="shrink-0 w-7 h-7 grid place-items-center rounded-lg text-white/55 hover:text-white hover:bg-white/10 transition"
                                         data-testid="edit-business-name-btn"
                                         title="Edit business name"
                                     >
-                                        <Pencil size={15} />
+                                        <Pencil size={13} />
                                     </button>
+                                    <span className="hidden sm:inline-flex items-center gap-1 text-[10px] tracking-[0.14em] uppercase font-semibold text-emerald-300/90"><CheckCircle2 size={11} /> Approved</span>
                                 </div>
-                                <div className="mt-2 flex items-center gap-2" data-testid="supplier-seller-id">
-                                    <span className="text-[10px] tracking-[0.18em] uppercase font-semibold text-white/45">Seller ID</span>
+                                <div className="mt-1 flex items-center gap-2 text-[11.5px] text-white/55 flex-wrap" data-testid="supplier-seller-id">
+                                    <span className="tracking-[0.1em] uppercase text-white/40">Seller ID</span>
                                     {user?.supplier?.seller_id ? (
-                                        <span className="font-mono text-[13px] font-semibold text-[#F5C400] bg-white/10 border border-white/15 rounded-md px-2 py-0.5">{user.supplier.seller_id}</span>
+                                        <span className="font-mono text-[12px] font-semibold text-[#F5C400] bg-white/10 border border-white/15 rounded px-1.5 py-0.5">{user.supplier.seller_id}</span>
                                     ) : (
-                                        <span className="text-[12px] text-white/50 italic">Pending</span>
+                                        <span className="italic text-white/45">Pending</span>
                                     )}
+                                    {(user?.supplier?.city || user?.city) && <span className="text-white/30">·</span>}
+                                    <span>{user?.supplier?.city || user?.city}</span>
                                 </div>
-                                <p className="text-[14px] text-white/65 mt-2">{user?.supplier?.city || user?.city}</p>
                             </div>
                         </div>
-                        <div className="hidden sm:flex items-center gap-2 self-start shrink-0" data-testid="seller-dashboard-label">
-                            <span className="w-2 h-2 rounded-full bg-[#F5C400]" />
-                            <span className="text-[11px] tracking-[0.2em] uppercase font-semibold text-white/60">Seller Dashboard</span>
-                        </div>
-                    </div>
 
-                    {/* Stats inside hero — clickable, jump to the relevant section */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-8">
-                        {[
-                            { k: "Listings", key: "listings", v: stats.listings, Icon: Package },
-                            { k: "Active",   key: "active",   v: stats.active,   Icon: CheckCircle2 },
-                            { k: "Orders",   key: "orders",   v: stats.orders,   Icon: ShoppingCart },
-                            { k: "Pending",  key: "pending",  v: stats.pending,  Icon: Clock },
-                        ].map(({ k, key, v, Icon }) => (
-                            <button
-                                key={k}
-                                type="button"
-                                onClick={() => goStat(key)}
-                                className="tc-stat-card text-left cursor-pointer transition-transform duration-150 hover:-translate-y-0.5 hover:border-[#F5C400]/60 focus:outline-none focus:ring-2 focus:ring-[#F5C400]/50"
-                                data-testid={`supplier-stat-${k.toLowerCase()}`}
-                                aria-label={`View ${k}`}
-                            >
-                                <div className="tc-stat-icon"><Icon size={16} /></div>
-                                <div className="tc-stat-value">{v}</div>
-                                <div className="tc-stat-label">{k}</div>
-                            </button>
-                        ))}
+                        {/* Compact clickable stats — slim pills */}
+                        <div className="flex items-center gap-2 flex-wrap" data-testid="seller-dashboard-label">
+                            {[
+                                { k: "Listings", key: "listings", v: stats.listings, Icon: Package },
+                                { k: "Active",   key: "active",   v: stats.active,   Icon: CheckCircle2 },
+                                { k: "Orders",   key: "orders",   v: stats.orders,   Icon: ShoppingCart },
+                                { k: "Pending",  key: "pending",  v: stats.pending,  Icon: Clock },
+                            ].map(({ k, key, v, Icon }) => (
+                                <button
+                                    key={k}
+                                    type="button"
+                                    onClick={() => goStat(key)}
+                                    className="group flex items-center gap-2 rounded-xl bg-white/[0.07] hover:bg-white/[0.14] border border-white/10 px-3 py-1.5 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-[#F5C400]/50"
+                                    data-testid={`supplier-stat-${k.toLowerCase()}`}
+                                    aria-label={`Go to ${k}`}
+                                >
+                                    <Icon size={14} className="text-white/45 group-hover:text-[#F5C400] transition-colors" />
+                                    <span className="text-left leading-none">
+                                        <span className="block text-[15px] font-semibold text-white">{v}</span>
+                                        <span className="block text-[9px] tracking-[0.12em] uppercase text-white/45 mt-0.5">{k}</span>
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {/* Sticky full-width pastel control bar — stays pinned below the navbar */}
+            <DealerTabBar active={catalog} onSelect={selectTab} />
 
             <div className="tc-container py-8 sm:py-10">
                 {catalog === "printers" ? (
@@ -681,7 +726,7 @@ export default function SupplierDashboard() {
                 ) : catalog === "orders" ? (
                     <>
                         <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-                            <h2 id="orders" className="text-[#0A0A0B] scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Incoming orders</h2>
+                            <h2 id="orders" className="text-[#0A0A0B] scroll-mt-[130px]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Incoming orders</h2>
                             {orderFilter === "pending" && (
                                 <button onClick={() => setOrderFilter("all")} className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#4F46E5] bg-[#EEF0FE] border border-[#CBD2FA] rounded-full px-3 py-1.5 hover:bg-[#DDE1FC]" data-testid="orders-filter-clear">
                                     Showing pending only · Clear
@@ -870,6 +915,65 @@ export default function SupplierDashboard() {
             <div className="mt-8" data-testid="commission-calculator-wrap">
                 <CommissionCalculator />
             </div>
+
+            {/* All Listings — combined view across every category, always visible */}
+            <section id="all-listings" className="mt-10 scroll-mt-[130px]" data-testid="all-listings-section">
+                <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                    <div>
+                        <h2 className="text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>All listings</h2>
+                        <p className="text-[12.5px] text-[#6E6E73] mt-0.5">Every product across all categories in one place.</p>
+                    </div>
+                    {listingFilter === "active" && (
+                        <button onClick={() => setListingFilter("all")} className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#0891B2] bg-[#ECFBFD] border border-[#C2EFF5] rounded-full px-3 py-1.5 hover:bg-[#D6F5F9]" data-testid="all-listings-filter-clear">
+                            Showing active (in-stock) only · Clear
+                        </button>
+                    )}
+                </div>
+                {visibleAllProducts.length === 0 ? (
+                    <div className="tc-card-flat p-10 text-center text-[#6E6E73]" data-testid="all-listings-empty">
+                        {listingFilter === "active" ? "No active products — everything is out of stock." : "No products yet. Use the tabs above to add toners, printers, papers or consumables."}
+                    </div>
+                ) : (
+                    <div className="tc-card-flat p-0 overflow-x-auto">
+                        <table className="w-full text-[13px]">
+                            <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">
+                                <tr>
+                                    <th className="text-left p-3">Product name</th>
+                                    <th className="text-left p-3">Category</th>
+                                    <th className="text-left p-3">Price</th>
+                                    <th className="text-left p-3">Stock</th>
+                                    <th className="text-left p-3">Status</th>
+                                    <th className="text-right p-3">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {visibleAllProducts.map((p) => {
+                                    const active = Number(p.stock) > 0;
+                                    return (
+                                        <tr key={`${p.kind}-${p.id}`} className="border-t border-black/[0.06]" data-testid={`all-row-${p.id}`}>
+                                            <td className="p-3 font-medium text-[#0A0A0B] max-w-[280px] truncate">{p.name || "—"}</td>
+                                            <td className="p-3"><span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${CAT_BADGE[p.cat] || ""}`}>{p.cat}</span></td>
+                                            <td className="p-3">{p.price != null ? formatINR(p.price) : "—"}</td>
+                                            <td className="p-3">{p.stock ?? 0}</td>
+                                            <td className="p-3">
+                                                <span className={`inline-flex items-center gap-1.5 text-[12px] font-semibold ${active ? "text-emerald-600" : "text-[#9A9AA0]"}`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-[#C8C8CD]"}`} /> {active ? "Active" : "Inactive"}
+                                                </span>
+                                            </td>
+                                            <td className="p-3">
+                                                <div className="flex items-center justify-end gap-3">
+                                                    <button onClick={() => editProduct(p)} className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#0A0A0B] hover:text-[#00B7C7]" data-testid={`all-edit-${p.id}`}><Pencil size={12} /> Edit</button>
+                                                    <button onClick={() => deleteProduct(p)} className="inline-flex items-center gap-1 text-[12px] font-semibold text-red-600 hover:text-red-700" data-testid={`all-delete-${p.id}`}><Trash2 size={12} /> Delete</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </section>
 
             {/* Add listing dialog */}
             <Dialog open={open} onOpenChange={setOpen}>

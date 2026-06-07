@@ -1,0 +1,22 @@
+{
+  "summary": "Narrow retest of the sticky DealerTabBar fix from iteration 30. The CSS change (overflow-x: hidden -> overflow-x: clip on html and body/#root in /app/frontend/src/index.css) is confirmed in source AND verified at runtime. After logging in as the approved supplier and navigating to /supplier, scrollTo(0, 1500) leaves [data-testid=catalog-tabs] pinned at top=64 (computed position=sticky). tab-papers remains clickable after scroll and switches content (Papers tab activates, listings update). No horizontal scroll regression: document.documentElement.scrollWidth (1440) == window.innerWidth (1440).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix is correct and minimal. overflow-x: clip is the right primitive here because (unlike hidden) it does not create a scroll container, so descendant position:sticky continues to track the viewport. Browser support is good in all modern Chromium/Firefox/Safari; if IE11/very old WebKit support is ever required, a fallback wrapper would be needed, but that is out of scope for this app."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "qa.dealer.it30.cd2e6adb@example.com / Test@1234 (approved supplier, login worked, 8 products visible across categories).",
+  "seed_data_creation": "None. Re-used iteration-30 seed supplier.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Sticky tab bar is fully working again. Measurement: initial getBoundingClientRect().top = 156.6 at scrollY=0, then = 64 at scrollY=1500 (sticky kicks in at exactly top-[64px] under the navbar). When the bug was present in iteration 30, the same measurement returned ~-1068 because the overflow-x:hidden on ancestors made #root the scroll container, breaking position:sticky. The chat-widget (Crisp/intercom-like) bubble in bottom-right is benign and does not affect tab clicks.",
+  "rca of the issue": "ROOT CAUSE (recap, already fixed): CSS spec - position:sticky tracks the nearest ancestor scroll container, not the viewport. Any ancestor with overflow != visible (including overflow-x: hidden) becomes a scroll container. Both html and body/#root in index.css had overflow-x: hidden, so the catalog tabs treated #root as their containing scroll context; since #root itself doesn't scroll (window does), the sticky position became effectively absolute and scrolled away with the page. FIX: replace overflow-x: hidden with overflow-x: clip, which clips overflow visually WITHOUT making the element a scroll container, allowing descendant sticky to keep working. VERIFIED: top=64 at scrollY=1500, no horizontal scroll regression."
+}

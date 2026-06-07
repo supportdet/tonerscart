@@ -57,7 +57,7 @@
 
 @layer base {
     * { @apply border-border; }
-    html { scroll-behavior: smooth; overflow-x: hidden; }
+    html { scroll-behavior: smooth; overflow-x: clip; }
     body, #root {
         background-color: var(--tc-bg);
         color: var(--tc-text);
@@ -65,7 +65,7 @@
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         font-feature-settings: "ss01";
-        overflow-x: hidden;
+        overflow-x: clip;
         max-width: 100vw;
     }
     h1, h2, h3, h4, h5, .tc-display, .tc-h1, .tc-h2, .tc-h3 {
@@ -889,6 +889,20 @@
     display: grid;
     place-items: center;
     transition: border-color 220ms ease, background 220ms ease;
+}
+.tc-featured-banner {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 14px;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 30% 25%, rgba(255,255,255,0.10) 0%, transparent 60%),
+        linear-gradient(180deg, #2A2C32 0%, #1E2024 100%);
+    border: 1px solid rgba(255,255,255,0.10);
+    transition: border-color 220ms ease;
+}
+.tc-featured-card:hover .tc-featured-banner {
+    border-color: rgba(245,196,0,0.45);
 }
 .tc-featured-card:hover .tc-featured-logo-ph {
     border-color: rgba(245,196,0,0.55);

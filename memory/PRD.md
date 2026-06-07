@@ -1,5 +1,7 @@
 # TonersCart — Product Requirements (Supabase edition)
 
+> **Latest (2026-06-07):** Unified universal-search product cards (shared `src/components/cards/*`) so `/search` uses the exact category-page cards with Add/Buy; fixed a printer add-to-cart crash (`add`→`addItem`); fixed Featured Suppliers slow load (backend `_FEATURED_CACHE` 120s TTL) and switched the banner to a 16:9 rectangle from the dealer application image. Frontend test 100% (iteration_32). See CHANGELOG.md for the full running log.
+
 
 ## Latest changelog (2026-02 Wave 10 — Two-layer navbar + new category pages + D2D marketplace)
 

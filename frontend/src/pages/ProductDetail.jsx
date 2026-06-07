@@ -276,7 +276,7 @@ export default function ProductDetail({ kind = "toner" }) {
                         {kind === "toner" && data.compatible_models && (
                             <div className="mt-4 inline-flex items-start gap-2 bg-[#FFF8E0] border border-[#F5E5A6] rounded-lg px-3 py-2 text-[12.5px] text-[#5C4A00]" data-testid="product-compatibility">
                                 <CheckCircle2 size={14} className="mt-0.5 text-[#8C6A00] shrink-0" />
-                                <div><span className="font-semibold">Compatible with:</span> {data.compatible_models}</div>
+                                <div><span className="font-semibold">Compatible models:</span> {data.compatible_models}</div>
                             </div>
                         )}
 

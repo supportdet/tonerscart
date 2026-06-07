@@ -1,27 +1,23 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
-import { MapPin, Boxes, Plus, Minus, ShoppingCart, X, Sparkles } from "lucide-react";
+import { MapPin, Boxes, Sparkles } from "lucide-react";
 import { Skeleton } from "../components/ui/skeleton";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import { useCart } from "../context/CartContext";
-import TonerCartridge from "../components/TonerCartridge";
-import VerifiedBadge from "../components/VerifiedBadge";
 import RefilledWarningDialog from "../components/RefilledWarningDialog";
 import PageMeta from "../components/PageMeta";
 import CategoryFilters from "../components/CategoryFilters";
 import UniversalSearch from "../components/UniversalSearch";
+import TonerProductCard from "../components/cards/TonerProductCard";
+import PrinterProductCard from "../components/cards/PrinterProductCard";
+import PaperProductCard from "../components/cards/PaperProductCard";
+import ConsumableProductCard from "../components/cards/ConsumableProductCard";
 import { PRINTER_TONER_BRANDS } from "../lib/listingConstants";
 import useReveal from "../hooks/useReveal";
-import { colorSwatch } from "../lib/colors";
-import { cityMatch, deliveryLabel } from "../lib/location";
-
-const variantColorFromName = (name) => {
-    const v = colorSwatch(name);
-    return v.startsWith("linear") ? "#C8C8CD" : v;
-};
+import { cityMatch } from "../lib/location";
 
 const TONER_SORT_OPTIONS = [
     { value: "local", label: "Local suppliers first" },
@@ -29,91 +25,6 @@ const TONER_SORT_OPTIONS = [
     { value: "price_desc", label: "Price: High to Low" },
     { value: "newest", label: "Newest first" },
 ];
-
-function ProductCard({ p, qty, setQty, onBuy, onCart, userCity }) {
-    const typeStyle = p.toner_type === "Original"
-        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-        : p.toner_type === "Compatible"
-        ? "bg-blue-50 text-blue-700 border-blue-200"
-        : "bg-amber-50 text-amber-700 border-amber-200";
-    const variants = Array.isArray(p.variants) ? p.variants : [];
-    const loc = deliveryLabel(p.city || p.supplier_city, userCity);
-    return (
-        <div className="tc-product-card group relative" data-testid={`product-card-${p.id}`}>
-            <Link to={`/toner/${p.id}`} className="tc-product-img block hover:opacity-95 transition" data-testid={`product-link-${p.id}`}>
-                <span className="tc-product-img-label">{p.brand}</span>
-                {p.image_url ? (
-                    <img src={p.image_url} alt={`${p.brand} ${p.model_number}`} className="w-full h-full object-cover" loading="lazy" />
-                ) : (
-                    <TonerCartridge color={p.color || "Black"} brand={p.brand} model={p.model_number} type={p.toner_type || "Original"} />
-                )}
-            </Link>
-            <div className="p-4 flex flex-col gap-2 flex-1">
-                <div className="flex items-center justify-between">
-                    <div className="text-[10px] tracking-[0.16em] uppercase font-semibold text-[#6E6E73]">{p.brand}</div>
-                    <span className={`text-[10px] font-bold px-2 py-1 rounded-md border uppercase tracking-[0.08em] ${typeStyle}`}>
-                        {p.toner_type || "Original"}
-                    </span>
-                </div>
-                <Link to={`/toner/${p.id}`} className="font-mono text-[18px] font-semibold text-[#0A0A0B] tracking-tight hover:text-[#00B7C7] transition">{p.model_number}</Link>
-                <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-[13px] text-[#1D1D1F] truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
-                        {p.supplier_name || "—"}
-                    </span>
-                    <VerifiedBadge compact />
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                    <div className="text-[12px] text-[#6E6E73] flex items-center gap-1">
-                        <MapPin size={11} /> {p.city}
-                    </div>
-                    {loc.text && (
-                        <span
-                            className={`inline-flex items-center gap-1 text-[10.5px] font-semibold px-2 py-0.5 rounded-full border ${loc.local ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-[#F4F4F6] text-[#6E6E73] border-[#E5E5EA]"}`}
-                            data-testid={`delivery-label-${p.id}`}
-                        >
-                            {loc.local ? "Local · Free delivery" : loc.text}
-                        </span>
-                    )}
-                </div>
-
-                {variants.length > 0 && (
-                    <div className="flex items-center gap-1.5" data-testid={`card-variants-${p.id}`}>
-                        {variants.slice(0, 6).map((v) => (
-                            <span
-                                key={v.id}
-                                title={v.color}
-                                className="inline-block w-3.5 h-3.5 rounded-full border border-black/10"
-                                style={{ backgroundColor: variantColorFromName(v.color) }}
-                            />
-                        ))}
-                        <span className="text-[10.5px] text-[#86868B]">{variants.length} colour{variants.length === 1 ? "" : "s"}</span>
-                    </div>
-                )}
-
-                <div className="mt-2 pt-3 border-t border-black/[0.05] flex items-end justify-between gap-2">
-                    <div>
-                        <div className="text-[10px] tracking-[0.14em] uppercase font-semibold text-[#86868B]">Price</div>
-                        <div className="font-mono text-[18px] font-semibold text-[#0A0A0B]">₹{Number(p.price).toLocaleString('en-IN')}</div>
-                    </div>
-                    <div className="tc-qty" data-testid={`qty-${p.id}`}>
-                        <button type="button" onClick={() => setQty(Math.max(1, qty - 1))} disabled={qty <= 1} aria-label="Decrease"><Minus size={14} /></button>
-                        <span data-testid={`qty-value-${p.id}`}>{qty}</span>
-                        <button type="button" onClick={() => setQty(Math.min(p.stock, qty + 1))} disabled={qty >= p.stock} aria-label="Increase"><Plus size={14} /></button>
-                    </div>
-                </div>
-
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                    <button onClick={() => onCart(p, qty)} className="btn-light text-[12.5px] py-2" data-testid={`add-to-cart-${p.id}`}>
-                        <ShoppingCart size={13} className="inline mr-1" /> Add
-                    </button>
-                    <button onClick={() => onBuy(p, qty)} className="btn-cta text-[12.5px] py-2" disabled={p.stock <= 0} data-testid={`buy-now-${p.id}`}>
-                        {p.stock > 0 ? "Buy" : "Out of stock"}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-}
 
 export default function SearchPage() {
     const [params, setParams] = useSearchParams();
@@ -375,18 +286,9 @@ export default function SearchPage() {
                                 </h2>
                                 <button onClick={() => setCat("toners")} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-toners">View all →</button>
                             </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
                                 {universal.toners.map((t) => (
-                                    <Link key={t.id} to={`/toner/${t.id}`} className="block bg-white border border-black/[0.06] rounded-xl overflow-hidden hover:shadow-md transition" data-testid={`universal-toner-${t.id}`}>
-                                        <div className="aspect-square bg-black/[0.03] grid place-items-center">
-                                            {t.image_url ? <img src={t.image_url} alt={`${t.brand} ${t.model_number}`} className="w-full h-full object-cover" loading="lazy" /> : <Boxes size={28} className="text-[#D2D2D7]" />}
-                                        </div>
-                                        <div className="p-2.5">
-                                            <div className="text-[11px] text-[#86868B] uppercase tracking-wider truncate">{t.brand}</div>
-                                            <div className="text-[12.5px] font-semibold text-[#0A0A0B] truncate">{t.model_number}</div>
-                                            <div className="text-[13px] font-mono text-[#0A0A0B] mt-1">₹{Number(t.price || 0).toLocaleString("en-IN")}</div>
-                                        </div>
-                                    </Link>
+                                    <TonerProductCard key={t.id} p={t} qty={getQty(t.id)} setQty={(n) => setQty(t.id, n)} onBuy={onBuy} onCart={onCart} userCity={city} />
                                 ))}
                             </div>
                         </section>
@@ -399,18 +301,9 @@ export default function SearchPage() {
                                 </h2>
                                 <button onClick={() => navigate(`/printers/results?q=${encodeURIComponent(universal.q)}`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-printers">Browse printers →</button>
                             </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
                                 {universal.printers.map((p) => (
-                                    <Link key={p.id} to={`/printer/${p.id}`} className="block bg-white border border-black/[0.06] rounded-xl overflow-hidden hover:shadow-md transition" data-testid={`universal-printer-${p.id}`}>
-                                        <div className="aspect-[4/3] bg-black/[0.03] grid place-items-center">
-                                            {p.image_url ? <img src={p.image_url} alt={`${p.brand} ${p.model_number}`} className="w-full h-full object-contain" loading="lazy" /> : <Boxes size={28} className="text-[#D2D2D7]" />}
-                                        </div>
-                                        <div className="p-2.5">
-                                            <div className="text-[11px] text-[#86868B] uppercase tracking-wider truncate">{p.brand}</div>
-                                            <div className="text-[12.5px] font-semibold text-[#0A0A0B] truncate">{p.model_number}</div>
-                                            <div className="text-[13px] font-mono text-[#0A0A0B] mt-1">₹{Number(p.price || 0).toLocaleString("en-IN")}</div>
-                                        </div>
-                                    </Link>
+                                    <PrinterProductCard key={p.id} p={p} />
                                 ))}
                             </div>
                         </section>
@@ -423,18 +316,9 @@ export default function SearchPage() {
                                 </h2>
                                 <button onClick={() => navigate(`/papers?q=${encodeURIComponent(universal.q)}`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-papers">Browse papers →</button>
                             </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {universal.papers.map((p) => (
-                                    <Link key={p.id} to={`/paper/${p.id}`} className="block bg-white border border-black/[0.06] rounded-xl overflow-hidden hover:shadow-md transition" data-testid={`universal-paper-${p.id}`}>
-                                        <div className="aspect-square bg-black/[0.03] grid place-items-center">
-                                            {p.image_url ? <img src={p.image_url} alt={`${p.brand} ${p.size}`} className="w-full h-full object-cover" loading="lazy" /> : <Boxes size={28} className="text-[#D2D2D7]" />}
-                                        </div>
-                                        <div className="p-2.5">
-                                            <div className="text-[11px] text-[#86868B] uppercase tracking-wider truncate">{p.brand}</div>
-                                            <div className="text-[12.5px] font-semibold text-[#0A0A0B] truncate">{p.size} · {p.gsm} GSM</div>
-                                            <div className="text-[13px] font-mono text-[#0A0A0B] mt-1">₹{Number(p.price_per_ream || 0).toLocaleString("en-IN")}/ream</div>
-                                        </div>
-                                    </Link>
+                                    <PaperProductCard key={p.id} p={p} />
                                 ))}
                             </div>
                         </section>
@@ -447,18 +331,9 @@ export default function SearchPage() {
                                 </h2>
                                 <button onClick={() => navigate(`/consumables`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-consumables">Browse consumables →</button>
                             </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {universal.consumables.map((c) => (
-                                    <Link key={c.id} to={`/consumable/${c.id}`} className="block bg-white border border-black/[0.06] rounded-xl overflow-hidden hover:shadow-md transition" data-testid={`universal-consumable-${c.id}`}>
-                                        <div className="aspect-square bg-black/[0.03] grid place-items-center">
-                                            {c.image_url ? <img src={c.image_url} alt={`${c.brand} ${c.model_number}`} className="w-full h-full object-cover" loading="lazy" /> : <Boxes size={28} className="text-[#D2D2D7]" />}
-                                        </div>
-                                        <div className="p-2.5">
-                                            <div className="text-[11px] text-[#86868B] uppercase tracking-wider truncate">{c.brand} · {c.subcategory}</div>
-                                            <div className="text-[12.5px] font-semibold text-[#0A0A0B] truncate">{c.model_number}</div>
-                                            <div className="text-[13px] font-mono text-[#0A0A0B] mt-1">₹{Number(c.price || 0).toLocaleString("en-IN")}</div>
-                                        </div>
-                                    </Link>
+                                    <ConsumableProductCard key={c.id} c={c} />
                                 ))}
                             </div>
                         </section>
@@ -539,7 +414,7 @@ export default function SearchPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 mt-4">
                         {visibleProducts.map((p, idx) => (
                             <div key={p.id} className="tc-reveal" style={{ transitionDelay: `${Math.min(idx * 35, 280)}ms` }}>
-                                <ProductCard p={p} qty={getQty(p.id)} setQty={(n) => setQty(p.id, n)} onBuy={onBuy} onCart={onCart} userCity={city} />
+                                <TonerProductCard p={p} qty={getQty(p.id)} setQty={(n) => setQty(p.id, n)} onBuy={onBuy} onCart={onCart} userCity={city} />
                             </div>
                         ))}
                     </div>
