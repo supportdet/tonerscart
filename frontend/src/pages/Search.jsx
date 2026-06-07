@@ -55,7 +55,7 @@ function ProductCard({ p, qty, setQty, onBuy, onCart, userCity }) {
                         {p.toner_type || "Original"}
                     </span>
                 </div>
-                <Link to={`/toner/${p.id}`} className="font-mono text-[18px] font-semibold text-[#0A0A0B] tracking-tight hover:text-[#00B7C7] transition">{p.model_number}</Link>
+                <Link to={`/toner/${p.id}`} className="text-[18px] font-semibold text-[#0A0A0B] tracking-tight hover:text-[#00B7C7] transition" data-testid={`product-title-${p.id}`}>{p.compatible_models || p.model_number}</Link>
                 <div className="flex items-center gap-1.5 min-w-0">
                     <span className="text-[13px] text-[#1D1D1F] truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
                         {p.supplier_name || "—"}
@@ -383,7 +383,7 @@ export default function SearchPage() {
                                         </div>
                                         <div className="p-2.5">
                                             <div className="text-[11px] text-[#86868B] uppercase tracking-wider truncate">{t.brand}</div>
-                                            <div className="text-[12.5px] font-semibold text-[#0A0A0B] truncate">{t.model_number}</div>
+                                            <div className="text-[12.5px] font-semibold text-[#0A0A0B] truncate">{t.compatible_models || t.model_number}</div>
                                             <div className="text-[13px] font-mono text-[#0A0A0B] mt-1">₹{Number(t.price || 0).toLocaleString("en-IN")}</div>
                                         </div>
                                     </Link>

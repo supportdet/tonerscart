@@ -8,9 +8,7 @@ import React from "react";
  *
  * Props:
  *   color: "Cyan" | "Magenta" | "Yellow" | "Black"
- *   brand: e.g. "HP", "Canon", "Brother"
- *   model: e.g. "88A", "TN-2365"
- *   type:  "Original" | "Compatible" | "Refilled"
+ *   brand: e.g. "HP", "Canon", "Brother" — the only text shown on the cartridge
  */
 
 const BRAND_ACCENTS = {
@@ -31,10 +29,10 @@ const COLOR_DOT = {
     Black:   "#1C1C1E",
 };
 
-export default function TonerCartridge({ color = "Black", brand = "HP", model = "88A", type = "Original" }) {
+export default function TonerCartridge({ color = "Black", brand = "HP" }) {
     const brandAccent = BRAND_ACCENTS[brand] || BRAND_ACCENTS.HP;
     const dot = COLOR_DOT[color] || COLOR_DOT.Black;
-    const uid = `${brand}-${model}`.replace(/[^a-zA-Z0-9]/g, "");
+    const uid = `${brand}-${color}`.replace(/[^a-zA-Z0-9]/g, "");
 
     return (
         <svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -101,68 +99,20 @@ export default function TonerCartridge({ color = "Black", brand = "HP", model = 
             <rect x="40" y="106" width="320" height="1.5" fill="rgba(255,255,255,0.35)" />
             <rect x="40" y="156.5" width="320" height="1.5" fill="rgba(0,0,0,0.2)" />
 
-            {/* Brand name — left side */}
-            <text x="58" y="135"
+            {/* Brand name — centered; the ONLY text overlaid on the cartridge */}
+            <text x="200" y="141"
                 fill={brandAccent.text}
-                fontSize="24"
+                fontSize="30"
                 fontWeight="800"
                 fontFamily="'Montserrat', 'Inter', sans-serif"
-                letterSpacing="1"
+                letterSpacing="2"
+                textAnchor="middle"
             >
                 {brand.toUpperCase()}
             </text>
 
-            {/* Model number — right side */}
-            <text x="342" y="135"
-                fill={brandAccent.text}
-                fontSize="22"
-                fontWeight="700"
-                fontFamily="'JetBrains Mono', ui-monospace, monospace"
-                letterSpacing="2"
-                textAnchor="end"
-            >
-                {model}
-            </text>
-
-            {/* Divider dot */}
-            <circle cx="200" cy="132" r="3" fill="rgba(255,255,255,0.85)" />
-
             {/* ====================== LOWER BODY DETAILS ====================== */}
-            {/* LaserJet-style product line text */}
-            <text x="58" y="182"
-                fill="rgba(20,20,20,0.55)"
-                fontSize="9"
-                fontWeight="700"
-                fontFamily="'Inter', sans-serif"
-                letterSpacing="2.5"
-            >
-                LASERJET TONER CARTRIDGE
-            </text>
-
-            {/* Type tag (Original / Compatible / Refilled) */}
-            <rect x="58" y="192" width="84" height="18" rx="3" fill="rgba(20,20,20,0.08)" stroke="rgba(20,20,20,0.18)" />
-            <text x="100" y="205"
-                fill="rgba(20,20,20,0.75)"
-                fontSize="9"
-                fontWeight="700"
-                fontFamily="'Inter', sans-serif"
-                letterSpacing="1.5"
-                textAnchor="middle"
-            >
-                {type.toUpperCase()}
-            </text>
-
-            {/* TonerCart small branding on right */}
-            <text x="342" y="205"
-                fill="rgba(20,20,20,0.4)"
-                fontSize="8"
-                fontWeight="600"
-                fontFamily="'Inter', sans-serif"
-                letterSpacing="2"
-                textAnchor="end"
-            >
-                TONERSCART · VERIFIED
-            </text>
+            {/* Lower body kept clean — no model / type / label text overlay. */}
 
             {/* Color indicator dot bottom-right */}
             <circle cx="336" cy="181" r="6" fill={dot} stroke="rgba(0,0,0,0.15)" strokeWidth="1" />
