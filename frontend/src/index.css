@@ -57,7 +57,7 @@
 
 @layer base {
     * { @apply border-border; }
-    html { scroll-behavior: smooth; overflow-x: hidden; }
+    html { scroll-behavior: smooth; overflow-x: clip; }
     body, #root {
         background-color: var(--tc-bg);
         color: var(--tc-text);
@@ -65,7 +65,7 @@
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         font-feature-settings: "ss01";
-        overflow-x: hidden;
+        overflow-x: clip;
         max-width: 100vw;
     }
     h1, h2, h3, h4, h5, .tc-display, .tc-h1, .tc-h2, .tc-h3 {
