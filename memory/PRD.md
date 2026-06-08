@@ -1,6 +1,6 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-07):** Unified universal-search product cards (shared `src/components/cards/*`) so `/search` uses the exact category-page cards with Add/Buy; fixed a printer add-to-cart crash (`add`→`addItem`); fixed Featured Suppliers slow load (backend `_FEATURED_CACHE` 120s TTL) and switched the banner to a 16:9 rectangle from the dealer application image. Frontend test 100% (iteration_32). See CHANGELOG.md for the full running log.
+> **Latest (2026-06-08):** (1) Login brute-force protection — backend `POST /api/auth/login` (server-side Supabase sign-in), 5 failed/IP/10min → 30-min block. (2) Order tracking flow Requested→Confirmed→Dispatched→Delivered→Completed with dealer/customer actions, emails, and a 5-day APScheduler auto-confirm + payout timer. (3) Grievance officer text updated. **ACTION: run `backend/supabase_schema_order_tracking.sql` in Supabase** for order-tracking columns. **DEFERRED:** server.py → routers refactor (do after feature validation). See CHANGELOG.md.
 
 
 ## Latest changelog (2026-02 Wave 10 — Two-layer navbar + new category pages + D2D marketplace)

@@ -1,4 +1,23 @@
-### 2026-06-07 — Unified universal-search product cards + Featured Suppliers fix (16:9 banner + caching)
+### 2026-06-08 — Login rate limiting + Order tracking flow + Grievance officer
+
+**1. Login rate limiting (brute-force protection).** Login was 100% client-side Supabase (`signInWithPassword`) — no backend endpoint to limit. Added `POST /api/auth/login` (`server.py`) that signs in server-side via Supabase GoTrue REST (`/auth/v1/token`, stateless httpx call — avoids shared-client races) and applies a per-IP, FAILED-only sliding window: **5 fails / IP / 10 min → 30-min block**, message `"Too many attempts, try again in 30 minutes."` Successful logins clear the counter. `AuthContext.login` now calls the backend then hydrates the client session via `supabase.auth.setSession(...)`. Verified via curl: 200+token / 401 / 429 sequence correct.
+
+**2. Order tracking flow.** Lifecycle: Requested → Confirmed(`accepted`) → Dispatched(`shipped`) → Delivered → **Completed** (new). 
+- Dealer (`SupplierDashboard`): Accept → Confirmed (email); Dispatch via new `CourierDispatchInput` (courier name + tracking REQUIRED) → Dispatched (email w/ courier+tracking); **Mark Delivered** → Delivered (email asking buyer to confirm).
+- Customer (`CustomerDashboard`): `OrderTimeline` (4 stages) + courier/tracking shown when dispatched; **"Confirm you received your order"** button on Delivered → Completed, which sets `completed_at` + `payout_eligible_at = +5 days`.
+- **Auto-confirm:** `AsyncIOScheduler` (APScheduler, already installed) job every 30 min → orders `delivered` for >5 days are auto-completed (`auto_confirmed=true`) + support payout email. Protects dealers from silent buyers.
+- Backend (`update_order_status`) rewritten with strict role/transition enforcement + `_safe_order_update()` that drops not-yet-migrated columns so the flow works pre-migration.
+- New emails: `email_order_confirmed`, `email_order_delivered_confirm`; `email_order_shipped` now shows courier; support payout email handles auto vs manual.
+- **MIGRATION REQUIRED (user to run):** `backend/supabase_schema_order_tracking.sql` adds `courier_name, delivered_at, completed_at, payout_eligible_at, auto_confirmed` + index. Until run, status transitions work but those fields don't persist.
+
+**3. Grievance officer (`Terms.jsx`):** now "Grievance Officer: Rohit Sairam, TonersCart Private Limited, Email: support@tonerscart.com, Response time: 48 hours."
+
+**DEFERRED — Task 2 (server.py → routers refactor):** user chose to validate features + run migration first, then refactor on a verified base. `server.py` is ~5,520 lines; procurement/oem/agreements already use separate routers. Plan: extract shared infra (clients, models, deps, helpers) into a `deps`/`core` module, then move endpoint groups into `backend/routes/{auth,products,orders,search,admin,suppliers,oem,procurement}.py`, server.py just registers routers. Constraints: no CORS change, no behavior change.
+
+**Constraints honored:** no CORS change, no emergentintegrations, Razorpay/Twilio still mocked, no force-push.
+
+
+
 
 **Unified search cards (DRY refactor)** — extracted the four category product cards into shared components under `src/components/cards/`: `TonerProductCard`, `PrinterProductCard`, `PaperProductCard`, `ConsumableProductCard`. The universal search (`/search?q=`) groups now render the SAME full cards as the category pages (with Add-to-cart / Buy-now + qty stepper), replacing the old tiny click-through tiles. Category pages (`Papers.jsx`, `Consumables.jsx`, `PrintersResults.jsx`) and `Search.jsx` (both the detailed toner browse + universal toners group) all import the shared cards now. OEM group kept as inline tiles (no shared OEM card).
 - **Bug fixed:** the old inline `PrinterCard` destructured `const { add } = useCart()` but CartContext only exports `addItem` — so printer Add-to-cart / Buy-now would crash. The shared `PrinterProductCard` correctly uses `addItem`. Verified at runtime (toast + navbar cart badge increments).
