@@ -33,19 +33,28 @@ export const AuthProvider = ({ children }) => {
     }, [refresh]);
 
     const login = async (email, password) => {
-        let result;
+        // Route login through the backend so it can be rate-limited (brute-force
+        // protection). On success we hydrate the Supabase client session so the
+        // rest of the app keeps working exactly as before.
+        let data;
         try {
-            result = await supabase.auth.signInWithPassword({ email, password });
-        } catch {
-            throw new Error("Incorrect email or password");
+            const res = await api.post("/auth/login", { email, password });
+            data = res.data;
+        } catch (err) {
+            const status = err?.response?.status;
+            const detail = err?.response?.data?.detail;
+            if (status === 429) throw new Error(detail || "Too many attempts, try again in 30 minutes.");
+            if (status === 401) throw new Error("Incorrect email or password");
+            throw new Error(detail || "Sign-in failed");
         }
-        if (result?.error) {
-            const m = (result.error.message || "").toLowerCase();
-            if (m.includes("invalid login") || m.includes("invalid_credentials") || m.includes("invalid email") || m.includes("invalid password") || m.includes("body stream")) {
-                throw new Error("Incorrect email or password");
-            }
-            throw new Error(result.error.message || "Sign-in failed");
+        if (!data?.access_token || !data?.refresh_token) {
+            throw new Error("Sign-in failed");
         }
+        const { error } = await supabase.auth.setSession({
+            access_token: data.access_token,
+            refresh_token: data.refresh_token,
+        });
+        if (error) throw new Error(error.message || "Sign-in failed");
         await refresh();
     };
 

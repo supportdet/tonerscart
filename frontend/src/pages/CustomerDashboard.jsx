@@ -14,10 +14,54 @@ const STATUS_STYLE = {
     requested: "bg-amber-50 text-amber-700 border-amber-200",
     accepted: "bg-blue-50 text-blue-700 border-blue-200",
     shipped: "bg-violet-50 text-violet-700 border-violet-200",
-    delivered: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    delivered: "bg-teal-50 text-teal-700 border-teal-200",
+    completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
     rejected: "bg-red-50 text-red-700 border-red-200",
     cancelled: "bg-slate-100 text-slate-600 border-slate-200",
 };
+
+const STATUS_LABEL = {
+    requested: "Requested",
+    accepted: "Confirmed",
+    shipped: "Dispatched",
+    delivered: "Delivered",
+    completed: "Completed",
+    rejected: "Rejected",
+    cancelled: "Cancelled",
+};
+
+// Customer-facing progress timeline. The 4 happy-path stages; "completed" is the
+// terminal success state (shown as a filled Delivered + a "Completed" chip).
+const TIMELINE = [
+    { key: "requested", label: "Requested" },
+    { key: "accepted", label: "Confirmed" },
+    { key: "shipped", label: "Dispatched" },
+    { key: "delivered", label: "Delivered" },
+];
+const STAGE_INDEX = { requested: 0, accepted: 1, shipped: 2, delivered: 3, completed: 4 };
+
+function OrderTimeline({ status }) {
+    if (status === "rejected" || status === "cancelled") return null;
+    const current = STAGE_INDEX[status] ?? 0;
+    return (
+        <div className="mt-4 flex items-center" data-testid="order-timeline">
+            {TIMELINE.map((s, i) => {
+                const done = i <= current;
+                return (
+                    <React.Fragment key={s.key}>
+                        <div className="flex flex-col items-center gap-1.5 min-w-0">
+                            <div className={`w-3 h-3 rounded-full border-2 ${done ? "bg-emerald-500 border-emerald-500" : "bg-white border-[#D2D2D7]"}`} data-testid={`timeline-dot-${s.key}`} />
+                            <span className={`text-[10px] font-semibold tracking-wide ${done ? "text-emerald-700" : "text-[#A1A1A6]"}`}>{s.label}</span>
+                        </div>
+                        {i < TIMELINE.length - 1 && (
+                            <div className={`flex-1 h-[2px] mx-1 mb-4 ${i < current ? "bg-emerald-500" : "bg-[#E5E5EA]"}`} />
+                        )}
+                    </React.Fragment>
+                );
+            })}
+        </div>
+    );
+}
 
 export default function CustomerDashboard() {
     const { user } = useAuth();
@@ -34,11 +78,11 @@ export default function CustomerDashboard() {
     };
     useEffect(() => { load(); }, []);
 
-    const confirmDelivery = async (orderId) => {
-        if (!window.confirm("Confirm that you have received this order? This will mark it as delivered.")) return;
+    const confirmReceived = async (orderId) => {
+        if (!window.confirm("Confirm that you have received this order? This will complete the order.")) return;
         try {
-            await api.put(`/orders/${orderId}/status`, { status: "delivered" });
-            toast.success("Delivery confirmed — thank you!");
+            await api.put(`/orders/${orderId}/status`, { status: "completed" });
+            toast.success("Thanks for confirming — order completed!");
             load();
         } catch (e) { toast.error(formatApiError(e)); }
     };
@@ -139,14 +183,22 @@ export default function CustomerDashboard() {
                                     <div className="font-mono font-semibold text-[#0A0A0B] text-[15px]">{o.listings?.brand} · {o.listings?.model_number || "—"}</div>
                                     <div className="text-[11.5px] text-[#86868B] mt-0.5">{o.listings?.toner_type || ""} · Qty {o.qty}</div>
                                     <div className="text-[12px] text-[#3a3a40] mt-1">Seller: <span className="font-semibold text-[#0A0A0B]">{o.suppliers?.business_name || "—"}</span>{o.suppliers?.city ? ` · ${o.suppliers.city}` : ""}</div>
-                                    {o.tracking_number && <div className="text-[11.5px] text-[#3a3a40] mt-0.5 font-mono">Tracking: {o.tracking_number}</div>}
+                                    {(o.status === "shipped" || o.status === "delivered" || o.status === "completed") && (o.courier_name || o.tracking_number) && (
+                                        <div className="text-[11.5px] text-[#3a3a40] mt-1" data-testid={`order-shipping-${o.id}`}>
+                                            {o.courier_name && <span>Courier: <span className="font-semibold text-[#0A0A0B]">{o.courier_name}</span></span>}
+                                            {o.courier_name && o.tracking_number && <span> · </span>}
+                                            {o.tracking_number && <span className="font-mono">Tracking: {o.tracking_number}</span>}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="text-right">
-                                    <span className={`text-[10.5px] font-bold px-2 py-1 rounded-md border uppercase tracking-[0.08em] ${STATUS_STYLE[o.status] || STATUS_STYLE.cancelled}`}>{o.status}</span>
+                                    <span className={`text-[10.5px] font-bold px-2 py-1 rounded-md border uppercase tracking-[0.08em] ${STATUS_STYLE[o.status] || STATUS_STYLE.cancelled}`} data-testid={`order-status-${o.id}`}>{STATUS_LABEL[o.status] || o.status}</span>
                                     <div className="font-mono font-bold text-[18px] text-[#0A0A0B] mt-2">₹{Number(o.total).toLocaleString('en-IN')}</div>
                                     <div className="text-[10.5px] text-[#86868B] mt-0.5" data-testid={`order-price-locked-${o.id}`}>Price locked at order time</div>
                                 </div>
                             </div>
+
+                            <OrderTimeline status={o.status} />
 
                             {/* GST invoice block */}
                             {(o.buyer_gst_number || o.suppliers?.gst_number) && (
@@ -166,16 +218,22 @@ export default function CustomerDashboard() {
                             <ReturnPolicyBox className="mt-4" />
 
                             {o.status === "shipped" && (
+                                <div className="mt-3 text-[12px] text-[#6E6E73] bg-[#F4F4F6] border border-black/[0.04] rounded-[10px] px-3 py-2.5" data-testid={`awaiting-delivery-${o.id}`}>
+                                    Your order is on the way. You will be asked to confirm receipt once the seller marks it delivered.
+                                </div>
+                            )}
+
+                            {o.status === "delivered" && (
                                 <button
-                                    onClick={() => confirmDelivery(o.id)}
+                                    onClick={() => confirmReceived(o.id)}
                                     className="mt-3 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[13px] font-semibold transition"
-                                    data-testid={`confirm-delivery-${o.id}`}
+                                    data-testid={`confirm-received-${o.id}`}
                                 >
-                                    <CheckCircle2 size={15} /> Confirm Delivery
+                                    <CheckCircle2 size={15} /> Confirm you received your order
                                 </button>
                             )}
 
-                            {(o.status === "delivered" || o.status === "cancelled") && (
+                            {(o.status === "completed" || o.status === "delivered" || o.status === "cancelled") && (
                                 <button
                                     onClick={() => reorder(o)}
                                     disabled={reorderingId === o.id}

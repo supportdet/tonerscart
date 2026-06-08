@@ -15,6 +15,7 @@ import re
 import uuid
 import asyncio
 import logging
+import httpx
 from pathlib import Path
 from typing import List, Optional, Any
 from datetime import datetime, timezone
@@ -35,6 +36,8 @@ from email_service import (
     email_featured_applicant_reply,
     email_quotation,
     email_order_shipped,
+    email_order_confirmed,
+    email_order_delivered_confirm,
     email_order_delivered_support,
     email_dealer_suspended,
     email_dealer_unsuspended,
@@ -316,6 +319,7 @@ class OrderCreate(BaseModel):
 class OrderStatusUpdate(BaseModel):
     status: str
     tracking_number: Optional[str] = None
+    courier_name: Optional[str] = None
 
 
 class RejectPayload(BaseModel):
@@ -384,6 +388,69 @@ def oauth_bootstrap(payload: dict, request: Request):
         "role": role,
     }).execute()
     return {"ok": True, "role": role, "created": True}
+
+
+# ---- Server-side login with brute-force protection ---------------------------
+_SB_URL = os.environ.get("SUPABASE_URL")
+_SB_ANON = os.environ.get("SUPABASE_ANON_KEY")
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+# Per-IP FAILED-login tracking (in-memory, single process). Successful logins
+# clear the counter. 5 fails / IP / 10 min → block that IP for 30 min.
+_LOGIN_FAILS: dict = {}
+_LOGIN_MAX_FAILS = 5
+_LOGIN_WINDOW_SECS = 600     # 10 minutes
+_LOGIN_BLOCK_SECS = 1800     # 30 minutes
+
+
+@api.post("/auth/login")
+async def auth_login(payload: LoginRequest, request: Request):
+    """Server-side Supabase password sign-in so login can be rate-limited.
+    Only FAILED attempts count toward the limit: 5 fails / IP / 10 min → 30-min block.
+    On success returns the Supabase session for the client to hydrate."""
+    import time as _t
+    ip = _client_ip(request)
+    now = _t.time()
+    rec = _LOGIN_FAILS.get(ip)
+    if rec and rec.get("blocked_until", 0) > now:
+        raise HTTPException(429, "Too many attempts, try again in 30 minutes.")
+    try:
+        async with httpx.AsyncClient(timeout=15.0, http2=False) as client:
+            r = await client.post(
+                f"{_SB_URL}/auth/v1/token",
+                params={"grant_type": "password"},
+                headers={"apikey": _SB_ANON, "Content-Type": "application/json"},
+                json={"email": (payload.email or "").lower().strip(), "password": payload.password},
+            )
+    except Exception as e:
+        logger.warning("login upstream error: %s", e)
+        raise HTTPException(503, "Sign-in service unavailable. Please try again.")
+    if r.status_code == 200:
+        _LOGIN_FAILS.pop(ip, None)
+        data = r.json()
+        return {
+            "access_token": data.get("access_token"),
+            "refresh_token": data.get("refresh_token"),
+            "expires_in": data.get("expires_in"),
+            "token_type": data.get("token_type"),
+            "user": data.get("user"),
+        }
+    # Failed credentials — record the attempt against this IP (sliding window).
+    rec = _LOGIN_FAILS.get(ip) or {"fails": [], "blocked_until": 0}
+    rec["fails"] = [t for t in rec.get("fails", []) if now - t < _LOGIN_WINDOW_SECS]
+    rec["fails"].append(now)
+    if len(rec["fails"]) >= _LOGIN_MAX_FAILS:
+        rec["blocked_until"] = now + _LOGIN_BLOCK_SECS
+        rec["fails"] = []
+        _LOGIN_FAILS[ip] = rec
+        raise HTTPException(429, "Too many attempts, try again in 30 minutes.")
+    _LOGIN_FAILS[ip] = rec
+    raise HTTPException(401, "Incorrect email or password")
 
 
 @api.post("/auth/signup-customer")
@@ -1791,76 +1858,97 @@ def my_orders(user: dict = Depends(require_user)):
     return rows
 
 
+def _safe_order_update(order_id: str, upd: dict) -> dict:
+    """Apply an orders update, transparently dropping any column that does not
+    exist yet so the flow keeps working before the order-tracking migration is run."""
+    u = dict(upd)
+    protected = {"status", "updated_at"}
+    while True:
+        try:
+            sb_admin.table("orders").update(u).eq("id", order_id).execute()
+            return u
+        except Exception as e:
+            msg = str(e)
+            dropped = next((k for k in u if k not in protected and k in msg), None)
+            if dropped is None:
+                raise
+            u.pop(dropped, None)
+            logger.warning("orders.update: column '%s' missing — run order-tracking migration", dropped)
+
+
 @api.put("/orders/{order_id}/status")
 async def update_order_status(order_id: str, payload: OrderStatusUpdate, user: dict = Depends(require_user)):
-    allowed = {"requested", "accepted", "shipped", "delivered", "rejected", "cancelled"}
+    """Order lifecycle: Requested → Confirmed(accepted) → Dispatched(shipped) →
+    Delivered → Completed. Dealer accepts/dispatches/marks-delivered; customer
+    confirms receipt (delivered → completed) which starts the 5-day payout timer."""
+    allowed = {"requested", "accepted", "shipped", "delivered", "completed", "rejected", "cancelled"}
     if payload.status not in allowed:
         raise HTTPException(400, "Invalid status")
     o = sb_admin.table("orders").select("*").eq("id", order_id).maybe_single().execute()
     if not o or not o.data:
         raise HTTPException(404, "Order not found")
     O_row = o.data
-    if user["role"] == "customer":
-        # Buyer can cancel a pending order OR confirm delivery on a shipped order
+    cur = O_row.get("status")
+    role = user["role"]
+
+    if role == "customer":
         if O_row["customer_id"] != user["id"]:
             raise HTTPException(403, "Not your order")
-        if payload.status == "cancelled" and O_row.get("status") in ("requested", "accepted"):
-            pass  # ok
-        elif payload.status == "delivered" and O_row.get("status") == "shipped":
-            pass  # ok
+        if payload.status == "cancelled" and cur in ("requested", "accepted"):
+            pass
+        elif payload.status == "completed" and cur == "delivered":
+            pass  # buyer confirms receipt
         else:
-            raise HTTPException(403, "Customers can only cancel pending orders or confirm shipped orders")
-    elif user["role"] == "supplier":
+            raise HTTPException(403, "You can only cancel a pending order or confirm a delivered order")
+    elif role == "supplier":
         s = _approved_supplier(user)
         if O_row["supplier_id"] != s["id"]:
             raise HTTPException(403, "Not your order")
-    upd = {"status": payload.status, "updated_at": datetime.now(timezone.utc).isoformat()}
-    if payload.tracking_number:
-        try:
-            upd["tracking_number"] = payload.tracking_number
-            sb_admin.table("orders").update(upd).eq("id", order_id).execute()
-        except Exception as e:
-            if "tracking_number" in str(e):
-                upd.pop("tracking_number", None)
-                sb_admin.table("orders").update(upd).eq("id", order_id).execute()
-            else:
-                raise
-    else:
-        sb_admin.table("orders").update(upd).eq("id", order_id).execute()
-        if user.get("role") == "admin":
-            _log_admin_action(user, "order_status_changed", "order", order_id,
-                              {"status": payload.status})
+        if payload.status in ("accepted", "rejected") and cur == "requested":
+            pass
+        elif payload.status == "shipped" and cur == "accepted":
+            if not (payload.courier_name and payload.courier_name.strip()) or not (payload.tracking_number and payload.tracking_number.strip()):
+                raise HTTPException(400, "Courier name and tracking number are required to dispatch")
+        elif payload.status == "delivered" and cur == "shipped":
+            pass
+        else:
+            raise HTTPException(403, "Invalid status transition for this order")
+    elif role != "admin":
+        raise HTTPException(403, "Not allowed")
 
-    # --- Side-effects: emails ---
-    if payload.status == "shipped" and payload.tracking_number:
-        try:
-            listing = sb_admin.table("listings").select(
-                "brand,model_number"
-            ).eq("id", O_row["listing_id"]).maybe_single().execute().data or {}
-            buyer = sb_admin.table("users").select("email,name").eq(
-                "id", O_row["customer_id"]
-            ).maybe_single().execute().data or {}
-            await email_order_shipped(
-                {**O_row, "tracking_number": payload.tracking_number},
-                listing,
-                buyer,
-            )
-        except Exception as e:
-            logger.warning("shipped email failed: %s", e)
-    elif payload.status == "delivered" and user["role"] == "customer":
-        try:
-            listing = sb_admin.table("listings").select(
-                "brand,model_number"
-            ).eq("id", O_row["listing_id"]).maybe_single().execute().data or {}
-            supplier = sb_admin.table("suppliers").select(
-                "business_name"
-            ).eq("id", O_row["supplier_id"]).maybe_single().execute().data or {}
-            buyer = sb_admin.table("users").select("email,name").eq(
-                "id", O_row["customer_id"]
-            ).maybe_single().execute().data or {}
-            await email_order_delivered_support(O_row, listing, supplier, buyer)
-        except Exception as e:
-            logger.warning("delivered notify failed: %s", e)
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    upd = {"status": payload.status, "updated_at": now_iso}
+    if payload.status == "shipped":
+        if payload.tracking_number:
+            upd["tracking_number"] = payload.tracking_number.strip()
+        if payload.courier_name:
+            upd["courier_name"] = payload.courier_name.strip()
+    elif payload.status == "delivered":
+        upd["delivered_at"] = now_iso
+    elif payload.status == "completed":
+        upd["completed_at"] = now_iso
+        upd["payout_eligible_at"] = (now + _td(days=5)).isoformat()
+        upd["auto_confirmed"] = False
+    _safe_order_update(order_id, upd)
+    if role == "admin":
+        _log_admin_action(user, "order_status_changed", "order", order_id, {"status": payload.status})
+
+    # --- Side-effect emails (best-effort) ---
+    try:
+        listing = sb_admin.table("listings").select("brand,model_number").eq("id", O_row["listing_id"]).maybe_single().execute().data or {}
+        buyer = sb_admin.table("users").select("email,name").eq("id", O_row["customer_id"]).maybe_single().execute().data or {}
+        if payload.status == "accepted":
+            await email_order_confirmed(O_row, listing, buyer)
+        elif payload.status == "shipped":
+            await email_order_shipped({**O_row, "tracking_number": payload.tracking_number, "courier_name": payload.courier_name}, listing, buyer)
+        elif payload.status == "delivered":
+            await email_order_delivered_confirm(O_row, listing, buyer)
+        elif payload.status == "completed":
+            supplier = sb_admin.table("suppliers").select("business_name").eq("id", O_row["supplier_id"]).maybe_single().execute().data or {}
+            await email_order_delivered_support({**O_row, "auto_confirmed": False}, listing, supplier, buyer)
+    except Exception as e:
+        logger.warning("order status email failed (%s): %s", payload.status, e)
     return {"ok": True}
 
 
@@ -5334,6 +5422,59 @@ def landing_data():
 def _bust_landing_cache():
     _LANDING_CACHE["data"] = None
     _LANDING_CACHE["ts"] = 0.0
+
+
+# ===== Background scheduler: auto-confirm delivered orders after 5 days ========
+from apscheduler.schedulers.asyncio import AsyncIOScheduler  # noqa: E402
+
+_scheduler = None
+
+
+async def _auto_confirm_delivered_orders():
+    """If a buyer doesn't confirm receipt within 5 days of the dealer marking an
+    order Delivered, auto-confirm it → Completed and start the 5-day payout timer.
+    Protects dealers from unresponsive customers."""
+    try:
+        cutoff = (datetime.now(timezone.utc) - _td(days=5)).isoformat()
+        try:
+            rows = sb_admin.table("orders").select("*").eq("status", "delivered").lte("delivered_at", cutoff).execute().data or []
+        except Exception as e:
+            logger.debug("auto-confirm skipped (delivered_at not migrated?): %s", e)
+            return
+        for O_row in rows:
+            now = datetime.now(timezone.utc)
+            _safe_order_update(O_row["id"], {
+                "status": "completed",
+                "updated_at": now.isoformat(),
+                "completed_at": now.isoformat(),
+                "payout_eligible_at": (now + _td(days=5)).isoformat(),
+                "auto_confirmed": True,
+            })
+            try:
+                listing = sb_admin.table("listings").select("brand,model_number").eq("id", O_row["listing_id"]).maybe_single().execute().data or {}
+                supplier = sb_admin.table("suppliers").select("business_name").eq("id", O_row["supplier_id"]).maybe_single().execute().data or {}
+                buyer = sb_admin.table("users").select("email,name").eq("id", O_row["customer_id"]).maybe_single().execute().data or {}
+                await email_order_delivered_support({**O_row, "auto_confirmed": True}, listing, supplier, buyer)
+            except Exception as e:
+                logger.warning("auto-confirm email failed for %s: %s", O_row.get("id"), e)
+            logger.info("auto-confirmed order %s (no buyer confirmation in 5 days)", O_row.get("id"))
+    except Exception:
+        logger.exception("auto-confirm job crashed")
+
+
+@app.on_event("startup")
+async def _start_scheduler():
+    global _scheduler
+    if _scheduler is not None:
+        return
+    _scheduler = AsyncIOScheduler(timezone="UTC")
+    _scheduler.add_job(
+        _auto_confirm_delivered_orders, "interval", minutes=30,
+        id="auto_confirm_delivered", replace_existing=True,
+        next_run_time=datetime.now(timezone.utc) + _td(seconds=60),
+    )
+    _scheduler.start()
+    logger.info("APScheduler started — auto-confirm delivered orders every 30 min")
 
 
 app.include_router(api)
