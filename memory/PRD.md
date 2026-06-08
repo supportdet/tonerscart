@@ -1,6 +1,6 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-08):** (1) Login brute-force protection — backend `POST /api/auth/login` (server-side Supabase sign-in), 5 failed/IP/10min → 30-min block. (2) Order tracking flow Requested→Confirmed→Dispatched→Delivered→Completed with dealer/customer actions, emails, and a 5-day APScheduler auto-confirm + payout timer. (3) Grievance officer text updated. **ACTION: run `backend/supabase_schema_order_tracking.sql` in Supabase** for order-tracking columns. **DEFERRED:** server.py → routers refactor (do after feature validation). See CHANGELOG.md.
+> **Latest (2026-06-08):** (1) Login brute-force protection — backend `POST /api/auth/login`, 5 failed/IP/10min → 30-min block. (2) Order tracking flow Requested→Confirmed→Dispatched→Delivered→Completed + 5-day APScheduler auto-confirm/payout timer. (3) Grievance officer text. (4) **server.py refactored** into `backend/routes/{auth,search,products,orders,admin,suppliers}.py` (5,523→1,597 lines, 120-endpoint parity, zero behaviour change). **ACTION: run `backend/supabase_schema_order_tracking.sql`** for order-tracking columns. See CHANGELOG.md.
 
 
 ## Latest changelog (2026-02 Wave 10 — Two-layer navbar + new category pages + D2D marketplace)

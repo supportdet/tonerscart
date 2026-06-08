@@ -1,4 +1,15 @@
-### 2026-06-08 — Login rate limiting + Order tracking flow + Grievance officer
+### 2026-06-08 (b) — server.py refactor into route modules (zero behaviour change)
+
+Split the 5,523-line monolithic `server.py` into domain route files under `backend/routes/`, leaving the shared kernel (helpers, models, dependencies, caches) + app/middleware/CORS/scheduler + the 3 `@app` routes (robots/sitemap/pageview) in `server.py`, which now registers all routers.
+
+- **New route modules** (each `from server import *` for the shared kernel + explicit underscore-helper imports; own `APIRouter(prefix="/api")`): `routes/auth.py` (14 endpoints), `routes/search.py` (10), `routes/products.py` (38), `routes/orders.py` (6), `routes/admin.py` (40), `routes/suppliers.py` (9). `procurement.py`/`oem.py`/`agreements.py` already existed.
+- **Parity verified:** 117 router endpoints + 3 `@app` = **120 = original** (git HEAD). 0 `@api.` left in server.py. `server.py` 5,523 → **1,597 lines**.
+- **Method:** AST-based extraction (moved only `@api`-decorated functions; all helpers/models/constants stayed as kernel). Auto-detected & added per-file underscore-helper imports; caught import-alias kernel names (`_td/_re/_time/_dd`) and a re-exported `_commission_breakdown`.
+- **Verified:** boots clean; 25+ endpoints across every domain return correct codes (reads + a cross-module write round-trip admin→public config; `search_ai`→`search_universal` in-module call); no cross-file endpoint-to-endpoint calls; lint clean (intentional star-import F405 suppressed file-level); homepage renders end-to-end. Zero frontend impact (identical `/api` paths).
+- **Constraints honored:** no CORS change, no behaviour change, Razorpay/Twilio untouched.
+
+
+
 
 **1. Login rate limiting (brute-force protection).** Login was 100% client-side Supabase (`signInWithPassword`) — no backend endpoint to limit. Added `POST /api/auth/login` (`server.py`) that signs in server-side via Supabase GoTrue REST (`/auth/v1/token`, stateless httpx call — avoids shared-client races) and applies a per-IP, FAILED-only sliding window: **5 fails / IP / 10 min → 30-min block**, message `"Too many attempts, try again in 30 minutes."` Successful logins clear the counter. `AuthContext.login` now calls the backend then hydrates the client session via `supabase.auth.setSession(...)`. Verified via curl: 200+token / 401 / 429 sequence correct.
 
