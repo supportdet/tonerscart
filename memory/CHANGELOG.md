@@ -1,3 +1,9 @@
+### 2026-06-09 (c) — Fix: homepage brand marquee showed empty white pills
+
+Root cause: `/api/config/marquee_brands` stores plain strings (e.g. ["HP","Canon","Brother"]), but `Landing.jsx` rendered `b.name`/`b.color` (object shape) → pills rendered with NO text (just white boxes), most obvious on mobile where the label+marquee shared one flex row and the mask-fade only revealed slivers.
+Fix (Landing.jsx): added `normalizeBrands()` + `BRAND_COLORS` map — accepts both string and {name,color} shapes, assigns each brand its corporate colour. Mobile layout: marquee label now stacks above a full-width marquee (`flex-col sm:flex-row`, `w-full sm:flex-1 min-w-0`); index.css adds a <=640px block (smaller pills, tighter gap, narrower mask) so brand names stay readable.
+
+
 ### 2026-06-09 (b) — Auto-notify waiting buyers when a compatible product is listed
 
 When a dealer creates a **toner** (`POST /api/supplier/listings`) or **consumable** (`POST /api/supplier/consumables`), the backend now fires a fire-and-forget job (`routes/compat.schedule_notify` → daemon thread → `notify_waiting_buyers`) that:

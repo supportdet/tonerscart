@@ -16,6 +16,28 @@ import { categoryRoute } from "../lib/categoryRoute";
 // now come from /api/config/<key>. The backend ships sane defaults so the
 // frontend never needs its own fallback array.
 
+// Brand → corporate colour for the marquee pills. Config entries may be plain
+// strings (e.g. "HP") or objects ({name, color}); we normalise both shapes so
+// the pill always shows the readable brand name in its brand colour.
+const BRAND_COLORS = {
+    hp: "#0096D6", canon: "#BE0000", epson: "#003399", brother: "#0067B1",
+    ricoh: "#D7000F", xerox: "#000000", kyocera: "#D80C24", samsung: "#1428A0",
+    "konica minolta": "#0096D6", pantum: "#00A0E9", lexmark: "#00A94F",
+    sharp: "#C20E1A", riso: "#ED1C24", oki: "#006341",
+};
+
+const normalizeBrands = (raw) => {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .map((b) => {
+            const name = (typeof b === "string" ? b : b?.name || "").trim();
+            if (!name) return null;
+            const color = (typeof b === "object" && b?.color) || BRAND_COLORS[name.toLowerCase()] || "#0A0A0B";
+            return { name, color };
+        })
+        .filter(Boolean);
+};
+
 export default function Landing() {
     const navigate = useNavigate();
     const { city } = useCity();
@@ -49,7 +71,7 @@ export default function Landing() {
         };
         loadFeatured();
         api.get("/config/marquee_brands")
-            .then((r) => setMarqueeBrands(Array.isArray(r.data?.value) ? r.data.value : []))
+            .then((r) => setMarqueeBrands(normalizeBrands(r.data?.value)))
             .catch(() => setMarqueeBrands([]));
         api.get("/config/popular_chips")
             .then((r) => setPopularChips(Array.isArray(r.data?.value) ? r.data.value : []))
@@ -190,9 +212,9 @@ export default function Landing() {
             {/* ============ BRANDS MARQUEE — colored logo-style text ============ */}
             {marqueeBrands.length > 0 && (
                 <section className="tc-brand-marquee" data-testid="brand-marquee">
-                    <div className="tc-container flex items-center gap-6">
+                    <div className="tc-container flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
                         <span className="text-[10px] tracking-[0.22em] uppercase font-semibold text-[#F5C400] shrink-0">Brands on TonersCart</span>
-                        <div className="tc-marquee-mask flex-1">
+                        <div className="tc-marquee-mask w-full sm:flex-1 min-w-0">
                             <div className="tc-marquee-track">
                                 {[...marqueeBrands, ...marqueeBrands, ...marqueeBrands].map((b, i) => (
                                     <span
