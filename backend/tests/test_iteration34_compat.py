@@ -25,7 +25,7 @@ def test_db_covers_all_required_brands():
 
 def test_bidirectional_cross_reference():
     # selecting a printer shows compatible toners; that toner lists the printer back
-    p = cdb.get_printer("hp-laserjet-m1005-mfp")
+    p = cdb.get_printer("hp-laserjet-m1005")
     assert p and p["toners"]
     code = p["toners"][0]
     t = cdb.get_toner(code)
@@ -53,10 +53,10 @@ def test_api_search_toners():
 
 
 def test_api_printer_detail():
-    r = httpx.get(f"{API}/api/compat/printer/hp-laserjet-m1005-mfp", timeout=30)
+    r = httpx.get(f"{API}/api/compat/printer/hp-laserjet-m1005", timeout=30)
     assert r.status_code == 200
     body = r.json()
-    assert body["printer"]["slug"] == "hp-laserjet-m1005-mfp"
+    assert body["printer"]["slug"] == "hp-laserjet-m1005"
     assert "compatible_toners" in body and "listings" in body
 
 
@@ -65,9 +65,40 @@ def test_api_printer_404():
     assert r.status_code == 404
 
 
+@pytest.mark.parametrize("slug,expect", [
+    ("hp-laserjet-m1005", "HP LaserJet M1005 MFP"),
+    ("canon-lbp2900", "Canon imageCLASS LBP2900"),
+    ("xerox-b305", "Xerox B305"),
+    ("brother-hl-2321d", "Brother HL-L2321D"),
+    ("epson-l3150", "Epson EcoTank L3150"),
+])
+def test_tolerant_slug_resolution(slug, expect):
+    assert cdb.get_printer(slug) is not None, slug
+    assert cdb.get_printer(slug)["full_name"] == expect
+    r = httpx.get(f"{API}/api/compat/printer/{slug}", timeout=30)
+    assert r.status_code == 200, (slug, r.status_code)
+    assert r.json()["printer"]["full_name"] == expect
+
+
+def test_all_printer_pages_resolve():
+    """Every one of the 543+ printer pages must resolve from both its canonical
+    slug and the raw full-name slug — no /compatible page may 404."""
+    import re
+    raw = lambda s: re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
+    printers = cdb.all_printers()
+    assert len(printers) >= 543
+    canon_fail = [p["slug"] for p in printers if cdb.get_printer(p["slug"]) is None]
+    full_fail = [p["full_name"] for p in printers if cdb.get_printer(raw(p["full_name"])) is None]
+    assert canon_fail == [], canon_fail
+    assert full_fail == [], full_fail
+    # slugs are unique
+    slugs = [p["slug"] for p in printers]
+    assert len(slugs) == len(set(slugs))
+
+
 def test_api_notify_graceful():
     r = httpx.post(f"{API}/api/compat/notify",
-                   json={"printer_slug": "hp-laserjet-m1005-mfp", "email": "qa@example.com"}, timeout=30)
+                   json={"printer_slug": "hp-laserjet-m1005", "email": "qa@example.com"}, timeout=30)
     assert r.status_code == 200
     assert r.json().get("ok") is True
 
@@ -75,4 +106,4 @@ def test_api_notify_graceful():
 def test_api_sitemap_contains_compatible_and_listings():
     r = httpx.get(f"{API}/api/sitemap.xml", timeout=30)
     assert r.status_code == 200
-    assert "/compatible/hp-laserjet-m1005-mfp" in r.text
+    assert "/compatible/hp-laserjet-m1005" in r.text
