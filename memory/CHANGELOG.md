@@ -1,3 +1,22 @@
+### 2026-06-09 (e) — Toner/consumable SEO pages + related sections + dealer-form fixes
+
+**Toner model SEO pages `/toner/[model-slug]`** (e.g. /toner/hp-q2612a):
+- `compatibility_db.py`: `toner_slugify()` (drops parenthetical aliases + filler → hp-q2612a), `get_toner_by_slug()` tolerant 4-tier resolver (exact→alias→token-subset→fuzzy), `all_brands()`; every one of the 572 toner models now has a unique resolvable slug.
+- `routes/compat.py`: `GET /api/compat/brands`, `GET /api/compat/toner-page/{slug}` (toner, compatible_printers, dealer listings matched by model_number token, related). Listings matched across `listings`+`consumable_listings` with word-boundary alias check (so "88A" doesn't match "1288A").
+- `server.py` sitemap now also emits `/toner/<model-slug>` for all 572.
+- Frontend `TonerModelPage.jsx` (title/meta/H1, compatible-printer chips, dealer listings, related, Notify-me when empty, Schema.org Product/AggregateOffer). `/toner/:id` route now goes through `TonerRoute.jsx` which branches **UUID → ProductDetail (listing detail), slug → TonerModelPage** so the two coexist.
+
+**"You may also need" related sections** on BOTH printer and toner pages, placed immediately after the dealer-listings section and before Notify-me. New `RelatedRow.jsx` (horizontal scroll, max 6) + `CompatListingCard.jsx`. Printer page: "Compatible cartridges" + "More <brand> printers". Toner page: "Compatible with same printers" + "From the same brand". Section order: hero → cartridge/printer models → dealer listings → related → notify(if no stock).
+
+**Dealer upload form fixes** (`PrinterListings.jsx`, `CompatibleModelsSelect.jsx`, new `PrinterModelSelect.jsx`):
+- Printer **Brand** → `<select>` of the 12 compat-DB brands (`/api/compat/brands`).
+- Printer **Model** → searchable single-select from 546 models (auto-fills brand on pick; free text still allowed).
+- Printer **Compatible cartridges** → searchable multi-select wired to the 571-toner DB (mode=toners).
+- Fixed the overlapping search icon on the toner "compatible printer models" field — inline `paddingLeft:2.4rem` overrides `.tc-input-lg`'s `padding:0 16px`.
+
+**Testing:** backend pytest 25/25; testing agent iteration_35 — backend 100% (33/33), frontend 100% on public surfaces (toner page, route branching, /compatible ordering+related+notify). Dealer wizard verified at source-level (interactive Playwright blocked by the global seller-agreement modal — infra, not a bug). Constraints honored: no CORS change, no emergentintegrations, Razorpay/Twilio untouched.
+
+
 ### 2026-06-09 (d) — Fix: /compatible/:slug returning "printer not found"
 
 Root cause: slugs were generated as `brand + full model name`, so DB slugs carried marketing/sub-brand filler (`-mfp`, `imageclass`, `ecotank`) and model variants (`HL-L2321D`), and `get_printer()` only did an exact dict lookup — so natural SEO slugs like `hp-laserjet-m1005`, `canon-lbp2900`, `epson-l3150` 404'd. Xerox B305 was also missing from the DB.
