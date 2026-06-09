@@ -6,6 +6,7 @@ products, and exposes search endpoints for the dealer upload dropdowns.
 """
 import logging
 import asyncio
+import re
 import threading
 from datetime import datetime, timezone
 
@@ -106,6 +107,12 @@ def compat_stats():
     return cdb.stats()
 
 
+@router.get("/brands")
+def compat_brands():
+    """All printer brands in the compatibility DB (for the printer upload dropdown)."""
+    return cdb.all_brands()
+
+
 @router.get("/printers")
 def compat_search_printers(q: str = "", limit: int = 20):
     """Searchable printer catalogue for the toner/consumable upload dropdowns."""
@@ -166,6 +173,83 @@ def _matching_listings(printer: dict) -> list:
     return sorted(found.values(), key=lambda x: (x.get("price") or 1e12))
 
 
+def _printer_card(p: dict) -> dict:
+    return {"full_name": p["full_name"], "brand": p["brand"], "model": p["model"],
+            "type": p["type"], "slug": p["slug"], "url": f"/compatible/{p['slug']}"}
+
+
+def _toner_card(t: dict) -> dict:
+    return {"model": t["model"], "brand": t["brand"], "type": t["type"],
+            "slug": t["slug"], "url": f"/toner/{t['slug']}"}
+
+
+def _printer_related(p: dict) -> dict:
+    printers = cdb.all_printers()
+    same_brand = [_printer_card(x) for x in printers
+                  if x["brand"] == p["brand"] and x["slug"] != p["slug"]][:6]
+    cart, seen = [], set()
+    for code in p.get("toners") or []:
+        t = cdb.get_toner(code)
+        if t and t["slug"] not in seen:
+            seen.add(t["slug"])
+            cart.append(_toner_card(t))
+    return {"same_brand_printers": same_brand, "compatible_toner_models": cart[:6]}
+
+
+def _toner_related(t: dict) -> dict:
+    toners = cdb.all_toners()
+    mine = set(t.get("printers") or [])
+    same_printers = []
+    if mine:
+        scored = []
+        for x in toners:
+            if x["slug"] == t["slug"]:
+                continue
+            overlap = len(mine & set(x.get("printers") or []))
+            if overlap:
+                scored.append((overlap, x))
+        scored.sort(key=lambda z: (-z[0], z[1]["brand"], z[1]["model"]))
+        same_printers = [_toner_card(x) for _, x in scored[:6]]
+    same_brand = [_toner_card(x) for x in toners
+                  if x["brand"] == t["brand"] and x["slug"] != t["slug"]][:6]
+    return {"same_printers_toners": same_printers, "same_brand_toners": same_brand}
+
+
+def _toner_aliases(model: str) -> list:
+    """Meaningful model tokens to match dealer listings, e.g. 'CB388A (88A)' -> ['CB388A','88A']."""
+    return [tok for tok in re.findall(r"[A-Za-z0-9\-]+", model or "") if len(tok) >= 2]
+
+
+def _alias_hit(model_number: str, aliases: list) -> bool:
+    mn = (model_number or "").lower()
+    for a in aliases:
+        if re.search(r"(?<![a-z0-9])" + re.escape(a.lower()) + r"(?![a-z0-9])", mn):
+            return True
+    return False
+
+
+def _toner_listings(toner: dict) -> list:
+    """In-stock dealer toner/consumable listings FOR this exact cartridge model."""
+    aliases = _toner_aliases(toner["model"])
+    found: dict = {}
+    for table, kind in (("listings", "toner"), ("consumable_listings", "consumable")):
+        for a in aliases:
+            try:
+                rows = sb_admin.table(table).select("*").ilike(
+                    "model_number", f"%{a}%"
+                ).limit(40).execute().data or []
+            except Exception as e:
+                logger.debug("toner listings %s/%s skipped: %s", table, a, e)
+                continue
+            for L in rows:
+                if int(L.get("stock") or 0) <= 0:
+                    continue
+                if not _alias_hit(L.get("model_number"), aliases):
+                    continue
+                found[(table, L["id"])] = _public_listing(L, kind)
+    return sorted(found.values(), key=lambda x: (x.get("price") or 1e12))
+
+
 @router.get("/printer/{slug}")
 def compat_printer(slug: str):
     p = cdb.get_printer(slug)
@@ -174,7 +258,7 @@ def compat_printer(slug: str):
     compatible_toners = []
     for code in p.get("toners") or []:
         t = cdb.get_toner(code)
-        compatible_toners.append(t or {"model": code, "brand": p["brand"], "type": "toner", "printers": []})
+        compatible_toners.append(t or {"model": code, "brand": p["brand"], "type": "toner", "printers": [], "slug": cdb.toner_slugify(p["brand"], code)})
     listings = _matching_listings(p)
     return {
         "printer": {
@@ -184,6 +268,31 @@ def compat_printer(slug: str):
         "compatible_toners": compatible_toners,
         "listings": listings,
         "listings_count": len(listings),
+        "related": _printer_related(p),
+    }
+
+
+@router.get("/toner-page/{slug}")
+def compat_toner_page(slug: str):
+    t = cdb.get_toner_by_slug(slug)
+    if not t:
+        raise HTTPException(404, "Toner not found")
+    compatible_printers = []
+    for fn in t.get("printers") or []:
+        pr = cdb.get_printer(cdb.slugify("", fn))
+        if pr:
+            compatible_printers.append(_printer_card(pr))
+        else:
+            s = cdb.slugify("", fn)
+            compatible_printers.append({"full_name": fn, "brand": t["brand"], "model": fn,
+                                        "type": "", "slug": s, "url": f"/compatible/{s}"})
+    listings = _toner_listings(t)
+    return {
+        "toner": {"model": t["model"], "brand": t["brand"], "type": t["type"], "slug": t["slug"]},
+        "compatible_printers": compatible_printers,
+        "listings": listings,
+        "listings_count": len(listings),
+        "related": _toner_related(t),
     }
 
 

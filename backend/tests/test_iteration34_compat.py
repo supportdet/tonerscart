@@ -96,6 +96,56 @@ def test_all_printer_pages_resolve():
     assert len(slugs) == len(set(slugs))
 
 
+# ----------------------------- Toner model pages -----------------------------
+
+def test_brands_endpoint():
+    r = httpx.get(f"{API}/api/compat/brands", timeout=30)
+    assert r.status_code == 200
+    brands = r.json()
+    for b in ["HP", "Canon", "Epson", "Brother", "Ricoh", "Xerox", "Kyocera",
+              "Samsung", "Konica Minolta", "Pantum", "Riso", "Sharp"]:
+        assert b in brands, f"missing brand {b}"
+
+
+@pytest.mark.parametrize("slug", ["hp-q2612a", "hp-88a", "brother-tn-2280", "ricoh-sp-320"])
+def test_toner_page_resolves(slug):
+    assert cdb.get_toner_by_slug(slug) is not None, slug
+    r = httpx.get(f"{API}/api/compat/toner-page/{slug}", timeout=30)
+    assert r.status_code == 200, (slug, r.status_code)
+    body = r.json()
+    assert body["toner"]["slug"]  # resolves to a canonical toner (may differ from input)
+    assert "compatible_printers" in body and "listings" in body and "related" in body
+    assert {"same_printers_toners", "same_brand_toners"} <= set(body["related"])
+
+
+def test_toner_page_404():
+    r = httpx.get(f"{API}/api/compat/toner-page/this-is-not-a-toner", timeout=30)
+    assert r.status_code == 404
+
+
+def test_all_toner_pages_resolve():
+    toners = cdb.all_toners()
+    assert len(toners) >= 500
+    fail = [t["slug"] for t in toners if cdb.get_toner_by_slug(t["slug"]) is None]
+    assert fail == [], fail[:10]
+    slugs = [t["slug"] for t in toners]
+    assert len(slugs) == len(set(slugs))
+
+
+def test_printer_page_has_related():
+    r = httpx.get(f"{API}/api/compat/printer/hp-laserjet-m1005", timeout=30)
+    assert r.status_code == 200
+    rel = r.json().get("related", {})
+    assert {"same_brand_printers", "compatible_toner_models"} <= set(rel)
+    assert len(rel["same_brand_printers"]) >= 1
+
+
+def test_sitemap_contains_toner_model_pages():
+    r = httpx.get(f"{API}/api/sitemap.xml", timeout=30)
+    assert r.status_code == 200
+    assert "/toner/hp-q2612a" in r.text
+
+
 def test_api_notify_graceful():
     r = httpx.post(f"{API}/api/compat/notify",
                    json={"printer_slug": "hp-laserjet-m1005", "email": "qa@example.com"}, timeout=30)

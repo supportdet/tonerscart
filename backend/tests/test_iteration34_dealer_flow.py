@@ -49,8 +49,10 @@ def test_sitemap_has_compatible_and_listing_urls():
     r = httpx.get(f"{API}/api/sitemap.xml", timeout=60)
     assert r.status_code == 200
     body = r.text
-    # programmatic SEO pages
-    assert "/compatible/hp-laserjet-m1005-mfp" in body
+    # programmatic SEO pages (canonical slug, iteration 35+)
+    assert "/compatible/hp-laserjet-m1005" in body
+    # iteration 35 — toner model pages must also be in sitemap
+    assert "/toner/hp-q2612a" in body
     # at least one of the product feeds must be present (live data dependent;
     # if no in-stock product exists this is environment-only, not a bug)
     has_any_listing = any(p in body for p in ("/toner/", "/printer/", "/paper/", "/consumable/"))

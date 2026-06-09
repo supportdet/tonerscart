@@ -101,7 +101,8 @@ export default function CompatibleModelsSelect({
                     onChange={(e) => setQ(e.target.value)}
                     onFocus={() => results.length && setOpen(true)}
                     placeholder={ph}
-                    className="tc-input-lg w-full pl-9"
+                    className="tc-input-lg w-full"
+                    style={{ paddingLeft: "2.4rem" }}
                     data-testid={`${testid}-input`}
                     autoComplete="off"
                 />
