@@ -151,13 +151,13 @@ export default function CompatiblePage() {
                             label="Compatible cartridges"
                             kind="toner"
                             testid="related-compatible-cartridges"
-                            items={(related.compatible_toner_models || []).map((t) => ({ brand: t.brand, title: t.model, subtitle: t.type, url: t.url }))}
+                            items={related.compatible_toner_models || []}
                         />
                         <RelatedRow
                             label={`More ${p.brand} printers`}
                             kind="printer"
                             testid="related-same-brand-printers"
-                            items={(related.same_brand_printers || []).map((x) => ({ brand: x.brand, title: x.full_name, subtitle: x.type, url: x.url }))}
+                            items={related.same_brand_printers || []}
                         />
                     </section>
                 )}

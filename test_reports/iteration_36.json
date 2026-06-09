@@ -1,0 +1,28 @@
+{
+  "summary": "Iteration 36 — all 3 SEO refinements verified end-to-end. Backend pytest 9/9 (test_iteration36_compat_refinements.py) + iteration34 regression 25/25 still green. Frontend Playwright pass for /toner/brother-tn-2280 (same-brand row strictly TONER type, 6 rich cards each with cartridge SVG image + bold model + TONER badge + 'Compatible with N printers' subtitle + View link, no BT-5000/LC-3619 ink/drum leakage), /compatible/hp-laserjet-m1005 (compatible-cartridges has 1 toner card Q2612A with TONER badge + 'Compatible with 12 printers'; same-brand-printers has 6 cards each with printer-icon image, LASER type badge, 'N compatible cartridges' subtitle, View link — none blank), and price-comparison flow on /toner/hp-q2612a after seeding a Q2612A dealer listing (price 1200, GST 18, total 1416, intercity 150, dealer 'QA Dealer UI'). toner-price-table renders headers DEALER/PRICE (EX GST)/GST/TOTAL/DELIVERY/(Buy), the row price-row-<id> shows ₹1,200 / 18% / ₹1,416 / Local Free + Intercity +₹150, price-buy-<id> links to /toner/<listing-uuid>. Sticky bar toner-sticky-bar is correctly hidden before scroll, becomes visible after scrolling past the first row, and shows 'LOWEST PRICE ₹1,416 incl. GST · QA Dealer UI…' with a toner-sticky-buy link to /toner/<uuid>. Route branching verified: /toner/<uuid> renders ProductDetail (no toner-h1, no toner-price-table) while /toner/hp-q2612a renders the model page. All test data (supplier + listing + auth user) cleaned up.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration36_compat_refinements.py",
+    "/app/backend/tests/test_iteration34_compat.py",
+    "/app/test_reports/pytest/iteration_36.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "_toner_related in routes/compat.py correctly filters same_brand_toners by x['type']==t['type'] so a TONER page never lists INK/DRUM and vice-versa — confirmed for both Brother TN-2280 (toner) and a Brother BT (ink) cartridge.",
+    "_public_listing now exposes price/gst_rate/total_price/intercity_delivery_charge and _toner_listings enriches each item with dealer_name + dealer_city and sorts by total_price ascending — exact field shape required by the price-comparison table.",
+    "TonerModelPage IntersectionObserver-driven sticky bar is correctly conditional: invisible until the first dealer row is scrolled past, visible after, and the 'Buy now' href points to the cheapest listing's /toner/<uuid> route. Confirmed at 1280x720 viewport.",
+    "RelatedRow renders TonerCartridge SVG for toner cards and PrinterIcon for printer cards with brand on the cartridge label — no blank cards observed on either /toner/* or /compatible/* pages tested.",
+    "Route branching /toner/:slug — slug looks like UUID -> ProductDetail; otherwise -> TonerModelPage. Verified by visiting both /toner/hp-q2612a (model page) and /toner/100f0285-... (product page) within the same test."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration36_compat_refinements.py (NEW — 9 tests covering all 3 refinements + self-cleanup)"
+  ],
+  "success_rate": {"backend": "100% (9/9 new + 25/25 iteration34 regression)", "frontend": "100% — all 7 Playwright assertions across the 3 pages passed"},
+  "test_credentials": "Admin: admin@tonerscart.in / Admin@123. No long-lived supplier — the pytest and the UI seed both self-clean.",
+  "seed_data_creation": "Ephemeral. Created qa.dealer.it36ui.a6a9ec27@example.com + listing 100f0285-66e3-458b-829e-43be6920e29d for the price-table UI test, fully DELETED at end (listings/suppliers/suppliers_pending/users + Supabase auth user). No leftover test data in DB.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run /app/backend/tests/test_iteration36_compat_refinements.py for the 3-refinement regression (9 tests, self-seeding supplier + listing, self-cleanup). Sticky bar will only show after scrolling past the first dealer row — when testing with viewport height 4000 nothing actually scrolls, use a normal 1280x720 viewport for sticky-bar assertions. Tolerant slug resolution still applies (input hp-88a -> canonical hp-cb388a etc.).",
+  "rca of the issue": "No product issues found. All 3 refinements behave exactly per spec."
+}
