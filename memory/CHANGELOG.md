@@ -1,3 +1,21 @@
+### 2026-06-09 (f) — Related-section type fix + rich cards + toner price table + smart brand sorting
+
+**Same-type related fix:** toner pages' "From the same brand" now lists only cartridges of the SAME type as the current model (laser toner -> only toners, ink -> only inks). Added `_infer_toner_type()` in compatibility_db.py (pattern-based: LC/BT/GI/GT/PG/CL/T#/S- -> ink, DR/DK -> drum, Epson short numerics -> ink, else toner) so derived cartridges (e.g. Brother LC-3619XLBK) are no longer mislabelled toner. Type distribution now 421 toner / 119 ink / 24 drum / 8 ribbon.
+
+**Richer related cards** (RelatedRow.jsx, both printer & toner pages): generated TonerCartridge SVG (brand on label) for toner cards / printer icon for printer cards, bold model name, TYPE badge (TONER/INK/DRUM/RIBBON), subtitle ("Compatible with N printers" / "N compatible cartridges"), View -> link. Never blank.
+
+**Toner price-comparison table + sticky bar** (TonerPriceTable.jsx, TonerModelPage.jsx): columns Dealer / Price (ex GST) / GST% / Total / Delivery (Local free + Intercity) / Buy, sorted by lowest total first. `_public_listing` now returns gst_rate, total_price (price*(1+gst/100)), intercity_delivery_charge; `_toner_listings` enriches dealer_name/city and sorts by total. Sticky "Lowest price Rs X — Buy now" bar (IntersectionObserver on first row) appears after scrolling past the first dealer row.
+
+**Smart brand sorting on dealer dropdowns** (task 5):
+- `GET /api/compat/printers?brand=&brand_only=` and `GET /api/compat/toners?brand=` — brand floats to the top of results (or filters, for printer model field). search_printers/search_toners updated.
+- Toner upload "Compatible printer models" (CompatibleModelsSelect mode=printers) now passes the toner's brand -> selected brand's printers first, others below.
+- Printer upload "Model number" (PrinterModelSelect) passes brand + brand_only=true -> only that brand's models.
+- Printer upload "Compatible cartridges" (mode=toners) passes the printer brand -> that brand's cartridges first.
+- Dropdowns now also fetch on focus (empty query) so the brand-prioritised list shows in the initial open state, not just on typing.
+
+**Testing:** backend pytest tests/test_iteration34_compat.py now 28/28 (incl. brand-sort). Testing agent iteration_36 (prior turn) passed 100% (backend 9/9 + 25/25 regression, frontend 7/7: price table Rs1,416 row, sticky bar, rich cards, type filter, route branching). All test users/products + test notify_requests deleted. Constraints honored: no CORS change, no emergentintegrations, Razorpay/Twilio untouched.
+
+
 ### 2026-06-09 (e) — Toner/consumable SEO pages + related sections + dealer-form fixes
 
 **Toner model SEO pages `/toner/[model-slug]`** (e.g. /toner/hp-q2612a):

@@ -228,6 +228,7 @@ export default function ConsumableListings() {
                                     mode="printers"
                                     value={form.compatible_models}
                                     onChange={(v) => setForm({ ...form, compatible_models: v })}
+                                    brand={form.brand}
                                     testid="consumable-compatible"
                                 />
                             </div>

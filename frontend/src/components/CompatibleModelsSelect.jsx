@@ -17,6 +17,7 @@ export default function CompatibleModelsSelect({
     onChange,
     testid = "compatible-models",
     placeholder,
+    brand = "",
 }) {
     const parse = (v) => (v || "").split(",").map((s) => s.trim()).filter(Boolean);
     const [selected, setSelected] = useState(parse(value));
@@ -47,27 +48,26 @@ export default function CompatibleModelsSelect({
     const remove = (label) => commit(selected.filter((s) => s !== label));
 
     useEffect(() => {
+        if (!open) return;
         const term = q.trim();
-        if (!term) { setResults([]); return; }
         let active = true;
         setLoading(true);
         const t = setTimeout(async () => {
             try {
-                const { data } = await api.get(`/compat/${mode}`, { params: { q: term, limit: 12 } });
+                const { data } = await api.get(`/compat/${mode}`, { params: { q: term, limit: 12, brand: brand || "" } });
                 if (!active) return;
                 const opts = (Array.isArray(data) ? data : []).map((d) =>
                     mode === "printers" ? d.full_name : `${d.model}`
                 );
                 setResults(opts);
-                setOpen(true);
             } catch {
                 if (active) setResults([]);
             } finally {
                 if (active) setLoading(false);
             }
-        }, 220);
+        }, 200);
         return () => { active = false; clearTimeout(t); };
-    }, [q, mode]);
+    }, [q, mode, brand, open]);
 
     useEffect(() => {
         const onDoc = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
@@ -99,7 +99,7 @@ export default function CompatibleModelsSelect({
                 <input
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
-                    onFocus={() => results.length && setOpen(true)}
+                    onFocus={() => setOpen(true)}
                     placeholder={ph}
                     className="tc-input-lg w-full"
                     style={{ paddingLeft: "2.4rem" }}

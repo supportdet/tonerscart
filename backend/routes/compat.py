@@ -114,15 +114,16 @@ def compat_brands():
 
 
 @router.get("/printers")
-def compat_search_printers(q: str = "", limit: int = 20):
-    """Searchable printer catalogue for the toner/consumable upload dropdowns."""
-    return cdb.search_printers(q, min(max(limit, 1), 50))
+def compat_search_printers(q: str = "", limit: int = 20, brand: str = "", brand_only: bool = False):
+    """Searchable printer catalogue. `brand` prioritises that brand first (or, with
+    brand_only=true, filters to it) for the dealer upload dropdowns."""
+    return cdb.search_printers(q, min(max(limit, 1), 50), brand=brand or None, brand_only=brand_only)
 
 
 @router.get("/toners")
-def compat_search_toners(q: str = "", limit: int = 20):
-    """Searchable toner/cartridge catalogue for the printer upload dropdown."""
-    return cdb.search_toners(q, min(max(limit, 1), 50))
+def compat_search_toners(q: str = "", limit: int = 20, brand: str = ""):
+    """Searchable toner/cartridge catalogue; `brand` floats that brand to the top."""
+    return cdb.search_toners(q, min(max(limit, 1), 50), brand=brand or None)
 
 
 def _public_listing(L: dict, kind: str) -> dict:

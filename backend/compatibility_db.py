@@ -1029,24 +1029,31 @@ def get_toner(model: str):
     return _build()[3].get(model)
 
 
-def search_printers(q: str, limit: int = 20):
+def search_printers(q: str, limit: int = 20, brand: str = None, brand_only: bool = False):
     q = (q or "").strip().lower()
     items = _build()[0]
-    if not q:
-        res = items[:limit]
-    else:
-        res = [p for p in items if q in p["full_name"].lower()][:limit]
+    matched = [p for p in items if q in p["full_name"].lower()] if q else list(items)
+    if brand:
+        b = brand.strip().lower()
+        if brand_only:
+            matched = [p for p in matched if p["brand"].lower() == b]
+        else:
+            matched = [p for p in matched if p["brand"].lower() == b] + \
+                      [p for p in matched if p["brand"].lower() != b]
+    res = matched[:limit]
     return [{"brand": p["brand"], "model": p["model"], "full_name": p["full_name"],
              "type": p["type"], "slug": p["slug"]} for p in res]
 
 
-def search_toners(q: str, limit: int = 20):
+def search_toners(q: str, limit: int = 20, brand: str = None):
     q = (q or "").strip().lower()
     items = _build()[2]
-    if not q:
-        res = items[:limit]
-    else:
-        res = [t for t in items if q in t["model"].lower() or q in t["brand"].lower()][:limit]
+    matched = [t for t in items if q in t["model"].lower() or q in t["brand"].lower()] if q else list(items)
+    if brand:
+        b = brand.strip().lower()
+        matched = [t for t in matched if t["brand"].lower() == b] + \
+                  [t for t in matched if t["brand"].lower() != b]
+    res = matched[:limit]
     return [{"brand": t["brand"], "model": t["model"], "type": t["type"], "slug": t["slug"]} for t in res]
 
 

@@ -146,6 +146,28 @@ def test_sitemap_contains_toner_model_pages():
     assert "/toner/hp-q2612a" in r.text
 
 
+# ----------------------- Smart brand sorting on dropdowns --------------------
+
+def test_printers_brand_prioritised():
+    r = httpx.get(f"{API}/api/compat/printers", params={"brand": "Xerox", "limit": 8}, timeout=30)
+    assert r.status_code == 200
+    data = r.json()
+    assert data and data[0]["brand"] == "Xerox"  # selected brand floated to top, others still allowed below
+
+
+def test_printers_brand_only_filter():
+    r = httpx.get(f"{API}/api/compat/printers", params={"brand": "Canon", "brand_only": "true", "limit": 20}, timeout=30)
+    assert r.status_code == 200
+    assert {d["brand"] for d in r.json()} == {"Canon"}
+
+
+def test_toners_brand_prioritised():
+    r = httpx.get(f"{API}/api/compat/toners", params={"brand": "HP", "q": "2", "limit": 8}, timeout=30)
+    assert r.status_code == 200
+    data = r.json()
+    assert data and data[0]["brand"] == "HP"
+
+
 def test_api_notify_graceful():
     r = httpx.post(f"{API}/api/compat/notify",
                    json={"printer_slug": "hp-laserjet-m1005", "email": "qa@example.com"}, timeout=30)
