@@ -1,3 +1,21 @@
+### 2026-06-09 — SEO + Printer↔Toner compatibility database + programmatic SEO pages
+
+**1. Technical SEO.**
+- `GET /sitemap.xml` + ingress-reachable `GET /api/sitemap.xml` (dynamic): static pages, city variants, every `/compatible/<slug>` printer page, and all in-stock product listing URLs (`/toner/ /printer/ /paper/ /consumable/`). The static `public/sitemap.xml` is now a sitemap-index pointing at `/api/sitemap.xml` (so it works behind the /api-only proxy).
+- `GET /robots.txt` (backend) + `public/robots.txt`: allow all, Disallow `/admin /supplier /procurement /checkout /customer /oem-dashboard /api`.
+- Homepage JSON-LD (`Landing.jsx` ldOrg) now `@type=WholesaleStore`, legalName "TonersCart Private Limited", description "India's marketplace for printers, toners and MFDs — verified dealers, GST invoices, pan-India delivery".
+
+**2. Compatibility database (`backend/compatibility_db.py`).** Expanded to **543 printers / 571 toners** (both >500), covering HP, Canon, Epson, Brother, Ricoh, Xerox, Kyocera, Samsung, Konica Minolta, Pantum, **Riso, Sharp** (+ a few Lexmark/OKI cartridges). Bidirectional cross-reference (printer→cartridges, cartridge→printers) via the derived inverse map. New router `routes/compat.py`: `GET /api/compat/stats|printers?q=|toners?q=|printer/{slug}|toner/{model}` and `POST /api/compat/notify`.
+
+**3. Programmatic SEO pages (`/compatible/:slug`, `pages/CompatiblePage.jsx`).** Per-printer page: title/meta/H1, compatible cartridge chips, live dealer-listing grid (toners+consumables matched by compatible_models ILIKE printer model OR model_number in cartridge codes), Schema.org ItemList/Product JSON-LD; when no stock → "Notify me when available" email capture → `POST /api/compat/notify`.
+
+**4. Dealer uploads — searchable multi-select (`components/CompatibleModelsSelect.jsx`).** Replaced the free-text "compatible models" field on the **toner** (SupplierDashboard) and **consumable** (ConsumableListings) forms with a debounced searchable dropdown hitting `/api/compat/printers` (pick printer models); added the same on the **printer** wizard hitting `/api/compat/toners` (pick compatible cartridges). Stored as comma-joined string (back-compat with existing matching + free-text). Bulk-upload grids left as free text by design. Existing listings render unchanged.
+
+**Migrations (USER):** `supabase_schema_notify_requests.sql` (RUN ✅) for the Notify-me table; `supabase_schema_printer_compat.sql` (adds `printer_listings.compatible_models`) — until run, printer compatible_models is silently dropped on write (graceful, never errors).
+
+**Testing:** backend pytest `tests/test_iteration34_compat.py` 10/10; testing agent iteration_34 — backend 100% (18/18), compatible page + Notify-me + WholesaleStore JSON-LD verified E2E. Dealer-form dropdown rendering/persistence verified via API; interactive Playwright click was blocked only by the global seller-agreement Radix-checkbox quirk (test-infra, not a product bug). Constraints honored: no CORS change, no emergentintegrations, Razorpay/Twilio untouched.
+
+
 ### 2026-06-08 (b) — server.py refactor into route modules (zero behaviour change)
 
 Split the 5,523-line monolithic `server.py` into domain route files under `backend/routes/`, leaving the shared kernel (helpers, models, dependencies, caches) + app/middleware/CORS/scheduler + the 3 `@app` routes (robots/sitemap/pageview) in `server.py`, which now registers all routers.
