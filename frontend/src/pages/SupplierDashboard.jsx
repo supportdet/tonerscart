@@ -1043,6 +1043,7 @@ export default function SupplierDashboard() {
                                     mode="printers"
                                     value={compatibleModels}
                                     onChange={setCompatibleModels}
+                                    brand={brand}
                                     testid="listing-compatible-models"
                                 />
                                 <div className="text-[11px] text-[#86868B] mt-1">This identifies your toner and is shown on the product card.</div>

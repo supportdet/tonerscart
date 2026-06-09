@@ -1,13 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowRight, Bell, CheckCircle2, Package } from "lucide-react";
+import { ArrowRight, Bell, CheckCircle2, Package, ShoppingCart } from "lucide-react";
 import api from "../lib/api";
 import PageMeta from "../components/PageMeta";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import RelatedRow from "../components/RelatedRow";
-import CompatListingCard from "../components/CompatListingCard";
+import TonerPriceTable from "../components/TonerPriceTable";
+
+const inr = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
 
 export default function TonerModelPage() {
     const params = useParams();
@@ -18,6 +20,8 @@ export default function TonerModelPage() {
     const [email, setEmail] = useState("");
     const [notified, setNotified] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const firstRowRef = useRef(null);
+    const [showBar, setShowBar] = useState(false);
 
     useEffect(() => {
         let active = true;
@@ -29,6 +33,18 @@ export default function TonerModelPage() {
             .finally(() => { if (active) setLoading(false); });
         return () => { active = false; };
     }, [slug]);
+
+    // Show the sticky "lowest price" bar once the first dealer row scrolls above the viewport.
+    useEffect(() => {
+        const el = firstRowRef.current;
+        if (!el) { setShowBar(false); return; }
+        const obs = new IntersectionObserver(
+            ([e]) => setShowBar(!e.isIntersecting && e.boundingClientRect.top < 0),
+            { threshold: 0 }
+        );
+        obs.observe(el);
+        return () => obs.disconnect();
+    }, [data]);
 
     const submitNotify = async (e) => {
         e.preventDefault();
@@ -131,9 +147,7 @@ export default function TonerModelPage() {
                     {listings.length === 0 ? (
                         <div className="text-[13.5px] text-[#6E6E73]" data-testid="toner-no-stock">No verified dealer has listed {t.model} yet — see the suggestions below, or get notified when stock arrives.</div>
                     ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="toner-listings-grid">
-                            {listings.map((l) => <CompatListingCard l={l} key={`${l.kind}-${l.id}`} />)}
-                        </div>
+                        <TonerPriceTable listings={listings} firstRowRef={firstRowRef} />
                     )}
                 </section>
 
@@ -145,13 +159,13 @@ export default function TonerModelPage() {
                             label="Compatible with same printers"
                             kind="toner"
                             testid="related-same-printers"
-                            items={(related.same_printers_toners || []).map((x) => ({ brand: x.brand, title: x.model, subtitle: x.type, url: x.url }))}
+                            items={related.same_printers_toners || []}
                         />
                         <RelatedRow
                             label="From the same brand"
                             kind="toner"
                             testid="related-same-brand"
-                            items={(related.same_brand_toners || []).map((x) => ({ brand: x.brand, title: x.model, subtitle: x.type, url: x.url }))}
+                            items={related.same_brand_toners || []}
                         />
                     </section>
                 )}
@@ -183,6 +197,21 @@ export default function TonerModelPage() {
                     Browse all products <ArrowRight size={16} />
                 </Link>
             </div>
+
+            {/* Sticky lowest-price bar — appears after scrolling past the first dealer row */}
+            {listings.length > 0 && showBar && (
+                <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#0A0A0B] text-white shadow-2xl" data-testid="toner-sticky-bar">
+                    <div className="tc-container py-3 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <div className="text-[10px] uppercase tracking-[0.16em] text-white/60 font-semibold">Lowest price</div>
+                            <div className="text-[18px] font-semibold font-mono truncate">{inr(listings[0].total_price)} <span className="text-[12px] text-white/60 font-sans">incl. GST · {listings[0].dealer_name}</span></div>
+                        </div>
+                        <Link to={listings[0].url} className="btn-pill-cta whitespace-nowrap inline-flex items-center gap-1.5" data-testid="toner-sticky-buy">
+                            <ShoppingCart size={15} /> Buy now
+                        </Link>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

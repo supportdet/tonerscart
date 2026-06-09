@@ -841,6 +841,25 @@ def _raw_slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
 
 
+def _infer_toner_type(brand: str, model: str) -> str:
+    """Best-effort cartridge type for models not in TONER_META, by code pattern,
+    so inks/drums don't get mislabelled as toner (e.g. Brother LC-* are inks)."""
+    m = (model or "").upper().strip()
+    if "DRUM" in m or re.match(r"^(DR|DK)\b|^(DR|DK)-?\d|^EP-?87|^101R|^108R", m):
+        return "drum"
+    # Explicit laser-toner code families.
+    if re.match(r"^(TN|TNP|TK|MLT|ML-D|CLT|CRG|NPG|GPR|C-EXV|CE|CB|CF|TL|CTL|DL|"
+                r"Q\d|W\d|106R|006R|013R|50F|60F|58D|B2\d|C540|MX|AR|SP|MP|IM)", m):
+        return "toner"
+    # Ink code families.
+    if re.match(r"^(LC|BT|GT|GI|PG|CL|PGI|CLI|BCI|GC|T\d|S-\d)", m):
+        return "ink"
+    # Epson short numeric codes (003/008/664/774/113…) are inks.
+    if brand == "Epson" and re.match(r"^\d{2,3}[A-Z]?$", m):
+        return "ink"
+    return "toner"
+
+
 def slugify(brand: str, model: str) -> str:
     """Canonical, clean slug for a printer model (filler words removed)."""
     raw = _raw_slug(f"{brand} {model}")
@@ -869,9 +888,12 @@ def _build():
     toners = {}
     # Derived toners (referenced by printers) — inverse map = compatible printers.
     for model, prs in toner_to_printers.items():
-        brand, ttype = TONER_META.get(model, (None, "toner"))
-        if brand is None:
+        meta = TONER_META.get(model)
+        if meta:
+            brand, ttype = meta
+        else:
             brand = next((b for b, m, _t, _ts in PRINTERS_RAW if model in _ts), "")
+            ttype = _infer_toner_type(brand, model)
         toners[model] = {"brand": brand, "model": model, "type": ttype,
                          "printers": sorted(prs)}
     # Standalone toners (no printer cross-ref in our curated set yet).
@@ -1007,24 +1029,31 @@ def get_toner(model: str):
     return _build()[3].get(model)
 
 
-def search_printers(q: str, limit: int = 20):
+def search_printers(q: str, limit: int = 20, brand: str = None, brand_only: bool = False):
     q = (q or "").strip().lower()
     items = _build()[0]
-    if not q:
-        res = items[:limit]
-    else:
-        res = [p for p in items if q in p["full_name"].lower()][:limit]
+    matched = [p for p in items if q in p["full_name"].lower()] if q else list(items)
+    if brand:
+        b = brand.strip().lower()
+        if brand_only:
+            matched = [p for p in matched if p["brand"].lower() == b]
+        else:
+            matched = [p for p in matched if p["brand"].lower() == b] + \
+                      [p for p in matched if p["brand"].lower() != b]
+    res = matched[:limit]
     return [{"brand": p["brand"], "model": p["model"], "full_name": p["full_name"],
              "type": p["type"], "slug": p["slug"]} for p in res]
 
 
-def search_toners(q: str, limit: int = 20):
+def search_toners(q: str, limit: int = 20, brand: str = None):
     q = (q or "").strip().lower()
     items = _build()[2]
-    if not q:
-        res = items[:limit]
-    else:
-        res = [t for t in items if q in t["model"].lower() or q in t["brand"].lower()][:limit]
+    matched = [t for t in items if q in t["model"].lower() or q in t["brand"].lower()] if q else list(items)
+    if brand:
+        b = brand.strip().lower()
+        matched = [t for t in matched if t["brand"].lower() == b] + \
+                  [t for t in matched if t["brand"].lower() != b]
+    res = matched[:limit]
     return [{"brand": t["brand"], "model": t["model"], "type": t["type"], "slug": t["slug"]} for t in res]
 
 

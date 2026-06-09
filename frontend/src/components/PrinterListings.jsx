@@ -582,6 +582,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                                     value={f.model_number}
                                     onChange={(v) => setF((cur) => ({ ...cur, model_number: v }))}
                                     onSelect={(p) => setF((cur) => ({ ...cur, model_number: p.model, brand: p.brand }))}
+                                    brand={f.brand}
                                     testid="wizard-model"
                                 />
                             </div>
@@ -595,6 +596,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                                     mode="toners"
                                     value={f.compatible_models}
                                     onChange={(v) => setF((p) => ({ ...p, compatible_models: v }))}
+                                    brand={f.brand}
                                     testid="wizard-compatible-toners"
                                 />
                             </div>

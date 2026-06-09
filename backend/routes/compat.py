@@ -114,25 +114,31 @@ def compat_brands():
 
 
 @router.get("/printers")
-def compat_search_printers(q: str = "", limit: int = 20):
-    """Searchable printer catalogue for the toner/consumable upload dropdowns."""
-    return cdb.search_printers(q, min(max(limit, 1), 50))
+def compat_search_printers(q: str = "", limit: int = 20, brand: str = "", brand_only: bool = False):
+    """Searchable printer catalogue. `brand` prioritises that brand first (or, with
+    brand_only=true, filters to it) for the dealer upload dropdowns."""
+    return cdb.search_printers(q, min(max(limit, 1), 50), brand=brand or None, brand_only=brand_only)
 
 
 @router.get("/toners")
-def compat_search_toners(q: str = "", limit: int = 20):
-    """Searchable toner/cartridge catalogue for the printer upload dropdown."""
-    return cdb.search_toners(q, min(max(limit, 1), 50))
+def compat_search_toners(q: str = "", limit: int = 20, brand: str = ""):
+    """Searchable toner/cartridge catalogue; `brand` floats that brand to the top."""
+    return cdb.search_toners(q, min(max(limit, 1), 50), brand=brand or None)
 
 
 def _public_listing(L: dict, kind: str) -> dict:
+    price = float(L.get("price") or 0)
+    gst = int(L.get("gst_rate") if L.get("gst_rate") is not None else 18)
     return {
         "id": L["id"],
         "kind": kind,
         "brand": L.get("brand"),
         "model_number": L.get("model_number"),
         "title": f"{L.get('brand', '') or ''} {L.get('model_number', '') or ''}".strip(),
-        "price": L.get("price"),
+        "price": price,
+        "gst_rate": gst,
+        "total_price": round(price * (1 + gst / 100.0)),
+        "intercity_delivery_charge": float(L.get("intercity_delivery_charge") or 0),
         "stock": L.get("stock"),
         "image_url": L.get("image_url"),
         "compatible_models": L.get("compatible_models"),
@@ -175,12 +181,14 @@ def _matching_listings(printer: dict) -> list:
 
 def _printer_card(p: dict) -> dict:
     return {"full_name": p["full_name"], "brand": p["brand"], "model": p["model"],
-            "type": p["type"], "slug": p["slug"], "url": f"/compatible/{p['slug']}"}
+            "type": p["type"], "slug": p["slug"], "url": f"/compatible/{p['slug']}",
+            "toners_count": len(p.get("toners") or [])}
 
 
 def _toner_card(t: dict) -> dict:
     return {"model": t["model"], "brand": t["brand"], "type": t["type"],
-            "slug": t["slug"], "url": f"/toner/{t['slug']}"}
+            "slug": t["slug"], "url": f"/toner/{t['slug']}",
+            "printers_count": len(t.get("printers") or [])}
 
 
 def _printer_related(p: dict) -> dict:
@@ -211,7 +219,7 @@ def _toner_related(t: dict) -> dict:
         scored.sort(key=lambda z: (-z[0], z[1]["brand"], z[1]["model"]))
         same_printers = [_toner_card(x) for _, x in scored[:6]]
     same_brand = [_toner_card(x) for x in toners
-                  if x["brand"] == t["brand"] and x["slug"] != t["slug"]][:6]
+                  if x["brand"] == t["brand"] and x["type"] == t["type"] and x["slug"] != t["slug"]][:6]
     return {"same_printers_toners": same_printers, "same_brand_toners": same_brand}
 
 
@@ -247,7 +255,22 @@ def _toner_listings(toner: dict) -> list:
                 if not _alias_hit(L.get("model_number"), aliases):
                     continue
                 found[(table, L["id"])] = _public_listing(L, kind)
-    return sorted(found.values(), key=lambda x: (x.get("price") or 1e12))
+    items = sorted(found.values(), key=lambda x: (x.get("total_price") or x.get("price") or 1e12))
+    # Enrich with dealer business name + city for the price-comparison table.
+    sup_ids = list({i["supplier_id"] for i in items if i.get("supplier_id")})
+    sup_map = {}
+    if sup_ids:
+        try:
+            rows = sb_admin.table("suppliers").select("id,business_name,city").in_(
+                "id", sup_ids).execute().data or []
+            sup_map = {r["id"]: r for r in rows}
+        except Exception as e:
+            logger.debug("toner listings supplier enrich skipped: %s", e)
+    for i in items:
+        s = sup_map.get(i.get("supplier_id")) or {}
+        i["dealer_name"] = s.get("business_name") or "Verified dealer"
+        i["dealer_city"] = s.get("city")
+    return items
 
 
 @router.get("/printer/{slug}")

@@ -8,7 +8,7 @@ import api from "../lib/api";
  * one (which also auto-fills the brand). Free text is still allowed as a
  * fallback for models not yet in the DB.
  */
-export default function PrinterModelSelect({ value = "", onChange, onSelect, testid = "printer-model" }) {
+export default function PrinterModelSelect({ value = "", onChange, onSelect, testid = "printer-model", brand = "" }) {
     const [q, setQ] = useState(value || "");
     const [results, setResults] = useState([]);
     const [open, setOpen] = useState(false);
@@ -18,19 +18,19 @@ export default function PrinterModelSelect({ value = "", onChange, onSelect, tes
     useEffect(() => { setQ(value || ""); }, [value]);
 
     useEffect(() => {
+        if (!open) return;
         const term = q.trim();
-        if (!term) { setResults([]); return; }
         let active = true;
         setLoading(true);
         const tmr = setTimeout(async () => {
             try {
-                const { data } = await api.get("/compat/printers", { params: { q: term, limit: 12 } });
-                if (active) { setResults(Array.isArray(data) ? data : []); setOpen(true); }
+                const { data } = await api.get("/compat/printers", { params: { q: term, limit: 12, brand: brand || "", brand_only: brand ? true : false } });
+                if (active) setResults(Array.isArray(data) ? data : []);
             } catch { if (active) setResults([]); }
             finally { if (active) setLoading(false); }
-        }, 220);
+        }, 200);
         return () => { active = false; clearTimeout(tmr); };
-    }, [q]);
+    }, [q, brand, open]);
 
     useEffect(() => {
         const onDoc = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
@@ -53,7 +53,7 @@ export default function PrinterModelSelect({ value = "", onChange, onSelect, tes
                 <input
                     value={q}
                     onChange={(e) => { setQ(e.target.value); onChange && onChange(e.target.value); }}
-                    onFocus={() => results.length && setOpen(true)}
+                    onFocus={() => setOpen(true)}
                     placeholder="Type a model, e.g. M1005, LBP2900"
                     className="tc-input-lg w-full"
                     style={{ paddingLeft: "2.4rem" }}
