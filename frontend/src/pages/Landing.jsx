@@ -90,11 +90,15 @@ export default function Landing() {
         "@context": "https://schema.org",
         "@graph": [
             {
-                "@type": "Organization",
+                "@type": "WholesaleStore",
                 "name": "TonersCart",
+                "legalName": "TonersCart Private Limited",
                 "url": "https://www.tonerscart.com",
                 "logo": "https://www.tonerscart.com/TONERSCART-bg.png",
+                "image": "https://www.tonerscart.com/TONERSCART-bg.png",
                 "email": "support@tonerscart.com",
+                "description": "India's marketplace for printers, toners and MFDs — verified dealers, GST invoices, pan-India delivery",
+                "areaServed": "IN",
                 "sameAs": ["https://www.linkedin.com/company/tonerscart"],
             },
             {

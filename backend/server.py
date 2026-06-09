@@ -701,6 +701,8 @@ class PrinterListingCreate(BaseModel):
     # Wave 9: multi-select usage + special features
     usage_types: List[str] = Field(default_factory=list)
     special_features: List[str] = Field(default_factory=list)
+    # Compatible cartridges/toners (comma-joined) — from the searchable dropdown
+    compatible_models: Optional[str] = None
     # Wave 10 — D2D marketplace
     d2d_enabled: Optional[bool] = False
     d2d_price: Optional[float] = None
@@ -1346,34 +1348,85 @@ def robots_txt():
         "User-agent: *\n"
         "Allow: /\n"
         "Disallow: /admin\n"
+        "Disallow: /supplier\n"
+        "Disallow: /procurement\n"
+        "Disallow: /checkout\n"
+        "Disallow: /api\n"
         "Sitemap: https://www.tonerscart.com/sitemap.xml\n"
     )
     return Response(content=txt, media_type="text/plain")
 
 
+def _sitemap_listing_urls() -> list:
+    """All in-stock product listing detail URLs (best-effort; empty on failure)."""
+    out = []
+    feeds = [
+        ("listings", "/toner/"),
+        ("printer_listings", "/printer/"),
+        ("paper_listings", "/paper/"),
+        ("consumable_listings", "/consumable/"),
+    ]
+    for table, prefix in feeds:
+        try:
+            rows = sb_admin.table(table).select("id,stock").gt("stock", 0).limit(5000).execute().data or []
+            out += [f"{prefix}{r['id']}" for r in rows if r.get("id")]
+        except Exception as e:
+            logger.debug("sitemap feed %s skipped: %s", table, e)
+    return out
+
+
 @app.get("/sitemap.xml", include_in_schema=False)
 def sitemap_xml():
+    return _build_sitemap_response()
+
+
+@app.get("/api/sitemap.xml", include_in_schema=False)
+def sitemap_xml_api():
+    """Ingress-reachable alias — the static public/sitemap.xml is a sitemap index
+    that points here, so the dynamic sitemap works behind the /api-only proxy."""
+    return _build_sitemap_response()
+
+
+def _build_sitemap_response():
+    import compatibility_db as _cdb  # noqa: WPS433
     base = "https://www.tonerscart.com"
     static = [
         ("/", "1.0"),
         ("/search", "0.9"),
         ("/printers", "0.9"),
         ("/papers", "0.9"),
-        ("/mps", "0.8"),
-        ("/sell", "0.8"),
-        ("/get-featured", "0.8"),
+        ("/consumables", "0.9"),
+        ("/oem", "0.7"),
+        ("/mps", "0.7"),
+        ("/sell", "0.7"),
+        ("/get-featured", "0.6"),
+        ("/about", "0.5"),
+        ("/contact", "0.6"),
         ("/terms", "0.4"),
         ("/privacy", "0.4"),
-        ("/contact", "0.6"),
     ]
     today = datetime.now(timezone.utc).date().isoformat()
     parts = ['<?xml version="1.0" encoding="UTF-8"?>',
               '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+
+    def add(path, prio, lastmod=today):
+        parts.append(f"<url><loc>{base}{path}</loc><lastmod>{lastmod}</lastmod><priority>{prio}</priority></url>")
+
     for path, prio in static:
-        parts.append(f"<url><loc>{base}{path}</loc><lastmod>{today}</lastmod><priority>{prio}</priority></url>")
+        add(path, prio)
     for c in _SITEMAP_CITIES:
-        parts.append(f"<url><loc>{base}/search?city={c}</loc><lastmod>{today}</lastmod><priority>0.7</priority></url>")
-        parts.append(f"<url><loc>{base}/printers?city={c}</loc><lastmod>{today}</lastmod><priority>0.7</priority></url>")
+        add(f"/search?city={c}", "0.7")
+        add(f"/printers?city={c}", "0.7")
+    # Programmatic SEO pages — one per printer model in the compatibility DB.
+    try:
+        for p in _cdb.all_printers():
+            add(f"/compatible/{p['slug']}", "0.6")
+    except Exception as e:
+        logger.debug("sitemap compatible pages skipped: %s", e)
+    # Live product listing detail pages.
+    for path in _sitemap_listing_urls():
+        add(path, "0.8")
+
     parts.append("</urlset>")
     return Response(content="\n".join(parts), media_type="application/xml")
 
@@ -1553,6 +1606,8 @@ from routes.admin import router as admin_router  # noqa: E402
 app.include_router(admin_router)
 from routes.suppliers import router as suppliers_router  # noqa: E402
 app.include_router(suppliers_router)
+from routes.compat import router as compat_router  # noqa: E402
+app.include_router(compat_router)
 
 # Procurement module (Govt & Corporate) — self-contained, separate from the
 # regular Supabase-Auth customer/dealer/admin flow.

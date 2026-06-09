@@ -10,6 +10,7 @@ import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
 import BulkUploadGeneric from "./BulkUploadGeneric";
 import { consumableBulkConfig } from "../lib/bulkConfigs";
+import CompatibleModelsSelect from "./CompatibleModelsSelect";
 import { CONSUMABLE_SUBCATEGORIES, CONSUMABLE_CONDITIONS } from "../lib/consumableConstants";
 
 const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
@@ -223,7 +224,12 @@ export default function ConsumableListings() {
                             </div>
                             <div className="col-span-2">
                                 <Label>Compatible printer models</Label>
-                                <Input value={form.compatible_models} onChange={(e) => setForm({ ...form, compatible_models: e.target.value })} placeholder="HL-L2321D, DCP-L2541DW" className="tc-input-lg" data-testid="consumable-compatible-input" />
+                                <CompatibleModelsSelect
+                                    mode="printers"
+                                    value={form.compatible_models}
+                                    onChange={(v) => setForm({ ...form, compatible_models: v })}
+                                    testid="consumable-compatible"
+                                />
                             </div>
                             <div>
                                 <Label>Price (₹) <span className="text-red-500">*</span></Label>

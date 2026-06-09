@@ -25,6 +25,7 @@ import { colorSwatch as _colorSwatch } from "../lib/colors";
 import BulkUploadGeneric from "../components/BulkUploadGeneric";
 import { tonerBulkConfig } from "../lib/bulkConfigs";
 import D2DRow, { D2DExplainer } from "../components/D2DRow";
+import CompatibleModelsSelect from "../components/CompatibleModelsSelect";
 import SupplierAgreementDialog, { hasAcceptedSupplierAgreement } from "../components/SupplierAgreementDialog";
 
 const colorSwatchHex = (name) => {
@@ -1038,13 +1039,11 @@ export default function SupplierDashboard() {
                             </div>
                             <div>
                                 <Label>Compatible printer models<span className="text-red-500"> *</span></Label>
-                                <Input
+                                <CompatibleModelsSelect
+                                    mode="printers"
                                     value={compatibleModels}
-                                    onChange={(e) => setCompatibleModels(e.target.value)}
-                                    placeholder="e.g. HP LaserJet 1010, 1012, 1015"
-                                    required
-                                    className="tc-input-lg"
-                                    data-testid="listing-compatible-models"
+                                    onChange={setCompatibleModels}
+                                    testid="listing-compatible-models"
                                 />
                                 <div className="text-[11px] text-[#86868B] mt-1">This identifies your toner and is shown on the product card.</div>
                             </div>

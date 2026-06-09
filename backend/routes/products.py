@@ -276,6 +276,7 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
         "usage_types": usage_types,
         "special_features": payload.special_features or None,
+        "compatible_models": payload.compatible_models or None,
         "d2d_enabled": bool(payload.d2d_enabled) if payload.d2d_enabled is not None else None,
         "d2d_price": (float(payload.d2d_price) if payload.d2d_price else None),
     }
@@ -289,7 +290,7 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("spec_pdf_url", "image_urls", "print_speed_ppm", "duty_cycle", "display_type", "dimensions", "weight_kg", "printer_warranty", "max_resolution", "mobile_printing", "monthly_volume_recommended", "intercity_delivery_charge", "gst_rate", "usage_types", "special_features", "d2d_enabled", "d2d_price"):
+            for k in ("spec_pdf_url", "image_urls", "print_speed_ppm", "duty_cycle", "display_type", "dimensions", "weight_kg", "printer_warranty", "max_resolution", "mobile_printing", "monthly_volume_recommended", "intercity_delivery_charge", "gst_rate", "usage_types", "special_features", "compatible_models", "d2d_enabled", "d2d_price"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True
@@ -1091,7 +1092,8 @@ def supplier_patch_printer(printer_id: str, payload: ListingPatch, user: dict = 
         upd["d2d_price"] = float(payload.d2d_price) if payload.d2d_price else None
     for k in ("brand", "model_number", "description", "image_url", "image_urls",
               "usage_type", "category", "color", "functions", "connectivity",
-              "paper_sizes", "mobile_printing", "max_resolution", "condition"):
+              "paper_sizes", "mobile_printing", "max_resolution", "condition",
+              "compatible_models"):
         v = getattr(payload, k, None)
         if v is not None:
             upd[k] = v

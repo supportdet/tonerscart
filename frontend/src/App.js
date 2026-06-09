@@ -46,6 +46,7 @@ import Consumables from "./pages/Consumables";
 import Dealer from "./pages/Dealer";
 import DealerStore from "./pages/DealerStore";
 import OEM from "./pages/OEM";
+import CompatiblePage from "./pages/CompatiblePage";
 import OemDashboard from "./pages/OemDashboard";
 import ErrorBoundary from "./components/ErrorBoundary";
 import VisitorTracker from "./components/VisitorTracker";
@@ -134,6 +135,7 @@ function App() {
                                     <Route path="/dealer" element={<Dealer />} />
                                     <Route path="/store/:supplierId" element={<DealerStore />} />
                                     <Route path="/oem" element={<OEM />} />
+                                    <Route path="/compatible/:slug" element={<CompatiblePage />} />
                                     <Route path="/terms" element={<Terms />} />
                                     <Route path="/privacy" element={<Privacy />} />
                                     <Route path="/contact" element={<Contact />} />

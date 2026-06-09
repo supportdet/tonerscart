@@ -1,9 +1,10 @@
 User-agent: *
 Allow: /
 Disallow: /admin
-Disallow: /customer
 Disallow: /supplier
-Disallow: /auth/
-Disallow: /reset-password
-Disallow: /forgot-password
+Disallow: /procurement
+Disallow: /checkout
+Disallow: /customer
+Disallow: /oem-dashboard
+Disallow: /api
 Sitemap: https://www.tonerscart.com/sitemap.xml
