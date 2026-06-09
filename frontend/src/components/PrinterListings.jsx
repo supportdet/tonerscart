@@ -12,6 +12,7 @@ import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
 import BulkUploadGeneric from "./BulkUploadGeneric";
 import { printerBulkConfig } from "../lib/bulkConfigs";
+import CompatibleModelsSelect from "./CompatibleModelsSelect";
 
 // ============================================================
 // Option catalogues — kept aligned with PrintersGuide.jsx so
@@ -100,6 +101,7 @@ const fmt = (v) => PRETTY[v] || v;
 
 const EMPTY = {
     brand: "", model_number: "", description: "",
+    compatible_models: "",
     image_url: "",
     image_urls: [],
     spec_pdf_path: "",
@@ -267,6 +269,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                 brand: editing.brand || "",
                 model_number: editing.model_number || "",
                 description: editing.description || "",
+                compatible_models: editing.compatible_models || "",
                 image_url: editing.image_url || "",
                 image_urls: Array.isArray(editing.image_urls) ? editing.image_urls : (editing.image_url ? [editing.image_url] : []),
                 spec_pdf_path: "",
@@ -416,6 +419,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                 brand: f.brand.trim(),
                 model_number: f.model_number.trim(),
                 description: f.description.trim(),
+                compatible_models: (f.compatible_models || "").trim() || null,
                 image_url: f.image_url || (f.image_urls && f.image_urls[0]) || null,
                 image_urls: f.image_urls || [],
                 condition: f.condition,
@@ -567,6 +571,15 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                             <div className="sm:col-span-2">
                                 <Label>Description (optional)</Label>
                                 <Textarea rows={3} value={f.description} onChange={upd("description")} placeholder="Highlight key strengths buyers should know…" className="tc-input-lg" data-testid="wizard-description" />
+                            </div>
+                            <div>
+                                <Label>Compatible cartridges / toners (optional)</Label>
+                                <CompatibleModelsSelect
+                                    mode="toners"
+                                    value={f.compatible_models}
+                                    onChange={(v) => setF((p) => ({ ...p, compatible_models: v }))}
+                                    testid="wizard-compatible-toners"
+                                />
                             </div>
                         </div>
                     </div>

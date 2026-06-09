@@ -25,6 +25,7 @@ import { colorSwatch as _colorSwatch } from "../lib/colors";
 import BulkUploadGeneric from "../components/BulkUploadGeneric";
 import { tonerBulkConfig } from "../lib/bulkConfigs";
 import D2DRow, { D2DExplainer } from "../components/D2DRow";
+import CompatibleModelsSelect from "../components/CompatibleModelsSelect";
 import SupplierAgreementDialog, { hasAcceptedSupplierAgreement } from "../components/SupplierAgreementDialog";
 
 const colorSwatchHex = (name) => {
@@ -100,9 +101,10 @@ function CenterAction({ title, subtitle, children }) {
 
 const ORDER_STATUS = {
     requested: "Requested",
-    accepted: "Accepted",
-    shipped: "Shipped",
+    accepted: "Confirmed",
+    shipped: "Dispatched",
     delivered: "Delivered",
+    completed: "Completed",
     rejected: "Rejected",
     cancelled: "Cancelled",
 };
@@ -134,32 +136,42 @@ function PendingScreen({ application }) {
     );
 }
 
-function TrackingInput({ onSubmit, testIdSuffix }) {
-    const [val, setVal] = React.useState("");
+function CourierDispatchInput({ onSubmit, testIdSuffix }) {
+    const [courier, setCourier] = React.useState("");
+    const [tracking, setTracking] = React.useState("");
     const submit = () => {
-        const v = val.trim();
-        if (!v) return;
-        onSubmit(v);
-        setVal("");
+        const c = courier.trim(); const t = tracking.trim();
+        if (!c || !t) return;
+        onSubmit({ courier_name: c, tracking_number: t });
+        setCourier(""); setTracking("");
     };
     return (
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-col gap-1.5 min-w-[180px]">
             <input
-                value={val}
-                onChange={(e) => setVal(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
-                placeholder="Tracking number"
-                className="h-7 px-2 text-[11.5px] rounded border border-[#D2D2D7] bg-white w-32"
-                data-testid={`tracking-input-${testIdSuffix}`}
+                value={courier}
+                onChange={(e) => setCourier(e.target.value)}
+                placeholder="Courier name (e.g. Delhivery)"
+                className="h-7 px-2 text-[11.5px] rounded border border-[#D2D2D7] bg-white w-full"
+                data-testid={`courier-input-${testIdSuffix}`}
             />
-            <button
-                onClick={submit}
-                disabled={!val.trim()}
-                className="text-[11px] px-2 py-1 rounded bg-[#0A0A0B] text-white border border-[#0A0A0B] hover:bg-[#1D1D1F] disabled:opacity-40 disabled:cursor-not-allowed"
-                data-testid={`tracking-submit-${testIdSuffix}`}
-            >
-                Update Tracking
-            </button>
+            <div className="flex items-center gap-1.5">
+                <input
+                    value={tracking}
+                    onChange={(e) => setTracking(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
+                    placeholder="Tracking number"
+                    className="h-7 px-2 text-[11.5px] rounded border border-[#D2D2D7] bg-white w-32"
+                    data-testid={`tracking-input-${testIdSuffix}`}
+                />
+                <button
+                    onClick={submit}
+                    disabled={!courier.trim() || !tracking.trim()}
+                    className="text-[11px] px-2 py-1 rounded bg-[#0A0A0B] text-white border border-[#0A0A0B] hover:bg-[#1D1D1F] disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                    data-testid={`dispatch-submit-${testIdSuffix}`}
+                >
+                    Mark Dispatched
+                </button>
+            </div>
         </div>
     );
 }
@@ -565,10 +577,11 @@ export default function SupplierDashboard() {
         } catch (e) { toast.error(formatApiError(e)); }
     };
 
-    const updateOrder = async (id, status, tracking_number) => {
+    const updateOrder = async (id, status, extra = {}) => {
         try {
-            await api.put(`/orders/${id}/status`, { status, tracking_number });
-            toast.success(`Order ${status}`);
+            await api.put(`/orders/${id}/status`, { status, ...extra });
+            const label = { accepted: "confirmed", shipped: "marked dispatched", delivered: "marked delivered", rejected: "rejected" }[status] || status;
+            toast.success(`Order ${label}`);
             load();
         } catch (e) { toast.error(formatApiError(e)); }
     };
@@ -776,10 +789,22 @@ export default function SupplierDashboard() {
                                                         </div>
                                                     )}
                                                     {o.status === "accepted" && (
-                                                        <TrackingInput onSubmit={(t) => updateOrder(o.id, "shipped", t)} testIdSuffix={o.id} />
+                                                        <CourierDispatchInput onSubmit={(d) => updateOrder(o.id, "shipped", d)} testIdSuffix={o.id} />
                                                     )}
                                                     {o.status === "shipped" && (
-                                                        <div className="text-[10.5px] text-[#6E6E73]">Awaiting buyer confirmation…<div className="font-mono text-[#0A0A0B]">Tracking: {o.tracking_number || "—"}</div></div>
+                                                        <div className="space-y-1.5">
+                                                            <div className="text-[10.5px] text-[#6E6E73]">
+                                                                {o.courier_name && <div>Courier: <span className="text-[#0A0A0B] font-semibold">{o.courier_name}</span></div>}
+                                                                <div className="font-mono text-[#0A0A0B]">Tracking: {o.tracking_number || "—"}</div>
+                                                            </div>
+                                                            <button onClick={() => updateOrder(o.id, "delivered")} className="text-[11px] px-2 py-1 rounded bg-teal-50 text-teal-700 border border-teal-200" data-testid={`mark-delivered-${o.id}`}>Mark Delivered</button>
+                                                        </div>
+                                                    )}
+                                                    {o.status === "delivered" && (
+                                                        <div className="text-[10.5px] text-[#6E6E73]">Awaiting customer confirmation…<div className="text-[#86868B]">Auto-confirms in 5 days</div></div>
+                                                    )}
+                                                    {o.status === "completed" && (
+                                                        <div className="text-[10.5px] text-emerald-700 font-semibold">Completed{o.payout_eligible_at ? <div className="text-[#86868B] font-normal">Payout eligible {new Date(o.payout_eligible_at).toLocaleDateString("en-IN")}</div> : null}</div>
                                                     )}
                                                 </td>
                                             </tr>
@@ -1014,13 +1039,11 @@ export default function SupplierDashboard() {
                             </div>
                             <div>
                                 <Label>Compatible printer models<span className="text-red-500"> *</span></Label>
-                                <Input
+                                <CompatibleModelsSelect
+                                    mode="printers"
                                     value={compatibleModels}
-                                    onChange={(e) => setCompatibleModels(e.target.value)}
-                                    placeholder="e.g. HP LaserJet 1010, 1012, 1015"
-                                    required
-                                    className="tc-input-lg"
-                                    data-testid="listing-compatible-models"
+                                    onChange={setCompatibleModels}
+                                    testid="listing-compatible-models"
                                 />
                                 <div className="text-[11px] text-[#86868B] mt-1">This identifies your toner and is shown on the product card.</div>
                             </div>

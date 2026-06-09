@@ -1,0 +1,38 @@
+{
+  "summary": "Post-refactor regression sweep. Confirmed all 9 router modules (auth, search, products, orders, admin, suppliers, procurement, oem, agreements) registered via include_router and responding correctly after the server.py -> routes/*.py AST extraction. 138 /api/* routes exposed in OpenAPI, 26/27 pytest tests pass, 1 skip is a benign no-public-procurement-GET case. NO refactor-introduced regressions detected.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "APScheduler job _auto_confirm_delivered_orders", "issue": "Returns HTTP 400 from Supabase every 30 min because delivered_at column does not exist (order tracking SQL migration not yet applied). Scheduler swallows the exception (job 'executed successfully' logged) so it is GRACEFUL per task spec — flagging only for visibility. Apply the courier_name/delivered_at/completed_at/payout_eligible_at/auto_confirmed migration in Supabase to silence the recurring 400."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration33_refactor.py",
+    "/app/test_reports/pytest/iteration33_results.xml"
+  ],
+  "action_items": [
+    "(Optional, non-blocking) Apply the order tracking SQL migration in Supabase so the auto-confirm scheduler stops 400-ing every 30 min.",
+    "(Doc-only) The review-request used 'dealers' but the live endpoint is /api/admin/suppliers. /api/admin/dealers does not exist in either pre- or post-refactor code — terminology drift in the task description, not a regression."
+  ],
+  "critical_code_review_comments": [
+    "include_router order in server.py (lines 1542-1571) is clean: api router first, then auth/search/products/orders/admin/suppliers, then procurement+procurement-admin, then oem+oem-admin, then agreements+agreements-admin. No prefix collisions observed.",
+    "Cross-module integrity confirmed: admin write surfaces (site-config, featured suppliers) and the public /api/featured/suppliers cached read both hit the same _FEATURED_CACHE/_SUPABASE singleton from server.py — shared kernel is intact after the AST extraction.",
+    "Auth flow on /api/auth/login is rate-limited and returns a Supabase access_token (852 chars). /api/auth/me correctly hydrates the user row from the users table and returns role='admin'. Wrong password returns 401. Missing bearer returns 401.",
+    "Procurement router uses its own custom JWT (NOT Supabase) — verified by /api/procurement/me returning 401 when called with the Supabase admin token, which is correct. Admin endpoints /api/admin/procurement/accounts and /api/admin/procurement/pending are gated by Supabase admin and return 200.",
+    "Universal search /api/search/universal?q=xerox returns the expected grouped shape (toners/printers/papers/consumables lists, all populated). AI search /api/search/ai returned 200 even without an explicit key configured — graceful.",
+    "Orders router: /api/orders is POST-only (placement), reads are /api/orders/mine (current user) and /api/admin/orders (admin). Both behave as expected and enforce auth. Status transition endpoint /api/orders/{id}/status rejects unauthenticated/invalid IDs with 401/404 rather than 500.",
+    "Suppliers storefront /api/suppliers/{id}/storefront returns business info + grouped in-stock listings as documented.",
+    "138 /api/* routes registered in OpenAPI. Every endpoint listed in the review request (universal search, listings/paginated, printers, papers, consumables, orders, featured suppliers, admin/customers, admin/finance/summary, admin/activity-log, admin/oem/pending, admin/procurement/pending, oem/public) responds 200 with admin token (or 401/403 anonymous as appropriate)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration33_refactor.py (new — 27 regression tests across all 9 router modules)"
+  ],
+  "success_rate": {"backend": "100% (26/26 executed pass, 1 skip)", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "admin@tonerscart.in / Admin@123 (Supabase). Procurement portal uses separate custom JWT — Supabase admin token does NOT authenticate it (by design).",
+  "seed_data_creation": "None. All checks read-only against existing production data. No mutating writes performed; cross-module write test was a benign read-only probe of /api/admin/site-config + /api/featured/suppliers.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Post-refactor regression suite lives at /app/backend/tests/test_iteration33_refactor.py and is the canonical smoke test after any server.py / routes/*.py changes. Notes: (a) /api/admin/dealers does NOT exist — use /api/admin/suppliers; the review spec terminology is off. (b) /api/orders root is POST-only; for listing use /api/orders/mine (buyer) or /api/admin/orders (admin). (c) The auto-confirm scheduler logs a recurring 400 every 30 min because the delivered_at SQL migration is not yet applied — task spec marks this graceful, NOT a regression. (d) Procurement uses its own JWT (NOT Supabase), so Supabase admin token returns 401 on /api/procurement/me — expected.",
+  "rca of the issue": "Not applicable — verification-only iteration. All 9 router modules registered, all listed endpoints respond with the documented status codes, shared kernel state (caches, supabase client) is reachable from every router. The refactor is regression-free."
+}

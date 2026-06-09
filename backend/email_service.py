@@ -74,6 +74,27 @@ async def _send(to: str, subject: str, body_html: str, reply_to: str | None = No
         return False
 
 
+async def email_notify_available(to: str, printer_name: str, product_name: str, product_url: str):
+    """Tell a buyer who asked to be notified that a compatible product is now in stock."""
+    if not to:
+        return False
+    html = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;">Good news — it's back in stock!</h2>
+    <p><strong>{product_name}</strong>, compatible with your <strong>{printer_name}</strong>,
+    is now available on TonersCart from a verified dealer.</p>
+    <p style="margin:20px 0;">
+      <a href="{product_url}" style="background:#F5C400;color:#0A0A0B;text-decoration:none;
+         font-weight:700;padding:12px 22px;border-radius:999px;display:inline-block;font-size:14px;">
+        View &amp; Buy
+      </a>
+    </p>
+    <p style="color:#6E6E73;font-size:12.5px;">Stock can move fast — order soon to lock today's price.
+    Every order ships with a GST invoice.</p>
+    """
+    return await _send(to, f"{product_name} for your {printer_name} is now available", html)
+
+
+
 async def email_proc_quotation(u: dict, quotation: dict, pdf_bytes: bytes):
     """Email a generated quotation PDF to the procurement user."""
     email_to = u.get("email")
@@ -874,6 +895,7 @@ async def email_order_shipped(order: dict, listing: dict, buyer: dict):
     brand = (listing or {}).get("brand") or ""
     model = (listing or {}).get("model_number") or ""
     tracking = (order or {}).get("tracking_number") or "—"
+    courier = (order or {}).get("courier_name") or "—"
     buyer_email = (buyer or {}).get("email")
     buyer_name = (buyer or {}).get("name") or order.get("customer_name") or "there"
     if not buyer_email:
@@ -886,9 +908,11 @@ async def email_order_shipped(order: dict, listing: dict, buyer: dict):
     <p style="color:#3a3a40;">Hi {buyer_name}, good news — your order has been dispatched.</p>
 
     <div style="margin:14px 0;padding:14px 16px;background:#F5F5F7;border-radius:10px;font-size:13.5px;">
-      <div style="font-size:10.5px;letter-spacing:0.16em;text-transform:uppercase;color:#86868B;font-weight:700;">Tracking</div>
+      <div style="font-size:10.5px;letter-spacing:0.16em;text-transform:uppercase;color:#86868B;font-weight:700;">Courier</div>
+      <div style="font-size:15px;font-weight:700;color:#0A0A0B;margin-top:3px;">{courier}</div>
+      <div style="font-size:10.5px;letter-spacing:0.16em;text-transform:uppercase;color:#86868B;font-weight:700;margin-top:10px;">Tracking number</div>
       <div style="font-family:monospace;font-size:18px;font-weight:700;color:#0A0A0B;margin-top:4px;letter-spacing:0.04em;">{tracking}</div>
-      <div style="margin-top:6px;font-size:11.5px;color:#6E6E73;">Use this number with the courier&apos;s tracking page.</div>
+      <div style="margin-top:6px;font-size:11.5px;color:#6E6E73;">Use this number on {courier}&apos;s tracking page.</div>
     </div>
 
     <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;">
@@ -911,6 +935,62 @@ async def email_order_shipped(order: dict, listing: dict, buyer: dict):
     await _send(buyer_email, f"Your order #{short_id} has been shipped", body)
 
 
+async def email_order_confirmed(order: dict, listing: dict, buyer: dict):
+    """Notify buyer that the seller has CONFIRMED (accepted) their order."""
+    short_id = str(order.get("id", ""))[:8].upper()
+    brand = (listing or {}).get("brand") or ""
+    model = (listing or {}).get("model_number") or ""
+    buyer_email = (buyer or {}).get("email")
+    buyer_name = (buyer or {}).get("name") or order.get("customer_name") or "there"
+    if not buyer_email:
+        return
+    qty = order.get("qty", 1)
+    total = order.get("total", 0)
+    body = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;">Your order is confirmed</h2>
+    <p style="color:#3a3a40;">Hi {buyer_name}, the seller has <strong>confirmed</strong> your order and is preparing it for dispatch. We&apos;ll email you the courier and tracking details as soon as it ships.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;">
+      <tr><td style='padding:4px 12px;color:#86868B;'>Order</td><td style='padding:4px 12px;font-family:monospace;'><strong>#{short_id}</strong></td></tr>
+      <tr><td style='padding:4px 12px;color:#86868B;'>Product</td><td style='padding:4px 12px;'><strong>{brand} {model}</strong></td></tr>
+      <tr><td style='padding:4px 12px;color:#86868B;'>Quantity</td><td style='padding:4px 12px;'>{qty}</td></tr>
+      <tr><td style='padding:4px 12px;color:#86868B;'>Total</td><td style='padding:4px 12px;'><strong>{_money(total)}</strong></td></tr>
+    </table>
+    <p style="margin-top:18px;">Follow progress any time in your
+      <a href="https://tonerscart.com/dashboard" style="color:#0A0A0B;font-weight:600;">TonersCart dashboard</a>.</p>
+    <p style="margin-top:22px;color:#86868B;font-size:11.5px;">— Team TonersCart</p>
+    """
+    await _send(buyer_email, f"Order #{short_id} confirmed by the seller", body)
+
+
+async def email_order_delivered_confirm(order: dict, listing: dict, buyer: dict):
+    """Dealer marked the order Delivered — ask the buyer to confirm receipt.
+    Auto-confirms after 5 days if the buyer doesn't respond."""
+    short_id = str(order.get("id", ""))[:8].upper()
+    brand = (listing or {}).get("brand") or ""
+    model = (listing or {}).get("model_number") or ""
+    buyer_email = (buyer or {}).get("email")
+    buyer_name = (buyer or {}).get("name") or order.get("customer_name") or "there"
+    if not buyer_email:
+        return
+    body = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;">Did you receive your order?</h2>
+    <p style="color:#3a3a40;">Hi {buyer_name}, the seller has marked order <strong>#{short_id}</strong>
+      (<strong>{brand} {model}</strong>) as <strong>delivered</strong>.</p>
+    <p style="color:#3a3a40;">Please confirm you received it so we can close the order.</p>
+    <p style="margin:20px 0;">
+      <a href="https://tonerscart.com/dashboard"
+         style="display:inline-block;padding:13px 26px;background:#10B981;color:#FFFFFF;border-radius:10px;font-weight:700;text-decoration:none;font-size:14px;">
+        Confirm you received your order
+      </a>
+    </p>
+    <p style="font-size:12.5px;color:#6E6E73;">If we don&apos;t hear from you within <strong>5 days</strong>, the order will be
+      auto-confirmed so the seller can be paid. Didn&apos;t receive it? Email
+      <a href="mailto:support@tonerscart.com" style="color:#0A0A0B;font-weight:600;">support@tonerscart.com</a> right away.</p>
+    <p style="margin-top:22px;color:#86868B;font-size:11.5px;">— Team TonersCart</p>
+    """
+    await _send(buyer_email, f"Please confirm you received order #{short_id}", body)
+
+
 async def email_order_delivered_support(order: dict, listing: dict, supplier: dict, buyer: dict):
     """Notify the support inbox that a buyer marked an order delivered so we can release payout."""
     short_id = str(order.get("id", ""))[:8].upper()
@@ -919,10 +999,16 @@ async def email_order_delivered_support(order: dict, listing: dict, supplier: di
     seller = (supplier or {}).get("business_name") or "—"
     buyer_name = (buyer or {}).get("name") or order.get("customer_name") or "Buyer"
     commission, payout, rate_label = _commission_breakdown(order.get("total") or 0)
+    auto = bool(order.get("auto_confirmed"))
+    confirm_line = (
+        f"Order <strong>#{short_id}</strong> was <strong>auto-confirmed</strong> (buyer did not respond within 5 days of delivery)."
+        if auto else
+        f"Buyer <strong>{buyer_name}</strong> has confirmed delivery for order <strong>#{short_id}</strong>."
+    )
     html = f"""
-    <h2 style="margin:0 0 6px 0;font-size:18px;">Order delivered — release payout</h2>
-    <p style="color:#3a3a40;">Buyer <strong>{buyer_name}</strong> has confirmed delivery for order
-    <strong>#{short_id}</strong>.</p>
+    <h2 style="margin:0 0 6px 0;font-size:18px;">Order completed — release payout</h2>
+    <p style="color:#3a3a40;">{confirm_line}</p>
+    <p style="color:#6E6E73;font-size:12.5px;">Payout becomes eligible 5 days after completion.</p>
     <table style="width:100%;border-collapse:collapse;font-size:13px;">
       <tr><td style='padding:4px 12px;color:#86868B;'>Product</td><td style='padding:4px 12px;'>{brand} {model}</td></tr>
       <tr><td style='padding:4px 12px;color:#86868B;'>Dealer</td><td style='padding:4px 12px;'>{seller}</td></tr>
@@ -931,7 +1017,7 @@ async def email_order_delivered_support(order: dict, listing: dict, supplier: di
       <tr><td style='padding:4px 12px;color:#86868B;'>Payout to dealer</td><td style='padding:4px 12px;'><strong>{_money(payout)}</strong></td></tr>
     </table>
     """
-    await _send(SUPPORT_INBOX, f"Payout ready — order #{short_id} delivered", html)
+    await _send(SUPPORT_INBOX, f"Payout ready — order #{short_id} completed", html)
 
 
 async def email_dealer_suspended(supplier: dict, reason: str | None = None):

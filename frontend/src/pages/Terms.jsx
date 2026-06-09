@@ -145,9 +145,11 @@ export default function Terms() {
                     </Section>
 
                     <Section title="18. Grievance Officer">
-                        In accordance with the IT (Intermediary Guidelines) Rules, 2021, grievances may be addressed to our Grievance Officer at
-                        <a href="mailto:support@tonerscart.com" className="text-[#00B7C7] hover:underline"> support@tonerscart.com</a>.
-                        We acknowledge and respond to grievances <strong>within 48 hours</strong> and endeavour to resolve them within the timelines prescribed by law.
+                        In accordance with the IT (Intermediary Guidelines) Rules, 2021, grievances may be addressed to our Grievance Officer:
+                        <br />
+                        <strong>Grievance Officer:</strong> Rohit Sairam, TonersCart Private Limited,
+                        Email: <a href="mailto:support@tonerscart.com" className="text-[#00B7C7] hover:underline">support@tonerscart.com</a>,
+                        Response time: <strong>48 hours</strong>.
                     </Section>
 
                     <Section title="19. Amendments">

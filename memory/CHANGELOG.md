@@ -1,4 +1,73 @@
-### 2026-06-07 — Unified universal-search product cards + Featured Suppliers fix (16:9 banner + caching)
+### 2026-06-09 (c) — Fix: homepage brand marquee showed empty white pills
+
+Root cause: `/api/config/marquee_brands` stores plain strings (e.g. ["HP","Canon","Brother"]), but `Landing.jsx` rendered `b.name`/`b.color` (object shape) → pills rendered with NO text (just white boxes), most obvious on mobile where the label+marquee shared one flex row and the mask-fade only revealed slivers.
+Fix (Landing.jsx): added `normalizeBrands()` + `BRAND_COLORS` map — accepts both string and {name,color} shapes, assigns each brand its corporate colour. Mobile layout: marquee label now stacks above a full-width marquee (`flex-col sm:flex-row`, `w-full sm:flex-1 min-w-0`); index.css adds a <=640px block (smaller pills, tighter gap, narrower mask) so brand names stay readable.
+
+
+### 2026-06-09 (b) — Auto-notify waiting buyers when a compatible product is listed
+
+When a dealer creates a **toner** (`POST /api/supplier/listings`) or **consumable** (`POST /api/supplier/consumables`), the backend now fires a fire-and-forget job (`routes/compat.schedule_notify` → daemon thread → `notify_waiting_buyers`) that:
+- computes every compatibility-DB printer **slug** the new listing matches — from the dealer's selected `compatible_models` (printer models) AND from `model_number` mapped through the cartridge→printers inverse map;
+- looks up `notify_requests` for those slugs, emails each waiting buyer via Resend (`email_notify_available`: "Good news — [Product] compatible with your [Printer] is now available … View & Buy"), then **deletes** those requests so nobody is emailed twice.
+- Fully graceful: never blocks the listing-create response; swallows all errors; no-ops if `notify_requests` isn't migrated or `RESEND_API_KEY` is unset.
+- Works for single-create and bulk (bulk calls the single endpoints).
+
+**Deleted** the temporary QA supplier `qa.dealer.it34ui.6c96bdae@example.com` (DB rows + listings + Supabase Auth) per user request.
+
+**⚠️ Still required (user):** run `supabase_schema_notify_requests.sql` in Supabase — the `notify_requests` table does NOT exist yet (PGRST205), so both the "Notify me" capture and this auto-notify flow are currently no-ops until the table is created. (Earlier note that it was already run was incorrect.)
+
+Constraints honored: no CORS change, no emergentintegrations, Razorpay/Twilio untouched.
+
+
+### 2026-06-09 — SEO + Printer↔Toner compatibility database + programmatic SEO pages
+
+**1. Technical SEO.**
+- `GET /sitemap.xml` + ingress-reachable `GET /api/sitemap.xml` (dynamic): static pages, city variants, every `/compatible/<slug>` printer page, and all in-stock product listing URLs (`/toner/ /printer/ /paper/ /consumable/`). The static `public/sitemap.xml` is now a sitemap-index pointing at `/api/sitemap.xml` (so it works behind the /api-only proxy).
+- `GET /robots.txt` (backend) + `public/robots.txt`: allow all, Disallow `/admin /supplier /procurement /checkout /customer /oem-dashboard /api`.
+- Homepage JSON-LD (`Landing.jsx` ldOrg) now `@type=WholesaleStore`, legalName "TonersCart Private Limited", description "India's marketplace for printers, toners and MFDs — verified dealers, GST invoices, pan-India delivery".
+
+**2. Compatibility database (`backend/compatibility_db.py`).** Expanded to **543 printers / 571 toners** (both >500), covering HP, Canon, Epson, Brother, Ricoh, Xerox, Kyocera, Samsung, Konica Minolta, Pantum, **Riso, Sharp** (+ a few Lexmark/OKI cartridges). Bidirectional cross-reference (printer→cartridges, cartridge→printers) via the derived inverse map. New router `routes/compat.py`: `GET /api/compat/stats|printers?q=|toners?q=|printer/{slug}|toner/{model}` and `POST /api/compat/notify`.
+
+**3. Programmatic SEO pages (`/compatible/:slug`, `pages/CompatiblePage.jsx`).** Per-printer page: title/meta/H1, compatible cartridge chips, live dealer-listing grid (toners+consumables matched by compatible_models ILIKE printer model OR model_number in cartridge codes), Schema.org ItemList/Product JSON-LD; when no stock → "Notify me when available" email capture → `POST /api/compat/notify`.
+
+**4. Dealer uploads — searchable multi-select (`components/CompatibleModelsSelect.jsx`).** Replaced the free-text "compatible models" field on the **toner** (SupplierDashboard) and **consumable** (ConsumableListings) forms with a debounced searchable dropdown hitting `/api/compat/printers` (pick printer models); added the same on the **printer** wizard hitting `/api/compat/toners` (pick compatible cartridges). Stored as comma-joined string (back-compat with existing matching + free-text). Bulk-upload grids left as free text by design. Existing listings render unchanged.
+
+**Migrations (USER):** `supabase_schema_notify_requests.sql` (RUN ✅) for the Notify-me table; `supabase_schema_printer_compat.sql` (adds `printer_listings.compatible_models`) — until run, printer compatible_models is silently dropped on write (graceful, never errors).
+
+**Testing:** backend pytest `tests/test_iteration34_compat.py` 10/10; testing agent iteration_34 — backend 100% (18/18), compatible page + Notify-me + WholesaleStore JSON-LD verified E2E. Dealer-form dropdown rendering/persistence verified via API; interactive Playwright click was blocked only by the global seller-agreement Radix-checkbox quirk (test-infra, not a product bug). Constraints honored: no CORS change, no emergentintegrations, Razorpay/Twilio untouched.
+
+
+### 2026-06-08 (b) — server.py refactor into route modules (zero behaviour change)
+
+Split the 5,523-line monolithic `server.py` into domain route files under `backend/routes/`, leaving the shared kernel (helpers, models, dependencies, caches) + app/middleware/CORS/scheduler + the 3 `@app` routes (robots/sitemap/pageview) in `server.py`, which now registers all routers.
+
+- **New route modules** (each `from server import *` for the shared kernel + explicit underscore-helper imports; own `APIRouter(prefix="/api")`): `routes/auth.py` (14 endpoints), `routes/search.py` (10), `routes/products.py` (38), `routes/orders.py` (6), `routes/admin.py` (40), `routes/suppliers.py` (9). `procurement.py`/`oem.py`/`agreements.py` already existed.
+- **Parity verified:** 117 router endpoints + 3 `@app` = **120 = original** (git HEAD). 0 `@api.` left in server.py. `server.py` 5,523 → **1,597 lines**.
+- **Method:** AST-based extraction (moved only `@api`-decorated functions; all helpers/models/constants stayed as kernel). Auto-detected & added per-file underscore-helper imports; caught import-alias kernel names (`_td/_re/_time/_dd`) and a re-exported `_commission_breakdown`.
+- **Verified:** boots clean; 25+ endpoints across every domain return correct codes (reads + a cross-module write round-trip admin→public config; `search_ai`→`search_universal` in-module call); no cross-file endpoint-to-endpoint calls; lint clean (intentional star-import F405 suppressed file-level); homepage renders end-to-end. Zero frontend impact (identical `/api` paths).
+- **Constraints honored:** no CORS change, no behaviour change, Razorpay/Twilio untouched.
+
+
+
+
+**1. Login rate limiting (brute-force protection).** Login was 100% client-side Supabase (`signInWithPassword`) — no backend endpoint to limit. Added `POST /api/auth/login` (`server.py`) that signs in server-side via Supabase GoTrue REST (`/auth/v1/token`, stateless httpx call — avoids shared-client races) and applies a per-IP, FAILED-only sliding window: **5 fails / IP / 10 min → 30-min block**, message `"Too many attempts, try again in 30 minutes."` Successful logins clear the counter. `AuthContext.login` now calls the backend then hydrates the client session via `supabase.auth.setSession(...)`. Verified via curl: 200+token / 401 / 429 sequence correct.
+
+**2. Order tracking flow.** Lifecycle: Requested → Confirmed(`accepted`) → Dispatched(`shipped`) → Delivered → **Completed** (new). 
+- Dealer (`SupplierDashboard`): Accept → Confirmed (email); Dispatch via new `CourierDispatchInput` (courier name + tracking REQUIRED) → Dispatched (email w/ courier+tracking); **Mark Delivered** → Delivered (email asking buyer to confirm).
+- Customer (`CustomerDashboard`): `OrderTimeline` (4 stages) + courier/tracking shown when dispatched; **"Confirm you received your order"** button on Delivered → Completed, which sets `completed_at` + `payout_eligible_at = +5 days`.
+- **Auto-confirm:** `AsyncIOScheduler` (APScheduler, already installed) job every 30 min → orders `delivered` for >5 days are auto-completed (`auto_confirmed=true`) + support payout email. Protects dealers from silent buyers.
+- Backend (`update_order_status`) rewritten with strict role/transition enforcement + `_safe_order_update()` that drops not-yet-migrated columns so the flow works pre-migration.
+- New emails: `email_order_confirmed`, `email_order_delivered_confirm`; `email_order_shipped` now shows courier; support payout email handles auto vs manual.
+- **MIGRATION REQUIRED (user to run):** `backend/supabase_schema_order_tracking.sql` adds `courier_name, delivered_at, completed_at, payout_eligible_at, auto_confirmed` + index. Until run, status transitions work but those fields don't persist.
+
+**3. Grievance officer (`Terms.jsx`):** now "Grievance Officer: Rohit Sairam, TonersCart Private Limited, Email: support@tonerscart.com, Response time: 48 hours."
+
+**DEFERRED — Task 2 (server.py → routers refactor):** user chose to validate features + run migration first, then refactor on a verified base. `server.py` is ~5,520 lines; procurement/oem/agreements already use separate routers. Plan: extract shared infra (clients, models, deps, helpers) into a `deps`/`core` module, then move endpoint groups into `backend/routes/{auth,products,orders,search,admin,suppliers,oem,procurement}.py`, server.py just registers routers. Constraints: no CORS change, no behavior change.
+
+**Constraints honored:** no CORS change, no emergentintegrations, Razorpay/Twilio still mocked, no force-push.
+
+
+
 
 **Unified search cards (DRY refactor)** — extracted the four category product cards into shared components under `src/components/cards/`: `TonerProductCard`, `PrinterProductCard`, `PaperProductCard`, `ConsumableProductCard`. The universal search (`/search?q=`) groups now render the SAME full cards as the category pages (with Add-to-cart / Buy-now + qty stepper), replacing the old tiny click-through tiles. Category pages (`Papers.jsx`, `Consumables.jsx`, `PrintersResults.jsx`) and `Search.jsx` (both the detailed toner browse + universal toners group) all import the shared cards now. OEM group kept as inline tiles (no shared OEM card).
 - **Bug fixed:** the old inline `PrinterCard` destructured `const { add } = useCart()` but CartContext only exports `addItem` — so printer Add-to-cart / Buy-now would crash. The shared `PrinterProductCard` correctly uses `addItem`. Verified at runtime (toast + navbar cart badge increments).

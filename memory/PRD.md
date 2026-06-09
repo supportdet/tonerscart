@@ -1,6 +1,6 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-07):** Unified universal-search product cards (shared `src/components/cards/*`) so `/search` uses the exact category-page cards with Add/Buy; fixed a printer add-to-cart crash (`add`→`addItem`); fixed Featured Suppliers slow load (backend `_FEATURED_CACHE` 120s TTL) and switched the banner to a 16:9 rectangle from the dealer application image. Frontend test 100% (iteration_32). See CHANGELOG.md for the full running log.
+> **Latest (2026-06-08):** (1) Login brute-force protection — backend `POST /api/auth/login`, 5 failed/IP/10min → 30-min block. (2) Order tracking flow Requested→Confirmed→Dispatched→Delivered→Completed + 5-day APScheduler auto-confirm/payout timer. (3) Grievance officer text. (4) **server.py refactored** into `backend/routes/{auth,search,products,orders,admin,suppliers}.py` (5,523→1,597 lines, 120-endpoint parity, zero behaviour change). **ACTION: run `backend/supabase_schema_order_tracking.sql`** for order-tracking columns. See CHANGELOG.md.
 
 
 ## Latest changelog (2026-02 Wave 10 — Two-layer navbar + new category pages + D2D marketplace)
@@ -503,3 +503,19 @@ Replaced the single-page dialog with a clean 4-step wizard:
 - `backend/supabase_schema_quotation_featured.sql`
 - `backend/supabase_schema_logo.sql`
 - `backend/supabase_schema_buyer_gst.sql`
+
+---
+
+## 2026-06-09 — SEO + Compatibility DB feature set (DONE)
+
+Implemented & tested (iteration_34, backend 100%):
+- Dynamic sitemap (`/sitemap.xml` + `/api/sitemap.xml`, static index points to /api), updated robots, WholesaleStore JSON-LD on homepage.
+- Compatibility DB `backend/compatibility_db.py` → 543 printers / 571 toners across 12 brands (incl. Riso, Sharp), bidirectional; served via `routes/compat.py` (`/api/compat/*` + `/api/compat/notify`).
+- Programmatic SEO pages `/compatible/:slug` (`pages/CompatiblePage.jsx`) with live dealer listings + Notify-me capture.
+- Dealer toner/consumable/printer upload forms use searchable multi-select `CompatibleModelsSelect` bound to the compatibility DB (stored as comma-joined string; bulk grids unchanged).
+
+**Refactor note:** `server.py` monolith refactor into `routes/` is COMPLETE (verified iteration_33, 100%).
+
+**User-side migrations:** `supabase_schema_notify_requests.sql` (RUN ✅), `supabase_schema_order_tracking.sql` (RUN ✅). PENDING: `supabase_schema_printer_compat.sql` (adds `printer_listings.compatible_models` — graceful until run).
+
+**Backlog (P1/P2):** Procurement Phase 2 order flow (needs `supabase_schema_procurement_orders.sql`), Procurement Phase 3 credit ledger, Twilio OTP phone login, supplier ratings/reviews, live Razorpay.
