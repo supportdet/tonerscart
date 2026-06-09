@@ -1,3 +1,15 @@
+### 2026-06-09 (d) — Fix: /compatible/:slug returning "printer not found"
+
+Root cause: slugs were generated as `brand + full model name`, so DB slugs carried marketing/sub-brand filler (`-mfp`, `imageclass`, `ecotank`) and model variants (`HL-L2321D`), and `get_printer()` only did an exact dict lookup — so natural SEO slugs like `hp-laserjet-m1005`, `canon-lbp2900`, `epson-l3150` 404'd. Xerox B305 was also missing from the DB.
+
+Fix (`compatibility_db.py`):
+- `slugify()` now strips a small filler set (`imageclass, ecotank, mfp, series`) → clean canonical slugs (`canon-lbp2900`, `epson-l3150`, `hp-laserjet-m1005`); collision-guarded (falls back to full slug if cleaning would clash). Sitemap/search now emit these clean slugs.
+- `get_printer()` is now a tolerant 4-tier resolver: exact → alias (full uncleaned slug + cleaned-incoming) → token-subset → fuzzy (difflib ≥0.82). Resolves variants like `brother-hl-2321d` → "Brother HL-L2321D".
+- Added Xerox B305/B310/B315 (toner 006R04403). Printer count 543 → 546.
+
+Verified: all 5 requested slugs HTTP 200; **all 546 canonical slugs AND all raw full-name slugs resolve (0 failures)**; no duplicate slugs. Regression tests in `tests/test_iteration34_compat.py` (16/16 pass).
+
+
 ### 2026-06-09 (c) — Fix: homepage brand marquee showed empty white pills
 
 Root cause: `/api/config/marquee_brands` stores plain strings (e.g. ["HP","Canon","Brother"]), but `Landing.jsx` rendered `b.name`/`b.color` (object shape) → pills rendered with NO text (just white boxes), most obvious on mobile where the label+marquee shared one flex row and the mask-fade only revealed slivers.

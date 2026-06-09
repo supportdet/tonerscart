@@ -550,6 +550,9 @@ PRINTERS_RAW = [
     ("Xerox", "B225", "mfd", ["006R04400"]),
     ("Xerox", "B230", "laser", ["006R04400"]),
     ("Xerox", "B235", "mfd", ["006R04400"]),
+    ("Xerox", "B305", "mfd", ["006R04403"]),
+    ("Xerox", "B310", "laser", ["006R04403"]),
+    ("Xerox", "B315", "mfd", ["006R04403"]),
     ("Xerox", "WorkCentre 3335", "mfd", ["106R03623"]),
 
     # ============================== Samsung — extended =====================
@@ -721,6 +724,7 @@ TONER_META = {
     "SP C360": ("Ricoh", "toner"), "MP 2501": ("Ricoh", "toner"), "IM 2500": ("Ricoh", "toner"), "IM C2000": ("Ricoh", "toner"),
     # Xerox extended
     "106R03581": ("Xerox", "toner"), "106R03623": ("Xerox", "toner"), "006R04400": ("Xerox", "toner"),
+    "006R04403": ("Xerox", "toner"),
     "106R03511": ("Xerox", "toner"), "106R03512": ("Xerox", "toner"), "106R03513": ("Xerox", "toner"), "106R03514": ("Xerox", "toner"),
     "106R03480": ("Xerox", "toner"), "106R03477": ("Xerox", "toner"), "106R03478": ("Xerox", "toner"), "106R03479": ("Xerox", "toner"),
     # Samsung extended
@@ -822,18 +826,40 @@ EXTRA_TONERS = [
 ]
 
 
+import re
+from difflib import get_close_matches
+from functools import lru_cache
+
+# Marketing / sub-brand words commonly omitted from SEO slugs. They never
+# distinguish two distinct models, so stripping them yields clean canonical
+# slugs (e.g. "Canon imageCLASS LBP2900" -> canon-lbp2900) while the tolerant
+# resolver below still accepts the full forms.
+_FILLER_TOKENS = {"imageclass", "ecotank", "mfp", "series"}
+
+
+def _raw_slug(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
+
+
 def slugify(brand: str, model: str) -> str:
-    s = f"{brand} {model}".lower()
-    s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
-    return s
+    """Canonical, clean slug for a printer model (filler words removed)."""
+    raw = _raw_slug(f"{brand} {model}")
+    toks = [t for t in raw.split("-") if t and t not in _FILLER_TOKENS]
+    return "-".join(toks) or raw
 
 
 @lru_cache(maxsize=1)
 def _build():
     printers = []
     toner_to_printers: dict = {}
+    used_slugs: dict = {}
     for brand, model, ptype, toners in PRINTERS_RAW:
         slug = slugify(brand, model)
+        # Guard against the rare case where cleaning collides two models:
+        # fall back to the full (uncleaned) slug for the later entry.
+        if slug in used_slugs and used_slugs[slug] != f"{brand} {model}":
+            slug = _raw_slug(f"{brand} {model}")
+        used_slugs[slug] = f"{brand} {model}"
         p = {"brand": brand, "model": model, "full_name": f"{brand} {model}",
              "type": ptype, "slug": slug, "toners": list(toners)}
         printers.append(p)
@@ -858,12 +884,58 @@ def _build():
     return printers, printers_by_slug, toners_list, {t["model"]: t for t in toners_list}
 
 
+@lru_cache(maxsize=1)
+def _alias_index():
+    """Map several slug variants per printer -> printer, for tolerant matching:
+    canonical slug, full (uncleaned) slug, and the brand+core-model token form.
+    Also returns (token_sets, canonical_slugs) for subset/fuzzy fallbacks."""
+    printers = _build()[0]
+    alias: dict = {}
+    token_sets = []
+    for p in printers:
+        full = _raw_slug(p["full_name"])
+        for s in {p["slug"], full}:
+            alias.setdefault(s, p)
+        tokens = set(full.split("-"))
+        token_sets.append((tokens, p))
+    return alias, token_sets, [p["slug"] for p in printers]
+
+
 def all_printers():
     return _build()[0]
 
 
 def get_printer(slug: str):
-    return _build()[1].get(slug)
+    """Resolve a printer from a URL slug, tolerant of marketing/filler words and
+    minor model-name variations so SEO/external slugs still land on the page."""
+    if not slug:
+        return None
+    s = _raw_slug(slug)
+    by_slug = _build()[1]
+    # Tier 1 — exact canonical slug.
+    if s in by_slug:
+        return by_slug[s]
+    alias, token_sets, canon_slugs = _alias_index()
+    # Tier 2 — exact alias (full uncleaned slug) or cleaned incoming slug.
+    if s in alias:
+        return alias[s]
+    cleaned = "-".join(t for t in s.split("-") if t and t not in _FILLER_TOKENS)
+    if cleaned in by_slug:
+        return by_slug[cleaned]
+    if cleaned in alias:
+        return alias[cleaned]
+    # Tier 3 — token subset: all incoming (non-filler) tokens appear in a model.
+    in_tokens = {t for t in s.split("-") if t and t not in _FILLER_TOKENS}
+    if in_tokens:
+        candidates = [(len(toks), p) for toks, p in token_sets if in_tokens <= toks]
+        if candidates:
+            candidates.sort(key=lambda x: (x[0], len(x[1]["slug"])))
+            return candidates[0][1]
+    # Tier 4 — closest fuzzy match against canonical slugs.
+    near = get_close_matches(s, canon_slugs, n=1, cutoff=0.82)
+    if near:
+        return by_slug.get(near[0])
+    return None
 
 
 def all_toners():
