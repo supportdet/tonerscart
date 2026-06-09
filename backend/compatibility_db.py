@@ -880,8 +880,69 @@ def _build():
             toners[model] = {"brand": brand, "model": model, "type": ttype, "printers": []}
 
     toners_list = sorted(toners.values(), key=lambda x: (x["brand"], x["model"]))
+    # Clean, collision-guarded slug for each toner model (e.g. "Q2612A (12A)" -> hp-q2612a).
+    used_t: dict = {}
+    for t in toners_list:
+        s = toner_slugify(t["brand"], t["model"])
+        if s in used_t and used_t[s] != t["model"]:
+            s = _raw_slug(f"{t['brand']} {t['model']}")
+        used_t[s] = t["model"]
+        t["slug"] = s
     printers_by_slug = {p["slug"]: p for p in printers}
-    return printers, printers_by_slug, toners_list, {t["model"]: t for t in toners_list}
+    toners_by_slug = {t["slug"]: t for t in toners_list}
+    return (printers, printers_by_slug, toners_list,
+            {t["model"]: t for t in toners_list}, toners_by_slug)
+
+
+def toner_slugify(brand: str, model: str) -> str:
+    """Canonical, clean slug for a toner/consumable model (parenthetical aliases
+    and marketing filler removed) — e.g. ("HP", "Q2612A (12A)") -> hp-q2612a."""
+    core = (model or "").split("(")[0].strip()
+    raw = _raw_slug(f"{brand} {core}")
+    toks = [t for t in raw.split("-") if t and t not in _FILLER_TOKENS]
+    return "-".join(toks) or raw
+
+
+@lru_cache(maxsize=1)
+def _toner_alias_index():
+    toners = _build()[2]
+    alias: dict = {}
+    token_sets = []
+    for t in toners:
+        full = _raw_slug(f"{t['brand']} {t['model']}")
+        for s in {t["slug"], full}:
+            alias.setdefault(s, t)
+        token_sets.append((set(full.split("-")), t))
+    return alias, token_sets, [t["slug"] for t in toners]
+
+
+def get_toner_by_slug(slug: str):
+    """Resolve a toner/consumable model from a URL slug (same tolerant 4-tier
+    approach as printer pages)."""
+    if not slug:
+        return None
+    s = _raw_slug(slug)
+    by_slug = _build()[4]
+    if s in by_slug:
+        return by_slug[s]
+    alias, token_sets, canon = _toner_alias_index()
+    if s in alias:
+        return alias[s]
+    cleaned = "-".join(t for t in s.split("-") if t and t not in _FILLER_TOKENS)
+    if cleaned in by_slug:
+        return by_slug[cleaned]
+    if cleaned in alias:
+        return alias[cleaned]
+    in_tokens = {t for t in s.split("-") if t and t not in _FILLER_TOKENS}
+    if in_tokens:
+        cands = [(len(toks), t) for toks, t in token_sets if in_tokens <= toks]
+        if cands:
+            cands.sort(key=lambda x: (x[0], len(x[1]["slug"])))
+            return cands[0][1]
+    near = get_close_matches(s, canon, n=1, cutoff=0.82)
+    if near:
+        return by_slug.get(near[0])
+    return None
 
 
 @lru_cache(maxsize=1)
@@ -964,9 +1025,14 @@ def search_toners(q: str, limit: int = 20):
         res = items[:limit]
     else:
         res = [t for t in items if q in t["model"].lower() or q in t["brand"].lower()][:limit]
-    return [{"brand": t["brand"], "model": t["model"], "type": t["type"]} for t in res]
+    return [{"brand": t["brand"], "model": t["model"], "type": t["type"], "slug": t["slug"]} for t in res]
+
+
+def all_brands():
+    """Sorted distinct printer brands in the compatibility DB."""
+    return sorted({p["brand"] for p in _build()[0]})
 
 
 def stats():
-    p, _, t, _2 = _build()
-    return {"printers": len(p), "toners": len(t)}
+    b = _build()
+    return {"printers": len(b[0]), "toners": len(b[2])}

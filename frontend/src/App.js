@@ -47,6 +47,7 @@ import Dealer from "./pages/Dealer";
 import DealerStore from "./pages/DealerStore";
 import OEM from "./pages/OEM";
 import CompatiblePage from "./pages/CompatiblePage";
+import TonerRoute from "./pages/TonerRoute";
 import OemDashboard from "./pages/OemDashboard";
 import ErrorBoundary from "./components/ErrorBoundary";
 import VisitorTracker from "./components/VisitorTracker";
@@ -141,7 +142,7 @@ function App() {
                                     <Route path="/contact" element={<Contact />} />
                                     <Route path="/get-featured" element={<GetFeatured />} />
                                     <Route path="/about" element={<About />} />
-                                    <Route path="/toner/:id" element={<ProductDetail kind="toner" />} />
+                                    <Route path="/toner/:id" element={<TonerRoute />} />
                                     <Route path="/printer/:id" element={<ProductDetail kind="printer" />} />
                                     <Route path="/paper/:id" element={<ProductDetail kind="paper" />} />
                                     <Route path="/consumable/:id" element={<ProductDetail kind="consumable" />} />

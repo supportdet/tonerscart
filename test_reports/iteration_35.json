@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 35 — toner model SEO pages, related sections on both /toner and /compatible pages, dealer printer-wizard wiring and toner-form icon-padding fix. Backend: 33/33 pytest pass (test_iteration34_compat.py 25/25 + test_iteration34_dealer_flow.py 8/8 after fixing one stale assertion). Brands endpoint returns all 12 required brands; toner-page resolves for hp-q2612a, hp-88a, brother-tn-2280, ricoh-sp-320 (and all 572 catalog slugs) with the contracted {toner, compatible_printers, listings, listings_count, related{same_printers_toners, same_brand_toners}}; unknown slug -> 404; printer detail now returns related{same_brand_printers, compatible_toner_models}; sitemap contains 575 unique /toner/<slug> entries + 546 /compatible/<slug> entries + live-listing URLs. Frontend (Playwright + curl): /toner/hp-q2612a renders TonerModelPage with H1 'HP Q2612A — Compatible Printers & Verified Dealers' (data-testid toner-h1), 12 toner-compatible-printer-chip items, 'Available from verified dealers' section, You-may-also-need block (toner-related) with 6 related-card items, and AFTER it a Notify-me block (toner-notify-block/email/submit) which on submit shows toner-notify-success. Route branching verified: /toner/62d88617-0794-4a6e-b1d9-d5bc0d360d4c shows ProductDetail (Canon 555, Add-to-cart) and NOT the model page. /compatible/hp-laserjet-m1005 renders in the spec'd order — hero -> Compatible cartridge models (Q2612A chip) -> Available from verified dealers -> You may also need (compatible-related with related-compatible-cartridges + related-same-brand-printers, 1+6 cards) -> Notify-me (Y positions: hero=192 < related=574 < notify=1040 confirm ordering). Schema.org Product markup is emitted (lines 72-89 TonerModelPage.jsx) with brand, category, offers AggregateOffer when listings>0. Dealer wizard sources verified: PrinterListings.jsx ln 574 has <select data-testid='wizard-brand'> populated from /api/compat/brands (fallback to the 12-brand list), ln 581 PrinterModelSelect testid='wizard-model' with onSelect auto-filling brand, ln 594 CompatibleModelsSelect mode='toners' testid='wizard-compatible-toners'. CompatibleModelsSelect.jsx ln 97-108 has absolute SearchIcon left-3 + input style.paddingLeft='2.4rem' so the icon no longer overlaps typed text (same component reused for the toner-form listing-compatible-models-input).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration34_compat.py",
+    "/app/backend/tests/test_iteration34_dealer_flow.py",
+    "/app/test_reports/pytest/iteration_35.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Sitemap now canonicalises printer slugs (e.g. hp-laserjet-m1005 instead of the older hp-laserjet-m1005-mfp) — required updating one stale pytest assertion in test_iteration34_dealer_flow.py (fixed by this iteration).",
+    "TonerModelPage Schema.org Product JSON-LD correctly conditionalises AggregateOffer on listings.length > 0; when 0 dealers list a toner the Product object is still emitted (good for SEO discovery).",
+    "compatibility_db: stats reports printers=546, toners=572 (matches problem-statement claim of 546/572). All 572 toner-page slugs resolve; backend tolerant slug resolution maps e.g. hp-88a -> hp-cb388a as documented.",
+    "TonerModelPage Notify-me block is correctly gated to render only when listings.length===0 (after the related section), matching the spec 'only when no dealer stock'.",
+    "CompatibleModelsSelect padding fix is implemented with inline style style.paddingLeft='2.4rem' so it overrides the .tc-input-lg class regardless of cascade order — robust against future CSS edits.",
+    "PrinterListings wizard-brand has a hard-coded 12-brand fallback on /api/compat/brands failure — graceful and matches the spec list verbatim."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration34_dealer_flow.py (stale sitemap assertion: -mfp -> canonical hp-laserjet-m1005, plus new /toner/hp-q2612a assertion)"
+  ],
+  "success_rate": {"backend": "100% (33/33)", "frontend": "100% for publicly-driveable surfaces (toner-page, route branching, /compatible/* ordering + related + notify); dealer-wizard UI verified at source level only — interactive run still blocked behind the first-time seller-agreement Radix-checkbox modal as documented in iteration 34, NOT a product bug"},
+  "test_credentials": "Admin: admin@tonerscart.in / Admin@123. No long-lived supplier account exists; create-on-demand pattern is the standard. The dealer-flow pytest creates+cleans its own supplier per run.",
+  "seed_data_creation": "None new. test_iteration34_dealer_flow.py self-cleans (creates ephemeral qa.dealer.it34.* supplier and removes it).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run /app/backend/tests/test_iteration34_compat.py + /app/backend/tests/test_iteration34_dealer_flow.py for the full iteration-35 regression (33 tests, all green). Tolerant slug resolution means input may map to a different canonical slug (hp-88a -> hp-cb388a); that's expected. Dealer UI flow (printer wizard brand/model/compatible-toners + toner form icon padding) is verified at source-level here; to exercise it interactively you must create a supplier via /api/auth/signup-supplier, approve via admin, AND POST /api/agreements/accept with the supplier's token BEFORE driving the dashboard, otherwise the first-time Radix-checkbox modal will block Playwright (this is a known Playwright/Radix interaction quirk in this preview env). Real-listing UUID 62d88617-0794-4a6e-b1d9-d5bc0d360d4c (Canon 555) was used to verify /toner/<uuid> -> ProductDetail branching; it persists in DB.",
+  "rca of the issue": "No product issues. One stale pytest assertion fixed (test expected the old non-canonical /compatible/hp-laserjet-m1005-mfp slug; sitemap now emits canonical /compatible/hp-laserjet-m1005 which is correct iteration-35 behavior)."
+}

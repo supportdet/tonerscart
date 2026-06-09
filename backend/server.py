@@ -1423,6 +1423,12 @@ def _build_sitemap_response():
             add(f"/compatible/{p['slug']}", "0.6")
     except Exception as e:
         logger.debug("sitemap compatible pages skipped: %s", e)
+    # Programmatic SEO pages — one per toner/consumable model.
+    try:
+        for t in _cdb.all_toners():
+            add(f"/toner/{t['slug']}", "0.6")
+    except Exception as e:
+        logger.debug("sitemap toner pages skipped: %s", e)
     # Live product listing detail pages.
     for path in _sitemap_listing_urls():
         add(path, "0.8")

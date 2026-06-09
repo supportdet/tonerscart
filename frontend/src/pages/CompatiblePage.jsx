@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowRight, Bell, CheckCircle2, Printer as PrinterIcon, ShieldCheck } from "lucide-react";
+import { ArrowRight, Bell, CheckCircle2, Printer as PrinterIcon } from "lucide-react";
 import api from "../lib/api";
 import PageMeta from "../components/PageMeta";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-
-const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
+import RelatedRow from "../components/RelatedRow";
+import CompatListingCard from "../components/CompatListingCard";
 
 export default function CompatiblePage() {
     const { slug } = useParams();
@@ -62,6 +62,7 @@ export default function CompatiblePage() {
     const p = data.printer;
     const listings = data.listings || [];
     const toners = data.compatible_toners || [];
+    const related = data.related || {};
     const title = `Compatible Toners & Consumables for ${p.full_name} — TonersCart`;
     const description = `Find verified compatible toners, drums and consumables for ${p.full_name}. Compare prices from verified dealers. GST invoice on every order.`;
 
@@ -133,11 +134,40 @@ export default function CompatiblePage() {
                         <h2 className="text-[18px] font-semibold text-[#0A0A0B]">Available from verified dealers</h2>
                         {listings.length > 0 && <span className="text-[12.5px] text-[#86868B]">{listings.length} product{listings.length > 1 ? "s" : ""}</span>}
                     </div>
-
                     {listings.length === 0 ? (
+                        <div className="text-[13.5px] text-[#6E6E73]" data-testid="compatible-no-stock">No verified dealer has listed a compatible product yet — see the suggestions below, or get notified when stock arrives.</div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="compatible-listings-grid">
+                            {listings.map((l) => <CompatListingCard l={l} key={`${l.kind}-${l.id}`} />)}
+                        </div>
+                    )}
+                </section>
+
+                {/* Related / You may also need */}
+                {(related.same_brand_printers?.length > 0 || related.compatible_toner_models?.length > 0) && (
+                    <section className="space-y-6" data-testid="compatible-related">
+                        <h2 className="text-[18px] font-semibold text-[#0A0A0B]">You may also need</h2>
+                        <RelatedRow
+                            label="Compatible cartridges"
+                            kind="toner"
+                            testid="related-compatible-cartridges"
+                            items={(related.compatible_toner_models || []).map((t) => ({ brand: t.brand, title: t.model, subtitle: t.type, url: t.url }))}
+                        />
+                        <RelatedRow
+                            label={`More ${p.brand} printers`}
+                            kind="printer"
+                            testid="related-same-brand-printers"
+                            items={(related.same_brand_printers || []).map((x) => ({ brand: x.brand, title: x.full_name, subtitle: x.type, url: x.url }))}
+                        />
+                    </section>
+                )}
+
+                {/* Notify me — only when no dealer stock */}
+                {listings.length === 0 && (
+                    <section data-testid="compatible-notify-section">
                         <div className="bg-white border border-[#E5E5EA] rounded-2xl p-8 text-center max-w-xl" data-testid="compatible-notify-block">
                             <Bell size={26} className="mx-auto text-[#00B7C7]" />
-                            <div className="mt-3 text-[16px] font-semibold text-[#0A0A0B]">No stock currently</div>
+                            <div className="mt-3 text-[16px] font-semibold text-[#0A0A0B]">Notify me when available</div>
                             <p className="mt-1 text-[13.5px] text-[#6E6E73]">Be the first to know when a verified dealer lists a compatible product for the {p.full_name}.</p>
                             {notified ? (
                                 <div className="mt-4 inline-flex items-center gap-2 text-[#0A6E78] font-semibold" data-testid="compatible-notify-success">
@@ -152,30 +182,8 @@ export default function CompatiblePage() {
                                 </form>
                             )}
                         </div>
-                    ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="compatible-listings-grid">
-                            {listings.map((l) => (
-                                <Link to={l.url} key={`${l.kind}-${l.id}`} className="tc-product-card p-4 block hover:shadow-lg transition-shadow" data-testid={`compatible-listing-${l.id}`}>
-                                    <div className="flex items-start justify-between gap-2">
-                                        <div className="min-w-0">
-                                            <div className="text-[10.5px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">{l.brand}</div>
-                                            <div className="text-[15px] font-semibold text-[#0A0A0B] truncate" style={{ fontFamily: "'Montserrat', sans-serif" }}>{l.model_number}</div>
-                                        </div>
-                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-md border bg-emerald-50 text-emerald-700 border-emerald-200 uppercase shrink-0">
-                                            <ShieldCheck size={11} /> Verified
-                                        </span>
-                                    </div>
-                                    {l.compatible_models && <div className="mt-2 text-[11.5px] text-[#6E6E73] line-clamp-2">Compatible: {l.compatible_models}</div>}
-                                    <div className="mt-3 flex items-center justify-between">
-                                        <div className="font-mono text-[16px] font-semibold text-[#0A0A0B]">{fmtMoney(l.price)}</div>
-                                        <span className="text-[12px] text-[#00B7C7] font-semibold inline-flex items-center gap-1">View <ArrowRight size={13} /></span>
-                                    </div>
-                                    <div className="text-[11.5px] text-[#86868B] mt-1">{l.stock} in stock · {l.condition || "New"}</div>
-                                </Link>
-                            ))}
-                        </div>
-                    )}
-                </section>
+                    </section>
+                )}
 
                 <Link to="/search" className="inline-flex items-center gap-1 text-[#00B7C7] font-semibold" data-testid="compatible-browse-all">
                     Browse all products <ArrowRight size={16} />

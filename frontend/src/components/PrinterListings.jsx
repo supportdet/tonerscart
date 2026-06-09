@@ -13,6 +13,7 @@ import CommissionBanner from "./CommissionBanner";
 import BulkUploadGeneric from "./BulkUploadGeneric";
 import { printerBulkConfig } from "../lib/bulkConfigs";
 import CompatibleModelsSelect from "./CompatibleModelsSelect";
+import PrinterModelSelect from "./PrinterModelSelect";
 
 // ============================================================
 // Option catalogues — kept aligned with PrintersGuide.jsx so
@@ -257,6 +258,14 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
     const [existingImages, setExistingImages] = useState([]);
     const [uploading, setUploading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [brands, setBrands] = useState([]);
+
+    useEffect(() => {
+        if (!open) return;
+        api.get("/compat/brands")
+            .then((r) => setBrands(Array.isArray(r.data) ? r.data : []))
+            .catch(() => setBrands(["HP", "Canon", "Epson", "Brother", "Ricoh", "Xerox", "Kyocera", "Samsung", "Konica Minolta", "Pantum", "Riso", "Sharp"]));
+    }, [open]);
 
     // Reset whenever the dialog reopens — or prefill when editing
     useEffect(() => {
@@ -562,11 +571,19 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                             </div>
                             <div>
                                 <Label>Brand <span className="text-red-500">*</span></Label>
-                                <Input value={f.brand} onChange={upd("brand")} placeholder="HP, Canon, Epson…" className="tc-input-lg" data-testid="wizard-brand" />
+                                <select value={f.brand} onChange={upd("brand")} className="tc-input-lg w-full" data-testid="wizard-brand">
+                                    <option value="">Select brand…</option>
+                                    {brands.map((b) => <option key={b} value={b}>{b}</option>)}
+                                </select>
                             </div>
                             <div>
                                 <Label>Model number <span className="text-red-500">*</span></Label>
-                                <Input value={f.model_number} onChange={upd("model_number")} placeholder="M1138w, LBP2900B…" className="tc-input-lg" data-testid="wizard-model" />
+                                <PrinterModelSelect
+                                    value={f.model_number}
+                                    onChange={(v) => setF((cur) => ({ ...cur, model_number: v }))}
+                                    onSelect={(p) => setF((cur) => ({ ...cur, model_number: p.model, brand: p.brand }))}
+                                    testid="wizard-model"
+                                />
                             </div>
                             <div className="sm:col-span-2">
                                 <Label>Description (optional)</Label>
