@@ -131,6 +131,8 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
                 logger.warning("variant insert failed: %s", e)
     listing_row = dict(listing_row or {})
     listing_row["variants"] = saved_variants
+    from routes.compat import schedule_notify
+    schedule_notify(listing_row, "toner")
     return listing_row
 
 
@@ -762,7 +764,10 @@ def create_consumable(payload: ConsumableCreate, user: dict = Depends(require_us
     while True:
         try:
             res = sb_admin.table("consumable_listings").insert(row).execute()
-            return res.data[0] if res.data else row
+            created = res.data[0] if res.data else row
+            from routes.compat import schedule_notify
+            schedule_notify(created, "consumable")
+            return created
         except Exception as e:
             msg = str(e)
             dropped = False

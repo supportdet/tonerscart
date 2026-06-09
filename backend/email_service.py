@@ -74,6 +74,27 @@ async def _send(to: str, subject: str, body_html: str, reply_to: str | None = No
         return False
 
 
+async def email_notify_available(to: str, printer_name: str, product_name: str, product_url: str):
+    """Tell a buyer who asked to be notified that a compatible product is now in stock."""
+    if not to:
+        return False
+    html = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;">Good news — it's back in stock!</h2>
+    <p><strong>{product_name}</strong>, compatible with your <strong>{printer_name}</strong>,
+    is now available on TonersCart from a verified dealer.</p>
+    <p style="margin:20px 0;">
+      <a href="{product_url}" style="background:#F5C400;color:#0A0A0B;text-decoration:none;
+         font-weight:700;padding:12px 22px;border-radius:999px;display:inline-block;font-size:14px;">
+        View &amp; Buy
+      </a>
+    </p>
+    <p style="color:#6E6E73;font-size:12.5px;">Stock can move fast — order soon to lock today's price.
+    Every order ships with a GST invoice.</p>
+    """
+    return await _send(to, f"{product_name} for your {printer_name} is now available", html)
+
+
+
 async def email_proc_quotation(u: dict, quotation: dict, pdf_bytes: bytes):
     """Email a generated quotation PDF to the procurement user."""
     email_to = u.get("email")

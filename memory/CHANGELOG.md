@@ -1,3 +1,18 @@
+### 2026-06-09 (b) — Auto-notify waiting buyers when a compatible product is listed
+
+When a dealer creates a **toner** (`POST /api/supplier/listings`) or **consumable** (`POST /api/supplier/consumables`), the backend now fires a fire-and-forget job (`routes/compat.schedule_notify` → daemon thread → `notify_waiting_buyers`) that:
+- computes every compatibility-DB printer **slug** the new listing matches — from the dealer's selected `compatible_models` (printer models) AND from `model_number` mapped through the cartridge→printers inverse map;
+- looks up `notify_requests` for those slugs, emails each waiting buyer via Resend (`email_notify_available`: "Good news — [Product] compatible with your [Printer] is now available … View & Buy"), then **deletes** those requests so nobody is emailed twice.
+- Fully graceful: never blocks the listing-create response; swallows all errors; no-ops if `notify_requests` isn't migrated or `RESEND_API_KEY` is unset.
+- Works for single-create and bulk (bulk calls the single endpoints).
+
+**Deleted** the temporary QA supplier `qa.dealer.it34ui.6c96bdae@example.com` (DB rows + listings + Supabase Auth) per user request.
+
+**⚠️ Still required (user):** run `supabase_schema_notify_requests.sql` in Supabase — the `notify_requests` table does NOT exist yet (PGRST205), so both the "Notify me" capture and this auto-notify flow are currently no-ops until the table is created. (Earlier note that it was already run was incorrect.)
+
+Constraints honored: no CORS change, no emergentintegrations, Razorpay/Twilio untouched.
+
+
 ### 2026-06-09 — SEO + Printer↔Toner compatibility database + programmatic SEO pages
 
 **1. Technical SEO.**

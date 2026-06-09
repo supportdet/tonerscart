@@ -5,6 +5,8 @@ listings (toners + consumables) so a printer SEO page can show real, in-stock
 products, and exposes search endpoints for the dealer upload dropdowns.
 """
 import logging
+import asyncio
+import threading
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
@@ -15,6 +17,88 @@ import compatibility_db as cdb
 
 logger = logging.getLogger("tonerscart")
 router = APIRouter(prefix="/api/compat")
+
+
+def compatible_printer_slugs(brand: str, model_number: str, compatible_models: str) -> set:
+    """All printer slugs in the compatibility DB that this listing is compatible with:
+    (a) printer models the dealer selected in compatible_models, and
+    (b) printers that use this cartridge code (model_number) as a known toner."""
+    slugs: set = set()
+    for tok in (compatible_models or "").split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        s = cdb.slugify("", tok)
+        if cdb.get_printer(s):
+            slugs.add(s)
+    if model_number:
+        t = cdb.get_toner(model_number.strip())
+        if t:
+            for full_name in t.get("printers", []):
+                s = cdb.slugify("", full_name)
+                if cdb.get_printer(s):
+                    slugs.add(s)
+    return slugs
+
+
+async def notify_waiting_buyers(listing: dict, kind: str):
+    """When a dealer lists a new toner/consumable, email every buyer who asked to
+    be notified for a compatible printer page, then clear those requests so they
+    aren't emailed again. Best-effort — never raises."""
+    try:
+        if not listing or not listing.get("id"):
+            return
+        slugs = compatible_printer_slugs(
+            listing.get("brand"), listing.get("model_number"), listing.get("compatible_models")
+        )
+        if not slugs:
+            return
+        try:
+            rows = sb_admin.table("notify_requests").select("*").in_(
+                "printer_slug", list(slugs)
+            ).execute().data or []
+        except Exception as e:
+            logger.debug("notify_requests query skipped (not migrated?): %s", e)
+            return
+        if not rows:
+            return
+        from email_service import email_notify_available
+        base = "https://www.tonerscart.com"
+        product_name = f"{listing.get('brand', '') or ''} {listing.get('model_number', '') or ''}".strip() or "A compatible product"
+        product_url = f"{base}/{kind}/{listing['id']}"
+        notified_ids = []
+        for r in rows:
+            printer_name = r.get("printer_name")
+            if not printer_name:
+                p = cdb.get_printer(r.get("printer_slug") or "")
+                printer_name = p["full_name"] if p else "your printer"
+            ok = await email_notify_available(
+                to=r.get("email"), printer_name=printer_name,
+                product_name=product_name, product_url=product_url,
+            )
+            if ok and r.get("id"):
+                notified_ids.append(r["id"])
+        if notified_ids:
+            try:
+                sb_admin.table("notify_requests").delete().in_("id", notified_ids).execute()
+            except Exception as e:
+                logger.warning("notify_requests cleanup failed: %s", e)
+        logger.info("notified %d waiting buyer(s) for new %s %s", len(notified_ids), kind, listing.get("id"))
+    except Exception:
+        logger.exception("notify_waiting_buyers failed (non-fatal)")
+
+
+def schedule_notify(listing: dict, kind: str):
+    """Fire-and-forget the notify job from a sync route (runs in a daemon thread
+    so it never blocks the dealer's listing-create response)."""
+    try:
+        threading.Thread(
+            target=lambda: asyncio.run(notify_waiting_buyers(listing, kind)),
+            daemon=True,
+        ).start()
+    except Exception:
+        logger.exception("schedule_notify failed (non-fatal)")
+
 
 
 @router.get("/stats")
