@@ -1,3 +1,9 @@
+### 2026-06-10 (b) — Checkout mobile overflow: hard containment + cross-browser fallback
+
+- **Root-cause guard:** `overflow-x: clip` (html/body/#root) is unsupported on older iOS Safari (<16) and silently falls back to `visible`, letting the horizontally-scrollable category bar cause whole-page horizontal scroll on those devices (incl. checkout). Added `@supports not (overflow-x: clip) { html, body, #root { overflow-x: hidden } }` in `index.css` — modern browsers keep `clip` (sticky intact), older engines fall back to `hidden` (no sideways scroll).
+- **Checkout-scoped hardening** (per user request): new `.tc-checkout-safe` class — container `width:100%; max-width:100vw; overflow-x:hidden`; all descendants `max-width:100%; min-width:0`; media `max-width:100%`. Applied to the checkout page root + empty-cart state in `Checkout.jsx` (already had `min-w-0` grid guards).
+- **Verified @390px:** 0 elements outside viewport on BOTH step 1 (details) and step 2 (review), `scrollWidth==clientWidth==390`. Desktop @1280px unchanged (container 1280, two-column layout intact, no overflow).
+
 ### 2026-06-10 — Feedback tab + "Couldn't find your toner?" enquiry form + checkout mobile guard
 
 - **Rotated Feedback tab** (`components/FeedbackTab.jsx`, mounted globally in `App.js` `Chrome`, hidden on `/procurement`): fixed right-edge cyan tab, rotated -90° (decoupled: outer div does position+rotate, inner button styled), hidden until `window.scrollY > 480` (opacity fade), opens a feedback dialog (message + optional email) → `POST /api/mps/inquiry` with `selections.type="feedback"` → mps_inquiries row + Resend email to support. Verified: opacity 0 before scroll, dialog opens, no page overflow.

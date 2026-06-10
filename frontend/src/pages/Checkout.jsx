@@ -147,7 +147,7 @@ export default function Checkout() {
 
     if (items.length === 0) {
         return (
-            <div className="tc-container py-16 text-center" data-testid="checkout-empty">
+            <div className="tc-container tc-checkout-safe py-16 text-center w-full max-w-full" data-testid="checkout-empty">
                 <ShoppingBag className="mx-auto text-[#D2D2D7]" size={42} />
                 <div className="mt-3 font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Your cart is empty</div>
                 <Button onClick={() => navigate("/search")} className="btn-cta mt-5">Browse toners</Button>
@@ -156,7 +156,7 @@ export default function Checkout() {
     }
 
     return (
-        <div className="tc-hero relative pb-16" data-testid="checkout-page">
+        <div className="tc-hero tc-checkout-safe relative pb-16 w-full max-w-full" data-testid="checkout-page">
             <div className="tc-hero-grid" />
             <div className="tc-container relative pt-10 sm:pt-14">
                 <div className="flex items-center gap-3 mb-3">
