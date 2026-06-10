@@ -89,12 +89,15 @@
    Forces the checkout container AND every descendant to stay
    within the viewport width so nothing can overflow on the right.
    ========================================================== */
+/* Thin/hidden horizontal scrollbar — used by the admin tab bar on tablet/desktop */
+.no-scrollbar::-webkit-scrollbar { height: 0; width: 0; display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
 .tc-checkout-safe {
     width: 100%;
     max-width: 100vw;
     overflow-x: hidden;
-}
-.tc-checkout-safe * {
+}.tc-checkout-safe * {
     max-width: 100%;
     min-width: 0;
 }

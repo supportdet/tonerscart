@@ -103,7 +103,7 @@ export default function OrdersTab() {
                 <div className="py-16 text-center text-[#6E6E73]">No orders match these filters.</div>
             ) : (
                 <div className="bg-white border border-black/[0.06] rounded-2xl overflow-x-auto" data-testid="orders-table">
-                    <table className="w-full text-[12.5px]">
+                    <table className="w-full min-w-[760px] text-[12.5px]">
                         <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">
                             <tr>
                                 <th className="text-left p-3">Order</th>

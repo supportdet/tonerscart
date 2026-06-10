@@ -1,3 +1,16 @@
+### 2026-06-10 (d) — Admin account migration + mobile-responsive admin dashboard
+
+**Admin account migrated:**
+- Created new admin `support@tonerscart.com` (role=admin) in Supabase Auth + `users`; password set verbatim. Updated `backend/.env` `ADMIN_EMAIL`/`ADMIN_PASSWORD` (quoted — password contains `#`) so the old admin can never be re-seeded.
+- Reassigned the old admin's references (`suppliers.approved_by` ×10, `suppliers_pending.reviewed_by` ×11) to the new admin, then **fully deleted** `admin@tonerscart.in` from the `users` table AND Supabase Auth. Verified: new admin logs in (role=admin), old admin → HTTP 401, gone from users + Auth. Credentials in `test_credentials.md`.
+
+**Mobile-responsive admin dashboard (`AdminDashboard.jsx` + admin sub-tabs):**
+- Tabs: the 14 tabs no longer wrap into a congested block on mobile — `<md` shows a clean full-width **Section dropdown** (`data-testid="admin-tab-select"`, 14 options with badge counts); `≥md` shows a single **horizontally-scrollable** tab bar (`hidden md:flex … overflow-x-auto no-scrollbar`, added `.no-scrollbar` util in index.css).
+- Tables: added readable `min-w` to all 9 admin tables (Orders/Agreements/Dealers/Customers/Finance ×3/Approved/Featured) so they **scroll** within their existing `overflow-x-auto` wrappers instead of squishing. No page horizontal overflow at 390px.
+- Buttons: Pending approve/reject row stacks **full-width** on mobile; shared `DialogFooter` now renders its buttons full-width on mobile (`[&>button]:w-full sm:[&>button]:w-auto`) — covers all admin modals (suspend/reject/payout/resolve/approve).
+- Verified at 390px (dropdown + scrolling tables, no overflow) and 1280px (single scrollable tab bar, desktop intact).
+
+
 ### 2026-06-10 (c) — Scanners vertical + sign-in speed + admin doc download + bulk-hub + seller progress
 
 **Sign-in speed:** `AuthContext.refresh()` now dedupes concurrent `/auth/me` calls (in-flight promise ref) and returns the profile; `login()` returns it; `Login.jsx` navigates from the returned role instead of making a 3rd `/auth/me` call. ~3 round-trips → 1. Dealer/admin sign-in lands on dashboard fast (admin verified 2.4s incl. browser overhead).

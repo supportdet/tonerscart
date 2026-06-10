@@ -60,7 +60,7 @@ export default function CustomersTab() {
                 <div className="py-16 text-center text-[#86868B] text-[14px]">No customers found.</div>
             ) : (
                 <div className="bg-white border border-black/[0.06] rounded-2xl overflow-x-auto" data-testid="customers-table">
-                    <table className="w-full text-[13px]">
+                    <table className="w-full min-w-[640px] text-[13px]">
                         <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">
                             <tr>
                                 <th className="text-left p-3">Name</th>

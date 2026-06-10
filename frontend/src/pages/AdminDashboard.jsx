@@ -206,7 +206,41 @@ export default function AdminDashboard() {
             </div>
 
             <Tabs value={tab} onValueChange={setTab}>
-                <TabsList className="mb-5 flex-wrap">
+                {(() => {
+                    const adminTabs = [
+                        { value: "analytics", label: "Analytics" },
+                        { value: "pending", label: "Pending", badge: pending.length || 0 },
+                        { value: "dealers", label: "Dealers" },
+                        { value: "customers", label: "Customers" },
+                        { value: "orders", label: "Orders" },
+                        { value: "disputes", label: "Disputes" },
+                        { value: "finance", label: "Finance" },
+                        { value: "messages", label: "Messages" },
+                        { value: "activity", label: "Activity" },
+                        { value: "featured", label: "Featured", badge: featured.filter((x) => x.status === "new").length || 0 },
+                        { value: "content", label: "Content" },
+                        { value: "procurement", label: "Procurement", badge: procPending || 0 },
+                        { value: "oem", label: "OEM", badge: oemPending || 0 },
+                        { value: "agreements", label: "Agreements" },
+                    ];
+                    return (
+                        <div className="md:hidden mb-4">
+                            <label htmlFor="admin-tab-select" className="block text-[11px] tracking-[0.14em] uppercase font-semibold text-[#6E6E73] mb-1.5">Section</label>
+                            <select
+                                id="admin-tab-select"
+                                value={tab}
+                                onChange={(e) => setTab(e.target.value)}
+                                className="w-full h-12 rounded-xl border border-[#D2D2D7] bg-white px-3 text-[15px] font-semibold text-[#0A0A0B] outline-none focus:border-[#0A0A0B]"
+                                data-testid="admin-tab-select"
+                            >
+                                {adminTabs.map((t) => (
+                                    <option key={t.value} value={t.value}>{t.label}{t.badge ? ` (${t.badge})` : ""}</option>
+                                ))}
+                            </select>
+                        </div>
+                    );
+                })()}
+                <TabsList className="hidden md:flex mb-5 w-full max-w-full justify-start gap-1 overflow-x-auto no-scrollbar">
                     <TabsTrigger value="analytics" data-testid="tab-analytics">Analytics</TabsTrigger>
                     <TabsTrigger value="pending" data-testid="tab-pending">
                         Pending {pending.length > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5">{pending.length}</span>)}
@@ -307,12 +341,12 @@ export default function AdminDashboard() {
                                         <div><span className="text-[#86868B]">GST:</span> <span className="font-mono">{p.gst_number || "—"}</span></div>
                                         <div><span className="text-[#86868B]">Turnover:</span> {p.annual_turnover || "—"}</div>
                                     </div>
-                                    <div className="mt-4 flex items-center gap-2">
-                                        <Button onClick={() => openReview(p)} variant="outline" className="text-[12.5px]" data-testid={`view-${p.id}`}>View details</Button>
-                                        <Button onClick={() => approve(p.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[12.5px]" data-testid={`approve-${p.id}`}>
+                                    <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2">
+                                        <Button onClick={() => openReview(p)} variant="outline" className="w-full sm:w-auto text-[12.5px]" data-testid={`view-${p.id}`}>View details</Button>
+                                        <Button onClick={() => approve(p.id)} className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white text-[12.5px]" data-testid={`approve-${p.id}`}>
                                             <CheckCircle2 size={14} className="mr-1" /> Approve
                                         </Button>
-                                        <Button onClick={() => { setRejecting(p); setReason(""); }} variant="outline" className="text-[12.5px] text-red-600 border-red-200 hover:bg-red-50" data-testid={`reject-${p.id}`}>
+                                        <Button onClick={() => { setRejecting(p); setReason(""); }} variant="outline" className="w-full sm:w-auto text-[12.5px] text-red-600 border-red-200 hover:bg-red-50" data-testid={`reject-${p.id}`}>
                                             <XCircle size={14} className="mr-1" /> Reject
                                         </Button>
                                     </div>
@@ -327,7 +361,7 @@ export default function AdminDashboard() {
                         <div className="tc-card-flat p-10 text-center text-[#6E6E73]">No approved suppliers yet.</div>
                     ) : (
                         <div className="tc-card-flat p-0 overflow-x-auto">
-                            <table className="w-full text-[13px]">
+                            <table className="w-full min-w-[720px] text-[13px]">
                                 <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">
                                     <tr>
                                         <th className="text-left p-3">Business</th>
@@ -369,7 +403,7 @@ export default function AdminDashboard() {
                         <div className="tc-card-flat p-10 text-center text-[#6E6E73]">No featured-supplier applications yet.</div>
                     ) : (
                         <div className="tc-card-flat p-0 overflow-x-auto" data-testid="featured-table">
-                            <table className="w-full text-[13px]">
+                            <table className="w-full min-w-[760px] text-[13px]">
                                 <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">
                                     <tr>
                                         <th className="text-left p-3 w-[80px]">Image</th>

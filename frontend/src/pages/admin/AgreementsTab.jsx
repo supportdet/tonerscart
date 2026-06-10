@@ -46,7 +46,7 @@ export default function AgreementsTab() {
                 <div className="tc-card-flat p-10 text-center text-[13px] text-[#6E6E73]"><FileCheck2 size={20} className="mx-auto mb-2 text-[#C7C7CC]" /> No acceptances recorded yet.</div>
             ) : (
                 <div className="tc-card-flat overflow-x-auto">
-                    <table className="w-full text-[13px]">
+                    <table className="w-full min-w-[640px] text-[13px]">
                         <thead>
                             <tr className="text-left text-[#86868B] border-b border-[#EFEFF2]">
                                 <th className="px-4 py-3 font-medium">User ID</th>

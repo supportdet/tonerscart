@@ -81,7 +81,7 @@ export default function FinanceTab() {
                     <div className="tc-card-flat p-10 text-center text-[#6E6E73]">No order data yet.</div>
                 ) : (
                     <div className="tc-card-flat p-0 overflow-x-auto">
-                        <table className="w-full text-[13px]" data-testid="finance-summary-table">
+                        <table className="w-full min-w-[640px] text-[13px]" data-testid="finance-summary-table">
                             <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">
                                 <tr>
                                     <th className="text-left p-3">Month</th>
@@ -118,7 +118,7 @@ export default function FinanceTab() {
                     <div className="tc-card-flat p-10 text-center text-[#6E6E73]">No dealer transactions yet.</div>
                 ) : (
                     <div className="tc-card-flat p-0 overflow-x-auto">
-                        <table className="w-full text-[13px]" data-testid="finance-dealers-table">
+                        <table className="w-full min-w-[680px] text-[13px]" data-testid="finance-dealers-table">
                             <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">
                                 <tr>
                                     <th className="text-left p-3">Dealer</th>
@@ -154,7 +154,7 @@ export default function FinanceTab() {
                     <div className="tc-card-flat p-10 text-center text-[#6E6E73]" data-testid="finance-dues-empty">No procurement accounts owe money right now.</div>
                 ) : (
                     <div className="tc-card-flat p-0 overflow-x-auto">
-                        <table className="w-full text-[13px]" data-testid="finance-dues-table">
+                        <table className="w-full min-w-[680px] text-[13px]" data-testid="finance-dues-table">
                             <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">
                                 <tr>
                                     <th className="text-left p-3">Account</th>
