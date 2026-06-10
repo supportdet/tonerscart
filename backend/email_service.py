@@ -135,7 +135,7 @@ async def email_admin_reply(to: str, subject: str, message: str, name: str | Non
 # ===== Public helpers ===========================================================
 
 # Public app base for links inside emails (matches the rest of this module).
-PROC_BASE = "https://printer-supply-hub.preview.emergentagent.com"
+PROC_BASE = "https://www.tonerscart.com"
 
 
 async def email_proc_registration_received(u: dict):
@@ -353,7 +353,7 @@ async def email_application_received(application: dict):
     )
     admin_html = f"""
     <h2 style="margin:0 0 6px 0;font-size:18px;">New supplier application</h2>
-    <p style="margin:0 0 18px 0;color:#6E6E73;">Review at <a href="https://printer-supply-hub.preview.emergentagent.com/admin">/admin</a>.</p>
+    <p style="margin:0 0 18px 0;color:#6E6E73;">Review at <a href="https://www.tonerscart.com/admin">/admin</a>.</p>
     <table style="width:100%;border-collapse:collapse;font-size:13px;">{rows}</table>
     """
     await _send(SUPPORT_INBOX, f"[TonersCart] New supplier application — {biz}", admin_html, reply_to=email_to_applicant)
@@ -363,7 +363,7 @@ async def email_application_received(application: dict):
         applicant_html = f"""
         <h2 style="margin:0 0 6px 0;font-size:18px;">Thanks {name or 'there'} — we&apos;ve got your application</h2>
         <p>Your business <strong>{biz}</strong> is now in TonersCart&apos;s review queue. Our team typically reviews applications within 1–2 working days.</p>
-        <p>You can sign in at <a href="https://printer-supply-hub.preview.emergentagent.com/login">tonerscart</a> any time to track approval status.</p>
+        <p>You can sign in at <a href="https://www.tonerscart.com/login">tonerscart</a> any time to track approval status.</p>
         <p style="margin-top:22px;color:#86868B;font-size:12.5px;">Questions? Just reply to this email.</p>
         """
         await _send(email_to_applicant, "Your TonersCart supplier application is in review", applicant_html)
@@ -391,7 +391,7 @@ async def email_application_approved(application: dict):
     You can now sign in and start listing your toner products.</p>
     {sid_block}
     <p style="margin:22px 0;">
-      <a href="https://printer-supply-hub.preview.emergentagent.com/supplier"
+      <a href="https://www.tonerscart.com/supplier"
          style="display:inline-block;padding:12px 22px;background:#F7C600;color:#0A0A0B;border-radius:10px;font-weight:600;text-decoration:none;">
         Go to my dashboard
       </a>
@@ -690,7 +690,7 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
 
     <div style="margin-top:16px;padding:12px 14px;border-left:3px solid #F5C400;background:#FFFBEB;border-radius:6px;font-size:12.5px;color:#5C4A00;">
       This quotation is valid for <strong>7 days</strong>. Prices are subject to availability.
-      Place your order at <a href="https://tonerscart.com" style="color:#0A0A0B;font-weight:600;">tonerscart.com</a>.
+      Place your order at <a href="https://www.tonerscart.com" style="color:#0A0A0B;font-weight:600;">tonerscart.com</a>.
     </div>
 
     <p style="margin-top:22px;color:#86868B;font-size:11.5px;">
@@ -889,7 +889,7 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
         {gst_block_s}
         <p style="margin:18px 0 4px 0;"><strong>Please dispatch within 2 business days</strong> and update tracking in your dashboard.</p>
         <p style="margin:18px 0;">
-          <a href="https://printer-supply-hub.preview.emergentagent.com/supplier"
+          <a href="https://www.tonerscart.com/supplier"
              style="display:inline-block;padding:12px 22px;background:#F7C600;color:#0A0A0B;border-radius:10px;font-weight:600;text-decoration:none;">
             Open my dashboard
           </a>
@@ -935,7 +935,7 @@ async def email_order_shipped(order: dict, listing: dict, buyer: dict):
 
     <p style="margin-top:18px;">
       Once you receive it, please confirm delivery in your
-      <a href="https://tonerscart.com/dashboard" style="color:#0A0A0B;font-weight:600;">TonersCart dashboard</a>.
+      <a href="https://www.tonerscart.com/dashboard" style="color:#0A0A0B;font-weight:600;">TonersCart dashboard</a>.
     </p>
 
     <p style="margin-top:16px;font-size:12.5px;color:#3a3a40;">
@@ -967,7 +967,7 @@ async def email_order_confirmed(order: dict, listing: dict, buyer: dict):
       <tr><td style='padding:4px 12px;color:#86868B;'>Total</td><td style='padding:4px 12px;'><strong>{_money(total)}</strong></td></tr>
     </table>
     <p style="margin-top:18px;">Follow progress any time in your
-      <a href="https://tonerscart.com/dashboard" style="color:#0A0A0B;font-weight:600;">TonersCart dashboard</a>.</p>
+      <a href="https://www.tonerscart.com/dashboard" style="color:#0A0A0B;font-weight:600;">TonersCart dashboard</a>.</p>
     <p style="margin-top:22px;color:#86868B;font-size:11.5px;">— Team TonersCart</p>
     """
     await _send(buyer_email, f"Order #{short_id} confirmed by the seller", body)
@@ -989,7 +989,7 @@ async def email_order_delivered_confirm(order: dict, listing: dict, buyer: dict)
       (<strong>{brand} {model}</strong>) as <strong>delivered</strong>.</p>
     <p style="color:#3a3a40;">Please confirm you received it so we can close the order.</p>
     <p style="margin:20px 0;">
-      <a href="https://tonerscart.com/dashboard"
+      <a href="https://www.tonerscart.com/dashboard"
          style="display:inline-block;padding:13px 26px;background:#10B981;color:#FFFFFF;border-radius:10px;font-weight:700;text-decoration:none;font-size:14px;">
         Confirm you received your order
       </a>
