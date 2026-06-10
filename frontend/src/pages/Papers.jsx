@@ -7,6 +7,7 @@ import PageMeta from "../components/PageMeta";
 import CategoryFilters from "../components/CategoryFilters";
 import UniversalSearch from "../components/UniversalSearch";
 import PaperProductCard from "../components/cards/PaperProductCard";
+import ProductRequestForm from "../components/ProductRequestForm";
 import { PAPER_BRANDS } from "../lib/listingConstants";
 
 const SIZES = ["A4", "A3", "A5", "Letter"];
@@ -119,6 +120,7 @@ export default function Papers() {
                         ))}
                     </div>
                 )}
+                <ProductRequestForm category="paper" />
             </div>
         </div>
     );
