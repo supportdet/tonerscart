@@ -7,6 +7,7 @@ import PageMeta from "../components/PageMeta";
 import CategoryFilters from "../components/CategoryFilters";
 import UniversalSearch from "../components/UniversalSearch";
 import ConsumableProductCard from "../components/cards/ConsumableProductCard";
+import ProductRequestForm from "../components/ProductRequestForm";
 import { CONSUMABLE_SUBCATEGORIES, CONSUMABLE_CONDITIONS } from "../lib/consumableConstants";
 import { PRINTER_TONER_BRANDS } from "../lib/listingConstants";
 
@@ -133,6 +134,7 @@ export default function Consumables() {
                         ))}
                     </div>
                 )}
+                <ProductRequestForm category="consumable" />
             </div>
         </div>
     );

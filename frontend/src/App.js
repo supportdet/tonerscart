@@ -14,6 +14,7 @@ import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AIChatWidget from "./components/AIChatWidget";
 import CookieConsent from "./components/CookieConsent";
+import FeedbackTab from "./components/FeedbackTab";
 import Landing from "./pages/Landing";
 import SearchPage from "./pages/Search";
 import Login from "./pages/Login";
@@ -73,6 +74,7 @@ function Chrome({ children }) {
             </main>
             {!bare && <Footer />}
             {!bare && <AIChatWidget />}
+            {!bare && <FeedbackTab />}
             <CookieConsent />
             <Toaster richColors position="top-right" />
         </>

@@ -174,7 +174,7 @@ export default function Checkout() {
 
                 <div className="grid lg:grid-cols-12 gap-6 mt-8 text-[#0A0A0B]">
                     {step === 1 ? (
-                        <form onSubmit={proceedToSummary} className="lg:col-span-7 bg-white border border-black/[0.06] rounded-2xl p-6 sm:p-8 space-y-7">
+                        <form onSubmit={proceedToSummary} className="lg:col-span-7 min-w-0 bg-white border border-black/[0.06] rounded-2xl p-6 sm:p-8 space-y-7">
                             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#86868B]">Buyer details</div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                                 <div className="space-y-1.5"><Label className="text-[12.5px] font-medium text-[#3a3a40]">Your name</Label><Input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Full name" className="h-11" data-testid="checkout-name" /></div>
@@ -239,7 +239,7 @@ export default function Checkout() {
                             </Button>
                         </form>
                     ) : (
-                        <div className="lg:col-span-7 bg-white border border-black/[0.06] rounded-2xl p-5 sm:p-7 space-y-4" data-testid="checkout-summary">
+                        <div className="lg:col-span-7 min-w-0 bg-white border border-black/[0.06] rounded-2xl p-5 sm:p-7 space-y-4" data-testid="checkout-summary">
                             <button type="button" onClick={() => setStep(1)} className="inline-flex items-center gap-1 text-[12px] text-[#6E6E73] hover:text-[#0A0A0B]" data-testid="checkout-back-btn">
                                 <ChevronLeft size={13} /> Edit details
                             </button>
@@ -343,7 +343,7 @@ export default function Checkout() {
                         </div>
                     )}
 
-                    <aside className="lg:col-span-5 bg-white border border-black/[0.06] rounded-2xl p-5">
+                    <aside className="lg:col-span-5 min-w-0 bg-white border border-black/[0.06] rounded-2xl p-5">
                         <div className="text-[12px] font-semibold uppercase tracking-wider text-[#0A0A0B] mb-3">Items ({count})</div>
                         <div className="divide-y divide-black/[0.06]">
                             {items.map((it) => (

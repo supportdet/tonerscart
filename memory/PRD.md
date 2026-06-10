@@ -1,6 +1,8 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-08):** (1) Login brute-force protection — backend `POST /api/auth/login`, 5 failed/IP/10min → 30-min block. (2) Order tracking flow Requested→Confirmed→Dispatched→Delivered→Completed + 5-day APScheduler auto-confirm/payout timer. (3) Grievance officer text. (4) **server.py refactored** into `backend/routes/{auth,search,products,orders,admin,suppliers}.py` (5,523→1,597 lines, 120-endpoint parity, zero behaviour change). **ACTION: run `backend/supabase_schema_order_tracking.sql`** for order-tracking columns. See CHANGELOG.md.
+> **Latest (2026-06-10):** Added (1) a global rotated right-edge **Feedback tab** (visible past hero) and (2) a **"Couldn't find your toner?" product-request form** on Search/Papers/Consumables/PrintersResults — both record to `mps_inquiries` (Admin → Messages, tagged `feedback`/`product_request`) AND email support@tonerscart.com via the existing `/api/mps/inquiry`. (3) Hardened mobile **Checkout** with `min-w-0` grid guards (no overflow was reproducible). See CHANGELOG.md.
+>
+> **Prev (2026-06-08):** (1) Login brute-force protection — backend `POST /api/auth/login`, 5 failed/IP/10min → 30-min block. (2) Order tracking flow Requested→Confirmed→Dispatched→Delivered→Completed + 5-day APScheduler auto-confirm/payout timer. (3) Grievance officer text. (4) **server.py refactored** into `backend/routes/{auth,search,products,orders,admin,suppliers}.py` (5,523→1,597 lines, 120-endpoint parity, zero behaviour change). **ACTION: run `backend/supabase_schema_order_tracking.sql`** for order-tracking columns. See CHANGELOG.md.
 
 
 ## Latest changelog (2026-02 Wave 10 — Two-layer navbar + new category pages + D2D marketplace)

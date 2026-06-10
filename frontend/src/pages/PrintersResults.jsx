@@ -7,6 +7,7 @@ import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import CategoryFilters from "../components/CategoryFilters";
 import UniversalSearch from "../components/UniversalSearch";
 import PrinterProductCard from "../components/cards/PrinterProductCard";
+import ProductRequestForm from "../components/ProductRequestForm";
 import { PRINTER_TONER_BRANDS } from "../lib/listingConstants";
 
 const PRINTER_CONDITIONS = [
@@ -181,6 +182,7 @@ export default function Printers() {
                         {visible.map((p) => <PrinterProductCard key={p.id} p={p} />)}
                     </div>
                 )}
+                <ProductRequestForm category="printer" />
             </div>
         </div>
     );

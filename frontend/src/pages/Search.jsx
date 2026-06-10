@@ -12,6 +12,7 @@ import PageMeta from "../components/PageMeta";
 import CategoryFilters from "../components/CategoryFilters";
 import UniversalSearch from "../components/UniversalSearch";
 import TonerProductCard from "../components/cards/TonerProductCard";
+import ProductRequestForm from "../components/ProductRequestForm";
 import PrinterProductCard from "../components/cards/PrinterProductCard";
 import PaperProductCard from "../components/cards/PaperProductCard";
 import ConsumableProductCard from "../components/cards/ConsumableProductCard";
@@ -435,6 +436,7 @@ export default function SearchPage() {
             )}
 
             <RefilledWarningDialog open={refilledWarn} onClose={() => setRefilledWarn(false)} />
+            <ProductRequestForm category="toner" />
         </div>
     );
 }

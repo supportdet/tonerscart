@@ -469,6 +469,17 @@ async def email_mps_inquiry(payload: dict):
         price_line = f" · Listed ₹{int(price):,}" if price else ""
         intro = f"<p style='margin:0 0 18px 0;color:#6E6E73;'>Product: <strong>{product}</strong>{price_line}</p>"
         subject = f"[TonersCart Deal] {product} — {email}"
+    elif kind == "product_request":
+        product = sel.get("product") or description or "—"
+        category = (sel.get("category") or "product").title()
+        heading = f"New {category} request — couldn't find it"
+        intro = f"<p style='margin:0 0 18px 0;color:#6E6E73;'>Buyer is looking for: <strong>{product}</strong></p>"
+        subject = f"[TonersCart Request] {product} — {email}"
+    elif kind == "feedback":
+        page = sel.get("page") or "—"
+        heading = "New site feedback"
+        intro = f"<p style='margin:0 0 18px 0;color:#6E6E73;'>From page: <strong>{page}</strong></p>"
+        subject = f"[TonersCart Feedback] {email}"
     else:
         heading = "New Managed Print Services (MPS) enquiry"
         intro = f"<p style='margin:0 0 18px 0;color:#6E6E73;'>Estimated fleet: <strong>{estimated}</strong> printers</p>"
