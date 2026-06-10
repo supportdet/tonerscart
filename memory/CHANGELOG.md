@@ -1,3 +1,21 @@
+### 2026-06-10 (c) — Scanners vertical + sign-in speed + admin doc download + bulk-hub + seller progress
+
+**Sign-in speed:** `AuthContext.refresh()` now dedupes concurrent `/auth/me` calls (in-flight promise ref) and returns the profile; `login()` returns it; `Login.jsx` navigates from the returned role instead of making a 3rd `/auth/me` call. ~3 round-trips → 1. Dealer/admin sign-in lands on dashboard fast (admin verified 2.4s incl. browser overhead).
+
+**Admin doc download (black page fix):** new `GET /api/admin/suppliers/{id}/document?field=&download=` mints a FRESH 1-hour signed URL per click (resolves path from `suppliers` then `suppliers_pending`). `DealerProfile.jsx` View → opens new tab; Download → forces file download (Supabase `download` flag → `Content-Disposition: attachment`). Verified both. Covers GST/PAN/bank/address/ID/brand-auth/cancelled-cheque.
+
+**Bulk upload hub:** root cause — hub fired `tc-open-bulk-*` events that only the per-tab components listened to (not mounted from hub). New `openBulkFor(kind)` in SupplierDashboard switches to the category tab then dispatches the event (same pattern as `editProduct`). All 4 (toner/printer/paper/consumable) + scanner now work from the hub.
+
+**Seller application:** doc uploads now run in PARALLEL (Promise.all) and a live progress overlay (`seller-submit-progress`) shows account → uploading (n/total) → finalizing with a % bar.
+
+**Scanners — full vertical (NEW):**
+- Backend (`server.py` models + `routes/products.py`): `ScannerCreate/ScannerPatch`, `_scanner_supplier`, endpoints `POST/PUT/DELETE /api/supplier/scanners`, `/supplier/scanners/bulk`, `/supplier/scanners/mine`, public `GET /api/scanners` (filters: type/brand/condition/city/q/near_city) + `GET /api/scanners/{id}/public`. Graceful 503/[]  until migration. Added scanner to direct-order flow (`scanner_listing_id`), universal search, admin analytics + dealer-detail counts.
+- Frontend: `pages/Scanners.jsx` (type tabs, brand/condition/city/price/sort filters, universal search, location sort), `cards/ScannerProductCard.jsx` (add-to-cart/buy-now, kind="scanner"), `ScannerListings.jsx` (dealer form: brand dropdown, model, type, condition, resolution, connectivity multi-select, speed ppm, color/mono, warranty, price/GST/stock/desc, up to 3 images + bulk + edit), `scannerBulkConfig`, ProductDetail scanner specs, App.js `/scanners` + `/scanner/:id` (Coming-Soon removed), SupplierDashboard Scanners tab + bulk hub button.
+- **MIGRATION REQUIRED:** user must run `backend/supabase_schema_scanners.sql` in Supabase to activate (creates `scanner_listings` + `orders.scanner_listing_id`).
+
+**QA dealer account created:** qadealer@tonerscart.in / Dealer@123 (approved supplier).
+
+
 ### 2026-06-10 (b) — Checkout mobile overflow: hard containment + cross-browser fallback
 
 - **Root-cause guard:** `overflow-x: clip` (html/body/#root) is unsupported on older iOS Safari (<16) and silently falls back to `visible`, letting the horizontally-scrollable category bar cause whole-page horizontal scroll on those devices (incl. checkout). Added `@supports not (overflow-x: clip) { html, body, #root { overflow-x: hidden } }` in `index.css` — modern browsers keep `clip` (sticky intact), older engines fall back to `hidden` (no sideways scroll).

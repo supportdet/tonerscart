@@ -7,7 +7,7 @@ import { Textarea } from "../components/ui/textarea";
 import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
-import { Upload, CheckCircle2, ChevronLeft, ChevronRight, FileText, ShieldCheck, CircleDashed } from "lucide-react";
+import { Upload, CheckCircle2, ChevronLeft, ChevronRight, FileText, ShieldCheck, CircleDashed, Loader2 } from "lucide-react";
 import PhonePrefixInput from "./PhonePrefixInput";
 
 const KNOWN_CITIES = ["Bangalore","Mumbai","Delhi","Chennai","Hyderabad","Pune","Kolkata","Ahmedabad","Jaipur","Lucknow","Chandigarh","Surat","Indore","Nagpur","Coimbatore","Kochi","Bhopal","Noida","Gurgaon"];
@@ -63,6 +63,8 @@ export default function SellerApplicationForm() {
     const { user, refresh } = useAuth();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [progressLabel, setProgressLabel] = useState("");
     const [step, setStep] = useState(1);
     const [s, setS] = useState({
         contact_person: user?.name || "",
@@ -172,6 +174,8 @@ export default function SellerApplicationForm() {
             return;
         }
         setLoading(true);
+        setProgress(6);
+        setProgressLabel("Creating your application…");
         try {
             // 1. Submit application (no role change yet)
             await api.post("/auth/apply-seller", {
@@ -191,7 +195,8 @@ export default function SellerApplicationForm() {
                 agreed_to_terms: agreed,
             });
 
-            // 2. Upload files via backend (service role — bypasses storage RLS for non-supplier users)
+            // 2. Upload files via backend (service role — bypasses storage RLS for non-supplier users).
+            //    Uploads run in PARALLEL for speed; progress bar advances as each finishes.
             const uploaded = {};
             const docMap = {
                 doc_brand_authorization: docs.brand_authorization,
@@ -202,17 +207,29 @@ export default function SellerApplicationForm() {
                 doc_id_proof: docs.id_proof,
                 doc_address_proof: docs.address_proof,
             };
-            for (const [field, file] of Object.entries(docMap)) {
-                if (!file) continue;
+            const docEntries = Object.entries(docMap).filter(([, f]) => !!f);
+            const totalSteps = 1 + docEntries.length + 1; // app + uploads + finalize
+            let completed = 1; // app submit done
+            setProgress(Math.round((completed / totalSteps) * 100));
+            setProgressLabel(`Uploading documents… (0/${docEntries.length})`);
+
+            let uploadedCount = 0;
+            await Promise.all(docEntries.map(async ([field, file]) => {
                 const fd = new FormData();
                 fd.append("file", file);
                 const { data: up } = await api.post(`/auth/supplier-document-upload?field=${field}`, fd);
                 uploaded[field] = up.path;
-            }
+                uploadedCount += 1;
+                completed += 1;
+                setProgress(Math.round((completed / totalSteps) * 100));
+                setProgressLabel(`Uploading documents… (${uploadedCount}/${docEntries.length})`);
+            }));
 
+            setProgressLabel("Finalizing your application…");
             if (Object.keys(uploaded).length > 0) {
                 await api.post("/auth/supplier-documents", uploaded);
             }
+            setProgress(100);
 
             await refresh();
             toast.success("Application submitted — pending admin approval");
@@ -222,6 +239,8 @@ export default function SellerApplicationForm() {
             toast.error(msg && msg !== "Something went wrong" ? msg : (err?.message || "Submission failed"));
         } finally {
             setLoading(false);
+            setProgress(0);
+            setProgressLabel("");
         }
     };
 
@@ -233,7 +252,21 @@ export default function SellerApplicationForm() {
                     if (canNext()) setStep((st) => Math.min(4, st + 1));
                 }
             }}
-            className="bg-white border border-black/[0.06] rounded-2xl shadow-2xl p-5 sm:p-7 text-[#0A0A0B]" data-testid="seller-application-form">
+            className="bg-white border border-black/[0.06] rounded-2xl shadow-2xl p-5 sm:p-7 text-[#0A0A0B] relative" data-testid="seller-application-form">
+            {loading && (
+                <div className="absolute inset-0 z-20 rounded-2xl bg-white/92 backdrop-blur-sm grid place-items-center px-6" data-testid="seller-submit-progress">
+                    <div className="w-full max-w-sm text-center">
+                        <Loader2 className="animate-spin mx-auto text-[#00838f]" size={28} />
+                        <div className="mt-4 text-[15px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Submitting your application</div>
+                        <div className="mt-1 text-[13px] text-[#6E6E73]" data-testid="seller-submit-progress-label">{progressLabel || "Please wait…"}</div>
+                        <div className="mt-4 h-2 w-full rounded-full bg-[#EDEDF0] overflow-hidden">
+                            <div className="h-full rounded-full bg-[#00B7C7] transition-all duration-300" style={{ width: `${progress}%` }} data-testid="seller-submit-progress-bar" />
+                        </div>
+                        <div className="mt-2 text-[12px] font-mono text-[#86868B]">{progress}%</div>
+                        <p className="mt-3 text-[11px] text-[#AEAEB2]">Please don&apos;t close this window.</p>
+                    </div>
+                </div>
+            )}
             <div className="flex items-center justify-between mb-5">
                 <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73]">
                     Step {step} of 4 — {step === 1 ? "About you" : step === 2 ? "Business" : step === 3 ? "What you sell" : "Documents"}

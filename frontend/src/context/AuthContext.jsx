@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import api, { formatApiError, getAccessToken } from "../lib/api";
 
@@ -7,21 +7,32 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    // Dedupe concurrent /auth/me calls (login's refresh + the onAuthStateChange
+    // refresh fire together) — collapse them into a single in-flight request.
+    const inflight = useRef(null);
 
     const refresh = useCallback(async () => {
-        try {
-            // Guests have no token — skip /auth/me entirely so we never emit a
-            // 401 on public pages (keeps the console clean, no false redirects).
-            const token = await getAccessToken();
-            if (!token) { setUser(null); setLoading(false); return; }
-            const { data } = await api.get("/auth/me", { timeout: 8000 });
-            setUser(data);
-        } catch (err) {
-            if (err?.response?.status === 401) setUser(null);
-            // else: keep previous user state — transient errors shouldn't blank the UI
-        } finally {
-            setLoading(false);
-        }
+        if (inflight.current) return inflight.current;
+        const p = (async () => {
+            try {
+                // Guests have no token — skip /auth/me entirely so we never emit a
+                // 401 on public pages (keeps the console clean, no false redirects).
+                const token = await getAccessToken();
+                if (!token) { setUser(null); return null; }
+                const { data } = await api.get("/auth/me", { timeout: 8000 });
+                setUser(data);
+                return data;
+            } catch (err) {
+                if (err?.response?.status === 401) setUser(null);
+                // else: keep previous user state — transient errors shouldn't blank the UI
+                return null;
+            } finally {
+                setLoading(false);
+                inflight.current = null;
+            }
+        })();
+        inflight.current = p;
+        return p;
     }, []);
 
     useEffect(() => {
@@ -55,7 +66,7 @@ export const AuthProvider = ({ children }) => {
             refresh_token: data.refresh_token,
         });
         if (error) throw new Error(error.message || "Sign-in failed");
-        await refresh();
+        return await refresh();
     };
 
     const signInWithGoogle = async (next) => {

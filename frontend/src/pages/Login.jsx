@@ -5,7 +5,7 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { useAuth } from "../context/AuthContext";
-import api, { formatApiError } from "../lib/api";
+import { formatApiError } from "../lib/api";
 import { toast } from "sonner";
 import { ArrowRight, Mail, Lock, Loader2, Landmark } from "lucide-react";
 
@@ -43,14 +43,14 @@ export default function Login() {
         clearErrors();
         setLoading(true);
         try {
-            await login(email, password);
-            const { data: me } = await api.get("/auth/me");
-            toast.success(`Welcome back, ${me.name}`);
+            const me = await login(email, password);
+            if (me?.name) toast.success(`Welcome back, ${me.name}`);
             if (next && next.startsWith("/")) {
                 navigate(next);
                 return;
             }
-            const path = me.role === "admin" ? "/admin" : me.role === "supplier" ? "/supplier" : me.role === "oem" ? "/oem-dashboard" : "/customer";
+            const role = me?.role;
+            const path = role === "admin" ? "/admin" : role === "supplier" ? "/supplier" : role === "oem" ? "/oem-dashboard" : "/customer";
             navigate(path);
         } catch (err) {
             const msg = err?.message || formatApiError(err) || "Sign-in failed";

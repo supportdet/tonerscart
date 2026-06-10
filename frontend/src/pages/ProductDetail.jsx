@@ -30,7 +30,7 @@ export default function ProductDetail({ kind = "toner" }) {
     const [authDialog, setAuthDialog] = useState(null); // {intent: 'cart'|'quote'}
     const [quoting, setQuoting] = useState(false);
 
-    const endpoint = kind === "printer" ? `/printers/${id}/public` : kind === "paper" ? `/papers/${id}/public` : kind === "consumable" ? `/consumables/${id}/public` : `/listings/${id}/public`;
+    const endpoint = kind === "printer" ? `/printers/${id}/public` : kind === "paper" ? `/papers/${id}/public` : kind === "consumable" ? `/consumables/${id}/public` : kind === "scanner" ? `/scanners/${id}/public` : `/listings/${id}/public`;
 
     useEffect(() => {
         let alive = true;
@@ -89,6 +89,7 @@ export default function ProductDetail({ kind = "toner" }) {
         if (kind === "printer") return [{ label: "Home", to: "/" }, { label: "Printers", to: "/printers" }, { label: productTitle }];
         if (kind === "paper")   return [{ label: "Home", to: "/" }, { label: "Papers", to: "/papers" }, { label: productTitle }];
         if (kind === "consumable") return [{ label: "Home", to: "/" }, { label: "Consumables", to: "/consumables" }, { label: productTitle }];
+        if (kind === "scanner") return [{ label: "Home", to: "/" }, { label: "Scanners", to: "/scanners" }, { label: productTitle }];
         return [{ label: "Home", to: "/" }, { label: "Toners", to: "/search" }, { label: productTitle }];
     }, [kind, productTitle]);
 
@@ -265,6 +266,9 @@ export default function ProductDetail({ kind = "toner" }) {
                         )}
                         {kind === "consumable" && (
                             <span className="inline-block text-[10.5px] tracking-[0.16em] uppercase font-semibold px-2.5 py-1 rounded-full border bg-[#FFF8E0] border-[#F5E5A6] text-[#8C6A00]" data-testid="product-subcategory-badge">{data.subcategory === "Other" && data.subcategory_other ? data.subcategory_other : data.subcategory}</span>
+                        )}
+                        {kind === "scanner" && data.scanner_type && (
+                            <span className="inline-block text-[10.5px] tracking-[0.16em] uppercase font-semibold px-2.5 py-1 rounded-full border bg-[#EAF6FF] border-[#BFE3FB] text-[#0369A1]" data-testid="product-scannertype-badge">{data.scanner_type}</span>
                         )}
 
                         <h1 className="mt-4 text-[#0A0A0B] leading-[1.1] tracking-[-0.02em]" style={{ fontFamily: "'Roboto', Helvetica, Arial, sans-serif", fontWeight: 700, fontSize: "clamp(22px, 3vw, 32px)" }} data-testid="product-title">
@@ -453,6 +457,17 @@ function SpecsBlock({ kind, data, selectedVariant }) {
         rows.push(["Type", data.subcategory === "Other" && data.subcategory_other ? data.subcategory_other : data.subcategory]);
         if (data.condition) rows.push(["Condition", data.condition]);
         if (data.compatible_models) rows.push(["Compatible printers", data.compatible_models]);
+        if (data.description) rows.push(["Description", data.description]);
+    } else if (kind === "scanner") {
+        rows.push(["Brand", data.brand]);
+        rows.push(["Model number", data.model_number]);
+        if (data.scanner_type) rows.push(["Scanner type", data.scanner_type]);
+        if (data.condition) rows.push(["Condition", data.condition]);
+        if (data.scan_resolution) rows.push(["Scanning resolution", data.scan_resolution]);
+        if (data.scan_speed_ppm) rows.push(["Scanning speed", `${data.scan_speed_ppm} ppm`]);
+        if (data.color_mode) rows.push(["Color / Mono", data.color_mode]);
+        if (data.connectivity?.length) rows.push(["Connectivity", (Array.isArray(data.connectivity) ? data.connectivity : [data.connectivity]).join(" · ")]);
+        if (data.warranty) rows.push(["Warranty", data.warranty]);
         if (data.description) rows.push(["Description", data.description]);
     } else {
         rows.push(["Brand", data.brand]);
