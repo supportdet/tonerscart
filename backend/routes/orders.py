@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api")
 async def create_order(payload: OrderCreate, user: dict = Depends(require_user)):
     if user["role"] not in ("customer", "supplier"):
         raise HTTPException(403, "Only signed-in buyers and sellers can place orders")
-    if (payload.listing_kind or "toner") in ("paper", "consumable"):
+    if (payload.listing_kind or "toner") in ("paper", "consumable", "scanner"):
         return await _create_direct_order(payload, user, payload.listing_kind)
     lst = sb_admin.table("listings").select("*").eq("id", payload.listing_id).maybe_single().execute()
     if not lst or not lst.data:

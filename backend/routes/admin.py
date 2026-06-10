@@ -306,6 +306,10 @@ def admin_analytics(user: dict = Depends(require_role("admin"))):
     users = sb_admin.table("users").select("id,role,name,created_at").execute().data or []
     listings_cnt = sb_admin.table("listings").select("id", count="exact").execute().count or 0
     printers_cnt = sb_admin.table("printer_listings").select("id", count="exact").execute().count or 0
+    try:
+        scanners_cnt = sb_admin.table("scanner_listings").select("id", count="exact").execute().count or 0
+    except Exception:
+        scanners_cnt = 0
 
     # Aggregates
     total_gmv = 0.0
@@ -392,7 +396,7 @@ def admin_analytics(user: dict = Depends(require_role("admin"))):
             "new_dealers_week": new_dealers_week,
             "total_buyers": len(buyers),
             "new_buyers_week": new_buyers_week,
-            "active_listings": int(listings_cnt) + int(printers_cnt),
+            "active_listings": int(listings_cnt) + int(printers_cnt) + int(scanners_cnt),
         },
         "orders_per_day": [
             {"date": d, "count": by_day_orders[d]}
@@ -432,6 +436,12 @@ def admin_supplier_detail(supplier_id: str, user: dict = Depends(require_role("a
         ).execute().data or []
     except Exception:
         papers = []
+    try:
+        scanners = sb_admin.table("scanner_listings").select("*").eq("supplier_id", supplier_id).order(
+            "created_at", desc=True
+        ).execute().data or []
+    except Exception:
+        scanners = []
     orders = sb_admin.table("orders").select("*,listings(brand,model_number)").eq("supplier_id", supplier_id).order(
         "created_at", desc=True
     ).limit(500).execute().data or []
@@ -502,27 +512,80 @@ def admin_supplier_detail(supplier_id: str, user: dict = Depends(require_role("a
     active_toners = len([t for t in toners if int(t.get("stock") or 0) > 0])
     active_printers = len([p for p in printers if int(p.get("stock") or 0) > 0])
     active_papers = len([p for p in papers if int(p.get("stock") or 0) > 0])
+    active_scanners = len([s for s in scanners if int(s.get("stock") or 0) > 0])
 
     return {
         "supplier": sup,
         "toner_listings": toners,
         "printer_listings": printers,
         "paper_listings": papers,
+        "scanner_listings": scanners,
         "orders": orders,
         "documents": documents,
         "agreements": agreements,
         "stats": {
-            "listing_count": len(toners) + len(printers) + len(papers),
-            "active_listing_count": active_toners + active_printers + active_papers,
+            "listing_count": len(toners) + len(printers) + len(papers) + len(scanners),
+            "active_listing_count": active_toners + active_printers + active_papers + active_scanners,
             "toner_count": len(toners),
             "printer_count": len(printers),
             "paper_count": len(papers),
+            "scanner_count": len(scanners),
             "order_count": len(orders),
             "gmv": round(gmv, 2),
             "commission_earned": round(commission_earned, 2),
             "pending_payout": round(pending_payout, 2),
         },
     }
+
+
+def _resolve_doc_path(supplier_id: str, field: str) -> Optional[str]:
+    """Resolve the storage path for a single KYC document of a supplier,
+    checking the `suppliers` row first then falling back to the original
+    `suppliers_pending` application (where the full KYC set lives)."""
+    if field not in DOC_FIELDS:
+        return None
+    s = sb_admin.table("suppliers").select("*").eq("id", supplier_id).maybe_single().execute()
+    if not s or not s.data:
+        return None
+    row = s.data
+    path = row.get(field)
+    if path:
+        return path
+    uid = row.get("user_id")
+    if uid:
+        try:
+            pend = sb_admin.table("suppliers_pending").select("*").eq("user_id", uid).maybe_single().execute()
+            if pend and pend.data:
+                return pend.data.get(field)
+        except Exception:
+            return None
+    return None
+
+
+@router.get("/admin/suppliers/{supplier_id}/document")
+def admin_supplier_document(supplier_id: str, field: str, download: bool = False,
+                            user: dict = Depends(require_role("admin"))):
+    """Mint a FRESH 1-hour signed URL for a single dealer document on demand,
+    so admin View/Download links never hit an expired URL. When download=true
+    the URL carries Supabase's download flag → forces a file download with the
+    document's original filename instead of rendering inline."""
+    path = _resolve_doc_path(supplier_id, field)
+    if not path:
+        raise HTTPException(404, "Document not found")
+    filename = path.rsplit("/", 1)[-1] or f"{field}"
+    try:
+        opts = {"download": filename} if download else None
+        res = sb_admin.storage.from_("supplier-documents").create_signed_url(path, 3600, opts) if opts \
+            else sb_admin.storage.from_("supplier-documents").create_signed_url(path, 3600)
+        url = res.get("signedURL") or res.get("signed_url") or res.get("signedUrl")
+    except Exception as e:
+        logger.warning("admin document signed url failed for %s/%s: %s", supplier_id, field, e)
+        raise HTTPException(502, "Could not generate document link") from e
+    if not url:
+        raise HTTPException(502, "Could not generate document link")
+    return {"url": url, "filename": filename, "field": field}
+
+
 
 
 @router.put("/admin/suppliers/{supplier_id}/notes")

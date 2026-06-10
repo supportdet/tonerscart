@@ -20,6 +20,7 @@ const LABELS = {
     printer: { noun: "printer", placeholder: "e.g. HP LaserJet M1005, Epson L3150" },
     paper: { noun: "paper", placeholder: "e.g. A4 75 GSM JK Copier" },
     consumable: { noun: "product", placeholder: "e.g. Brother DR-2305 drum" },
+    scanner: { noun: "scanner", placeholder: "e.g. Canon LiDE 400, Epson V39, Fujitsu ScanSnap" },
 };
 
 export default function ProductRequestForm({ category = "toner" }) {

@@ -512,7 +512,7 @@ async def _create_direct_order(payload: "OrderCreate", user: dict, kind: str):
     """Order path for direct-purchase products that live outside the `listings`
     table (papers, consumables). Inserts an order with the matching
     {kind}_listing_id + denormalised product columns and decrements stock."""
-    table = "paper_listings" if kind == "paper" else "consumable_listings"
+    table = "paper_listings" if kind == "paper" else "scanner_listings" if kind == "scanner" else "consumable_listings"
     lst = sb_admin.table(table).select("*").eq("id", payload.listing_id).maybe_single().execute()
     if not lst or not lst.data:
         raise HTTPException(404, "Listing not found")
@@ -568,7 +568,7 @@ async def _create_direct_order(payload: "OrderCreate", user: dict, kind: str):
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("consumable_listing_id", "paper_listing_id", "product_brand", "product_model",
+            for k in ("consumable_listing_id", "paper_listing_id", "scanner_listing_id", "product_brand", "product_model",
                       "product_image", "street_address", "area", "order_city", "order_state",
                       "pincode", "delivery_charge", "gst_rate", "gst_amount"):
                 if k in msg and k in row:
@@ -610,10 +610,11 @@ def _attach_direct_product(rows: list):
     a `listings` dict from the denormalised product_* columns so dashboards render."""
     for r in rows:
         if not r.get("listings") and (r.get("product_brand") or r.get("product_model")):
+            _tt = "Scanner" if r.get("scanner_listing_id") else "Consumable" if r.get("consumable_listing_id") else "Paper"
             r["listings"] = {
                 "brand": r.get("product_brand"),
                 "model_number": r.get("product_model"),
-                "toner_type": "Consumable" if r.get("consumable_listing_id") else "Paper",
+                "toner_type": _tt,
                 "image_url": r.get("product_image"),
             }
     return rows
@@ -1225,6 +1226,70 @@ class ConsumablePatch(BaseModel):
     intercity_delivery_charge: Optional[float] = None
     d2d_enabled: Optional[bool] = None
     d2d_price: Optional[float] = None
+
+
+# =============================================================================
+# Scanners — buyer feed + supplier CRUD (Wave 21)
+# =============================================================================
+
+SCANNER_TYPES = {"Flatbed", "ADF", "Sheet-fed", "Drum", "Photo", "All-in-one"}
+SCANNER_CONDITIONS = {"New", "Refurbished"}
+SCANNER_RESOLUTIONS = {"600dpi", "1200dpi", "2400dpi", "4800dpi", "9600dpi"}
+SCANNER_CONNECTIVITY = {"USB", "WiFi", "Ethernet", "Bluetooth"}
+SCANNER_COLOR_MODES = {"Color", "Mono"}
+SCANNER_WARRANTIES = {"No warranty", "6 months", "1 year", "2 years", "3 years"}
+
+
+class ScannerCreate(BaseModel):
+    brand: str = Field(min_length=1, max_length=80)
+    model_number: str = Field(min_length=1, max_length=80)
+    scanner_type: str = "Flatbed"
+    condition: Optional[str] = "New"
+    scan_resolution: Optional[str] = None
+    connectivity: List[str] = Field(default_factory=list)
+    scan_speed_ppm: Optional[float] = None
+    color_mode: Optional[str] = "Color"
+    warranty: Optional[str] = "No warranty"
+    price: float = Field(gt=0)
+    gst_rate: Optional[int] = 18
+    stock: int = Field(ge=0, default=0)
+    description: Optional[str] = None
+    city: Optional[str] = None
+    image_url: Optional[str] = None
+    image_urls: List[str] = Field(default_factory=list)
+    intercity_delivery_charge: Optional[float] = 0
+    d2d_enabled: Optional[bool] = False
+    d2d_price: Optional[float] = None
+
+
+class ScannerPatch(BaseModel):
+    brand: Optional[str] = None
+    model_number: Optional[str] = None
+    scanner_type: Optional[str] = None
+    condition: Optional[str] = None
+    scan_resolution: Optional[str] = None
+    connectivity: Optional[List[str]] = None
+    scan_speed_ppm: Optional[float] = None
+    color_mode: Optional[str] = None
+    warranty: Optional[str] = None
+    price: Optional[float] = None
+    gst_rate: Optional[int] = None
+    stock: Optional[int] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    image_urls: Optional[List[str]] = None
+    intercity_delivery_charge: Optional[float] = None
+    d2d_enabled: Optional[bool] = None
+    d2d_price: Optional[float] = None
+
+
+def _scanner_supplier(user: dict) -> dict:
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "Only approved sellers can list scanners")
+    s = sb_admin.table("suppliers").select("id,city").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        raise HTTPException(403, "Supplier not approved yet")
+    return s.data
 
 
 

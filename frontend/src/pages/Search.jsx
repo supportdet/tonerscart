@@ -16,6 +16,7 @@ import ProductRequestForm from "../components/ProductRequestForm";
 import PrinterProductCard from "../components/cards/PrinterProductCard";
 import PaperProductCard from "../components/cards/PaperProductCard";
 import ConsumableProductCard from "../components/cards/ConsumableProductCard";
+import ScannerProductCard from "../components/cards/ScannerProductCard";
 import { PRINTER_TONER_BRANDS } from "../lib/listingConstants";
 import useReveal from "../hooks/useReveal";
 import { cityMatch } from "../lib/location";
@@ -257,11 +258,12 @@ export default function SearchPage() {
             {universal && (
                 <div className="mt-5 flex flex-wrap gap-2" data-testid="universal-category-tabs">
                     {[
-                        { key: "all", label: "All", n: (universal.counts?.toners || 0) + (universal.counts?.printers || 0) + (universal.counts?.papers || 0) + (universal.counts?.consumables || 0) + (universal.counts?.oem || 0) },
+                        { key: "all", label: "All", n: (universal.counts?.toners || 0) + (universal.counts?.printers || 0) + (universal.counts?.papers || 0) + (universal.counts?.consumables || 0) + (universal.counts?.scanners || 0) + (universal.counts?.oem || 0) },
                         { key: "toners", label: "Toners", n: universal.counts?.toners || 0 },
                         { key: "printers", label: "Printers", n: universal.counts?.printers || 0 },
                         { key: "papers", label: "Papers", n: universal.counts?.papers || 0 },
                         { key: "consumables", label: "Consumables", n: universal.counts?.consumables || 0 },
+                        { key: "scanners", label: "Scanners", n: universal.counts?.scanners || 0 },
                         { key: "oem", label: "OEM", n: universal.counts?.oem || 0 },
                     ].map((t) => (
                         <button
@@ -277,7 +279,7 @@ export default function SearchPage() {
             )}
 
             {/* Universal multi-category results — gated by the active category tab */}
-            {universal && (universal.counts?.toners + universal.counts?.printers + universal.counts?.papers + (universal.counts?.consumables || 0) + (universal.counts?.oem || 0)) > 0 && (
+            {universal && (universal.counts?.toners + universal.counts?.printers + universal.counts?.papers + (universal.counts?.consumables || 0) + (universal.counts?.scanners || 0) + (universal.counts?.oem || 0)) > 0 && (
                 <div className="mt-6 space-y-8" data-testid="universal-results">
                     {cat === "all" && universal.counts.toners > 0 && (
                         <section data-testid="universal-section-toners">
@@ -335,6 +337,21 @@ export default function SearchPage() {
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {universal.consumables.map((c) => (
                                     <ConsumableProductCard key={c.id} c={c} />
+                                ))}
+                            </div>
+                        </section>
+                    )}
+                    {(cat === "all" || cat === "scanners") && (universal.counts.scanners || 0) > 0 && (
+                        <section data-testid="universal-section-scanners">
+                            <div className="flex items-baseline justify-between mb-3">
+                                <h2 className="text-[18px] font-semibold tracking-tight text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                                    Scanners <span className="text-[13px] font-normal text-[#86868B]">· {universal.counts.scanners} found</span>
+                                </h2>
+                                <button onClick={() => navigate(`/scanners`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-scanners">Browse scanners →</button>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {(universal.scanners || []).map((sc) => (
+                                    <ScannerProductCard key={sc.id} s={sc} />
                                 ))}
                             </div>
                         </section>

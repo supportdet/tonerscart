@@ -11,7 +11,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from server import *  # noqa: F401,F403  shared kernel: clients, models, helpers, deps
 from server import _td, _re, _time, _dd  # noqa: F401  import-alias kernel helpers
-from server import (_approved_supplier, _consumable_supplier, _fmt_validation_error, _sort_by_near_city, _supplier_id_for)  # underscore kernel helpers
+from server import (_approved_supplier, _consumable_supplier, _scanner_supplier, _fmt_validation_error, _sort_by_near_city, _supplier_id_for)  # underscore kernel helpers
 
 router = APIRouter(prefix="/api")
 
@@ -932,6 +932,209 @@ def get_consumable_public(consumable_id: str):
     data["supplier_name"] = sup.get("business_name")
     data["supplier_city"] = sup.get("city")
     return data
+
+
+# =============================================================================
+# Scanners — supplier CRUD + buyer feed (Wave 21)
+# =============================================================================
+
+SCANNER_OPTIONAL_DROP = (
+    "scan_resolution", "connectivity", "scan_speed_ppm", "color_mode", "warranty",
+    "description", "image_urls", "gst_rate", "intercity_delivery_charge",
+    "d2d_enabled", "d2d_price", "search_norm",
+)
+
+
+@router.post("/supplier/scanners")
+def create_scanner(payload: ScannerCreate, user: dict = Depends(require_user)):
+    s = _scanner_supplier(user)
+    brand = sanitize(payload.brand, 80)
+    model = sanitize(payload.model_number, 80)
+    stype = payload.scanner_type if payload.scanner_type in SCANNER_TYPES else "Flatbed"
+    conn = [c for c in (payload.connectivity or []) if c in SCANNER_CONNECTIVITY]
+    row = {
+        "supplier_id": s["id"],
+        "brand": brand,
+        "model_number": model,
+        "scanner_type": stype,
+        "condition": payload.condition if payload.condition in SCANNER_CONDITIONS else "New",
+        "price": float(payload.price),
+        "stock": int(payload.stock),
+        "city": payload.city or s.get("city"),
+        "image_url": payload.image_url or (payload.image_urls[0] if payload.image_urls else None),
+        "search_norm": re.sub(r"[^a-z0-9]", "", f"{brand}{model}".lower()),
+    }
+    optional_cols = {
+        "scan_resolution": payload.scan_resolution if payload.scan_resolution in SCANNER_RESOLUTIONS else None,
+        "connectivity": conn or None,
+        "scan_speed_ppm": (float(payload.scan_speed_ppm) if payload.scan_speed_ppm is not None else None),
+        "color_mode": payload.color_mode if payload.color_mode in SCANNER_COLOR_MODES else None,
+        "warranty": payload.warranty if payload.warranty in SCANNER_WARRANTIES else None,
+        "description": (payload.description or "").strip() or None,
+        "image_urls": payload.image_urls or None,
+        "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
+        "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
+        "d2d_enabled": bool(payload.d2d_enabled) if payload.d2d_enabled is not None else None,
+        "d2d_price": (float(payload.d2d_price) if payload.d2d_price else None),
+    }
+    for k, v in optional_cols.items():
+        if v is not None:
+            row[k] = v
+    while True:
+        try:
+            res = sb_admin.table("scanner_listings").insert(row).execute()
+            return res.data[0] if res.data else row
+        except Exception as e:
+            msg = str(e)
+            dropped = False
+            for k in SCANNER_OPTIONAL_DROP:
+                if k in msg and k in row:
+                    row.pop(k, None)
+                    dropped = True
+                    break
+            if dropped:
+                continue
+            logger.warning("create_scanner failed: %s", e)
+            raise HTTPException(503, "scanner_listings table not yet migrated — run supabase_schema_scanners.sql") from e
+
+
+@router.post("/supplier/scanners/bulk")
+def create_scanners_bulk(payload: List[dict], user: dict = Depends(require_role("supplier"))):
+    if not payload:
+        raise HTTPException(400, "No rows provided")
+    if len(payload) > 200:
+        raise HTTPException(400, "Bulk upload is limited to 200 rows per request")
+    created: List[dict] = []
+    errors: List[dict] = []
+    for idx, raw in enumerate(payload):
+        try:
+            created.append(create_scanner(ScannerCreate(**raw), user=user))
+        except ValidationError as ve:
+            errors.append({"row": idx, "message": _fmt_validation_error(ve)})
+        except HTTPException as he:
+            errors.append({"row": idx, "message": he.detail if isinstance(he.detail, str) else str(he.detail)})
+        except Exception as e:
+            errors.append({"row": idx, "message": str(e)[:240]})
+    return {"created": created, "errors": errors, "total": len(payload), "succeeded": len(created), "failed": len(errors)}
+
+
+@router.get("/supplier/scanners/mine")
+def my_scanners(user: dict = Depends(require_user)):
+    if user.get("role") != "supplier":
+        return []
+    s = sb_admin.table("suppliers").select("id").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data:
+        return []
+    try:
+        return sb_admin.table("scanner_listings").select("*").eq("supplier_id", s.data["id"]).order(
+            "created_at", desc=True
+        ).execute().data or []
+    except Exception:
+        return []
+
+
+@router.put("/supplier/scanners/{scanner_id}")
+def update_scanner(scanner_id: str, payload: ScannerPatch, user: dict = Depends(require_user)):
+    s = _scanner_supplier(user)
+    upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
+    if not upd:
+        return {"ok": True}
+    while True:
+        try:
+            sb_admin.table("scanner_listings").update(upd).eq("id", scanner_id).eq("supplier_id", s["id"]).execute()
+            return {"ok": True}
+        except Exception as e:
+            msg = str(e)
+            dropped = False
+            for k in list(upd.keys()):
+                if k in msg:
+                    upd.pop(k, None)
+                    dropped = True
+                    break
+            if not dropped or not upd:
+                raise HTTPException(503, "scanner_listings update failed — run supabase_schema_scanners.sql") from e
+
+
+@router.delete("/supplier/scanners/{scanner_id}")
+def delete_scanner(scanner_id: str, user: dict = Depends(require_user)):
+    s = _scanner_supplier(user)
+    sb_admin.table("scanner_listings").delete().eq("id", scanner_id).eq("supplier_id", s["id"]).execute()
+    return {"ok": True}
+
+
+@router.get("/scanners")
+def list_scanners(scanner_type: Optional[str] = None, brand: Optional[str] = None,
+                  condition: Optional[str] = None, q: Optional[str] = None,
+                  city: Optional[str] = None, near_city: Optional[str] = None, limit: int = 200):
+    def _run(select_cols):
+        qry = sb_admin.table("scanner_listings").select(select_cols).gt("stock", 0).order(
+            "created_at", desc=True
+        ).limit(limit)
+        if scanner_type and scanner_type != "all":
+            qry = qry.eq("scanner_type", scanner_type)
+        if brand:
+            qry = qry.ilike("brand", f"%{brand}%")
+        if condition:
+            qry = qry.eq("condition", condition)
+        if city:
+            qry = qry.eq("city", city)
+        if q:
+            qry = qry.ilike("search_norm", f"%{normalize(q)}%")
+        return qry.execute().data or []
+    try:
+        rows = _run("*,suppliers(business_name,city,is_suspended)")
+    except Exception as e:
+        msg = str(e)
+        if "scanner_listings" in msg and "does not exist" in msg:
+            return []
+        if "is_suspended" in msg:
+            try:
+                rows = _run("*,suppliers(business_name,city)")
+            except Exception:
+                return []
+        elif "search_norm" in msg:
+            try:
+                qry = sb_admin.table("scanner_listings").select("*,suppliers(business_name,city)").gt("stock", 0).order("created_at", desc=True).limit(limit)
+                if scanner_type and scanner_type != "all":
+                    qry = qry.eq("scanner_type", scanner_type)
+                if brand:
+                    qry = qry.ilike("brand", f"%{brand}%")
+                if city:
+                    qry = qry.eq("city", city)
+                rows = qry.execute().data or []
+            except Exception:
+                return []
+        else:
+            return []
+    out = []
+    for r in rows:
+        sup = r.pop("suppliers", None) or {}
+        if sup.get("is_suspended"):
+            continue
+        r["supplier_name"] = sup.get("business_name")
+        r["supplier_city"] = sup.get("city")
+        out.append(r)
+    if near_city and not (city and city.strip()):
+        out = _sort_by_near_city(out, near_city)
+    return out
+
+
+@router.get("/scanners/{scanner_id}/public")
+def get_scanner_public(scanner_id: str):
+    try:
+        r = sb_admin.table("scanner_listings").select(
+            "*,suppliers(business_name,city,is_suspended)"
+        ).eq("id", scanner_id).maybe_single().execute()
+    except Exception:
+        r = sb_admin.table("scanner_listings").select("*").eq("id", scanner_id).maybe_single().execute()
+    if not r or not r.data:
+        raise HTTPException(404, "Scanner not found")
+    data = dict(r.data)
+    sup = data.pop("suppliers", None) or {}
+    data["supplier_name"] = sup.get("business_name")
+    data["supplier_city"] = sup.get("city")
+    return data
+
 
 
 @router.post("/listings/{listing_id}/view")

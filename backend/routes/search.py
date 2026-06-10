@@ -329,6 +329,26 @@ def search_universal(q: str, limit_per_type: int = 12):
         if "consumable_listings" not in str(e):
             logger.warning("universal search consumables failed: %s", e)
 
+    # --- Scanners ---
+    scanners: list = []
+    try:
+        s_rows = sb_admin.table("scanner_listings").select(
+            "*,suppliers(business_name,city,is_suspended)"
+        ).or_(
+            f"brand.ilike.%{q_norm}%,model_number.ilike.%{q_norm}%"
+        ).gt("stock", 0).limit(200).execute().data or []
+        for r in s_rows:
+            sup = r.pop("suppliers", None) or {}
+            if sup.get("is_suspended"):
+                continue
+            r["supplier_name"] = sup.get("business_name") or ""
+            r["city"] = sup.get("city") or ""
+            scanners.append(r)
+        scanners = _rank(scanners)[:limit_per_type]
+    except Exception as e:
+        if "scanner_listings" not in str(e):
+            logger.warning("universal search scanners failed: %s", e)
+
     # --- OEM products (enquiry-only showcase, approved partners) ---
     oem: list = []
     try:
@@ -352,12 +372,14 @@ def search_universal(q: str, limit_per_type: int = 12):
         "printers": printers,
         "papers": papers,
         "consumables": consumables,
+        "scanners": scanners,
         "oem": oem,
         "counts": {
             "toners": len(toners),
             "printers": len(printers),
             "papers": len(papers),
             "consumables": len(consumables),
+            "scanners": len(scanners),
             "oem": len(oem),
         },
     }

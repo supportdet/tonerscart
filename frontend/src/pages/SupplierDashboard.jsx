@@ -15,6 +15,7 @@ import TonerCartridge from "../components/TonerCartridge";
 import PrinterListings from "../components/PrinterListings";
 import PaperListings from "../components/PaperListings";
 import ConsumableListings from "../components/ConsumableListings";
+import ScannerListings from "../components/ScannerListings";
 import SupplierEarnings from "../components/SupplierEarnings";
 import SupplierInsights from "../components/SupplierInsights";
 import CommissionBanner from "../components/CommissionBanner";
@@ -38,6 +39,7 @@ const DEALER_TABS = [
     { key: "printers", label: "Printers", bg: "#FDEDF7", bgHover: "#FAD9EE", bgActive: "#F6C6E4", accent: "#DB2777" },
     { key: "papers", label: "Papers", bg: "#FEF6E7", bgHover: "#FCEBC6", bgActive: "#FAE0A6", accent: "#D97706" },
     { key: "consumables", label: "Consumables", bg: "#EDFBEF", bgHover: "#D7F5DC", bgActive: "#C2EFCA", accent: "#16A34A" },
+    { key: "scanners", label: "Scanners", bg: "#EAF6FF", bgHover: "#D2EBFB", bgActive: "#BCE0F8", accent: "#0369A1" },
     { key: "orders", label: "Orders", bg: "#EEF0FE", bgHover: "#DDE1FC", bgActive: "#CBD2FA", accent: "#4F46E5" },
     { key: "earnings", label: "My Earnings", bg: "#FEF1E8", bgHover: "#FCDFCB", bgActive: "#FACDAE", accent: "#EA580C" },
     { key: "insights", label: "Insights", bg: "#EEF1F5", bgHover: "#DDE3EC", bgActive: "#CBD5E1", accent: "#475569" },
@@ -306,6 +308,7 @@ export default function SupplierDashboard() {
             api.get("/supplier/printers/mine"),
             api.get("/supplier/papers/mine"),
             api.get("/supplier/consumables/mine"),
+            api.get("/supplier/scanners/mine"),
         ]);
         const arr = (r) => (r.status === "fulfilled" && Array.isArray(r.value.data) ? r.value.data : []);
         const j = (...parts) => parts.filter(Boolean).join(" ").trim();
@@ -313,7 +316,8 @@ export default function SupplierDashboard() {
         const printers = arr(reqs[1]).map((l) => ({ id: l.id, kind: "printer", cat: "Printer", name: j(l.brand, l.model_number), price: l.price, stock: l.stock }));
         const papers = arr(reqs[2]).map((l) => ({ id: l.id, kind: "paper", cat: "Paper", name: j(l.brand, l.size, l.gsm ? `${l.gsm}GSM` : ""), price: l.price_per_ream, stock: l.stock }));
         const cons = arr(reqs[3]).map((l) => ({ id: l.id, kind: "consumable", cat: "Consumable", name: j(l.brand, l.model_number), price: l.price, stock: l.stock }));
-        setAllProducts([...toners, ...printers, ...papers, ...cons]);
+        const scanners = arr(reqs[4]).map((l) => ({ id: l.id, kind: "scanner", cat: "Scanner", name: j(l.brand, l.model_number), price: l.price, stock: l.stock }));
+        setAllProducts([...toners, ...printers, ...papers, ...cons, ...scanners]);
     };
 
     useEffect(() => { load(); loadAllProducts(); /* eslint-disable-next-line */ }, [isApproved]);
@@ -379,6 +383,19 @@ export default function SupplierDashboard() {
 
     const openEditBulk = () => setEditBulkOpen(true);
 
+    // Open the bulk-upload dialog for any category from the central Bulk hub.
+    // Printer/Paper/Consumable bulk dialogs live INSIDE their tab components, so
+    // we switch to that tab first (mounting the component + its event listener),
+    // then dispatch the open event — same pattern as editProduct below. Toner's
+    // bulk dialog is owned by this dashboard and is gated by the agreement modal.
+    const openBulkFor = (kind) => {
+        if (kind === "toner") { requestAddAction("bulk"); return; }
+        const tabKey = { printer: "printers", paper: "papers", consumable: "consumables", scanner: "scanners" }[kind];
+        const evt = { printer: "tc-open-bulk-printer", paper: "tc-open-bulk-paper", consumable: "tc-open-bulk-consumable", scanner: "tc-open-bulk-scanner" }[kind];
+        setCatalog(tabKey);
+        setTimeout(() => window.dispatchEvent(new CustomEvent(evt)), 320);
+    };
+
     // Manual tab click clears any stat-driven filter.
     const selectTab = (key) => { setCatalog(key); setListingFilter("all"); setOrderFilter("all"); };
     // Clickable stat cards → smooth-scroll to the relevant on-page section.
@@ -397,14 +414,14 @@ export default function SupplierDashboard() {
     // Combined "All Listings" — edit jumps to the right tab+grid, delete hits the API.
     const editProduct = (p) => {
         if (p.kind === "toner") { setCatalog("toners"); openEditBulk(); return; }
-        const tabKey = { printer: "printers", paper: "papers", consumable: "consumables" }[p.kind];
-        const evt = { printer: "tc-open-edit-printer", paper: "tc-open-edit-paper", consumable: "tc-open-edit-consumable" }[p.kind];
+        const tabKey = { printer: "printers", paper: "papers", consumable: "consumables", scanner: "scanners" }[p.kind];
+        const evt = { printer: "tc-open-edit-printer", paper: "tc-open-edit-paper", consumable: "tc-open-edit-consumable", scanner: "tc-open-edit-scanner" }[p.kind];
         setCatalog(tabKey);
         setTimeout(() => window.dispatchEvent(new CustomEvent(evt)), 280);
     };
     const deleteProduct = async (p) => {
         if (!window.confirm(`Delete "${p.name}"? This cannot be undone.`)) return;
-        const base = { toner: "/supplier/listings", printer: "/supplier/printers", paper: "/supplier/papers", consumable: "/supplier/consumables" }[p.kind];
+        const base = { toner: "/supplier/listings", printer: "/supplier/printers", paper: "/supplier/papers", consumable: "/supplier/consumables", scanner: "/supplier/scanners" }[p.kind];
         try {
             await api.delete(`${base}/${p.id}`);
             toast.success("Product deleted");
@@ -726,6 +743,16 @@ export default function SupplierDashboard() {
                         <D2DExplainer />
                         <ConsumableListings />
                     </>
+                ) : catalog === "scanners" ? (
+                    <>
+                        <h2 id="scanners" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your scanners</h2>
+                        <CenterAction title="Manage your scanners" subtitle="Add a single scanner SKU, edit your catalogue inline, or upload many at once.">
+                            <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-scanner"))} data-testid="add-scanner-cta-btn"><Plus size={16} /> Add Scanner</Button>
+                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-bulk-scanner"))} data-testid="bulk-upload-scanner-btn"><Upload size={15} /> Bulk upload</Button>
+                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-edit-scanner"))} data-testid="edit-scanners-btn"><Layers size={15} /> Edit Scanners</Button>
+                        </CenterAction>
+                        <ScannerListings />
+                    </>
                 ) : catalog === "earnings" ? (
                     <>
                         <h2 id="earnings" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>My earnings</h2>
@@ -820,10 +847,11 @@ export default function SupplierDashboard() {
                         <p className="text-[13px] text-[#6E6E73] mb-5 max-w-xl">List large quantities fast. Download a spreadsheet template, fill in your catalogue, and upload many products at once — for any category.</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" data-testid="bulk-hub">
                             {[
-                                { label: "Toners", evt: null, onClick: () => requestAddAction("bulk"), tid: "bulk-hub-toners" },
-                                { label: "Printers", onClick: () => window.dispatchEvent(new CustomEvent("tc-open-bulk-printer")), tid: "bulk-hub-printers" },
-                                { label: "Papers", onClick: () => window.dispatchEvent(new CustomEvent("tc-open-bulk-paper")), tid: "bulk-hub-papers" },
-                                { label: "Consumables", onClick: () => window.dispatchEvent(new CustomEvent("tc-open-bulk-consumable")), tid: "bulk-hub-consumables" },
+                                { label: "Toners", onClick: () => openBulkFor("toner"), tid: "bulk-hub-toners" },
+                                { label: "Printers", onClick: () => openBulkFor("printer"), tid: "bulk-hub-printers" },
+                                { label: "Papers", onClick: () => openBulkFor("paper"), tid: "bulk-hub-papers" },
+                                { label: "Consumables", onClick: () => openBulkFor("consumable"), tid: "bulk-hub-consumables" },
+                                { label: "Scanners", onClick: () => openBulkFor("scanner"), tid: "bulk-hub-scanners" },
                             ].map((b) => (
                                 <button key={b.label} onClick={b.onClick} className="tc-card-flat p-6 text-left hover:shadow-md hover:border-black/[0.12] transition group" data-testid={b.tid}>
                                     <div className="w-10 h-10 rounded-xl bg-[#0A0A0B]/[0.05] grid place-items-center mb-3 group-hover:bg-[#0A0A0B] group-hover:text-white transition"><Upload size={18} /></div>

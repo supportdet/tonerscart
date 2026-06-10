@@ -387,6 +387,123 @@ export const consumableBulkConfig = {
     }),
 };
 
+// ============================ SCANNERS ============================
+
+const SCANNER_TYPES = ["Flatbed", "ADF", "Sheet-fed", "Drum", "Photo", "All-in-one"];
+const SCANNER_CONDITIONS = ["New", "Refurbished"];
+const SCANNER_RESOLUTIONS = ["600dpi", "1200dpi", "2400dpi", "4800dpi", "9600dpi"];
+const SCANNER_COLOR_MODES = ["Color", "Mono"];
+const SCANNER_WARRANTIES = ["No warranty", "6 months", "1 year", "2 years", "3 years"];
+
+const SCANNER_COLUMNS = [
+    { key: "brand", label: "Brand", required: true, w: 130 },
+    { key: "model_number", label: "Model Number", required: true, w: 160 },
+    { key: "scanner_type", label: "Scanner Type", required: true, type: "select", w: 140 },
+    { key: "condition", label: "Condition", required: false, type: "select", w: 130 },
+    { key: "scan_resolution", label: "Resolution", required: false, type: "select", w: 120 },
+    { key: "connectivity", label: "Connectivity", required: false, w: 170 },
+    { key: "scan_speed_ppm", label: "Speed (ppm)", required: false, type: "number", w: 110 },
+    { key: "color_mode", label: "Color/Mono", required: false, type: "select", w: 120 },
+    { key: "warranty", label: "Warranty", required: false, type: "select", w: 130 },
+    { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
+    { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
+    { key: "stock", label: "Stock", required: true, type: "number", w: 90 },
+    { key: "intercity_delivery_charge", label: "Intercity Delivery (₹)", required: false, type: "number", w: 140 },
+    { key: "description", label: "Description", required: false, w: 220 },
+];
+
+const scannerEmptyRow = () => ({
+    brand: "", model_number: "", scanner_type: "Flatbed", condition: "New",
+    scan_resolution: "1200dpi", connectivity: "", scan_speed_ppm: "", color_mode: "Color",
+    warranty: "No warranty", price: "", gst_rate: "18", stock: "",
+    intercity_delivery_charge: "0", description: "",
+});
+
+const scannerIsRowEmpty = (r) =>
+    !["brand", "model_number", "price", "stock", "scan_speed_ppm", "connectivity", "description"]
+        .some((k) => String(r[k] ?? "").trim() !== "");
+
+const scannerRowErrors = (r) => {
+    const errs = new Set();
+    if (scannerIsRowEmpty(r)) return errs;
+    for (const k of ["brand", "model_number", "scanner_type", "price", "stock"]) {
+        if (String(r[k] ?? "").trim() === "") errs.add(k);
+    }
+    if (r.price !== "" && Number(r.price) <= 0) errs.add("price");
+    if (r.stock !== "" && Number(r.stock) < 0) errs.add("stock");
+    if (r.scanner_type && !SCANNER_TYPES.includes(r.scanner_type)) errs.add("scanner_type");
+    return errs;
+};
+
+const scannerScalarPayload = (r) => ({
+    brand: r.brand.trim(),
+    model_number: r.model_number.trim(),
+    scanner_type: r.scanner_type || "Flatbed",
+    condition: r.condition || "New",
+    scan_resolution: r.scan_resolution || null,
+    connectivity: splitList(r.connectivity),
+    scan_speed_ppm: num(r.scan_speed_ppm),
+    color_mode: r.color_mode || "Color",
+    warranty: r.warranty || "No warranty",
+    price: Number(r.price),
+    stock: Number(r.stock),
+    gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
+    intercity_delivery_charge: r.intercity_delivery_charge !== "" ? Number(r.intercity_delivery_charge) : 0,
+    description: (r.description || "").trim() || null,
+});
+
+export const scannerBulkConfig = {
+    title: "Bulk upload scanners",
+    subtitle: "Fill the table or upload a CSV / Excel. Required: Brand, Model, Scanner Type, Price, Stock.",
+    sheetName: "Scanners",
+    templateFilename: "tonerscart_bulk_scanners_template.xlsx",
+    currentFilename: "tonerscart_bulk_scanners.xlsx",
+    unitLabel: "scanner",
+    endpoint: "/supplier/scanners/bulk",
+    columns: SCANNER_COLUMNS,
+    selectOptions: {
+        scanner_type: SCANNER_TYPES,
+        condition: SCANNER_CONDITIONS,
+        scan_resolution: SCANNER_RESOLUTIONS,
+        color_mode: SCANNER_COLOR_MODES,
+        warranty: SCANNER_WARRANTIES,
+    },
+    emptyRow: scannerEmptyRow,
+    templateExample: {
+        brand: "Canon", model_number: "CanoScan LiDE 400", scanner_type: "Flatbed", condition: "New",
+        scan_resolution: "4800dpi", connectivity: "USB", scan_speed_ppm: "8", color_mode: "Color",
+        warranty: "1 year", price: "8500", gst_rate: "18", stock: "10",
+        intercity_delivery_charge: "150", description: "Compact flatbed scanner, 4800 dpi optical resolution.",
+    },
+    requiredKeys: ["brand", "model_number", "scanner_type", "price", "stock"],
+    isRowEmpty: scannerIsRowEmpty,
+    rowErrors: scannerRowErrors,
+    toPayload: (r) => ({
+        ...scannerScalarPayload(r),
+        image_url: "",
+        image_urls: [],
+    }),
+    itemPath: "/supplier/scanners",
+    fromListing: (l) => ({
+        _id: l.id,
+        brand: l.brand || "",
+        model_number: l.model_number || "",
+        scanner_type: l.scanner_type || "Flatbed",
+        condition: l.condition || "New",
+        scan_resolution: l.scan_resolution || "1200dpi",
+        connectivity: joinList(l.connectivity),
+        scan_speed_ppm: l.scan_speed_ppm ? String(l.scan_speed_ppm) : "",
+        color_mode: l.color_mode || "Color",
+        warranty: l.warranty || "No warranty",
+        price: String(l.price ?? ""),
+        gst_rate: String(l.gst_rate ?? 18),
+        stock: String(l.stock ?? ""),
+        intercity_delivery_charge: String(l.intercity_delivery_charge ?? 0),
+        description: l.description || "",
+    }),
+    toUpdatePayload: scannerScalarPayload,
+};
+
 const PAPER_SIZES = ["A4", "A3", "A5", "Letter", "Legal"];
 const PAPER_BRANDS_HINT = "JK Paper";
 

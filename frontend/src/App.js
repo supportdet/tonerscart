@@ -41,9 +41,9 @@ import ResetPassword from "./pages/ResetPassword";
 import About from "./pages/About";
 import ProductDetail from "./pages/ProductDetail";
 import NotFound from "./pages/NotFound";
-import ComingSoon from "./pages/ComingSoon";
 import Bulk from "./pages/Bulk";
 import Consumables from "./pages/Consumables";
+import Scanners from "./pages/Scanners";
 import Dealer from "./pages/Dealer";
 import DealerStore from "./pages/DealerStore";
 import OEM from "./pages/OEM";
@@ -133,7 +133,7 @@ function App() {
                                     <Route path="/printers/results" element={<PrintersResults />} />
                                     <Route path="/papers" element={<Papers />} />
                                     <Route path="/consumables" element={<Consumables />} />
-                                    <Route path="/scanners" element={<ComingSoon category="Scanners" accent="#5c6bc0" blurb="Desktop, network and production scanners from leading brands — coming to TonersCart soon. Get notified when we launch." />} />
+                                    <Route path="/scanners" element={<Scanners />} />
                                     <Route path="/bulk" element={<Bulk />} />
                                     <Route path="/dealer" element={<Dealer />} />
                                     <Route path="/store/:supplierId" element={<DealerStore />} />
@@ -148,6 +148,7 @@ function App() {
                                     <Route path="/printer/:id" element={<ProductDetail kind="printer" />} />
                                     <Route path="/paper/:id" element={<ProductDetail kind="paper" />} />
                                     <Route path="/consumable/:id" element={<ProductDetail kind="consumable" />} />
+                                    <Route path="/scanner/:id" element={<ProductDetail kind="scanner" />} />
                                     <Route path="/order-confirmed/:id" element={<OrderConfirmed />} />
                                     <Route path="/order-confirmed" element={<OrderConfirmed />} />
                                     <Route path="/procurement/login" element={<ProcurementLogin />} />

@@ -46,6 +46,28 @@ export default function DealerProfile() {
         finally { setSavingNotes(false); }
     };
 
+    // Mint a fresh signed URL on click (never an expired link). View opens in a
+    // new tab; Download forces a file download (Supabase download flag).
+    const openDoc = async (field, download) => {
+        try {
+            const { data: d } = await api.get(`/admin/suppliers/${id}/document`, { params: { field, download } });
+            if (!d?.url) throw new Error("No document link");
+            if (download) {
+                const a = document.createElement("a");
+                a.href = d.url;
+                a.rel = "noreferrer";
+                a.download = d.filename || field;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            } else {
+                window.open(d.url, "_blank", "noopener,noreferrer");
+            }
+        } catch (e) {
+            toast.error(formatApiError(e) || "Couldn't open document");
+        }
+    };
+
     if (loading) {
         return <div className="tc-container py-24 grid place-items-center text-[#86868B]"><Loader2 className="animate-spin" /></div>;
     }
@@ -135,15 +157,15 @@ export default function DealerProfile() {
                         <div className="text-[13px] text-[#86868B]">No documents uploaded (or storage links unavailable).</div>
                     ) : (
                         <div className="space-y-2">
-                            {docEntries.map(([key, url]) => (
+                            {docEntries.map(([key]) => (
                                 <div key={key} className="flex items-center justify-between gap-2 border border-black/[0.06] rounded-lg px-3 py-2" data-testid={`doc-${key}`}>
                                     <span className="inline-flex items-center gap-2 text-[13px] text-[#0A0A0B] font-medium min-w-0">
                                         <FileText size={15} className="text-[#00838f] shrink-0" />
                                         <span className="truncate">{DOC_LABELS[key] || key}</span>
                                     </span>
                                     <span className="flex items-center gap-2 shrink-0">
-                                        <a href={url} target="_blank" rel="noreferrer" className="text-[12px] font-semibold text-[#00838f] hover:underline inline-flex items-center gap-1" data-testid={`doc-view-${key}`}><ExternalLink size={12} /> View</a>
-                                        <a href={url} download className="text-[12px] font-semibold text-[#6E6E73] hover:text-[#0A0A0B] inline-flex items-center gap-1" data-testid={`doc-download-${key}`}><Download size={12} /> Download</a>
+                                        <button type="button" onClick={() => openDoc(key, false)} className="text-[12px] font-semibold text-[#00838f] hover:underline inline-flex items-center gap-1" data-testid={`doc-view-${key}`}><ExternalLink size={12} /> View</button>
+                                        <button type="button" onClick={() => openDoc(key, true)} className="text-[12px] font-semibold text-[#6E6E73] hover:text-[#0A0A0B] inline-flex items-center gap-1" data-testid={`doc-download-${key}`}><Download size={12} /> Download</button>
                                     </span>
                                 </div>
                             ))}
