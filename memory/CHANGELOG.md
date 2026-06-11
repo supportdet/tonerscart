@@ -861,3 +861,24 @@ Closed every "deferred to next batch" item from Wave 6.
 
 **Migrations still pending for full feature surfacing**
 `supabase_schema_papers.sql`, `supabase_schema_admin_v2.sql`, `supabase_schema_quotation_featured.sql`, `supabase_schema_v3.sql`, `supabase_schema_v4.sql`, `supabase_schema_shipping.sql`, **NEW** `supabase_schema_featured_v2.sql`.
+
+---
+
+## 2026-06-11 — Toner card visuals + fixed brand dropdowns + bulk model search (iterations 39–40)
+
+**Frontend**
+- **NEW `lib/brands.js`** — canonical `TONER_BRANDS` (12) + `extractBrand()` (pulls "Canon" out of "CARTRIDGE CANON 071").
+- **TonerCartridge.jsx** — label band shows ONLY the extracted brand name; default accent is now RED `#C8102E` (was HP blue fallback); accents added for Konica Minolta / Pantum / Riso / Sharp; long brand names auto-shrink font.
+- **TonerProductCard.jsx** — corner label + brand row use `extractBrand`; prominent 19px bold title = `model_number` (toner name); compatible models demoted to 11.5px "Fits: …" 2-line clamp (`data-testid product-compat-{id}`).
+- **ProductDetail.jsx** — toners without dealer images render the generated cartridge SVG in a proportionate `aspect-[1.25/1] max-w-[440px]` box (no more giant empty "No image uploaded" square); non-toner kinds get a smaller 4:3 placeholder box.
+- **SupplierDashboard.jsx** — single toner form brand dropdown = fixed `TONER_BRANDS` list; removed the `/toner-master/brands` fetch (source of junk entries).
+- **BulkUploadGeneric.jsx** — NEW `ModelSearchCell` (column `type:"models"`): 2+ chars → debounced GET `/api/compat/printers?q=&brand=`, dropdown grouped "{Brand} models" first then "Other brands"; multi mode appends comma-joined (toner/consumable compatible models), single mode fills the cell + autofills brand (printer model). Selects now support a `placeholder` empty option.
+- **bulkConfigs.js** — brand columns are selects everywhere: toners/printers/consumables → `TONER_BRANDS`, papers → `PAPER_BRANDS`; brand validated against the list in `rowErrors`; compatible_models payloads normalized via `splitList().join(", ")`.
+
+**Backend / Data**
+- **NEW `backend/cleanup_brands.py`** (one-off, executed): normalized 18 `listings` + 17 `toner_master` rows (e.g. brand "CARTRIDGE CANON 071" → brand="Canon", model_number="CARTRIDGE CANON 071", search_norm recomputed); deleted unreferenced `TEST_W10_*` toner_master rows; fixed `Xeroc`→`Xerox` in consumable_listings.
+- No API changes. `/api/toner-master/brands` still exists but is no longer consumed by the dealer UI.
+
+**QA**
+- Supplier QA account recreated (previous one purged in the 06-10 test-data sweep): `qadealer@tonerscart.in / Dealer@123`, approved, Bangalore.
+- Testing agent iteration 39 (buyer surfaces + backend regression, 5/5 pytest in `tests/test_iteration39_brands.py`) and iteration 40 (supplier flows: brand dropdowns, ModelSearchCell grouping/pick, bulk POST + cleanup) — all PASS. Printers/Papers/Consumables bulk dropdowns also live-verified via Playwright.
