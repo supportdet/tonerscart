@@ -9,7 +9,7 @@ import UniversalSearch from "../components/UniversalSearch";
 import PrinterProductCard from "../components/cards/PrinterProductCard";
 import ProductRequestForm from "../components/ProductRequestForm";
 import PrintersGuide from "./PrintersGuide";
-import { PRINTER_TONER_BRANDS } from "../lib/listingConstants";
+import BrandChips from "../components/BrandChips";
 
 const PRINTER_CONDITIONS = [
     { value: "new", label: "Brand New" },
@@ -54,24 +54,18 @@ export default function Printers() {
     const [listings, setListings] = useState([]);
     const [loading, setLoading] = useState(false);
     const [filters, setFilters] = useState({
-        brand: "", type: "", condition: "", city: "", minPrice: "", maxPrice: "", sort: "local",
+        brands: [], type: "", condition: "", city: "", minPrice: "", maxPrice: "", sort: "local",
     });
 
     // "Find your printer" popup — auto-opens 15s after landing on /printers,
-    // unless the user already started browsing (scrolled the page or clicked
-    // inside the printers content — header/cookie banners don't count) or it
-    // was already shown this session. Dismissible via a clear X button.
+    // unless the user already scrolled significantly or it was already shown
+    // this session. Dismissible via a clear X button.
     const [showFinder, setShowFinder] = useState(false);
     const interactedRef = useRef(false);
-    const pageRef = useRef(null);
     useEffect(() => {
-        if ([...params.keys()].length > 0) return; // arrived with finder/query filters — skip
         try { if (sessionStorage.getItem("tc_finder_popup_shown")) return; } catch { /* ignore */ }
-        const onScroll = () => { if (window.scrollY > 120) interactedRef.current = true; };
-        const onClick = () => { interactedRef.current = true; };
-        const el = pageRef.current;
+        const onScroll = () => { if (window.scrollY > 400) interactedRef.current = true; };
         window.addEventListener("scroll", onScroll, { passive: true });
-        el && el.addEventListener("pointerdown", onClick);
         const t = setTimeout(() => {
             if (!interactedRef.current) {
                 setShowFinder(true);
@@ -81,9 +75,7 @@ export default function Printers() {
         return () => {
             clearTimeout(t);
             window.removeEventListener("scroll", onScroll);
-            el && el.removeEventListener("pointerdown", onClick);
         };
-        // eslint-disable-next-line
     }, []);
 
     // Chips reflect the guided-finder selections passed in the URL (category,
@@ -119,11 +111,9 @@ export default function Printers() {
 
     const clearAll = () => { setParams({}, { replace: true }); };
 
-    const brandOptions = PRINTER_TONER_BRANDS.map((b) => ({ value: b, label: b }));
-
     const visible = useMemo(() => {
         let out = listings.filter((p) => {
-            if (filters.brand && p.brand !== filters.brand) return false;
+            if (filters.brands.length > 0 && !filters.brands.includes(p.brand)) return false;
             if (!matchType(p, filters.type)) return false;
             if (filters.condition && (p.condition || "") !== filters.condition) return false;
             const rc = p.supplier_city || p.city;
@@ -148,7 +138,7 @@ export default function Printers() {
     }, [listings, filters, city]);
 
     return (
-        <div ref={pageRef} className="relative pb-16" data-testid="printers-page">
+        <div className="relative pb-16" data-testid="printers-page">
             <div className="tc-hero relative pb-10">
                 <div className="tc-hero-grid" />
                 <div className="tc-container relative pt-12 sm:pt-16">
@@ -178,10 +168,14 @@ export default function Printers() {
                 <div className="mb-5" data-testid="printers-universal-search">
                     <UniversalSearch />
                 </div>
-                <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-3 pb-3 bg-[#F5F5F7]/95 backdrop-blur" data-testid="printers-filters-wrapper">
+                <BrandChips
+                    value={filters.brands}
+                    onChange={(b) => setFilters({ ...filters, brands: b })}
+                    testidPrefix="printer-brand-chip"
+                />
+                <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-3 pb-3 mt-5 bg-[#F5F5F7]/95 backdrop-blur" data-testid="printers-filters-wrapper">
                     <CategoryFilters
                         selects={[
-                            { key: "brand", label: "Brand", allLabel: "All brands", options: brandOptions },
                             { key: "type", label: "Type", allLabel: "All types", options: PRINTER_TYPES },
                             { key: "condition", label: "Condition", allLabel: "All conditions", options: PRINTER_CONDITIONS },
                             { key: "city", label: "City", allLabel: "All cities", options: KNOWN_CITIES.map((c) => ({ value: c, label: c })) },

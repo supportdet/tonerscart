@@ -18,7 +18,6 @@ import PaperProductCard from "../components/cards/PaperProductCard";
 import ConsumableProductCard from "../components/cards/ConsumableProductCard";
 import ScannerProductCard from "../components/cards/ScannerProductCard";
 import BrandChips from "../components/BrandChips";
-import { PRINTER_TONER_BRANDS } from "../lib/listingConstants";
 import useReveal from "../hooks/useReveal";
 import { cityMatch } from "../lib/location";
 
@@ -41,7 +40,13 @@ export default function SearchPage() {
         setParams(p);
     };
     const [q, setQ] = useState(params.get("q") || "");
-    const [brand, setBrand] = useState(params.get("brand") || "all");
+    // Brand multi-select — seeded from URL ?brand= (if present) but no longer
+    // synced to the URL or sent to the backend; filtering happens client-side
+    // on the loaded results.
+    const [selectedBrands, setSelectedBrands] = useState(() => {
+        const b = params.get("brand");
+        return b && b !== "all" ? [b] : [];
+    });
     const [filterCity, setFilterCity] = useState(params.get("city") || "all");
     const [tonerType, setTonerType] = useState(params.get("toner_type") || "all");
     const [refilledWarn, setRefilledWarn] = useState(false);
@@ -93,7 +98,6 @@ export default function SearchPage() {
     const buildParams = () => {
         const qp = {};
         if (params.get("q")) qp.q = params.get("q");
-        if (params.get("brand")) qp.brand = params.get("brand");
         if (params.get("city") && params.get("city") !== "all") qp.city = params.get("city");
         if (params.get("toner_type") && params.get("toner_type") !== "all") qp.toner_type = params.get("toner_type");
         if (params.get("supplier_id")) qp.supplier_id = params.get("supplier_id");
@@ -155,7 +159,6 @@ export default function SearchPage() {
         const p = new URLSearchParams(params);
         if (val === "all" || !val) p.delete(key); else p.set(key, val);
         setParams(p);
-        if (key === "brand") setBrand(val);
         if (key === "toner_type") setTonerType(val);
         if (key === "city") {
             setFilterCity(val);
@@ -163,7 +166,7 @@ export default function SearchPage() {
         }
     };
 
-    const clearAll = () => { setQ(""); setBrand("all"); setTonerType("all"); setFilterCity("all"); setMinPrice(""); setMaxPrice(""); setSortBy("local"); setParams(new URLSearchParams()); };
+    const clearAll = () => { setQ(""); setSelectedBrands([]); setTonerType("all"); setFilterCity("all"); setMinPrice(""); setMaxPrice(""); setSortBy("local"); setParams(new URLSearchParams()); };
 
     const getQty = (pid) => qtyMap[pid] ?? 1;
     const setQty = (pid, n) => setQtyMap((m) => ({ ...m, [pid]: n }));
@@ -180,13 +183,11 @@ export default function SearchPage() {
     // (refetch via URL params); price + sort are applied client-side on the
     // loaded results so they apply instantly.
     const tonerFilterValue = {
-        brand: brand === "all" ? "" : brand,
         type: tonerType === "all" ? "" : tonerType,
         city: filterCity === "all" ? "" : filterCity,
         minPrice, maxPrice, sort: sortBy,
     };
     const onTonerFilterChange = (next) => {
-        if ((next.brand || "") !== (tonerFilterValue.brand || "")) setFilter("brand", next.brand || "all");
         if ((next.city || "") !== (tonerFilterValue.city || "")) setFilter("city", next.city || "all");
         if ((next.type || "") !== (tonerFilterValue.type || "")) {
             if (next.type === "Refilled") { setRefilledWarn(true); }
@@ -199,6 +200,7 @@ export default function SearchPage() {
 
     const visibleProducts = useMemo(() => {
         let out = products.filter((p) => {
+            if (selectedBrands.length > 0 && !selectedBrands.includes(p.brand)) return false;
             const price = Number(p.price || 0);
             if (minPrice && price < Number(minPrice)) return false;
             if (maxPrice && price > Number(maxPrice)) return false;
@@ -209,7 +211,7 @@ export default function SearchPage() {
         else if (sortBy === "newest") out = [...out].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
         else out = [...out].sort(byCityThenPrice);
         return out;
-    }, [products, minPrice, maxPrice, sortBy]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [products, selectedBrands, minPrice, maxPrice, sortBy]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const onBuy = (p, qty) => {
         if (user && user.role === "admin") {
@@ -388,14 +390,13 @@ export default function SearchPage() {
             {(!params.get("q") || cat === "toners") && (
                 <div className="mt-4">
                     <BrandChips
-                        value={tonerFilterValue.brand}
-                        onChange={(b) => setFilter("brand", b || "all")}
+                        value={selectedBrands}
+                        onChange={setSelectedBrands}
                         testidPrefix="toner-brand-chip"
                     />
                     <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-3 pb-3 bg-[#F5F5F7]/95 backdrop-blur" data-testid="toners-filters-wrapper">
                         <CategoryFilters
                             selects={[
-                                { key: "brand", label: "Brand", allLabel: "All brands", options: PRINTER_TONER_BRANDS.map((b) => ({ value: b, label: b })) },
                                 { key: "type", label: "Condition", allLabel: "All conditions", options: [{ value: "Original", label: "Original" }, { value: "Compatible", label: "Compatible" }, { value: "Refilled", label: "Refilled" }] },
                                 { key: "city", label: "City", allLabel: "All cities", options: KNOWN_CITIES.map((c) => ({ value: c, label: c })) },
                             ]}

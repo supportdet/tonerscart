@@ -17,7 +17,7 @@ export default function CompatListingCard({ l }) {
                     <ShieldCheck size={11} /> Verified
                 </span>
             </div>
-            {l.compatible_models && <div className="mt-2 text-[11.5px] text-[#6E6E73] line-clamp-2">Compatible: {l.compatible_models}</div>}
+            {l.compatible_models && <div className="mt-2 text-[11.5px] text-[#6E6E73] line-clamp-2">Suitable for: {l.compatible_models}</div>}
             <div className="mt-3 flex items-center justify-between">
                 <div className="font-mono text-[16px] font-semibold text-[#0A0A0B]">{fmtMoney(l.price)}</div>
                 <span className="text-[12px] text-[#00B7C7] font-semibold inline-flex items-center gap-1">View <ArrowRight size={13} /></span>

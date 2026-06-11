@@ -52,6 +52,7 @@ import TonerRoute from "./pages/TonerRoute";
 import OemDashboard from "./pages/OemDashboard";
 import ErrorBoundary from "./components/ErrorBoundary";
 import VisitorTracker from "./components/VisitorTracker";
+import ScrollToTop from "./components/ScrollToTop";
 import { ProcAuthProvider } from "./context/ProcAuthContext";
 import ProcProtectedRoute from "./components/ProcProtectedRoute";
 import ProcurementLogin from "./pages/ProcurementLogin";
@@ -68,6 +69,7 @@ function Chrome({ children }) {
     return (
         <>
             {!bare && <Header />}
+            <ScrollToTop />
             <VisitorTracker />
             <main className="flex-1">
                 <ErrorBoundary>{children}</ErrorBoundary>

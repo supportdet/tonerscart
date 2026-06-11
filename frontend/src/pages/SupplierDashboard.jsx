@@ -507,7 +507,8 @@ export default function SupplierDashboard() {
     const submit = async (e) => {
         e.preventDefault();
         if (!brand) { toast.error("Please select a brand"); return; }
-        if (!compatibleModels.trim()) { toast.error("Please enter the compatible printer models"); return; }
+        if (!compatibleModels.trim()) { toast.error("Please enter the suitable printer models"); return; }
+        if (!pageYield || parseInt(pageYield, 10) <= 0) { toast.error("Page yield (sheets) is required"); return; }
         // Wave 10 — images are optional. Animated cartridge fallback is shown
         // automatically when no image is provided.
         const cleanedVariants = variants
@@ -1057,7 +1058,7 @@ export default function SupplierDashboard() {
                                 </select>
                             </div>
                             <div>
-                                <Label>Compatible printer models<span className="text-red-500"> *</span></Label>
+                                <Label>Suitable for<span className="text-red-500"> *</span></Label>
                                 <CompatibleModelsSelect
                                     mode="printers"
                                     value={compatibleModels}
@@ -1115,11 +1116,11 @@ export default function SupplierDashboard() {
                         </div>
                         <CommissionBanner />
 
-                        <div className="tc-form-section">Specifications (optional)</div>
+                        <div className="tc-form-section">Specifications</div>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <Label>Page yield (sheets)</Label>
-                                <Input type="number" min="0" step="1" value={pageYield} onChange={(e) => setPageYield(e.target.value)} placeholder="e.g. 2000" className="tc-input-lg" data-testid="listing-page-yield" />
+                                <Label>Page yield (sheets)<span className="text-red-500"> *</span></Label>
+                                <Input type="number" min="1" step="1" value={pageYield} onChange={(e) => setPageYield(e.target.value)} placeholder="e.g. 2000" required className="tc-input-lg" data-testid="listing-page-yield" />
                             </div>
                             <div>
                                 <Label>OEM part number</Label>

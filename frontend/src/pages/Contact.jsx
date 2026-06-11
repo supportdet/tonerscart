@@ -5,7 +5,7 @@ import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { toast } from "sonner";
 import api, { formatApiError } from "../lib/api";
-import { CheckCircle2, Mail, Clock, MapPin } from "lucide-react";
+import { CheckCircle2, Mail, Clock, MapPin, Phone, MessageCircle } from "lucide-react";
 import PhonePrefixInput from "../components/PhonePrefixInput";
 import PageMeta from "../components/PageMeta";
 
@@ -64,6 +64,23 @@ export default function Contact() {
                         <a href="mailto:support@tonerscart.com" className="block bg-white border border-black/[0.06] rounded-2xl p-5 hover:border-[#00B7C7] transition" data-testid="contact-email">
                             <div className="inline-flex items-center gap-2 text-[10px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73]"><Mail size={12} className="text-[#00B7C7]" /> Email</div>
                             <div className="mt-1 text-[15.5px] font-semibold text-[#0A0A0B]">support@tonerscart.com</div>
+                        </a>
+                        <a href="tel:+918884546789" className="block bg-white border border-black/[0.06] rounded-2xl p-5 hover:border-[#00B7C7] transition" data-testid="contact-phone">
+                            <div className="inline-flex items-center gap-2 text-[10px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73]"><Phone size={12} className="text-[#00B7C7]" /> Phone</div>
+                            <div className="mt-1 text-[15.5px] font-semibold text-[#0A0A0B]">+91 88845 46789</div>
+                        </a>
+                        <a
+                            href="https://wa.me/918884546789"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block bg-[#25D366] border border-[#1ebe5b] rounded-2xl p-5 hover:brightness-110 transition shadow-sm"
+                            data-testid="contact-whatsapp-btn"
+                        >
+                            <div className="inline-flex items-center gap-2 text-[10px] tracking-[0.18em] uppercase font-semibold text-white/85"><MessageCircle size={12} className="text-white" /> WhatsApp</div>
+                            <div className="mt-1 text-[15.5px] font-semibold text-white inline-flex items-center gap-2">
+                                Chat on WhatsApp
+                            </div>
+                            <div className="mt-0.5 text-[12.5px] text-white/85">+91 88845 46789 · replies in minutes</div>
                         </a>
                         <div className="bg-white border border-black/[0.06] rounded-2xl p-5" data-testid="contact-office">
                             <div className="inline-flex items-center gap-2 text-[10px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73]"><MapPin size={12} className="text-[#00B7C7]" /> Office</div>

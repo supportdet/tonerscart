@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import PageMeta from "../components/PageMeta";
-import { MapPin, Mail, Clock, Sparkles, Target, Users, Shield, Award } from "lucide-react";
+import { MapPin, Mail, Clock, Sparkles, Target, Users, Shield, Award, Phone } from "lucide-react";
 
 export default function About() {
     return (
@@ -76,7 +76,7 @@ export default function About() {
                     <p className="text-[14.5px] text-[#3a3a40] max-w-3xl mt-4 leading-relaxed">
                         TonersCart is operated by <strong>TonersCart Private Limited</strong>, an independent, Bangalore-headquartered private limited company building digital infrastructure for India&apos;s print-supply trade. We bring print-industry expertise and product engineering together to move legacy procurement online.
                     </p>
-                    <div className="mt-8 grid sm:grid-cols-3 gap-4">
+                    <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div className="bg-white border border-black/[0.06] rounded-2xl p-5">
                             <MapPin size={18} className="text-[#00B7C7]" />
                             <div className="text-[10px] tracking-[0.22em] uppercase font-semibold text-[#86868B] mt-3">Head office</div>
@@ -88,6 +88,12 @@ export default function About() {
                             <div className="text-[10px] tracking-[0.22em] uppercase font-semibold text-[#86868B] mt-3">Email</div>
                             <a href="mailto:support@tonerscart.com" className="block text-[14.5px] font-semibold text-[#0A0A0B] mt-1 hover:underline" data-testid="about-email">support@tonerscart.com</a>
                             <div className="block text-[12px] text-[#6E6E73] mt-1.5">For grievances: <a href="mailto:support@tonerscart.com" className="font-semibold hover:underline">support@tonerscart.com</a> · response within 48 hours</div>
+                        </div>
+                        <div className="bg-white border border-black/[0.06] rounded-2xl p-5">
+                            <Phone size={18} className="text-[#0A8754]" />
+                            <div className="text-[10px] tracking-[0.22em] uppercase font-semibold text-[#86868B] mt-3">Phone</div>
+                            <a href="tel:+918884546789" className="block text-[14.5px] font-semibold text-[#0A0A0B] mt-1 hover:underline" data-testid="about-phone">+91 88845 46789</a>
+                            <div className="block text-[12px] text-[#6E6E73] mt-1.5">Sales &amp; support · Mon–Sat</div>
                         </div>
                         <div className="bg-white border border-black/[0.06] rounded-2xl p-5">
                             <Clock size={18} className="text-[#F5C400]" />
