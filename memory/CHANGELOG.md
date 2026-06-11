@@ -914,3 +914,11 @@ Closed every "deferred to next batch" item from Wave 6.
 - **TonerCartridge.jsx** rewritten: SVG wrapper (`viewBox 296×144`) embedding the static PNG via `<image>` with a red `#C8102E` band + white bold brand text (extractBrand) overlaid across the middle. Scales proportionally at every usage size; `color` prop dropped (extra props from old call sites are harmless).
 - ProductDetail toner fallback box adjusted to `aspect-[1.6/1]` white background to match the landscape image.
 - Verified via Playwright on all four surfaces: listing cards, toner detail page, related-products row, SEO /compatible pages.
+
+---
+
+## 2026-06-11e — Brand-colored label bands + bold compatible models
+
+- **TonerCartridge.jsx** — band now uses each brand's official color: Canon/Xerox red, HP/Brother/Samsung blue, Epson dark blue, Ricoh red-orange, Kyocera dark red, Konica Minolta black-on-white (with border), Pantum green, Riso purple, Sharp orange; all other/unknown brands default red (#C8102E).
+- **TonerProductCard.jsx** — "Compatible models: …" line is now bold (font-bold, #4A4A4F).
+- Verified via Playwright: Canon cards red band, HP SEO card blue band, bold compat line.
