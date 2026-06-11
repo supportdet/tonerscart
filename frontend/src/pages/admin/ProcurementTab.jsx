@@ -4,7 +4,119 @@ import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog";
 import { Textarea } from "../../components/ui/textarea";
 import { toast } from "sonner";
-import { CheckCircle2, Landmark, Building2, Mail, Phone, MapPin, Loader2 } from "lucide-react";
+import { CheckCircle2, Landmark, Building2, Mail, Phone, MapPin, Loader2, Package, ExternalLink, ArrowRight } from "lucide-react";
+
+const ORDER_STATUSES = ["confirmed", "processing", "shipped", "delivered"];
+const fmtMoney = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const fmtDate = (s) => (s ? String(s).slice(0, 10) : "—");
+
+function OrdersSection() {
+    const [rows, setRows] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [busyId, setBusyId] = useState(null);
+
+    const load = async () => {
+        setLoading(true);
+        try {
+            const { data } = await api.get("/admin/procurement/orders");
+            setRows(Array.isArray(data) ? data : []);
+        } catch (e) { toast.error(formatApiError(e)); }
+        finally { setLoading(false); }
+    };
+    useEffect(() => { load(); }, []);
+
+    const advance = async (o) => {
+        const idx = ORDER_STATUSES.indexOf(o.status);
+        const next = ORDER_STATUSES[idx + 1];
+        if (!next) return;
+        setBusyId(o.id);
+        try {
+            await api.post(`/admin/procurement/orders/${o.id}/status`, { status: next });
+            toast.success(`${o.ref_number} → ${next}`);
+            load();
+        } catch (e) { toast.error(formatApiError(e)); }
+        finally { setBusyId(null); }
+    };
+
+    const viewPo = async (o) => {
+        try {
+            const { data } = await api.get(`/admin/procurement/orders/${o.id}/po-url`);
+            window.open(data.url, "_blank", "noopener");
+        } catch (e) { toast.error(formatApiError(e)); }
+    };
+
+    return (
+        <div className="mb-8" data-testid="proc-admin-orders">
+            <div className="flex items-center gap-2 mb-3">
+                <Package size={16} className="text-[#0B1220]" />
+                <h3 className="text-[15px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Procurement orders</h3>
+                <span className="text-[12px] text-[#86868B]">({rows.length})</span>
+            </div>
+            {loading ? (
+                <div className="py-8 text-center text-[#6E6E73] flex items-center justify-center gap-2"><Loader2 className="animate-spin" size={15} /> Loading orders…</div>
+            ) : rows.length === 0 ? (
+                <div className="tc-card-flat p-6 text-center text-[13px] text-[#6E6E73]">No procurement orders yet.</div>
+            ) : (
+                <div className="overflow-x-auto rounded-xl border border-black/[0.06] bg-white">
+                    <table className="w-full text-[12.5px]" style={{ minWidth: 860 }}>
+                        <thead>
+                            <tr className="text-left text-[11px] uppercase tracking-wide text-[#86868B] border-b border-black/[0.06]">
+                                <th className="px-3 py-2.5">Ref</th>
+                                <th className="px-3 py-2.5">Organisation</th>
+                                <th className="px-3 py-2.5">Product</th>
+                                <th className="px-3 py-2.5">Supplier</th>
+                                <th className="px-3 py-2.5">Total</th>
+                                <th className="px-3 py-2.5">Due</th>
+                                <th className="px-3 py-2.5">Status</th>
+                                <th className="px-3 py-2.5">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.map((o) => {
+                                const item = (o.items || [])[0] || {};
+                                const idx = ORDER_STATUSES.indexOf(o.status);
+                                const next = ORDER_STATUSES[idx + 1];
+                                return (
+                                    <tr key={o.id} className="border-b border-black/[0.04]" data-testid={`proc-admin-order-${o.ref_number}`}>
+                                        <td className="px-3 py-2.5 font-mono font-semibold whitespace-nowrap">{o.ref_number}</td>
+                                        <td className="px-3 py-2.5">
+                                            <div className="font-medium text-[#0A0A0B]">{o.org_name || "—"}</div>
+                                            <div className="text-[10.5px] uppercase text-[#86868B]">{o.org_type}</div>
+                                        </td>
+                                        <td className="px-3 py-2.5">{item.brand} {item.model_number} × {o.qty}</td>
+                                        <td className="px-3 py-2.5">{o.supplier_name} <span className="text-[10.5px] text-[#86868B]">({o.rank})</span></td>
+                                        <td className="px-3 py-2.5 font-mono font-semibold whitespace-nowrap">{fmtMoney(o.total_amount)}</td>
+                                        <td className="px-3 py-2.5 whitespace-nowrap">{fmtDate(o.payment_due_date)}</td>
+                                        <td className="px-3 py-2.5">
+                                            <span className={`text-[10.5px] font-semibold px-2 py-0.5 rounded-full border uppercase tracking-wide ${o.status === "delivered" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-[#EAF6FF] text-[#0369A1] border-[#BFE3FB]"}`} data-testid={`proc-admin-order-status-${o.ref_number}`}>
+                                                {o.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-3 py-2.5">
+                                            <div className="flex items-center gap-1.5">
+                                                {next && (
+                                                    <Button size="sm" variant="outline" onClick={() => advance(o)} disabled={busyId === o.id}
+                                                        className="h-7 px-2.5 text-[11.5px] inline-flex items-center gap-1" data-testid={`proc-admin-advance-${o.ref_number}`}>
+                                                        {busyId === o.id ? <Loader2 size={12} className="animate-spin" /> : <ArrowRight size={12} />} {next}
+                                                    </Button>
+                                                )}
+                                                {o.po_document_url && (
+                                                    <Button size="sm" variant="outline" onClick={() => viewPo(o)} className="h-7 px-2.5 text-[11.5px] inline-flex items-center gap-1" data-testid={`proc-admin-po-${o.ref_number}`}>
+                                                        <ExternalLink size={12} /> PO
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+}
 
 function DetailRow({ label, value }) {
     if (!value) return null;
@@ -116,6 +228,8 @@ export default function ProcurementTab() {
 
             <Section title="Government" icon={Landmark} rows={data.govt} />
             <Section title="Corporate" icon={Building2} rows={data.corporate} />
+
+            <OrdersSection />
 
             <Dialog open={!!rejecting} onOpenChange={(o) => { if (!o) { setRejecting(null); setReason(""); } }}>
                 <DialogContent>

@@ -1,16 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Printer as PrinterIcon, ScanLine, FileText, Package } from "lucide-react";
+import { FileText } from "lucide-react";
 import api from "../lib/api";
 import TonerCartridge from "./TonerCartridge";
+import ProductPlaceholder from "./ProductPlaceholder";
 import { extractBrand } from "../lib/brands";
-
-const KIND_ICON = {
-    printer: PrinterIcon,
-    scanner: ScanLine,
-    paper: FileText,
-    consumable: Package,
-};
 
 /**
  * "You may also need" — horizontal row of related, in-stock dealer products on
@@ -38,7 +32,6 @@ export default function RelatedProducts({ kind, id }) {
             </h2>
             <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: "thin" }}>
                 {items.map((it) => {
-                    const Icon = KIND_ICON[it.kind] || Package;
                     return (
                         <Link
                             to={it.url}
@@ -51,9 +44,11 @@ export default function RelatedProducts({ kind, id }) {
                                 {it.image_url ? (
                                     <img src={it.image_url} alt={it.title} className="w-full h-full object-cover" loading="lazy" />
                                 ) : it.kind === "toner" ? (
-                                    <TonerCartridge color={it.color || "Black"} brand={it.brand} />
+                                    <TonerCartridge brand={it.brand} />
+                                ) : ["printer", "consumable", "scanner"].includes(it.kind) ? (
+                                    <ProductPlaceholder kind={it.kind} brand={it.brand} />
                                 ) : (
-                                    <div className="w-full h-full grid place-items-center"><Icon size={36} className="text-[#C7C7CC]" /></div>
+                                    <div className="w-full h-full grid place-items-center"><FileText size={36} className="text-[#C7C7CC]" /></div>
                                 )}
                             </div>
                             <div className="p-3 flex flex-col gap-1 flex-1">

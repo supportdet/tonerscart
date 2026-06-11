@@ -905,3 +905,35 @@ Closed every "deferred to next batch" item from Wave 6.
 - **TonerCartridge.jsx v3** — horizontal cartridge matching the user's reference: wider than tall, cylindrical ends on both sides (capsule shapes with cylindrical shading), rectangular middle body, grip slot at bottom center, soft floor shadow. Brand label is now ALWAYS white-on-red (#C8102E) per instruction — brand accent colors removed.
 - **Test data purge** — deleted users + Supabase Auth for `qadealer@tonerscart.in`, `e2e_deliv_dealer@tonerscart.in`, `e2e_deliv_buyer@tonerscart.in`; supplier rows "QA Dealer Industries" + "E2E Deliv Dealer"; 1 test scanner listing (Canon LiDE 400); 3 test orders. test_credentials.md updated — no QA supplier account exists now.
 - **Finder popup fix** — pointerdown listener scoped to the printers page container (cookie-banner "Accept" or header clicks no longer cancel the popup); scroll suppression now requires >120px. Re-verified with Playwright: popup opens after 15s idle on /printers, X dismisses. Shows once per browser session.
+
+---
+
+## 2026-06-11d — Static toner placeholder image with red brand band overlay
+
+- Downloaded the user's `toner-placeholder.png` (296×144 line drawing) from www.tonerscart.com into `/app/frontend/public/toner-placeholder.png` (it existed in their GitHub/Vercel repo but not in this workspace).
+- **TonerCartridge.jsx** rewritten: SVG wrapper (`viewBox 296×144`) embedding the static PNG via `<image>` with a red `#C8102E` band + white bold brand text (extractBrand) overlaid across the middle. Scales proportionally at every usage size; `color` prop dropped (extra props from old call sites are harmless).
+- ProductDetail toner fallback box adjusted to `aspect-[1.6/1]` white background to match the landscape image.
+- Verified via Playwright on all four surfaces: listing cards, toner detail page, related-products row, SEO /compatible pages.
+
+---
+
+## 2026-06-11e — Brand-colored label bands + bold compatible models
+
+- **TonerCartridge.jsx** — band now uses each brand's official color: Canon/Xerox red, HP/Brother/Samsung blue, Epson dark blue, Ricoh red-orange, Kyocera dark red, Konica Minolta black-on-white (with border), Pantum green, Riso purple, Sharp orange; all other/unknown brands default red (#C8102E).
+- **TonerProductCard.jsx** — "Compatible models: …" line is now bold (font-bold, #4A4A4F).
+- Verified via Playwright: Canon cards red band, HP SEO card blue band, bold compat line.
+
+---
+
+## 2026-06-11f — Brand chips, category placeholders, PROCUREMENT PHASE 2 ORDER FLOW (iterations backend 15/15 + frontend iteration_41 100%)
+
+**Brand chips & placeholders**
+- NEW `BrandChips.jsx` — All + 12 brand chips in official colors (BRAND_BANDS moved to `lib/brands.js`); wired on /search (toners), /consumables, /scanners.
+- NEW `ProductPlaceholder.jsx` — line-art printer/scanner/consumable SVGs + brand band; used in PrinterProductCard, Consumable/Scanner cards (new image blocks), ProductDetail fallback, RelatedProducts.
+
+**Procurement Phase 2 (order flow)**
+- Backend (`procurement.py`): `POST /api/procurement/orders` (from quotation + chosen L1-L5 supplier; credit check; credit_used debit + credit_ledger entry; quotation→converted; PO-YYYY-NNNNNN refs; net-30 due date; confirmation email `email_proc_order_placed`), `GET /api/procurement/orders`, `POST /orders/{id}/po` (PDF/image → private supplier-documents bucket) + signed `GET /orders/{id}/po-url`; admin: `GET /api/admin/procurement/orders` (with org info), `POST /orders/{id}/status` (forward-only; delivered → delivered_at + due date + ledger sync), admin PO signed URL.
+- **BUGFIX**: `/procurement/compare` imported `search_listings` from `server` (function had moved to `routes/search.py`) — Search & Compare was crashing with 500. Fixed import.
+- Frontend: `MyQuotations.jsx` Place-order dialog (L1/L2/L3 radio cards), NEW `MyOrders.jsx` (status timeline, payment badge, PO upload for govt), `ProcurementDashboard.jsx` orders section live + credit refresh after ordering, `ProcurementTab.jsx` admin orders table with advance buttons + PO viewer.
+- Tests: `/app/backend/tests/test_phase2_proc_orders.py` — 15/15 live API assertions. Frontend iteration_41 — 100% pass.
+- QA data kept for Phase 3: procurement account phase2.test@tonerscart-qa.com + orders PO-2026-000001/2 (purge after Phase 3 QA).

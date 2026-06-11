@@ -8,6 +8,7 @@ import CategoryFilters from "../components/CategoryFilters";
 import UniversalSearch from "../components/UniversalSearch";
 import ConsumableProductCard from "../components/cards/ConsumableProductCard";
 import ProductRequestForm from "../components/ProductRequestForm";
+import BrandChips from "../components/BrandChips";
 import { CONSUMABLE_SUBCATEGORIES, CONSUMABLE_CONDITIONS } from "../lib/consumableConstants";
 import { PRINTER_TONER_BRANDS } from "../lib/listingConstants";
 
@@ -103,6 +104,13 @@ export default function Consumables() {
                         </button>
                     ))}
                 </div>
+
+                {/* Brand filter chips */}
+                <BrandChips
+                    value={filters.brand}
+                    onChange={(b) => setFilters({ ...filters, brand: b })}
+                    testidPrefix="consumable-brand-chip"
+                />
 
                 <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-3 pb-3 mt-5 bg-[#F5F5F7]/95 backdrop-blur" data-testid="consumables-filters-wrapper">
                     <CategoryFilters

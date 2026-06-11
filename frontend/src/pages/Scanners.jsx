@@ -8,6 +8,7 @@ import CategoryFilters from "../components/CategoryFilters";
 import UniversalSearch from "../components/UniversalSearch";
 import ScannerProductCard from "../components/cards/ScannerProductCard";
 import ProductRequestForm from "../components/ProductRequestForm";
+import BrandChips from "../components/BrandChips";
 import { SCANNER_TYPES, SCANNER_CONDITIONS } from "../lib/scannerConstants";
 import { PRINTER_TONER_BRANDS } from "../lib/listingConstants";
 
@@ -103,6 +104,13 @@ export default function Scanners() {
                         </button>
                     ))}
                 </div>
+
+                {/* Brand filter chips */}
+                <BrandChips
+                    value={filters.brand}
+                    onChange={(b) => setFilters({ ...filters, brand: b })}
+                    testidPrefix="scanner-brand-chip"
+                />
 
                 <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-3 pb-3 mt-5 bg-[#F5F5F7]/95 backdrop-blur" data-testid="scanners-filters-wrapper">
                     <CategoryFilters

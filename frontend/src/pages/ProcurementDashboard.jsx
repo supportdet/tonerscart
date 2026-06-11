@@ -3,7 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
     Search, FileText, Package, Wallet, UserRound, LogOut, ShieldCheck,
-    Landmark, Building2, Loader2, Clock, ArrowRight,
+    Landmark, Building2, Loader2, ArrowRight,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -12,6 +12,7 @@ import procApi, { formatApiError } from "../lib/procApi";
 import { useProcAuth } from "../context/ProcAuthContext";
 import SearchCompare from "../components/procurement/SearchCompare";
 import MyQuotations from "../components/procurement/MyQuotations";
+import MyOrders from "../components/procurement/MyOrders";
 import AgreementGate from "../components/AgreementGate";
 import PageMeta from "../components/PageMeta";
 
@@ -27,16 +28,6 @@ const SECTIONS = [
     { key: "credit", label: "Credit Account", icon: Wallet },
     { key: "profile", label: "Profile", icon: UserRound },
 ];
-
-function ComingSoon({ title, note }) {
-    return (
-        <div className="tc-card-flat p-10 text-center" data-testid="proc-coming-soon">
-            <Clock className="mx-auto text-[#00B7C7] mb-3" size={30} />
-            <h3 className="text-[16px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>{title}</h3>
-            <p className="text-[13px] text-[#6E6E73] mt-2 max-w-md mx-auto">{note}</p>
-        </div>
-    );
-}
 
 export default function ProcurementDashboard() {
     const navigate = useNavigate();
@@ -54,6 +45,15 @@ export default function ProcurementDashboard() {
     const usedPct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
 
     const onLogout = () => { logout(); navigate("/procurement/login"); };
+
+    // After an order is placed: jump to My Orders and refresh credit usage.
+    const onOrdered = async () => {
+        setSection("orders");
+        try {
+            const { data } = await procApi.get("/procurement/me");
+            setUser(data);
+        } catch { /* non-blocking */ }
+    };
 
     const saveProfile = async () => {
         setSaving(true);
@@ -113,10 +113,8 @@ export default function ProcurementDashboard() {
                 {/* Content */}
                 <div className="min-w-0">
                     {section === "search" && <SearchCompare onQuoted={() => setSection("quotations")} />}
-                    {section === "quotations" && <MyQuotations active={section === "quotations"} />}
-                    {section === "orders" && (
-                        <ComingSoon title="My Orders" note="Track every procurement order through its full status timeline, with downloadable invoices." />
-                    )}
+                    {section === "quotations" && <MyQuotations active={section === "quotations"} onOrdered={onOrdered} />}
+                    {section === "orders" && <MyOrders active={section === "orders"} isGovt={isGovt} />}
 
                     {section === "credit" && (
                         <div className="space-y-5" data-testid="proc-credit-section">

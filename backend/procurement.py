@@ -18,7 +18,7 @@ from datetime import datetime, timezone, timedelta
 
 import jwt
 import bcrypt
-from fastapi import APIRouter, HTTPException, Request, Depends, Response
+from fastapi import APIRouter, HTTPException, Request, Depends, Response, UploadFile, File
 from pydantic import BaseModel, EmailStr, Field
 
 from supabase_client import sb_admin, get_user_from_token
@@ -27,6 +27,7 @@ from email_service import (
     email_proc_approved,
     email_proc_rejected,
     email_proc_quotation,
+    email_proc_order_placed,
 )
 
 logger = logging.getLogger("tonerscart.procurement")
@@ -432,7 +433,7 @@ def _comparison_from_rows(rows: list) -> list:
 def proc_compare(q: str | None = None, brand: str | None = None,
                  qty: int = 1, user: dict = Depends(require_proc_user)):
     """Ranked supplier comparison (L1/L2/L3) for a product search."""
-    from server import search_listings  # lazy import avoids circular dependency
+    from routes.search import search_listings  # lazy import avoids circular dependency
     rows = search_listings(q=q, brand=brand, limit=100)
     entries = _comparison_from_rows(rows)
     warning = None
@@ -547,3 +548,219 @@ def quotation_pdf(qid: str, user: dict = Depends(require_proc_user)):
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{r.data["ref_number"]}.pdf"'},
     )
+
+# =============================================================================
+# PHASE 2 — Order flow
+# Place an order from a quotation (chosen L1/L2/L3 supplier), track it through
+# a status timeline, and (govt) attach the official PO document.
+# =============================================================================
+
+ORDER_STATUSES = ["confirmed", "processing", "shipped", "delivered"]
+PAYMENT_TERM_DAYS = 30
+_PO_BUCKET = "supplier-documents"  # private bucket; PO docs served via signed URLs
+
+
+def _orders_ready_or_503():
+    try:
+        sb_admin.table("procurement_orders").select("id").limit(1).execute()
+    except Exception as e:
+        if "procurement_orders" in str(e):
+            raise HTTPException(503, "Orders are not enabled yet — run supabase_schema_procurement_orders.sql in Supabase") from e
+        raise
+
+
+def _next_order_ref() -> str:
+    year = datetime.now(timezone.utc).year
+    prefix = f"PO-{year}-"
+    try:
+        rows = sb_admin.table("procurement_orders").select("ref_number").like("ref_number", f"{prefix}%").execute().data or []
+        n = len(rows) + 1
+    except Exception:
+        n = 1
+    return f"{prefix}{n:06d}"
+
+
+class ProcOrderCreate(BaseModel):
+    quotation_id: str
+    listing_id: str
+    qty: int | None = None
+
+
+@proc_router.post("/orders")
+async def create_proc_order(payload: ProcOrderCreate, user: dict = Depends(require_proc_user)):
+    _orders_ready_or_503()
+    r = sb_admin.table("procurement_quotations").select("*").eq("id", payload.quotation_id).eq("user_id", user["id"]).maybe_single().execute()
+    q = r.data if r and r.data else None
+    if not q:
+        raise HTTPException(404, "Quotation not found")
+    status = _quotation_status(q)
+    if status == "converted":
+        raise HTTPException(400, "This quotation has already been converted to an order")
+    if status == "expired":
+        raise HTTPException(400, "This quotation has expired — generate a fresh comparison")
+    item = next((i for i in (q.get("items") or []) if i.get("listing_id") == payload.listing_id), None)
+    if not item:
+        raise HTTPException(400, "Selected supplier is not part of this quotation")
+    qty = max(1, int(payload.qty or q.get("qty") or 1))
+    total = round(float(item.get("total_price") or 0) * qty, 2)
+
+    # Credit check — enforced only once the team has assigned a limit
+    limit = float(user.get("credit_limit") or 0)
+    used = float(user.get("credit_used") or 0)
+    if limit > 0 and total > (limit - used):
+        raise HTTPException(400, f"Insufficient credit — available ₹{limit - used:,.2f}, order total ₹{total:,.2f}")
+
+    now = datetime.now(timezone.utc)
+    due = now + timedelta(days=PAYMENT_TERM_DAYS)
+    row = {
+        "ref_number": _next_order_ref(),
+        "quotation_id": q["id"],
+        "user_id": user["id"],
+        "supplier_id": item.get("supplier_id"),
+        "supplier_name": item.get("supplier_name"),
+        "rank": item.get("rank"),
+        "items": [item],
+        "qty": qty,
+        "total_amount": total,
+        "user_type": user.get("type"),
+        "status": "confirmed",
+        "status_history": [{"status": "confirmed", "at": now.isoformat()}],
+        "payment_due_date": due.isoformat(),
+    }
+    res = sb_admin.table("procurement_orders").insert(row).execute()
+    order = res.data[0] if res.data else row
+
+    sb_admin.table("procurement_quotations").update({"status": "converted"}).eq("id", q["id"]).execute()
+
+    if limit > 0:
+        sb_admin.table("procurement_users").update({"credit_used": round(used + total, 2)}).eq("id", user["id"]).execute()
+        try:
+            sb_admin.table("credit_ledger").insert({
+                "user_id": user["id"],
+                "order_id": order.get("id"),
+                "amount": total,
+                "type": "debit",
+                "due_date": due.isoformat(),
+                "note": f"Order {row['ref_number']} ({item.get('brand')} {item.get('model_number')} × {qty})",
+            }).execute()
+        except Exception as e:
+            logger.warning("credit ledger debit skipped: %s", e)
+
+    try:
+        await email_proc_order_placed(user, order)
+    except Exception as e:
+        logger.warning("proc order email skipped: %s", e)
+    return {"id": order.get("id"), "ref_number": row["ref_number"], "status": "confirmed", "total_amount": total}
+
+
+@proc_router.get("/orders")
+def list_proc_orders(user: dict = Depends(require_proc_user)):
+    try:
+        rows = sb_admin.table("procurement_orders").select("*").eq("user_id", user["id"]).order("created_at", desc=True).execute().data or []
+    except Exception as e:
+        if "procurement_orders" in str(e):
+            return []
+        raise
+    return rows
+
+
+@proc_router.post("/orders/{oid}/po")
+async def upload_po_document(oid: str, file: UploadFile = File(...), user: dict = Depends(require_proc_user)):
+    """Government buyers attach their official Purchase Order (PDF/image, max 10 MB)."""
+    r = sb_admin.table("procurement_orders").select("id").eq("id", oid).eq("user_id", user["id"]).maybe_single().execute()
+    if not (r and r.data):
+        raise HTTPException(404, "Order not found")
+    ct = file.content_type or ""
+    if not (ct == "application/pdf" or ct.startswith("image/")):
+        raise HTTPException(400, "Only PDF or image files are allowed")
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(400, "Max 10 MB")
+    ext = "pdf" if ct == "application/pdf" else (file.filename or "po.jpg").rsplit(".", 1)[-1].lower()[:5]
+    path = f"procurement-po/{user['id']}/{oid}.{ext}"
+    try:
+        sb_admin.storage.from_(_PO_BUCKET).upload(path, content, {"content-type": ct, "upsert": "true"})
+    except Exception as e:
+        logger.exception("PO upload failed")
+        raise HTTPException(500, f"Upload failed: {e}") from e
+    sb_admin.table("procurement_orders").update({"po_document_url": path}).eq("id", oid).execute()
+    return {"ok": True, "path": path}
+
+
+def _po_signed_url(path: str) -> str:
+    signed = sb_admin.storage.from_(_PO_BUCKET).create_signed_url(path, 60 * 10)
+    url = signed.get("signedURL") or signed.get("signed_url")
+    if not url:
+        raise HTTPException(500, "Could not generate download URL")
+    return url
+
+
+@proc_router.get("/orders/{oid}/po-url")
+def po_document_url(oid: str, user: dict = Depends(require_proc_user)):
+    r = sb_admin.table("procurement_orders").select("po_document_url").eq("id", oid).eq("user_id", user["id"]).maybe_single().execute()
+    path = (r.data or {}).get("po_document_url") if r else None
+    if not path:
+        raise HTTPException(404, "No PO document uploaded")
+    return {"url": _po_signed_url(path)}
+
+
+# ----- Admin: order management ------------------------------------------------
+
+@proc_admin_router.get("/orders")
+def admin_proc_orders(admin: dict = Depends(require_admin)):
+    try:
+        rows = sb_admin.table("procurement_orders").select("*").order("created_at", desc=True).limit(200).execute().data or []
+    except Exception as e:
+        if "procurement_orders" in str(e):
+            return []
+        raise
+    uids = list({r["user_id"] for r in rows})
+    orgs = {}
+    if uids:
+        us = sb_admin.table("procurement_users").select("id,org_name,type,email").in_("id", uids).execute().data or []
+        orgs = {u["id"]: u for u in us}
+    for r in rows:
+        u = orgs.get(r["user_id"]) or {}
+        r["org_name"] = u.get("org_name")
+        r["org_type"] = u.get("type")
+        r["org_email"] = u.get("email")
+    return rows
+
+
+class ProcOrderStatusUpdate(BaseModel):
+    status: str
+
+
+@proc_admin_router.post("/orders/{oid}/status")
+def admin_proc_order_status(oid: str, payload: ProcOrderStatusUpdate, admin: dict = Depends(require_admin)):
+    if payload.status not in ORDER_STATUSES:
+        raise HTTPException(400, f"Status must be one of: {', '.join(ORDER_STATUSES)}")
+    r = sb_admin.table("procurement_orders").select("*").eq("id", oid).maybe_single().execute()
+    order = r.data if r and r.data else None
+    if not order:
+        raise HTTPException(404, "Order not found")
+    cur = order.get("status")
+    if cur in ORDER_STATUSES and ORDER_STATUSES.index(payload.status) <= ORDER_STATUSES.index(cur):
+        raise HTTPException(400, f"Order is already {cur}")
+    now = datetime.now(timezone.utc)
+    hist = list(order.get("status_history") or []) + [{"status": payload.status, "at": now.isoformat()}]
+    upd = {"status": payload.status, "status_history": hist}
+    if payload.status == "delivered":
+        due = now + timedelta(days=PAYMENT_TERM_DAYS)
+        upd["delivered_at"] = now.isoformat()
+        upd["payment_due_date"] = due.isoformat()
+        try:
+            sb_admin.table("credit_ledger").update({"due_date": due.isoformat()}).eq("order_id", oid).eq("type", "debit").execute()
+        except Exception as e:
+            logger.warning("ledger due-date sync skipped: %s", e)
+    sb_admin.table("procurement_orders").update(upd).eq("id", oid).execute()
+    return {"ok": True, "status": payload.status}
+
+
+@proc_admin_router.get("/orders/{oid}/po-url")
+def admin_po_document_url(oid: str, admin: dict = Depends(require_admin)):
+    r = sb_admin.table("procurement_orders").select("po_document_url").eq("id", oid).maybe_single().execute()
+    path = (r.data or {}).get("po_document_url") if r else None
+    if not path:
+        raise HTTPException(404, "No PO document uploaded")
+    return {"url": _po_signed_url(path)}
