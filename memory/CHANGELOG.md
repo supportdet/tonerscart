@@ -922,3 +922,18 @@ Closed every "deferred to next batch" item from Wave 6.
 - **TonerCartridge.jsx** — band now uses each brand's official color: Canon/Xerox red, HP/Brother/Samsung blue, Epson dark blue, Ricoh red-orange, Kyocera dark red, Konica Minolta black-on-white (with border), Pantum green, Riso purple, Sharp orange; all other/unknown brands default red (#C8102E).
 - **TonerProductCard.jsx** — "Compatible models: …" line is now bold (font-bold, #4A4A4F).
 - Verified via Playwright: Canon cards red band, HP SEO card blue band, bold compat line.
+
+---
+
+## 2026-06-11f — Brand chips, category placeholders, PROCUREMENT PHASE 2 ORDER FLOW (iterations backend 15/15 + frontend iteration_41 100%)
+
+**Brand chips & placeholders**
+- NEW `BrandChips.jsx` — All + 12 brand chips in official colors (BRAND_BANDS moved to `lib/brands.js`); wired on /search (toners), /consumables, /scanners.
+- NEW `ProductPlaceholder.jsx` — line-art printer/scanner/consumable SVGs + brand band; used in PrinterProductCard, Consumable/Scanner cards (new image blocks), ProductDetail fallback, RelatedProducts.
+
+**Procurement Phase 2 (order flow)**
+- Backend (`procurement.py`): `POST /api/procurement/orders` (from quotation + chosen L1-L5 supplier; credit check; credit_used debit + credit_ledger entry; quotation→converted; PO-YYYY-NNNNNN refs; net-30 due date; confirmation email `email_proc_order_placed`), `GET /api/procurement/orders`, `POST /orders/{id}/po` (PDF/image → private supplier-documents bucket) + signed `GET /orders/{id}/po-url`; admin: `GET /api/admin/procurement/orders` (with org info), `POST /orders/{id}/status` (forward-only; delivered → delivered_at + due date + ledger sync), admin PO signed URL.
+- **BUGFIX**: `/procurement/compare` imported `search_listings` from `server` (function had moved to `routes/search.py`) — Search & Compare was crashing with 500. Fixed import.
+- Frontend: `MyQuotations.jsx` Place-order dialog (L1/L2/L3 radio cards), NEW `MyOrders.jsx` (status timeline, payment badge, PO upload for govt), `ProcurementDashboard.jsx` orders section live + credit refresh after ordering, `ProcurementTab.jsx` admin orders table with advance buttons + PO viewer.
+- Tests: `/app/backend/tests/test_phase2_proc_orders.py` — 15/15 live API assertions. Frontend iteration_41 — 100% pass.
+- QA data kept for Phase 3: procurement account phase2.test@tonerscart-qa.com + orders PO-2026-000001/2 (purge after Phase 3 QA).
