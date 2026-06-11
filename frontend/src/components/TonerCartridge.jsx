@@ -1,4 +1,5 @@
 import React from "react";
+import { extractBrand } from "../lib/brands";
 
 /**
  * Photo-realistic laser toner cartridge SVG.
@@ -20,7 +21,14 @@ const BRAND_ACCENTS = {
     Epson:   { label: "#003399", text: "#FFFFFF" },   // Epson blue
     Xerox:   { label: "#CE1126", text: "#FFFFFF" },   // Xerox red
     Kyocera: { label: "#E60012", text: "#FFFFFF" },   // Kyocera red
+    "Konica Minolta": { label: "#005EB8", text: "#FFFFFF" }, // KM blue
+    Pantum:  { label: "#DA291C", text: "#FFFFFF" },   // Pantum red
+    Riso:    { label: "#E4002B", text: "#FFFFFF" },   // RISO red
+    Sharp:   { label: "#E60012", text: "#FFFFFF" },   // Sharp red
 };
+
+// Unknown / unrecognised brands fall back to RED (not blue).
+const DEFAULT_ACCENT = { label: "#C8102E", text: "#FFFFFF" };
 
 const COLOR_DOT = {
     Cyan:    "#00B7C7",
@@ -30,9 +38,11 @@ const COLOR_DOT = {
 };
 
 export default function TonerCartridge({ color = "Black", brand = "HP" }) {
-    const brandAccent = BRAND_ACCENTS[brand] || BRAND_ACCENTS.HP;
+    // Show ONLY the clean brand name (e.g. "CANON" from "CARTRIDGE CANON 071").
+    const brandName = extractBrand(brand) || "Toner";
+    const brandAccent = BRAND_ACCENTS[brandName] || DEFAULT_ACCENT;
     const dot = COLOR_DOT[color] || COLOR_DOT.Black;
-    const uid = `${brand}-${color}`.replace(/[^a-zA-Z0-9]/g, "");
+    const uid = `${brandName}-${color}`.replace(/[^a-zA-Z0-9]/g, "");
 
     return (
         <svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -102,13 +112,13 @@ export default function TonerCartridge({ color = "Black", brand = "HP" }) {
             {/* Brand name — centered; the ONLY text overlaid on the cartridge */}
             <text x="200" y="141"
                 fill={brandAccent.text}
-                fontSize="30"
+                fontSize={brandName.length > 9 ? 22 : 30}
                 fontWeight="800"
                 fontFamily="'Montserrat', 'Inter', sans-serif"
                 letterSpacing="2"
                 textAnchor="middle"
             >
-                {brand.toUpperCase()}
+                {brandName.toUpperCase()}
             </text>
 
             {/* ====================== LOWER BODY DETAILS ====================== */}

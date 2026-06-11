@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle, Camera, Loader2, Package, ShoppingCart, Clock, Printer, FileText, Pencil, X as XIcon } from "lucide-react";
 import { GST_RATES, gstAmount, formatINR } from "../lib/listingConstants";
+import { TONER_BRANDS } from "../lib/brands";
 import { supabase, PRODUCT_BUCKET } from "../lib/supabase";
 import RefilledWarningDialog from "../components/RefilledWarningDialog";
 import TonerCartridge from "../components/TonerCartridge";
@@ -256,8 +257,7 @@ export default function SupplierDashboard() {
     const [editingId, setEditingId] = useState(null);
     const [existingImages, setExistingImages] = useState([]); // urls already saved on this listing
 
-    // Brand dropdown
-    const [brands, setBrands] = useState([]);
+    // Brand dropdown — fixed canonical list (no DB-driven junk entries)
     const [brand, setBrand] = useState("");
     const [color, setColor] = useState("Black");
 
@@ -290,14 +290,12 @@ export default function SupplierDashboard() {
     const load = async () => {
         if (!isApproved) return;
         try {
-            const [l, o, b] = await Promise.all([
+            const [l, o] = await Promise.all([
                 api.get("/supplier/listings"),
                 api.get("/orders/mine"),
-                api.get("/toner-master/brands"),
             ]);
             setListings(Array.isArray(l.data) ? l.data : []);
             setOrders(Array.isArray(o.data) ? o.data : []);
-            setBrands(Array.isArray(b.data) ? b.data : []);
         } catch (e) { toast.error(formatApiError(e)); }
     };
 
@@ -1055,15 +1053,7 @@ export default function SupplierDashboard() {
                                     className="tc-input-lg w-full"
                                     data-testid="listing-brand-select">
                                     <option value="">Select brand…</option>
-                                    {brands.map((b) => <option key={b} value={b}>{b}</option>)}
-                                    <option value="HP">HP</option>
-                                    <option value="Canon">Canon</option>
-                                    <option value="Brother">Brother</option>
-                                    <option value="Samsung">Samsung</option>
-                                    <option value="Ricoh">Ricoh</option>
-                                    <option value="Epson">Epson</option>
-                                    <option value="Xerox">Xerox</option>
-                                    <option value="Kyocera">Kyocera</option>
+                                    {TONER_BRANDS.map((b) => <option key={b} value={b}>{b}</option>)}
                                 </select>
                             </div>
                             <div>
