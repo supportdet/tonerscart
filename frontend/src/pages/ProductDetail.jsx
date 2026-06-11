@@ -119,8 +119,11 @@ export default function ProductDetail({ kind = "toner" }) {
             variant_id: selectedVariant?.id || null,
             toner_type: data.toner_type,
             image_url: images[0] || data.image_url,
+            supplier_id: data.supplier_id,
             supplier_name: data.supplier_name,
             supplier_city: data.supplier_city,
+            city: data.supplier_city || data.city,
+            gst_rate: data.gst_rate ?? 18,
             kind,
         };
         addItem(product, qty);

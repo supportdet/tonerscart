@@ -1,0 +1,41 @@
+{
+  "summary": "Wave 22 flat-rate intercity delivery — VERIFIED end-to-end across backend + frontend for all 5 categories, BUT discovered + fixed a CRITICAL server bug that broke ALL toner orders. (1) Backend pytest: 15/15 PASS after fix (test_wave22_delivery.py 3/3 + test_wave22_all_categories.py 12/12 — every category gets the correct intercity rate AND same-city/alias-aware free, including server overriding a fake client delivery_charge=999). (2) Frontend Playwright e2e on the LIVE preview URL: full printer checkout flow (Mumbai vs dealer Bengaluru) → Step 2 shows summary-delivery=₹350, summary-total=₹18,050 (subtotal 15000 + GST 2700 + 350), 'Place Order' returned 200 and landed on /order-confirmed/<orderId>. Alias-aware same-city (Bengaluru↔Bangalore) → summary-delivery='Free' + per-item '✅ Free delivery within ...' line shown. Multi-item single-dealer (printer+toner same supplier_id, intercity) → summary-delivery=₹350 (charged once at HIGHEST category rate, NOT 450 sum). Per-category Step-2 rates verified: toner=₹100, paper=₹150, scanner=₹250, consumable=₹100, printer=₹350. No console errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave22_delivery.py",
+    "/app/backend/tests/test_wave22_all_categories.py",
+    "/app/test_reports/pytest/iteration_38.xml",
+    "/app/test_reports/pytest/iteration_38_categories.xml"
+  ],
+  "action_items": [
+    "Already fixed by testing agent: added _resolve_delivery_charge to the underscore-helpers import in /app/backend/routes/orders.py (was crashing all toner order placements with NameError 500). Verify the fix in main agent's next code review and keep in mind that `from server import *` does NOT pull underscore-prefixed kernel helpers — they must be listed explicitly in routes/*.py imports."
+  ],
+  "critical_code_review_comments": [
+    "CRITICAL (fixed): routes/orders.py used _resolve_delivery_charge on line 53 (toner path) but never imported it. Because Python's `from module import *` ignores names starting with `_`, the symbol was undefined at runtime and every toner POST /api/orders crashed with 500 NameError. This is a recurring footgun for this codebase — every new underscore-prefixed helper added to server.py MUST be added to the explicit underscore-helpers import line of every route module that uses it.",
+    "computeCartDelivery in /app/frontend/src/lib/delivery.js correctly mirrors the backend resolver and the 'charge once per dealer, highest category rate' rule — verified live with a 2-item single-dealer (printer+toner) cart returning ₹350, not ₹450.",
+    "Checkout.jsx hardcodes a default kind='toner' in the order payload (`it.product?.kind || 'toner'`) — fine today because PrinterProductCard / ProductDetail now stamp kind correctly, but if a future card forgets to stamp kind it will silently default to the wrong category. Consider raising a console.warn when kind is missing.",
+    "Backend server.py _resolve_delivery_charge (line 423) is authoritative and ignores client-sent delivery_charge — confirmed: client sent 999, server stored 350 for intercity / 0 for same-city across every category."
+  ],
+  "updated_files": [
+    "/app/backend/routes/orders.py (added _resolve_delivery_charge to the underscore-helpers import — bug fix for toner 500)",
+    "/app/backend/tests/test_wave22_all_categories.py (NEW — 12 tests covering intercity + same-city + alias-aware + charge-once for all 5 categories)"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 pytest)",
+    "frontend": "100% (printer e2e order placed; all 5 category rates + same-city Free + multi-item charge-once verified at Step 2)"
+  },
+  "test_credentials": "Used inline checkout signup. Buyer accounts created during this run (please purge): qa.w22cats.<ts>@example.com (Test@1234) and qa.w22ui.<ts>@example.com (Test@1234) — fresh emails per run. No shared buyer account reused.",
+  "seed_data_creation": "Backend: 1 real printer order persisted (id 6d70eea8-f87b-4114-b3d8-a282557a7b09 for the qa.w22ui buyer); plus several test orders created during pytest parametrize across toner/printer/paper/scanner/consumable (Mumbai/Delhi shipping). All orders are 'requested' status with no payment. Frontend: no extra DB data — same-city/multi-dealer UI tests stop at Step 2 without placing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "When testing checkout via Playwright on the live URL, a 'Welcome to TonersCart' Terms agreement modal AND a cookie banner are shown on first visit and intercept clicks. Either pre-set localStorage keys (tc_welcome_ack / tc_tos_ack / tc_cookie_ack) before navigation or click the 'I agree' checkbox + 'Accept & continue'. Cart key is 'tc_cart_v1' — seed it before /checkout. If you've already created a buyer in the run, the auth-email/auth-password fields will be hidden in Step 1 (only show for guests) — query for the element before filling. The previously reported pending DB migration for printer_listing_id has NO impact on printer orders — the insert loop drops the column gracefully and the printer order still persisted (verified via the order-confirmed page). The toner-order NameError 500 (now fixed) was caught only by an intercity toner POST; the unit-level test_resolver_unit in test_wave22_delivery.py did NOT catch it because it imports the helper directly — make sure to keep BOTH a resolver-unit test and a real POST /api/orders test for every category going forward.",
+  "rca of the issue": "RCA — toner orders 500: routes/orders.py imports kernel helpers from server.py via `from server import *` (which excludes underscore names per Python spec) plus an explicit `from server import (_helper1, _helper2, ...)` list. When Wave 22 added _resolve_delivery_charge to server.py and wired it into the toner branch of create_order, the explicit underscore-helpers import line was not updated. Reproduction: POST /api/orders with listing_kind=toner and any valid toner listing_id → 500 with traceback 'NameError: name _resolve_delivery_charge is not defined' at orders.py:53. Backend logs at /var/log/supervisor/backend.err.log show the stack trace. Mitigation applied: added `_resolve_delivery_charge` to the explicit-import tuple on line 14 of routes/orders.py. Re-tested — all 15 wave22 tests pass."
+}

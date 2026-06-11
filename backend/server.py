@@ -557,7 +557,7 @@ async def _create_direct_order(payload: "OrderCreate", user: dict, kind: str):
     """Order path for direct-purchase products that live outside the `listings`
     table (papers, consumables). Inserts an order with the matching
     {kind}_listing_id + denormalised product columns and decrements stock."""
-    table = "paper_listings" if kind == "paper" else "scanner_listings" if kind == "scanner" else "consumable_listings"
+    table = "paper_listings" if kind == "paper" else "scanner_listings" if kind == "scanner" else "printer_listings" if kind == "printer" else "consumable_listings"
     lst = sb_admin.table(table).select("*").eq("id", payload.listing_id).maybe_single().execute()
     if not lst or not lst.data:
         raise HTTPException(404, "Listing not found")
@@ -622,7 +622,7 @@ async def _create_direct_order(payload: "OrderCreate", user: dict, kind: str):
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("consumable_listing_id", "paper_listing_id", "scanner_listing_id", "product_brand", "product_model",
+            for k in ("consumable_listing_id", "paper_listing_id", "scanner_listing_id", "printer_listing_id", "product_brand", "product_model",
                       "product_image", "street_address", "area", "order_city", "order_state",
                       "pincode", "delivery_charge", "gst_rate", "gst_amount"):
                 if k in msg and k in row:
@@ -664,7 +664,7 @@ def _attach_direct_product(rows: list):
     a `listings` dict from the denormalised product_* columns so dashboards render."""
     for r in rows:
         if not r.get("listings") and (r.get("product_brand") or r.get("product_model")):
-            _tt = "Scanner" if r.get("scanner_listing_id") else "Consumable" if r.get("consumable_listing_id") else "Paper"
+            _tt = "Scanner" if r.get("scanner_listing_id") else "Printer" if r.get("printer_listing_id") else "Consumable" if r.get("consumable_listing_id") else "Paper"
             r["listings"] = {
                 "brand": r.get("product_brand"),
                 "model_number": r.get("product_model"),

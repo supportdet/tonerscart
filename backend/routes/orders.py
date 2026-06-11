@@ -11,7 +11,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from server import *  # noqa: F401,F403  shared kernel: clients, models, helpers, deps
 from server import _td, _re, _time, _dd  # noqa: F401  import-alias kernel helpers
-from server import (_approved_supplier, _attach_direct_product, _create_direct_order, _gen_quote_number, _generate_order_number, _log_admin_action, _orders_with_listings, _safe_order_update)  # underscore kernel helpers
+from server import (_approved_supplier, _attach_direct_product, _create_direct_order, _gen_quote_number, _generate_order_number, _log_admin_action, _orders_with_listings, _resolve_delivery_charge, _safe_order_update)  # underscore kernel helpers
 
 from server import (_commission_breakdown)  # auto: kernel underscore helpers
 router = APIRouter(prefix="/api")
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api")
 async def create_order(payload: OrderCreate, user: dict = Depends(require_user)):
     if user["role"] not in ("customer", "supplier"):
         raise HTTPException(403, "Only signed-in buyers and sellers can place orders")
-    if (payload.listing_kind or "toner") in ("paper", "consumable", "scanner"):
+    if (payload.listing_kind or "toner") in ("paper", "consumable", "scanner", "printer"):
         return await _create_direct_order(payload, user, payload.listing_kind)
     lst = sb_admin.table("listings").select("*").eq("id", payload.listing_id).maybe_single().execute()
     if not lst or not lst.data:
