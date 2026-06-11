@@ -1,3 +1,19 @@
+### 2026-06-11 (c) — Iteration 42: UX polish (7 features) + cleanup
+
+- **Printer finder popup fix** (`PrintersResults.jsx`): removed the over-eager `pointerdown` listener that was suppressing the 15s auto-popup; now only a scroll (>400 px) cancels it. sessionStorage flag still prevents re-open.
+- **Multi-select brand chips** (`BrandChips.jsx`): value is now an array; clicking a brand toggles it; "All" clears. Brand dropdown REMOVED from `CategoryFilters` on `/search`, `/printers`, `/consumables`, `/scanners` — chips are the sole brand control. Filter state renamed from `brand` to `brands` (array). Printers page newly gets BrandChips.
+- **Label rename: "Compatible models" → "Suitable for"** — applied across `TonerProductCard`, `ProductDetail` (toner + consumable rows), `TonerModelPage`, `ConsumableListings`, `SupplierDashboard` (label + toast), `CompatListingCard`, `bulkConfigs.js` (toner+consumable column header & subtitle), and `email_service.py` order receipts.
+- **Contact details** — phone `+91 88845 46789` added to Footer (brand column + grievance strip), Contact page (new phone card), About page (new phone card). WhatsApp button (`Chat on WhatsApp`, green `#25D366`) added to Contact page opening `https://wa.me/918884546789` in a new tab.
+- **Scroll-to-top on navigation**: new `ScrollToTop.jsx` mounted inside `Chrome` resets `window.scrollY` on every pathname change (skips `#hash` anchors).
+- **Page yield mandatory** for new toner uploads (single + bulk):
+  - Frontend single form: required input + submit validation toast.
+  - `bulkConfigs.js`: `page_yield` is now `required: true` in the toner template; included in `requiredKeys` and `tonerRowErrors`.
+  - Backend `routes/products.py:create_listing`: rejects with HTTP 400 when `page_yield` is missing or ≤ 0. Bulk endpoint inherits via per-row delegate.
+- **Verified** end-to-end by testing agent (iteration_42.json): 4/4 backend pytest + 7/7 frontend Playwright checks = 100% pass.
+- **Cleanup:** `cleanup_test_data.py` + `cleanup_brands.py` re-ran — DB already clean (0 test users/listings/orders).
+
+
+
 ### 2026-06-11 (b) — Standalone Vercel-served sitemap.xml (Google-crawlable)
 
 - **Problem:** `tonerscart.com/sitemap.xml` was a sitemap *index* pointing to `tonerscart.com/api/sitemap.xml` (Railway backend) which Google could not fetch.
