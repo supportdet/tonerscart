@@ -1,3 +1,14 @@
+### 2026-06-11 (b) — Standalone Vercel-served sitemap.xml (Google-crawlable)
+
+- **Problem:** `tonerscart.com/sitemap.xml` was a sitemap *index* pointing to `tonerscart.com/api/sitemap.xml` (Railway backend) which Google could not fetch.
+- **Fix:** Replaced `frontend/public/sitemap.xml` with a COMPLETE, standalone `<urlset>` (1132 URLs) served directly by Vercel — zero Railway dependency:
+  - 14 static pages (/, /search, /printers, /papers, /consumables, /scanners, /oem, /mps, /sell, /get-featured, /about, /contact, /terms, /privacy). NOTE: "Toners" nav = /search (there is no /toners route).
+  - 546 `/compatible/<slug>` printer pages + 572 `/toner/<slug>` toner pages, hardcoded from `compatibility_db`.
+- **Generator:** `backend/generate_sitemap.py` — re-run (`cd /app/backend && python generate_sitemap.py`) whenever `compatibility_db.py` changes. Product listing URLs intentionally excluded (added dynamically later).
+- Verified: XML well-formed, served as `application/xml`, 1132 `<url>` entries. `robots.txt` already references `https://www.tonerscart.com/sitemap.xml`.
+- **Cleanup:** purged all remaining test/example.com buyer accounts (0 test users remain). Product/supplier tables had no test data.
+
+
 ### 2026-06-11 — Wave 22: flat-rate intercity delivery FINALIZED + printer orders fixed
 
 **Delivery system (system-defined, dealers cannot set it):**
