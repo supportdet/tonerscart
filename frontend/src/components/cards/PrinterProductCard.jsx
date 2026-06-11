@@ -1,9 +1,10 @@
 import React from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Printer as PrinterIcon, ShoppingCart } from "lucide-react";
+import { ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
 import VerifiedBadge from "../VerifiedBadge";
+import ProductPlaceholder from "../ProductPlaceholder";
 import { useCity } from "../../context/CityContext";
 import { useCart } from "../../context/CartContext";
 import { deliveryLabel } from "../../lib/location";
@@ -38,11 +39,11 @@ export default function PrinterProductCard({ p }) {
     };
     return (
         <div className="bg-white border border-black/[0.06] rounded-2xl overflow-hidden transition hover:shadow-xl group relative" data-testid={`printer-card-${p.id}`}>
-            <Link to={`/printer/${p.id}`} className="block bg-black/[0.03] aspect-[4/3] grid place-items-center hover:opacity-95" data-testid={`printer-link-${p.id}`}>
+            <Link to={`/printer/${p.id}`} className="block bg-white aspect-[4/3] grid place-items-center hover:opacity-95" data-testid={`printer-link-${p.id}`}>
                 {p.image_url ? (
                     <img src={p.image_url} alt={`${p.brand} ${p.model_number}`} className="w-full h-full object-contain" loading="lazy" />
                 ) : (
-                    <PrinterIcon size={42} className="text-[#D2D2D7]" />
+                    <div className="w-[88%]"><ProductPlaceholder kind="printer" brand={p.brand} /></div>
                 )}
             </Link>
             <div className="p-4 space-y-2">

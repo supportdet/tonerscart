@@ -1,5 +1,5 @@
 import React from "react";
-import { extractBrand } from "../lib/brands";
+import { extractBrand, BRAND_BANDS, DEFAULT_BAND } from "../lib/brands";
 
 /**
  * Default toner product image — the static photo `/toner-placeholder.png`
@@ -13,25 +13,6 @@ import { extractBrand } from "../lib/brands";
  * Props:
  *   brand: e.g. "HP", "Canon" — extracted to a clean brand name for the band
  */
-
-// Official-ish brand colors for the label band.
-const BRAND_BANDS = {
-    Canon:   { band: "#CC0000", text: "#FFFFFF" },                       // red
-    Xerox:   { band: "#D40000", text: "#FFFFFF" },                       // red
-    HP:      { band: "#0096D6", text: "#FFFFFF" },                       // blue
-    Brother: { band: "#0053A6", text: "#FFFFFF" },                       // blue
-    Epson:   { band: "#003399", text: "#FFFFFF" },                       // dark blue
-    Ricoh:   { band: "#E8491D", text: "#FFFFFF" },                       // red/orange
-    Kyocera: { band: "#9B111E", text: "#FFFFFF" },                       // dark red
-    Samsung: { band: "#1428A0", text: "#FFFFFF" },                       // blue
-    "Konica Minolta": { band: "#FFFFFF", text: "#1C1C1E", border: "rgba(0,0,0,0.3)" }, // black on white
-    Pantum:  { band: "#009A44", text: "#FFFFFF" },                       // green
-    Riso:    { band: "#5F259F", text: "#FFFFFF" },                       // purple
-    Sharp:   { band: "#F47920", text: "#FFFFFF" },                       // orange
-};
-
-// All other / unknown brands → default red.
-const DEFAULT_BAND = { band: "#C8102E", text: "#FFFFFF" };
 
 export default function TonerCartridge({ brand = "HP" }) {
     const cleanBrand = extractBrand(brand) || "Toner";

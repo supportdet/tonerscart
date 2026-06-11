@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { MapPin, ShoppingCart, Zap, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import VerifiedBadge from "../VerifiedBadge";
+import ProductPlaceholder from "../ProductPlaceholder";
 import { useCity } from "../../context/CityContext";
 import { useCart } from "../../context/CartContext";
 import { deliveryLabel } from "../../lib/location";
@@ -54,6 +55,13 @@ export default function ScannerProductCard({ s }) {
     return (
         <div className="bg-white border border-black/[0.06] rounded-2xl p-4 shadow-sm hover:border-black/[0.15] transition flex flex-col" data-testid={`scanner-card-${s.id}`}>
             <Link to={`/scanner/${s.id}`} className="block flex-1" data-testid={`scanner-link-${s.id}`}>
+                <div className="aspect-[2.05/1] rounded-xl overflow-hidden border border-black/[0.05] bg-white mb-3 grid place-items-center" data-testid={`scanner-img-${s.id}`}>
+                    {s.image_url ? (
+                        <img src={s.image_url} alt={`${s.brand} ${s.model_number}`} className="w-full h-full object-contain" loading="lazy" />
+                    ) : (
+                        <ProductPlaceholder kind="scanner" brand={s.brand} />
+                    )}
+                </div>
                 <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                         <div className="text-[10.5px] tracking-[0.14em] uppercase font-semibold text-[#86868B]">{s.brand}</div>

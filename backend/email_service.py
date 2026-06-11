@@ -1078,3 +1078,30 @@ async def email_dealer_unsuspended(supplier: dict):
     """
     await _send(to, "Your TonersCart account has been reinstated", html)
 
+
+
+async def email_proc_order_placed(u: dict, order: dict):
+    """Order confirmation for a procurement (govt/corporate) buyer."""
+    email_to = u.get("email")
+    if not email_to:
+        return False
+    ref = order.get("ref_number")
+    item = (order.get("items") or [{}])[0]
+    product = f"{item.get('brand') or ''} {item.get('model_number') or ''}".strip() or "Product"
+    due = (order.get("payment_due_date") or "")[:10]
+    total = float(order.get("total_amount") or 0)
+    html = f"""
+    <h2 style="margin:0 0 6px 0;font-size:18px;">Order {ref} confirmed</h2>
+    <p>Hi {u.get('name') or 'there'},</p>
+    <p>Your procurement order has been placed with <strong>{order.get('supplier_name') or 'a verified supplier'}</strong>
+    ({order.get('rank') or 'L1'} from your quotation).</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;">
+      <tr><td style="padding:4px 12px;color:#86868B;">Order ref</td><td style="padding:4px 12px;"><strong>{ref}</strong></td></tr>
+      <tr><td style="padding:4px 12px;color:#86868B;">Product</td><td style="padding:4px 12px;">{product} × {order.get('qty') or 1}</td></tr>
+      <tr><td style="padding:4px 12px;color:#86868B;">Total (inc. GST)</td><td style="padding:4px 12px;"><strong>₹{total:,.2f}</strong></td></tr>
+      <tr><td style="padding:4px 12px;color:#86868B;">Payment due</td><td style="padding:4px 12px;">{due} (net-30 credit terms)</td></tr>
+    </table>
+    <p style="margin-top:16px;color:#6E6E73;font-size:12.5px;">Track the status timeline anytime from your procurement dashboard.
+    {"Please upload your official PO document from the My Orders section." if (u.get('type') == 'govt') else ""}</p>
+    """
+    return await _send(email_to, f"TonersCart Order {ref} confirmed", html)

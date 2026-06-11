@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { FileText, Download, Loader2, Clock } from "lucide-react";
+import { FileText, Download, Loader2, Clock, ShoppingCart } from "lucide-react";
 import { Button } from "../ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
 import procApi, { formatApiError } from "../../lib/procApi";
 import { downloadQuotationPdf } from "./SearchCompare";
 
@@ -11,10 +12,15 @@ const STATUS_STYLES = {
     converted: "bg-blue-50 text-blue-700 border-blue-200",
 };
 
-export default function MyQuotations({ active }) {
+const fmtMoney = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+
+export default function MyQuotations({ active, onOrdered }) {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
+    const [ordering, setOrdering] = useState(null); // quotation being ordered
+    const [sel, setSel] = useState(null);           // chosen listing_id
+    const [placing, setPlacing] = useState(false);
 
     const load = async () => {
         setLoading(true);
@@ -24,13 +30,35 @@ export default function MyQuotations({ active }) {
         } catch (e) { toast.error(formatApiError(e)); }
         finally { setLoading(false); }
     };
-    useEffect(() => { if (active) load(); }, [active]);
+    useEffect(() => { if (active) load(); }, [active]); // eslint-disable-line
 
     const download = async (q) => {
         setBusyId(q.id);
         try { await downloadQuotationPdf(q.id, q.ref_number); }
         catch (e) { toast.error(formatApiError(e)); }
         finally { setBusyId(null); }
+    };
+
+    const openOrder = (q) => {
+        setOrdering(q);
+        setSel((q.items || [])[0]?.listing_id || null);
+    };
+
+    const placeOrder = async () => {
+        if (!ordering || !sel) return;
+        setPlacing(true);
+        try {
+            const { data } = await procApi.post("/procurement/orders", {
+                quotation_id: ordering.id,
+                listing_id: sel,
+                qty: ordering.qty,
+            });
+            toast.success(`Order ${data.ref_number} placed`);
+            setOrdering(null); setSel(null);
+            load();
+            onOrdered && onOrdered();
+        } catch (e) { toast.error(formatApiError(e)); }
+        finally { setPlacing(false); }
     };
 
     if (loading) {
@@ -65,14 +93,61 @@ export default function MyQuotations({ active }) {
                                         <span className="inline-flex items-center gap-1"><Clock size={11} /> valid until {expires}</span>
                                     </div>
                                 </div>
-                                <Button onClick={() => download(q)} disabled={busyId === q.id} variant="outline" className="inline-flex items-center gap-1.5" data-testid={`proc-download-${q.ref_number}`}>
-                                    {busyId === q.id ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} PDF
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    {q.status === "active" && (
+                                        <Button onClick={() => openOrder(q)} className="btn-cta inline-flex items-center gap-1.5" data-testid={`proc-place-order-${q.ref_number}`}>
+                                            <ShoppingCart size={14} /> Place order
+                                        </Button>
+                                    )}
+                                    <Button onClick={() => download(q)} disabled={busyId === q.id} variant="outline" className="inline-flex items-center gap-1.5" data-testid={`proc-download-${q.ref_number}`}>
+                                        {busyId === q.id ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} PDF
+                                    </Button>
+                                </div>
                             </div>
                         );
                     })}
                 </div>
             )}
+
+            {/* Choose supplier → confirm order */}
+            <Dialog open={!!ordering} onOpenChange={(o) => { if (!o) { setOrdering(null); setSel(null); } }}>
+                <DialogContent className="max-w-lg" data-testid="proc-order-dialog">
+                    <DialogHeader>
+                        <DialogTitle>Place order — {ordering?.ref_number}</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-[13px] text-[#6E6E73]">{ordering?.product_label} · qty {ordering?.qty}. Choose the supplier to order from:</p>
+                    <div className="space-y-2 max-h-72 overflow-y-auto">
+                        {(ordering?.items || []).map((it) => {
+                            const selected = sel === it.listing_id;
+                            return (
+                                <button
+                                    key={it.listing_id}
+                                    onClick={() => setSel(it.listing_id)}
+                                    className={`w-full text-left rounded-xl border p-3 transition ${selected ? "border-[#00B7C7] bg-[#F2FBFC]" : "border-[#E5E5EA] bg-white hover:border-[#0A0A0B]"}`}
+                                    data-testid={`proc-order-pick-${it.rank}`}
+                                >
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded-full ${it.rank === "L1" ? "bg-emerald-100 text-emerald-800" : "bg-[#F4F4F6] text-[#6E6E73]"}`}>{it.rank}</span>
+                                            <span className="text-[13px] font-semibold text-[#0A0A0B] truncate">{it.supplier_name}</span>
+                                        </div>
+                                        <span className="font-mono text-[13.5px] font-bold text-[#0A0A0B]">{fmtMoney((it.total_price || 0) * (ordering?.qty || 1))}</span>
+                                    </div>
+                                    <div className="text-[11px] text-[#86868B] mt-1">
+                                        {fmtMoney(it.unit_price)} + GST {it.gst_rate}% per unit · delivery ~{it.delivery_days} days · {it.city || ""}
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => { setOrdering(null); setSel(null); }}>Cancel</Button>
+                        <Button onClick={placeOrder} disabled={placing || !sel} className="btn-cta" data-testid="proc-order-confirm">
+                            {placing ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null} Confirm order
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

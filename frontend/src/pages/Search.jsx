@@ -17,6 +17,7 @@ import PrinterProductCard from "../components/cards/PrinterProductCard";
 import PaperProductCard from "../components/cards/PaperProductCard";
 import ConsumableProductCard from "../components/cards/ConsumableProductCard";
 import ScannerProductCard from "../components/cards/ScannerProductCard";
+import BrandChips from "../components/BrandChips";
 import { PRINTER_TONER_BRANDS } from "../lib/listingConstants";
 import useReveal from "../hooks/useReveal";
 import { cityMatch } from "../lib/location";
@@ -386,6 +387,11 @@ export default function SearchPage() {
             {/* Detailed toner browse (full filters) — default view & the "Toners" tab */}
             {(!params.get("q") || cat === "toners") && (
                 <div className="mt-4">
+                    <BrandChips
+                        value={tonerFilterValue.brand}
+                        onChange={(b) => setFilter("brand", b || "all")}
+                        testidPrefix="toner-brand-chip"
+                    />
                     <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-3 pb-3 bg-[#F5F5F7]/95 backdrop-blur" data-testid="toners-filters-wrapper">
                         <CategoryFilters
                             selects={[

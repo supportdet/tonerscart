@@ -8,6 +8,7 @@ import { useCart } from "../context/CartContext";
 import { Skeleton } from "../components/ui/skeleton";
 import PageMeta from "../components/PageMeta";
 import TonerCartridge from "../components/TonerCartridge";
+import ProductPlaceholder from "../components/ProductPlaceholder";
 import RelatedProducts from "../components/RelatedProducts";
 import DealEnquiryDialog from "../components/DealEnquiryDialog";
 import AuthRequiredDialog from "../components/AuthRequiredDialog";
@@ -248,6 +249,12 @@ export default function ProductDetail({ kind = "toner" }) {
                             >
                                 <div className="w-[88%]">
                                     <TonerCartridge brand={data.brand} />
+                                </div>
+                            </div>
+                        ) : ["printer", "consumable", "scanner"].includes(kind) ? (
+                            <div className="aspect-[1.6/1] w-full max-w-[440px] rounded-2xl border border-black/[0.07] bg-white grid place-items-center" data-testid="product-image-main">
+                                <div className="w-[88%]">
+                                    <ProductPlaceholder kind={kind} brand={data.brand} />
                                 </div>
                             </div>
                         ) : (
