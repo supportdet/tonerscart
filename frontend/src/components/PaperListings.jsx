@@ -9,6 +9,7 @@ import D2DRow from "./D2DRow";
 import { GST_RATES, gstAmount, formatINR } from "../lib/listingConstants";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
+import DeliveryPolicyNote from "./DeliveryPolicyNote";
 import BulkUploadGeneric from "./BulkUploadGeneric";
 import { paperBulkConfig } from "../lib/bulkConfigs";
 
@@ -345,6 +346,7 @@ export default function PaperListings() {
                                 })}
                             </div>
                         </div>
+                        <DeliveryPolicyNote />
                         <CommissionBanner />
                         <DialogFooter className="mt-3">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>

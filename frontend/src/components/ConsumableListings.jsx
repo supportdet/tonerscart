@@ -8,6 +8,7 @@ import { Trash2, Boxes, Pencil, ChevronLeft, ImageIcon, X } from "lucide-react";
 import { GST_RATES, gstAmount, formatINR } from "../lib/listingConstants";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
+import DeliveryPolicyNote from "./DeliveryPolicyNote";
 import BulkUploadGeneric from "./BulkUploadGeneric";
 import { consumableBulkConfig } from "../lib/bulkConfigs";
 import CompatibleModelsSelect from "./CompatibleModelsSelect";
@@ -283,6 +284,7 @@ export default function ConsumableListings() {
                             </div>
                         </div>
 
+                        <DeliveryPolicyNote />
                         <CommissionBanner />
                         <DialogFooter className="mt-3">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>

@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { ShoppingCart } from "lucide-react";
+import { DELIVERY_RATES } from "../lib/delivery";
 
 const inr = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
 
@@ -38,9 +39,7 @@ export default function TonerPriceTable({ listings, firstRowRef }) {
                             <td className="px-4 py-3 font-mono text-[15px] font-semibold text-[#0A0A0B]">{inr(l.total_price)}</td>
                             <td className="px-4 py-3 text-[12px] text-[#6E6E73]">
                                 <div className="text-emerald-700 font-medium">Local: Free</div>
-                                {l.intercity_delivery_charge > 0
-                                    ? <div>Intercity: +{inr(l.intercity_delivery_charge)}</div>
-                                    : <div>Intercity: on request</div>}
+                                <div>Intercity: +{inr(DELIVERY_RATES.toner)}</div>
                             </td>
                             <td className="px-4 py-3">
                                 <Link to={l.url} className="btn-pill-cta text-[12.5px] px-4 py-2 inline-flex items-center gap-1 whitespace-nowrap" data-testid={`price-buy-${l.id}`}>

@@ -16,6 +16,7 @@ import PrinterListings from "../components/PrinterListings";
 import PaperListings from "../components/PaperListings";
 import ConsumableListings from "../components/ConsumableListings";
 import ScannerListings from "../components/ScannerListings";
+import DeliveryPolicyNote from "../components/DeliveryPolicyNote";
 import SupplierEarnings from "../components/SupplierEarnings";
 import SupplierInsights from "../components/SupplierInsights";
 import CommissionBanner from "../components/CommissionBanner";
@@ -1187,9 +1188,7 @@ export default function SupplierDashboard() {
                                 <div className="text-[11px] text-[#86868B] mt-1">Buyer sees only the base price on listing cards. GST is added on the checkout summary.</div>
                             </div>
                             <div className="col-span-2">
-                                <Label>Intercity delivery charge (₹)</Label>
-                                <Input type="number" min="0" step="1" value={intercityCharge} onChange={(e) => setIntercityCharge(e.target.value)} placeholder="0" className="tc-input-lg" data-testid="listing-intercity-charge" />
-                                <div className="text-[11px] text-[#86868B] mt-1">Delivery within your city is free and included in your listed price. Enter a charge only if you deliver to other cities. Leave 0 if intercity not available.</div>
+                                <DeliveryPolicyNote />
                             </div>
                         </div>
 

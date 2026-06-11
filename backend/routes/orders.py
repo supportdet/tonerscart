@@ -44,6 +44,15 @@ async def create_order(payload: OrderCreate, user: dict = Depends(require_user))
         raise HTTPException(400, "Insufficient stock")
     unit_price = float(variant["price"]) if variant else float(L["price"])
     total = unit_price * payload.qty
+    # System-defined intercity delivery (ignore any client-sent amount).
+    # Dealer city: listing city if present, else the supplier's registered city.
+    _dealer_city = L.get("city")
+    if not _dealer_city:
+        _sup = sb_admin.table("suppliers").select("city").eq("id", L["supplier_id"]).maybe_single().execute()
+        _dealer_city = (_sup.data or {}).get("city") if _sup else None
+    delivery_charge = _resolve_delivery_charge(
+        "toner", _dealer_city, payload.order_city, bool(payload.charge_delivery)
+    )
 
     row = {
         "customer_id": user["id"],
@@ -67,7 +76,7 @@ async def create_order(payload: OrderCreate, user: dict = Depends(require_user))
         "order_city": payload.order_city,
         "order_state": payload.order_state,
         "pincode": payload.pincode,
-        "delivery_charge": (float(payload.delivery_charge) if payload.delivery_charge else None),
+        "delivery_charge": (delivery_charge if delivery_charge else None),
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
         "gst_amount": (float(payload.gst_amount) if payload.gst_amount is not None else None),
     }.items():

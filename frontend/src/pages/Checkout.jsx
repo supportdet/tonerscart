@@ -12,6 +12,7 @@ import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
 import { CheckCircle2, ShoppingBag, Lock, ArrowRight, ChevronLeft } from "lucide-react";
 import PhonePrefixInput from "../components/PhonePrefixInput";
+import { computeCartDelivery } from "../lib/delivery";
 
 export default function Checkout() {
     const { user, login, signupCustomer } = useAuth();
@@ -33,21 +34,26 @@ export default function Checkout() {
     const [loading, setLoading] = useState(false);
     const [policyAgreed, setPolicyAgreed] = useState(false);
 
-    // Compute per-item delivery + GST: delivery 0 if same city else listing.intercity_delivery_charge
+    // System-defined delivery: free same-city, flat intercity rate per category,
+    // charged ONCE per dealer. GST is per item on the base price.
+    const delivery = useMemo(() => computeCartDelivery(items, orderCity), [items, orderCity]);
     const deliveryBreakdown = useMemo(() => {
-        const buyerCity = (orderCity || "").trim().toLowerCase();
         return items.map((it) => {
-            const dealerCity = (it.product?.city || "").trim().toLowerCase();
-            const intercity = Number(it.product?.intercity_delivery_charge || 0);
-            const sameCity = buyerCity && dealerCity && buyerCity === dealerCity;
-            const charge = sameCity ? 0 : intercity;
+            const d = delivery.perItem[it.id] || {};
             const rate = Number(it.product?.gst_rate ?? 18);
             const lineBase = Number(it.product?.price || 0) * it.qty;
             const lineGst = Math.round((lineBase * rate) / 100);
-            return { id: it.id, sameCity, intercity, charge, dealerCity: it.product?.city || "", rate, lineBase, lineGst };
+            return {
+                id: it.id,
+                sameCity: !!d.sameCity,
+                dealerCity: d.dealerCity || it.product?.city || "",
+                bears: !!d.bears,
+                charge: Number(d.charge || 0),
+                rate, lineBase, lineGst,
+            };
         });
-    }, [items, orderCity]);
-    const totalDelivery = useMemo(() => deliveryBreakdown.reduce((s, d) => s + Number(d.charge || 0), 0), [deliveryBreakdown]);
+    }, [items, delivery]);
+    const totalDelivery = delivery.total;
     const totalGst = useMemo(() => deliveryBreakdown.reduce((s, d) => s + Number(d.lineGst || 0), 0), [deliveryBreakdown]);
     const grandTotal = subtotal + totalGst + totalDelivery;
 
@@ -114,6 +120,7 @@ export default function Checkout() {
                     order_city: orderCity,
                     order_state: orderState,
                     pincode,
+                    charge_delivery: !!breakdown?.bears,
                     delivery_charge: Number(breakdown?.charge || 0),
                     gst_rate: Number(breakdown?.rate ?? 18),
                     gst_amount: Number(breakdown?.lineGst || 0),
@@ -268,10 +275,10 @@ export default function Checkout() {
                                                 <div className="mt-1 text-[11.5px]">
                                                     {br?.sameCity ? (
                                                         <span className="text-emerald-700 font-semibold">✅ Free delivery within {br.dealerCity}</span>
-                                                    ) : br?.charge > 0 ? (
-                                                        <span className="text-[#6E6E73]">🚚 Intercity delivery: +₹{Number(br.charge).toLocaleString("en-IN")}</span>
+                                                    ) : br?.bears ? (
+                                                        <span className="text-[#6E6E73]">🚚 Intercity delivery: +₹{Number(br.charge).toLocaleString("en-IN")} (charged once for this dealer)</span>
                                                     ) : (
-                                                        <span className="text-orange-700">⚠️ Delivery only within {br?.dealerCity || "dealer city"} — confirm with supplier</span>
+                                                        <span className="text-[#6E6E73]">🚚 Intercity — delivery charged once with this dealer&apos;s order</span>
                                                     )}
                                                 </div>
                                             </div>
@@ -290,10 +297,10 @@ export default function Checkout() {
                                     <span className="font-mono text-[#0A0A0B]" data-testid="summary-gst">₹{totalGst.toLocaleString("en-IN")}</span>
                                 </div>
                                 <div className="flex items-center justify-between text-[13px]">
-                                    <span className="text-[#6E6E73]">Delivery charges</span>
+                                    <span className="text-[#6E6E73]">{totalDelivery > 0 ? "Intercity delivery" : "Delivery"}</span>
                                     <span className="font-mono text-[#0A0A0B]" data-testid="summary-delivery">{totalDelivery > 0 ? `₹${totalDelivery.toLocaleString("en-IN")}` : "Free"}</span>
                                 </div>
-                                <div className="text-[11.5px] text-[#86868B]">GST invoice issued by supplier on delivery</div>
+                                <div className="text-[11.5px] text-[#86868B]">Same-city delivery is free. Intercity is a flat charge per dealer (₹100–₹350 by product type), charged once per dealer.</div>
                                 <div className="flex items-center justify-between pt-2 border-t border-black/[0.06]">
                                     <span className="text-[11px] tracking-[0.16em] uppercase font-semibold text-[#0A0A0B]">Total payable</span>
                                     <span className="font-mono text-[24px] font-bold text-[#0A0A0B]" data-testid="summary-total">₹{grandTotal.toLocaleString("en-IN")}</span>
