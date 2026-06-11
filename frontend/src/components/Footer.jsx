@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, Phone } from "lucide-react";
 import { TERMS_VERSION } from "../pages/Terms";
 import { PRIVACY_VERSION } from "../pages/Privacy";
 
@@ -26,6 +26,13 @@ export default function Footer() {
                         <p className="mt-2 text-[#6E6E73] text-[11px]">
                             TonersCart Private Limited · Bangalore, India
                         </p>
+                        <a
+                            href="tel:+918884546789"
+                            className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-[#0A0A0B] hover:text-[#00B7C7] transition"
+                            data-testid="footer-phone"
+                        >
+                            <Phone size={13} className="text-[#00B7C7]" /> +91 88845 46789
+                        </a>
                         <p className="mt-5 text-[12px] text-[#86868B]">© {year} TonersCart. All rights reserved.</p>
                     </div>
 
@@ -71,6 +78,7 @@ export default function Footer() {
                 <div className="mt-10 pt-6 border-t border-[#E8E8EC] text-[12px] text-[#6E6E73] leading-relaxed" data-testid="footer-grievance">
                     <span className="font-semibold text-[#0A0A0B]">For grievances contact:</span>{" "}
                     <a href="mailto:support@tonerscart.com" className="text-[#1D1D1F] hover:text-[#00B7C7] transition">support@tonerscart.com</a>
+                    {" · "}<a href="tel:+918884546789" className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-grievance-phone">+91 88845 46789</a>
                     {" · "}TonersCart Private Limited, Bangalore
                     {" · "}Response within 48 hours
                 </div>

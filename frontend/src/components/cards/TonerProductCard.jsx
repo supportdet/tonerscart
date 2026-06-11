@@ -45,7 +45,7 @@ export default function TonerProductCard({ p, qty, setQty, onBuy, onCart, userCi
                         style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
                         data-testid={`product-compat-${p.id}`}
                     >
-                        Compatible models: {p.compatible_models}
+                        Suitable for: {p.compatible_models}
                     </div>
                 )}
                 <div className="flex items-center gap-1.5 min-w-0">

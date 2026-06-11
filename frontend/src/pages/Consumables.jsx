@@ -10,7 +10,6 @@ import ConsumableProductCard from "../components/cards/ConsumableProductCard";
 import ProductRequestForm from "../components/ProductRequestForm";
 import BrandChips from "../components/BrandChips";
 import { CONSUMABLE_SUBCATEGORIES, CONSUMABLE_CONDITIONS } from "../lib/consumableConstants";
-import { PRINTER_TONER_BRANDS } from "../lib/listingConstants";
 
 const SORT_OPTIONS = [
     { value: "local", label: "Local suppliers first" },
@@ -25,7 +24,7 @@ export default function Consumables() {
     const [loading, setLoading] = useState(true);
     const [sub, setSub] = useState("all");
     const [filters, setFilters] = useState({
-        brand: "", condition: "", city: "", minPrice: "", maxPrice: "", sort: "local",
+        brands: [], condition: "", city: "", minPrice: "", maxPrice: "", sort: "local",
     });
 
     const load = async () => {
@@ -45,11 +44,9 @@ export default function Consumables() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { load(); }, [sub]);
 
-    const brandOptions = PRINTER_TONER_BRANDS.map((b) => ({ value: b, label: b }));
-
     const visible = useMemo(() => {
         let out = rows.filter((r) => {
-            if (filters.brand && r.brand !== filters.brand) return false;
+            if (filters.brands.length > 0 && !filters.brands.includes(r.brand)) return false;
             if (filters.condition && (r.condition || "New") !== filters.condition) return false;
             const rc = r.supplier_city || r.city;
             if (filters.city && rc !== filters.city) return false;
@@ -107,15 +104,14 @@ export default function Consumables() {
 
                 {/* Brand filter chips */}
                 <BrandChips
-                    value={filters.brand}
-                    onChange={(b) => setFilters({ ...filters, brand: b })}
+                    value={filters.brands}
+                    onChange={(b) => setFilters({ ...filters, brands: b })}
                     testidPrefix="consumable-brand-chip"
                 />
 
                 <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-3 pb-3 mt-5 bg-[#F5F5F7]/95 backdrop-blur" data-testid="consumables-filters-wrapper">
                     <CategoryFilters
                         selects={[
-                            { key: "brand", label: "Brand", allLabel: "All brands", options: brandOptions },
                             { key: "condition", label: "Condition", allLabel: "All conditions", options: CONSUMABLE_CONDITIONS.map((c) => ({ value: c, label: c })) },
                             { key: "city", label: "City", allLabel: "All cities", options: KNOWN_CITIES.map((c) => ({ value: c, label: c })) },
                         ]}

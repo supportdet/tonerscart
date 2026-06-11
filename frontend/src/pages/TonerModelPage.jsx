@@ -124,10 +124,10 @@ export default function TonerModelPage() {
             </section>
 
             <div className="tc-container py-10 space-y-10">
-                {/* Compatible printers */}
+                {/* Suitable for */}
                 {printers.length > 0 && (
                     <section data-testid="toner-compatible-printers">
-                        <h2 className="text-[18px] font-semibold text-[#0A0A0B] mb-3">Compatible printers</h2>
+                        <h2 className="text-[18px] font-semibold text-[#0A0A0B] mb-3">Suitable for</h2>
                         <div className="flex flex-wrap gap-2">
                             {printers.map((pr) => (
                                 <Link key={pr.slug} to={pr.url} className="inline-flex items-center gap-1.5 bg-white border border-[#E5E5EA] rounded-full px-3 py-1.5 text-[13px] text-[#0A0A0B] hover:border-[#00B7C7]/60 hover:text-[#0A6E78] transition" data-testid="toner-compatible-printer-chip">

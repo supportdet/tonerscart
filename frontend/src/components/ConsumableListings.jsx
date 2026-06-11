@@ -224,7 +224,7 @@ export default function ConsumableListings() {
                                 <Input value={form.model_number} onChange={(e) => setForm({ ...form, model_number: e.target.value })} required placeholder="DR-2305" className="tc-input-lg" data-testid="consumable-model-input" />
                             </div>
                             <div className="col-span-2">
-                                <Label>Compatible printer models</Label>
+                                <Label>Suitable for</Label>
                                 <CompatibleModelsSelect
                                     mode="printers"
                                     value={form.compatible_models}

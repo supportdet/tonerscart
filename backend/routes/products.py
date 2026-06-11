@@ -30,6 +30,8 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
     s = _approved_supplier(user)
     if payload.toner_type not in ("Original", "Compatible", "Refilled"):
         raise HTTPException(400, "toner_type must be Original, Compatible or Refilled")
+    if not payload.page_yield or int(payload.page_yield) <= 0:
+        raise HTTPException(400, "Page yield (sheets) is required")
 
     # Resolve toner_master row: use toner_id if given, else find/create by (brand, model)
     t = None

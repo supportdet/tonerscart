@@ -304,7 +304,7 @@ export default function ProductDetail({ kind = "toner" }) {
                         {kind === "toner" && data.compatible_models && (
                             <div className="mt-4 inline-flex items-start gap-2 bg-[#FFF8E0] border border-[#F5E5A6] rounded-lg px-3 py-2 text-[12.5px] text-[#5C4A00]" data-testid="product-compatibility">
                                 <CheckCircle2 size={14} className="mt-0.5 text-[#8C6A00] shrink-0" />
-                                <div><span className="font-semibold">Compatible models:</span> {data.compatible_models}</div>
+                                <div><span className="font-semibold">Suitable for:</span> {data.compatible_models}</div>
                             </div>
                         )}
 
@@ -449,7 +449,7 @@ function SpecsBlock({ kind, data, selectedVariant }) {
         rows.push(["Page yield", data.page_yield ? `${Number(data.page_yield).toLocaleString("en-IN")} pages` : "—"]);
         rows.push(["Type", data.toner_type]);
         rows.push(["Colour", selectedVariant?.color || data.color]);
-        if (data.compatible_models) rows.push(["Compatible models", data.compatible_models]);
+        if (data.compatible_models) rows.push(["Suitable for", data.compatible_models]);
         if (data.oem_part_number) rows.push(["OEM part number", data.oem_part_number]);
         if (data.cartridge_weight) rows.push(["Cartridge weight", `${data.cartridge_weight} g`]);
         if (data.pack_size) rows.push(["Pack size", `${data.pack_size} cartridge${data.pack_size === 1 ? "" : "s"}`]);
@@ -482,7 +482,7 @@ function SpecsBlock({ kind, data, selectedVariant }) {
         rows.push(["Model number", data.model_number]);
         rows.push(["Type", data.subcategory === "Other" && data.subcategory_other ? data.subcategory_other : data.subcategory]);
         if (data.condition) rows.push(["Condition", data.condition]);
-        if (data.compatible_models) rows.push(["Compatible printers", data.compatible_models]);
+        if (data.compatible_models) rows.push(["Suitable for", data.compatible_models]);
         if (data.description) rows.push(["Description", data.description]);
     } else if (kind === "scanner") {
         rows.push(["Brand", data.brand]);

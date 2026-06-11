@@ -586,7 +586,7 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
     else:  # toner (default)
         _push("Page yield", f"{item.get('page_yield')} pages" if item.get('page_yield') else None)
         compat = item.get('compatible_models')
-        _push("Compatible models", ", ".join(compat) if isinstance(compat, list) else compat)
+        _push("Suitable for", ", ".join(compat) if isinstance(compat, list) else compat)
         _push("OEM part number", item.get('oem_part_number'))
         _push("Cartridge weight", f"{item.get('cartridge_weight')} g" if item.get('cartridge_weight') else None)
         _push("Print technology", item.get('print_technology'))

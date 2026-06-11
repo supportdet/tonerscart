@@ -17,12 +17,12 @@ const TONER_TYPES = ["Original", "Compatible"];
 
 const TONER_COLUMNS = [
     { key: "brand", label: "Brand", required: true, type: "select", placeholder: "Select brand…", w: 140 },
-    { key: "compatible_models", label: "Compatible Models", required: true, type: "models", w: 240 },
+    { key: "compatible_models", label: "Suitable For", required: true, type: "models", w: 240 },
     { key: "color", label: "Color", required: false, w: 110 },
     { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
     { key: "stock", label: "Stock", required: true, type: "number", w: 90 },
-    { key: "page_yield", label: "Page Yield", required: false, type: "number", w: 110 },
+    { key: "page_yield", label: "Page Yield", required: true, type: "number", w: 110 },
     { key: "oem_part_number", label: "OEM Part Number", required: false, w: 150 },
     { key: "toner_type", label: "Toner Type", required: true, type: "select", w: 130 },
 ];
@@ -40,11 +40,12 @@ const tonerIsRowEmpty = (r) =>
 const tonerRowErrors = (r) => {
     const errs = new Set();
     if (tonerIsRowEmpty(r)) return errs;
-    for (const k of ["brand", "compatible_models", "price", "stock", "toner_type"]) {
+    for (const k of ["brand", "compatible_models", "price", "stock", "toner_type", "page_yield"]) {
         if (String(r[k] ?? "").trim() === "") errs.add(k);
     }
     if (r.price !== "" && Number(r.price) <= 0) errs.add("price");
     if (r.stock !== "" && Number(r.stock) < 0) errs.add("stock");
+    if (r.page_yield !== "" && Number(r.page_yield) <= 0) errs.add("page_yield");
     if (r.toner_type && !TONER_TYPES.includes(r.toner_type)) errs.add("toner_type");
     if (r.brand && !TONER_BRANDS.includes(r.brand)) errs.add("brand");
     return errs;
@@ -76,8 +77,8 @@ const tonerScalarPayload = (r) => ({
 export const tonerBulkConfig = {
     title: "Bulk upload toners",
     editTitle: "Edit toners",
-    editSubtitle: "Edit your existing toners inline, then save. Add new rows to publish more. Required: Brand, Compatible Models, Price, Stock, Toner Type.",
-    subtitle: "Fill the table or upload a CSV / Excel. Required: Brand, Compatible Models, Price, Stock, Toner Type.",
+    editSubtitle: "Edit your existing toners inline, then save. Add new rows to publish more. Required: Brand, Suitable For, Price, Stock, Toner Type, Page Yield.",
+    subtitle: "Fill the table or upload a CSV / Excel. Required: Brand, Suitable For, Price, Stock, Toner Type, Page Yield.",
     sheetName: "Toners",
     templateFilename: "tonerscart_bulk_toners_template.xlsx",
     currentFilename: "tonerscart_bulk_toners.xlsx",
@@ -93,7 +94,7 @@ export const tonerBulkConfig = {
         page_yield: "1500", oem_part_number: "CC388A", toner_type: "Original",
         intercity_delivery_charge: "150",
     },
-    requiredKeys: ["brand", "compatible_models", "price", "stock", "toner_type"],
+    requiredKeys: ["brand", "compatible_models", "price", "stock", "toner_type", "page_yield"],
     isRowEmpty: tonerIsRowEmpty,
     rowErrors: tonerRowErrors,
     // Edit mode — map an existing listing into an editable row.
@@ -294,7 +295,7 @@ const CONSUMABLE_COLUMNS = [
     { key: "subcategory_other", label: "If Other, specify", required: false, w: 150 },
     { key: "brand", label: "Brand", required: true, type: "select", placeholder: "Select brand…", w: 140 },
     { key: "model_number", label: "Model Number", required: true, w: 160 },
-    { key: "compatible_models", label: "Compatible Printers", required: false, type: "models", w: 220 },
+    { key: "compatible_models", label: "Suitable For", required: false, type: "models", w: 220 },
     { key: "condition", label: "Condition", required: false, type: "select", w: 130 },
     { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
