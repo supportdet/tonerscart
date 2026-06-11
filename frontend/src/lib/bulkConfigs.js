@@ -22,7 +22,6 @@ const TONER_COLUMNS = [
     { key: "page_yield", label: "Page Yield", required: false, type: "number", w: 110 },
     { key: "oem_part_number", label: "OEM Part Number", required: false, w: 150 },
     { key: "toner_type", label: "Toner Type", required: true, type: "select", w: 130 },
-    { key: "intercity_delivery_charge", label: "Intercity Delivery (₹)", required: false, type: "number", w: 140 },
 ];
 
 const tonerEmptyRow = () => ({
@@ -295,7 +294,6 @@ const CONSUMABLE_COLUMNS = [
     { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
     { key: "stock", label: "Stock", required: true, type: "number", w: 90 },
-    { key: "intercity_delivery_charge", label: "Intercity Delivery (₹)", required: false, type: "number", w: 140 },
     { key: "description", label: "Description", required: false, w: 220 },
 ];
 
@@ -408,7 +406,6 @@ const SCANNER_COLUMNS = [
     { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
     { key: "stock", label: "Stock", required: true, type: "number", w: 90 },
-    { key: "intercity_delivery_charge", label: "Intercity Delivery (₹)", required: false, type: "number", w: 140 },
     { key: "description", label: "Description", required: false, w: 220 },
 ];
 

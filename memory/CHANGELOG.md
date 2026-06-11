@@ -1,3 +1,31 @@
+### 2026-06-11 (b) — Standalone Vercel-served sitemap.xml (Google-crawlable)
+
+- **Problem:** `tonerscart.com/sitemap.xml` was a sitemap *index* pointing to `tonerscart.com/api/sitemap.xml` (Railway backend) which Google could not fetch.
+- **Fix:** Replaced `frontend/public/sitemap.xml` with a COMPLETE, standalone `<urlset>` (1132 URLs) served directly by Vercel — zero Railway dependency:
+  - 14 static pages (/, /search, /printers, /papers, /consumables, /scanners, /oem, /mps, /sell, /get-featured, /about, /contact, /terms, /privacy). NOTE: "Toners" nav = /search (there is no /toners route).
+  - 546 `/compatible/<slug>` printer pages + 572 `/toner/<slug>` toner pages, hardcoded from `compatibility_db`.
+- **Generator:** `backend/generate_sitemap.py` — re-run (`cd /app/backend && python generate_sitemap.py`) whenever `compatibility_db.py` changes. Product listing URLs intentionally excluded (added dynamically later).
+- Verified: XML well-formed, served as `application/xml`, 1132 `<url>` entries. `robots.txt` already references `https://www.tonerscart.com/sitemap.xml`.
+- **Cleanup:** purged all remaining test/example.com buyer accounts (0 test users remain). Product/supplier tables had no test data.
+
+
+### 2026-06-11 — Wave 22: flat-rate intercity delivery FINALIZED + printer orders fixed
+
+**Delivery system (system-defined, dealers cannot set it):**
+- Same-city = FREE; intercity = flat charge per CATEGORY, charged ONCE per dealer per order (highest category rate among that dealer's items). Rates: toner ₹100, printer ₹350, paper ₹150, scanner ₹250, consumable ₹100. Alias-aware city match (bangalore=bengaluru, bombay=mumbai, etc.).
+- Backend `_resolve_delivery_charge` (server.py) is AUTHORITATIVE — recomputes server-side and ignores any client-sent amount (verified: client 999 → stored 100/0).
+- Frontend `lib/delivery.js` `computeCartDelivery` mirrors backend; Checkout.jsx Step 2 renders per-item delivery line + `summary-delivery` total.
+
+**Bugs fixed this wave:**
+- `PrinterProductCard` / `ProductDetail.onAddToCart` / `CustomerDashboard.reorder` now stamp the correct `kind` + `city` + `supplier_id` into the cart product (printers were defaulting to the ₹100 toner rate; same-city detection was broken when only `supplier_city` was set).
+- **CRITICAL (caught by testing agent):** printer orders 404'd because printers were never wired into the order flow. Added `printer` to `_create_direct_order` (server.py, table=`printer_listings`, col=`printer_listing_id`) and to `create_order` routing (orders.py). Also `_attach_direct_product` now labels printer rows.
+- **CRITICAL (caught by testing agent):** toner `POST /orders` was crashing 500 — `_resolve_delivery_charge` was used in routes/orders.py but not imported (`from server import *` skips underscore names). Added to the explicit underscore-helpers import line. NOTE: every new `_helper` in server.py must be added to each route module's explicit import.
+
+**Migration (optional, recommended):** `backend/supabase_schema_printer_orders.sql` adds `orders.printer_listing_id`. Orders succeed without it (insert drop-loop), but the column preserves the printer→order FK link. USER SHOULD RUN THIS SQL in Supabase.
+
+**Tests:** backend `tests/test_wave22_delivery.py` (3) + `tests/test_wave22_all_categories.py` (12) = 15/15 PASS. Frontend e2e (iteration_38) verified all 5 category rates + alias-aware same-city Free + charge-once-per-dealer + order placement. All test buyer accounts purged.
+
+
 ### 2026-06-10 (d) — Admin account migration + mobile-responsive admin dashboard
 
 **Admin account migrated:**

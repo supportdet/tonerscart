@@ -311,6 +311,9 @@ class OrderCreate(BaseModel):
     order_state: Optional[str] = None
     pincode: Optional[str] = None
     delivery_charge: Optional[float] = 0
+    # Wave 22 — system-defined delivery: True only for the single delivery-bearing
+    # order line per dealer (checkout sets this); the server computes the amount.
+    charge_delivery: Optional[bool] = True
     # Wave 9 — GST
     gst_rate: Optional[int] = None
     gst_amount: Optional[float] = None
@@ -385,6 +388,48 @@ _CITY_EQUIV = {
 def _city_key(c: Optional[str]) -> str:
     k = (c or "").strip().lower()
     return _CITY_EQUIV.get(k, k)
+
+
+# ── System-defined flat intercity delivery rates (Wave 22) ──────────────────
+# Same-city delivery is free. For intercity orders a flat charge per product
+# category is added to the buyer's total at checkout — set by TonersCart, NOT by
+# dealers. Charged once per dealer per order (the checkout attributes the rate
+# to a single order line per dealer; non-bearing lines store 0).
+DELIVERY_RATES = {
+    "toner": 100,
+    "printer": 350,
+    "paper": 150,
+    "scanner": 250,
+    "consumable": 100,
+}
+DELIVERY_RATE_MAX = max(DELIVERY_RATES.values())
+
+
+def _delivery_rate(kind: Optional[str]) -> int:
+    """Flat intercity delivery rate (₹) for a product category."""
+    return DELIVERY_RATES.get((kind or "toner").lower(), DELIVERY_RATES["toner"])
+
+
+def _is_intercity(dealer_city: Optional[str], buyer_city: Optional[str]) -> bool:
+    """True when the dealer and buyer are in different cities (alias-aware).
+    When either city is unknown we conservatively treat it as intercity so the
+    delivery charge is shown rather than silently dropped."""
+    dk, bk = _city_key(dealer_city), _city_key(buyer_city)
+    if not dk or not bk:
+        return True
+    return dk != bk
+
+
+def _resolve_delivery_charge(kind: Optional[str], dealer_city: Optional[str],
+                             buyer_city: Optional[str], charge_delivery: bool) -> float:
+    """Authoritative, system-defined delivery charge for one order line.
+    Returns 0 for same-city, or when this line is not the delivery-bearing line
+    for its dealer (charge_delivery=False). Dealers cannot set or inflate this."""
+    if not charge_delivery:
+        return 0.0
+    if not _is_intercity(dealer_city, buyer_city):
+        return 0.0
+    return float(_delivery_rate(kind))
 
 
 def _fmt_validation_error(ve: ValidationError) -> str:
@@ -512,7 +557,7 @@ async def _create_direct_order(payload: "OrderCreate", user: dict, kind: str):
     """Order path for direct-purchase products that live outside the `listings`
     table (papers, consumables). Inserts an order with the matching
     {kind}_listing_id + denormalised product columns and decrements stock."""
-    table = "paper_listings" if kind == "paper" else "scanner_listings" if kind == "scanner" else "consumable_listings"
+    table = "paper_listings" if kind == "paper" else "scanner_listings" if kind == "scanner" else "printer_listings" if kind == "printer" else "consumable_listings"
     lst = sb_admin.table(table).select("*").eq("id", payload.listing_id).maybe_single().execute()
     if not lst or not lst.data:
         raise HTTPException(404, "Listing not found")
@@ -529,6 +574,15 @@ async def _create_direct_order(payload: "OrderCreate", user: dict, kind: str):
         brand = L.get("brand")
         model = L.get("model_number")
     total = unit_price * payload.qty
+    # System-defined intercity delivery (ignore any client-sent amount).
+    # Dealer city: listing city if present, else the supplier's registered city.
+    _dealer_city = L.get("city")
+    if not _dealer_city:
+        _sup = sb_admin.table("suppliers").select("city").eq("id", L["supplier_id"]).maybe_single().execute()
+        _dealer_city = (_sup.data or {}).get("city") if _sup else None
+    delivery_charge = _resolve_delivery_charge(
+        kind, _dealer_city, payload.order_city, bool(payload.charge_delivery)
+    )
 
     row = {
         "customer_id": user["id"],
@@ -553,7 +607,7 @@ async def _create_direct_order(payload: "OrderCreate", user: dict, kind: str):
         "order_city": payload.order_city,
         "order_state": payload.order_state,
         "pincode": payload.pincode,
-        "delivery_charge": (float(payload.delivery_charge) if payload.delivery_charge else None),
+        "delivery_charge": (delivery_charge if delivery_charge else None),
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
         "gst_amount": (float(payload.gst_amount) if payload.gst_amount is not None else None),
     }.items():
@@ -568,7 +622,7 @@ async def _create_direct_order(payload: "OrderCreate", user: dict, kind: str):
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("consumable_listing_id", "paper_listing_id", "scanner_listing_id", "product_brand", "product_model",
+            for k in ("consumable_listing_id", "paper_listing_id", "scanner_listing_id", "printer_listing_id", "product_brand", "product_model",
                       "product_image", "street_address", "area", "order_city", "order_state",
                       "pincode", "delivery_charge", "gst_rate", "gst_amount"):
                 if k in msg and k in row:
@@ -610,7 +664,7 @@ def _attach_direct_product(rows: list):
     a `listings` dict from the denormalised product_* columns so dashboards render."""
     for r in rows:
         if not r.get("listings") and (r.get("product_brand") or r.get("product_model")):
-            _tt = "Scanner" if r.get("scanner_listing_id") else "Consumable" if r.get("consumable_listing_id") else "Paper"
+            _tt = "Scanner" if r.get("scanner_listing_id") else "Printer" if r.get("printer_listing_id") else "Consumable" if r.get("consumable_listing_id") else "Paper"
             r["listings"] = {
                 "brand": r.get("product_brand"),
                 "model_number": r.get("product_model"),

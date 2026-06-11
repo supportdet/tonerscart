@@ -12,6 +12,7 @@ import AuthRequiredDialog from "../components/AuthRequiredDialog";
 import VerifiedBadge from "../components/VerifiedBadge";
 import { colorSwatch, isLightSwatch } from "../lib/colors";
 import { useCity } from "../context/CityContext";
+import { isIntercity, deliveryRate } from "../lib/delivery";
 
 const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
 
@@ -118,8 +119,11 @@ export default function ProductDetail({ kind = "toner" }) {
             variant_id: selectedVariant?.id || null,
             toner_type: data.toner_type,
             image_url: images[0] || data.image_url,
+            supplier_id: data.supplier_id,
             supplier_name: data.supplier_name,
             supplier_city: data.supplier_city,
+            city: data.supplier_city || data.city,
+            gst_rate: data.gst_rate ?? 18,
             kind,
         };
         addItem(product, qty);
@@ -323,7 +327,7 @@ export default function ProductDetail({ kind = "toner" }) {
                         )}
 
                         {/* Delivery info */}
-                        <DeliveryInfo data={data} />
+                        <DeliveryInfo data={data} kind={kind} />
 
                         {/* Supplier */}
                         <div className="mt-4 flex items-center gap-2 text-[13px] text-[#3a3a40]" data-testid="product-supplier">
@@ -398,20 +402,17 @@ export default function ProductDetail({ kind = "toner" }) {
     );
 }
 
-function DeliveryInfo({ data }) {
+function DeliveryInfo({ data, kind = "toner" }) {
     const { city: buyerCity } = useCity();
     const dealerCity = (data.supplier_city || data.city || "").trim();
     const buyer = (buyerCity || "").trim();
-    const charge = Number(data.intercity_delivery_charge || 0);
     if (!dealerCity) return null;
-    const same = buyer && dealerCity && buyer.toLowerCase() === dealerCity.toLowerCase();
+    const same = !isIntercity(dealerCity, buyer);
     if (same) {
         return (<div className="mt-2 text-[12.5px] font-semibold text-emerald-700 inline-flex items-center gap-1" data-testid="delivery-same-city">✅ Free delivery to {dealerCity}</div>);
     }
-    if (charge > 0) {
-        return (<div className="mt-2 text-[12.5px] text-[#6E6E73]" data-testid="delivery-intercity">🚚 Intercity delivery to {buyer || "your city"}: +₹{charge.toLocaleString("en-IN")}</div>);
-    }
-    return (<div className="mt-2 text-[12.5px] text-orange-700" data-testid="delivery-warning">⚠️ Delivery only within {dealerCity}</div>);
+    const charge = deliveryRate(kind);
+    return (<div className="mt-2 text-[12.5px] text-[#6E6E73]" data-testid="delivery-intercity">🚚 Intercity delivery to {buyer || "your city"}: +₹{charge.toLocaleString("en-IN")}</div>);
 }
 
 function SpecsBlock({ kind, data, selectedVariant }) {

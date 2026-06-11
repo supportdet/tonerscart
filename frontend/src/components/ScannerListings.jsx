@@ -8,6 +8,7 @@ import { Trash2, ScanLine, Pencil, ChevronLeft, ImageIcon, X } from "lucide-reac
 import { GST_RATES, gstAmount, formatINR, PRINTER_TONER_BRANDS } from "../lib/listingConstants";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
+import DeliveryPolicyNote from "./DeliveryPolicyNote";
 import BulkUploadGeneric from "./BulkUploadGeneric";
 import { scannerBulkConfig } from "../lib/bulkConfigs";
 import {
@@ -321,6 +322,7 @@ export default function ScannerListings() {
                             </div>
                         </div>
 
+                        <DeliveryPolicyNote />
                         <CommissionBanner />
                         <DialogFooter className="mt-3">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>

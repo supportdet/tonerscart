@@ -10,6 +10,7 @@ import D2DRow from "./D2DRow";
 import { GST_RATES, gstAmount, formatINR, PRINTER_SPECIAL_FEATURES } from "../lib/listingConstants";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
+import DeliveryPolicyNote from "./DeliveryPolicyNote";
 import BulkUploadGeneric from "./BulkUploadGeneric";
 import { printerBulkConfig } from "../lib/bulkConfigs";
 import CompatibleModelsSelect from "./CompatibleModelsSelect";
@@ -771,9 +772,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                                 <div className="text-[11px] text-[#86868B] mt-1">Buyer sees only the base price on listing cards. GST is added on checkout.</div>
                             </div>
                             <div>
-                                <Label>Intercity delivery charge (₹)</Label>
-                                <Input type="number" min="0" step="1" value={f.intercity_delivery_charge} onChange={upd("intercity_delivery_charge")} placeholder="0" className="tc-input-lg" data-testid="wizard-intercity-charge" />
-                                <div className="text-[11px] text-[#86868B] mt-1">Delivery within your city is free and included. Enter a charge only if you deliver to other cities. Leave 0 if intercity not available.</div>
+                                <DeliveryPolicyNote />
                             </div>
                         </div>
                     </div>

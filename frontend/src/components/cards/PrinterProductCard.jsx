@@ -23,14 +23,17 @@ export default function PrinterProductCard({ p }) {
     const { addItem } = useCart();
     const { city: userCity } = useCity();
     const loc = deliveryLabel(p.city || p.supplier_city, userCity);
+    // Printer rows from the API don't carry a `kind`; stamp it so checkout
+    // applies the correct system-defined intercity delivery rate (printer, not toner).
+    const prod = { ...p, kind: "printer" };
     const onAdd = (e) => {
         e.preventDefault(); e.stopPropagation();
-        addItem(p, 1);
+        addItem(prod, 1);
         toast.success(`Added ${p.brand} ${p.model_number} to cart`);
     };
     const onBuyNow = (e) => {
         e.preventDefault(); e.stopPropagation();
-        addItem(p, 1);
+        addItem(prod, 1);
         navigate("/checkout");
     };
     return (

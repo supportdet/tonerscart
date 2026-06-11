@@ -95,6 +95,7 @@ export default function CustomerDashboard() {
             const { data } = await api.get(`/listings/${listingId}`);
             const product = {
                 id: data.id,
+                kind: "toner",
                 price: data.price,
                 stock: data.stock,
                 brand: data.brand,
@@ -102,8 +103,10 @@ export default function CustomerDashboard() {
                 color: data.color,
                 toner_type: data.toner_type,
                 image_url: data.image_url,
+                supplier_id: data.supplier_id,
                 supplier_name: data.supplier_name,
-                supplier_city: data.supplier_city,
+                city: data.supplier_city || data.city,
+                gst_rate: data.gst_rate ?? 18,
             };
             addItem(product, order.qty || 1);
             toast.success("Added to cart");

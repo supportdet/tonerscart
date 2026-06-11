@@ -9,6 +9,7 @@ import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import { INDIAN_STATES } from "../lib/listingConstants";
+import { isIntercity, deliveryRate } from "../lib/delivery";
 import { Lock, Minus, Plus } from "lucide-react";
 import PhonePrefixInput from "./PhonePrefixInput";
 
@@ -45,11 +46,9 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
         }
     };
 
-    // Delivery preview
-    const buyerCity = (orderCity || "").trim().toLowerCase();
-    const dealerCity = (product?.city || "").trim().toLowerCase();
-    const sameCity = buyerCity && dealerCity && buyerCity === dealerCity;
-    const intercityCharge = Number(product?.intercity_delivery_charge || 0);
+    // Delivery preview — system-defined flat intercity rate per category (single dealer, single line).
+    const sameCity = !isIntercity(product?.city, orderCity);
+    const intercityCharge = deliveryRate(product?.kind);
     const deliveryCharge = sameCity ? 0 : intercityCharge;
     const fullAddress = [streetAddress, area, orderCity && pincode ? `${orderCity} - ${pincode}` : (orderCity || pincode), orderState].filter(Boolean).join(", ");
 
@@ -83,6 +82,7 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
                 order_city: orderCity,
                 order_state: orderState,
                 pincode,
+                charge_delivery: !sameCity,
                 delivery_charge: deliveryCharge,
             });
             toast.success("Order placed — supplier will confirm shortly");
@@ -183,10 +183,8 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
                         <div className="text-[12px] rounded-md px-3 py-2 border" data-testid="order-delivery-preview">
                             {sameCity ? (
                                 <span className="text-emerald-700 font-semibold">✅ Free delivery within {product.city}</span>
-                            ) : intercityCharge > 0 ? (
-                                <span className="text-[#0A0A0B]">🚚 Intercity delivery: <strong>+₹{intercityCharge.toLocaleString("en-IN")}</strong></span>
                             ) : (
-                                <span className="text-orange-700">⚠️ Delivery only within {product.city || "dealer city"} — confirm with supplier</span>
+                                <span className="text-[#0A0A0B]">🚚 Intercity delivery: <strong>+₹{intercityCharge.toLocaleString("en-IN")}</strong></span>
                             )}
                         </div>
                     )}

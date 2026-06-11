@@ -11,7 +11,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from server import *  # noqa: F401,F403  shared kernel: clients, models, helpers, deps
 from server import _td, _re, _time, _dd  # noqa: F401  import-alias kernel helpers
-from server import (_approved_supplier, _attach_direct_product, _create_direct_order, _gen_quote_number, _generate_order_number, _log_admin_action, _orders_with_listings, _safe_order_update)  # underscore kernel helpers
+from server import (_approved_supplier, _attach_direct_product, _create_direct_order, _gen_quote_number, _generate_order_number, _log_admin_action, _orders_with_listings, _resolve_delivery_charge, _safe_order_update)  # underscore kernel helpers
 
 from server import (_commission_breakdown)  # auto: kernel underscore helpers
 router = APIRouter(prefix="/api")
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api")
 async def create_order(payload: OrderCreate, user: dict = Depends(require_user)):
     if user["role"] not in ("customer", "supplier"):
         raise HTTPException(403, "Only signed-in buyers and sellers can place orders")
-    if (payload.listing_kind or "toner") in ("paper", "consumable", "scanner"):
+    if (payload.listing_kind or "toner") in ("paper", "consumable", "scanner", "printer"):
         return await _create_direct_order(payload, user, payload.listing_kind)
     lst = sb_admin.table("listings").select("*").eq("id", payload.listing_id).maybe_single().execute()
     if not lst or not lst.data:
@@ -44,6 +44,15 @@ async def create_order(payload: OrderCreate, user: dict = Depends(require_user))
         raise HTTPException(400, "Insufficient stock")
     unit_price = float(variant["price"]) if variant else float(L["price"])
     total = unit_price * payload.qty
+    # System-defined intercity delivery (ignore any client-sent amount).
+    # Dealer city: listing city if present, else the supplier's registered city.
+    _dealer_city = L.get("city")
+    if not _dealer_city:
+        _sup = sb_admin.table("suppliers").select("city").eq("id", L["supplier_id"]).maybe_single().execute()
+        _dealer_city = (_sup.data or {}).get("city") if _sup else None
+    delivery_charge = _resolve_delivery_charge(
+        "toner", _dealer_city, payload.order_city, bool(payload.charge_delivery)
+    )
 
     row = {
         "customer_id": user["id"],
@@ -67,7 +76,7 @@ async def create_order(payload: OrderCreate, user: dict = Depends(require_user))
         "order_city": payload.order_city,
         "order_state": payload.order_state,
         "pincode": payload.pincode,
-        "delivery_charge": (float(payload.delivery_charge) if payload.delivery_charge else None),
+        "delivery_charge": (delivery_charge if delivery_charge else None),
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
         "gst_amount": (float(payload.gst_amount) if payload.gst_amount is not None else None),
     }.items():
