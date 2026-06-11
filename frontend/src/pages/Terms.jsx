@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import PageMeta from "../components/PageMeta";
 
-export const TERMS_VERSION = "2.0";
+export const TERMS_VERSION = "2.1";
 
 export default function Terms() {
     return (
@@ -149,6 +149,7 @@ export default function Terms() {
                         <br />
                         <strong>Grievance Officer:</strong> Rohit Sairam, TonersCart Private Limited,
                         Email: <a href="mailto:support@tonerscart.com" className="text-[#00B7C7] hover:underline">support@tonerscart.com</a>,
+                        Phone: <a href="tel:+918884546789" className="text-[#00B7C7] hover:underline">+91 88845 46789</a>,
                         Response time: <strong>48 hours</strong>.
                     </Section>
 
@@ -160,6 +161,15 @@ export default function Terms() {
                     <Section title="20. Contact">
                         Questions about these Terms? Email <a href="mailto:support@tonerscart.com" className="text-[#00B7C7] hover:underline">support@tonerscart.com</a>.
                         TonersCart Private Limited, Bangalore, Karnataka, India. See also our <Link to="/privacy" className="text-[#00B7C7] hover:underline">Privacy Policy</Link>.
+                    </Section>
+
+                    <Section title="21. Nodal Officer">
+                        In accordance with the Consumer Protection (E-Commerce) Rules, 2020, the Nodal Officer of TonersCart Private Limited is:
+                        <br />
+                        <strong>Nodal Officer:</strong> Rohit Sairam, TonersCart Private Limited, Bangalore, Karnataka, India,
+                        Email: <a href="mailto:support@tonerscart.com" className="text-[#00B7C7] hover:underline">support@tonerscart.com</a>,
+                        Phone: <a href="tel:+918884546789" className="text-[#00B7C7] hover:underline">+91 88845 46789</a>,
+                        Response time: <strong>48 hours</strong>.
                     </Section>
                 </div>
             </div>

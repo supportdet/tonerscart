@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import PageMeta from "../components/PageMeta";
 
-export const PRIVACY_VERSION = "2.0";
+export const PRIVACY_VERSION = "2.1";
 
 export default function Privacy() {
     return (
@@ -66,7 +66,8 @@ export default function Privacy() {
                     <Section title="6. Data Retention">
                         We retain personal data for as long as your account is active and, after closure, for a period of
                         <strong> 7 years</strong> to comply with GST, tax and statutory record-keeping obligations. Data no longer required
-                        is securely deleted or anonymised.
+                        is securely deleted or anonymised. Upon a verified data deletion request, personal data not subject to legal
+                        retention obligations will be deleted within <strong>30 days</strong>.
                     </Section>
 
                     <Section title="7. Third-Party Sharing">
@@ -79,6 +80,11 @@ export default function Privacy() {
                             "Razorpay — payment processing (per RBI guidelines)",
                             "Google — sign-in / authentication services",
                         ]} />
+                        Payment data including card numbers, UPI IDs and net banking credentials are processed exclusively by
+                        <strong> Razorpay</strong>, our PCI-DSS compliant payment partner, and are <strong>never stored on TonersCart
+                        servers</strong>. Payment processing is governed by Razorpay&apos;s privacy policy and RBI guidelines.
+                        All third-party processors are <strong>contractually bound</strong> to protect your personal data from unauthorised
+                        use or disclosure and process it only for the purposes specified.
                     </Section>
 
                     <Section title="8. Your Rights under the DPDPA">
@@ -94,7 +100,9 @@ export default function Privacy() {
 
                     <Section title="9. Cookie Policy">
                         We use <strong>functional cookies only</strong> — to keep you signed in and remember your selected city. We do
-                        <strong> not</strong> use third-party advertising cookies or ad trackers.
+                        <strong> not</strong> use third-party advertising cookies or ad trackers. We also use <strong>Google Analytics (GA4)</strong>
+                        to track anonymised page views and user behaviour for platform improvement. No personally identifiable information
+                        is shared with Google Analytics.
                     </Section>
 
                     <Section title="10. Data Security">
@@ -114,12 +122,23 @@ export default function Privacy() {
                     </Section>
 
                     <Section title="13. Grievance Officer">
-                        For privacy grievances, contact our Grievance Officer at
-                        <a href="mailto:support@tonerscart.com" className="text-[#00B7C7] hover:underline"> support@tonerscart.com</a>.
+                        For privacy grievances, contact our Grievance Officer:
+                        <br />
+                        <strong>Rohit Sairam</strong>,
+                        Email: <a href="mailto:support@tonerscart.com" className="text-[#00B7C7] hover:underline">support@tonerscart.com</a>,
+                        Phone: <a href="tel:+918884546789" className="text-[#00B7C7] hover:underline">+91 88845 46789</a>.
                         We respond to grievances <strong>within 48 hours</strong>.
                     </Section>
 
-                    <Section title="14. Seller Payments & Commission">
+                    <Section title="14. Nodal Officer">
+                        In accordance with the Consumer Protection (E-Commerce) Rules, 2020, our Nodal Officer is:
+                        <br />
+                        <strong>Rohit Sairam</strong>, TonersCart Private Limited, Bangalore, Karnataka, India,
+                        Email: <a href="mailto:support@tonerscart.com" className="text-[#00B7C7] hover:underline">support@tonerscart.com</a>,
+                        Phone: <a href="tel:+918884546789" className="text-[#00B7C7] hover:underline">+91 88845 46789</a>.
+                    </Section>
+
+                    <Section title="15. Seller Payments & Commission">
                         For sellers, the bank account details you provide (account holder name, account number, IFSC, bank and branch) are used
                         <strong> solely to remit your payouts</strong> for completed orders and are stored securely. Payouts are made after deducting
                         TonersCart&apos;s platform commission, charged on the order <strong>bill value excluding GST</strong>:
@@ -128,7 +147,7 @@ export default function Privacy() {
                         <Link to="/terms" className="text-[#00B7C7] hover:underline"> Terms of Service</Link> for full commercial terms.
                     </Section>
 
-                    <Section title="15. Contact">
+                    <Section title="16. Contact">
                         Privacy questions or requests? Email <a href="mailto:support@tonerscart.com" className="text-[#00B7C7] hover:underline">support@tonerscart.com</a>.
                         TonersCart Private Limited, Bangalore, Karnataka, India. See also our <Link to="/terms" className="text-[#00B7C7] hover:underline">Terms of Service</Link>.
                     </Section>
