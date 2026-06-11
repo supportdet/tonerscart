@@ -34,16 +34,22 @@ def toner_master_brands():
 
 @router.get("/listings/search")
 def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
+                    brands: Optional[str] = None,
                     city: Optional[str] = None, toner_type: Optional[str] = None,
                     supplier_id: Optional[str] = None,
                     d2d_only: bool = False,
                     limit: int = 200):
+    # Multi-brand chip filter — `brands=HP,Canon,Brother` takes precedence over
+    # the legacy single `brand` query string when both are provided.
+    brand_list = [b.strip() for b in (brands or "").split(",") if b.strip()]
     qry = sb_admin.table("listings").select(
         "*,suppliers!inner(business_name,city,is_suspended)"
     ).order("price").limit(limit)
     if q:
         qry = qry.ilike("search_norm", f"%{normalize(q)}%")
-    if brand and brand != "all":
+    if brand_list:
+        qry = qry.in_("brand", brand_list)
+    elif brand and brand != "all":
         qry = qry.eq("brand", brand)
     if city and city != "all":
         qry = qry.eq("city", city)
@@ -72,7 +78,9 @@ def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
             ).order("price").limit(limit)
             if q:
                 qry = qry.ilike("search_norm", f"%{normalize(q)}%")
-            if brand and brand != "all":
+            if brand_list:
+                qry = qry.in_("brand", brand_list)
+            elif brand and brand != "all":
                 qry = qry.eq("brand", brand)
             if city and city != "all":
                 qry = qry.eq("city", city)
@@ -502,12 +510,13 @@ def listings_grouped(city: Optional[str] = None, limit: int = 12):
 @router.get("/listings/search/paginated")
 def search_listings_paginated(
     q: Optional[str] = None, brand: Optional[str] = None,
+    brands: Optional[str] = None,
     city: Optional[str] = None, toner_type: Optional[str] = None,
     supplier_id: Optional[str] = None,
     near_city: Optional[str] = None,
     page: int = 1, limit: int = 20,
 ):
-    all_rows = search_listings(q=q, brand=brand, city=city, toner_type=toner_type, supplier_id=supplier_id, limit=2000)
+    all_rows = search_listings(q=q, brand=brand, brands=brands, city=city, toner_type=toner_type, supplier_id=supplier_id, limit=2000)
     # Location-based ordering: surface the buyer's-city listings first (only
     # when not already hard-filtered by city).
     if near_city and not (city and city != "all"):
