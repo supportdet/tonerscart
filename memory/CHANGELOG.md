@@ -897,3 +897,11 @@ Closed every "deferred to next batch" item from Wave 6.
 
 **Backend**
 - **NEW `GET /api/related/{kind}/{listing_id}`** (routes/products.py) — up to 6 in-stock related products: compatible toners for printers (compatible_models match), same-brand same-kind items, same-brand toners, cheapest paper cross-sell. Tested via curl for toner (6 items), consumable (6), scanner (1).
+
+---
+
+## 2026-06-11c — Cartridge SVG v3 (reference shape), test-data purge, popup robustness
+
+- **TonerCartridge.jsx v3** — horizontal cartridge matching the user's reference: wider than tall, cylindrical ends on both sides (capsule shapes with cylindrical shading), rectangular middle body, grip slot at bottom center, soft floor shadow. Brand label is now ALWAYS white-on-red (#C8102E) per instruction — brand accent colors removed.
+- **Test data purge** — deleted users + Supabase Auth for `qadealer@tonerscart.in`, `e2e_deliv_dealer@tonerscart.in`, `e2e_deliv_buyer@tonerscart.in`; supplier rows "QA Dealer Industries" + "E2E Deliv Dealer"; 1 test scanner listing (Canon LiDE 400); 3 test orders. test_credentials.md updated — no QA supplier account exists now.
+- **Finder popup fix** — pointerdown listener scoped to the printers page container (cookie-banner "Accept" or header clicks no longer cancel the popup); scroll suppression now requires >120px. Re-verified with Playwright: popup opens after 15s idle on /printers, X dismisses. Shows once per browser session.

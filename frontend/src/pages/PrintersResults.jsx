@@ -58,16 +58,20 @@ export default function Printers() {
     });
 
     // "Find your printer" popup — auto-opens 15s after landing on /printers,
-    // unless the user has already started browsing (scrolled or clicked) or it
+    // unless the user already started browsing (scrolled the page or clicked
+    // inside the printers content — header/cookie banners don't count) or it
     // was already shown this session. Dismissible via a clear X button.
     const [showFinder, setShowFinder] = useState(false);
     const interactedRef = useRef(false);
+    const pageRef = useRef(null);
     useEffect(() => {
         if ([...params.keys()].length > 0) return; // arrived with finder/query filters — skip
         try { if (sessionStorage.getItem("tc_finder_popup_shown")) return; } catch { /* ignore */ }
-        const mark = () => { interactedRef.current = true; };
-        window.addEventListener("scroll", mark, { passive: true });
-        window.addEventListener("pointerdown", mark);
+        const onScroll = () => { if (window.scrollY > 120) interactedRef.current = true; };
+        const onClick = () => { interactedRef.current = true; };
+        const el = pageRef.current;
+        window.addEventListener("scroll", onScroll, { passive: true });
+        el && el.addEventListener("pointerdown", onClick);
         const t = setTimeout(() => {
             if (!interactedRef.current) {
                 setShowFinder(true);
@@ -76,8 +80,8 @@ export default function Printers() {
         }, 15000);
         return () => {
             clearTimeout(t);
-            window.removeEventListener("scroll", mark);
-            window.removeEventListener("pointerdown", mark);
+            window.removeEventListener("scroll", onScroll);
+            el && el.removeEventListener("pointerdown", onClick);
         };
         // eslint-disable-next-line
     }, []);
@@ -144,7 +148,7 @@ export default function Printers() {
     }, [listings, filters, city]);
 
     return (
-        <div className="relative pb-16" data-testid="printers-page">
+        <div ref={pageRef} className="relative pb-16" data-testid="printers-page">
             <div className="tc-hero relative pb-10">
                 <div className="tc-hero-grid" />
                 <div className="tc-container relative pt-12 sm:pt-16">
