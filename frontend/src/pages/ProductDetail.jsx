@@ -8,6 +8,7 @@ import { useCart } from "../context/CartContext";
 import { Skeleton } from "../components/ui/skeleton";
 import PageMeta from "../components/PageMeta";
 import TonerCartridge from "../components/TonerCartridge";
+import RelatedProducts from "../components/RelatedProducts";
 import DealEnquiryDialog from "../components/DealEnquiryDialog";
 import AuthRequiredDialog from "../components/AuthRequiredDialog";
 import VerifiedBadge from "../components/VerifiedBadge";
@@ -397,6 +398,11 @@ export default function ProductDetail({ kind = "toner" }) {
                         </div>
                     </div>
                 </div>
+
+                {/* Related / You may also need */}
+                {["toner", "printer", "consumable", "scanner"].includes(kind) && (
+                    <RelatedProducts kind={kind} id={data.id} />
+                )}
             </div>
 
             {dealDialog && (

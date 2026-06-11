@@ -158,7 +158,7 @@ function visibleSteps(a) {
 // Component
 // ============================================================
 
-export default function PrintersGuide() {
+export default function PrintersGuide({ embedded = false, onClose }) {
     const navigate = useNavigate();
     const { city: currentCity } = useCity();
     const [answers, setAnswers] = useState({});
@@ -229,7 +229,11 @@ export default function PrintersGuide() {
     };
 
     const back = () => {
-        if (idx === 0) { navigate(-1); return; }
+        if (idx === 0) {
+            if (embedded && onClose) onClose();
+            else navigate(-1);
+            return;
+        }
         setDir("back");
         setTimeout(() => setIdx((i) => Math.max(0, i - 1)), 160);
     };
@@ -262,14 +266,16 @@ export default function PrintersGuide() {
     const stepNum = idx + 1;
 
     return (
-        <div className="tc-hero relative pb-20" data-testid="printers-guide-page">
-            <PageMeta
-                title="Buy Printers Online India — Verified Dealers | TonersCart"
-                description="Buy laser printers, inkjet printers, all-in-one MFDs for home and office in India. Compare prices from verified dealers in Bangalore, Mumbai, Delhi and across India."
-                path="/printers"
-            />
+        <div className={`tc-hero relative ${embedded ? "pb-10" : "pb-20"}`} data-testid="printers-guide-page">
+            {!embedded && (
+                <PageMeta
+                    title="Buy Printers Online India — Verified Dealers | TonersCart"
+                    description="Buy laser printers, inkjet printers, all-in-one MFDs for home and office in India. Compare prices from verified dealers in Bangalore, Mumbai, Delhi and across India."
+                    path="/printers"
+                />
+            )}
             <div className="tc-hero-grid" />
-            <div className="tc-container relative pt-12 sm:pt-16 max-w-3xl">
+            <div className={`tc-container relative ${embedded ? "pt-8" : "pt-12 sm:pt-16"} max-w-3xl`}>
                 <div className="flex items-center gap-3 mb-3">
                     <span className="tc-strip" />
                     <span className="text-[11px] tracking-[0.22em] uppercase font-medium text-white/80">Printers · Guided finder</span>

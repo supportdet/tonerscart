@@ -1515,3 +1515,96 @@ def get_paper_public(paper_id: str):
     data["supplier_city"] = sup.get("city")
     data["supplier_suspended"] = bool(sup.get("is_suspended"))
     return data
+
+
+# ---------- Related products ("You may also need" on product detail pages) ----------
+
+_RELATED_TABLES = {
+    "toner": "listings",
+    "printer": "printer_listings",
+    "consumable": "consumable_listings",
+    "scanner": "scanner_listings",
+    "paper": "paper_listings",
+}
+
+
+def _related_card(L: dict, kind: str) -> dict:
+    if kind == "paper":
+        title = f"{L.get('brand') or ''} {L.get('size') or 'A4'} · {L.get('gsm') or ''} GSM".strip()
+        price = L.get("price_per_ream")
+    else:
+        title = (L.get("model_number") or "").strip() or (L.get("brand") or "")
+        price = L.get("price")
+    return {
+        "id": L["id"],
+        "kind": kind,
+        "brand": L.get("brand"),
+        "title": title,
+        "price": float(price or 0),
+        "image_url": L.get("image_url"),
+        "color": L.get("color"),
+        "city": L.get("city"),
+        "url": f"/{kind}/{L['id']}",
+    }
+
+
+@router.get("/related/{kind}/{listing_id}")
+def related_products(kind: str, listing_id: str):
+    """Up to 6 in-stock related dealer products for a detail page:
+    same-brand items of the same kind first, compatible toners for printers,
+    then cheap paper as a universal cross-sell."""
+    table = _RELATED_TABLES.get(kind)
+    if not table:
+        raise HTTPException(400, "Unknown product kind")
+    try:
+        base_res = sb_admin.table(table).select("*").eq("id", listing_id).maybe_single().execute()
+        base = base_res.data if base_res else None
+    except Exception:
+        base = None
+    if not base:
+        return {"items": []}
+
+    items, seen = [], {(kind, listing_id)}
+
+    def add(rows, k, limit=6):
+        for L in rows or []:
+            if len(items) >= 6:
+                return
+            key = (k, L.get("id"))
+            if not L.get("id") or key in seen:
+                continue
+            if int(L.get("stock") or 0) <= 0:
+                continue
+            seen.add(key)
+            items.append(_related_card(L, k))
+
+    brand = (base.get("brand") or "").strip()
+    model = (base.get("model_number") or "").strip()
+    try:
+        if kind == "printer" and model:
+            # Toners compatible with this printer model
+            rows = sb_admin.table("listings").select("*").ilike(
+                "compatible_models", f"%{model}%").limit(8).execute().data
+            add(rows, "toner")
+        if brand:
+            if kind in ("toner", "printer", "consumable"):
+                rows = sb_admin.table("listings").select("*").eq(
+                    "brand", brand).neq("id", listing_id).order("price").limit(8).execute().data
+                add(rows, "toner")
+            if kind == "consumable":
+                rows = sb_admin.table("consumable_listings").select("*").eq(
+                    "brand", brand).neq("id", listing_id).order("price").limit(4).execute().data
+                add(rows, "consumable")
+            if kind == "scanner":
+                rows = sb_admin.table("scanner_listings").select("*").eq(
+                    "brand", brand).neq("id", listing_id).order("price").limit(4).execute().data
+                add(rows, "scanner")
+        # Universal cross-sell — cheapest in-stock papers
+        if len(items) < 6:
+            rows = sb_admin.table("paper_listings").select("*").gt(
+                "stock", 0).order("price_per_ream").limit(2).execute().data
+            add(rows, "paper")
+    except Exception as e:
+        logger.warning("related products lookup failed (%s/%s): %s", kind, listing_id, e)
+
+    return {"items": items[:6]}

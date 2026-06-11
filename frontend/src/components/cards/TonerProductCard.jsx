@@ -38,14 +38,14 @@ export default function TonerProductCard({ p, qty, setQty, onBuy, onCart, userCi
                         {p.toner_type || "Original"}
                     </span>
                 </div>
-                <Link to={`/toner/${p.id}`} className="text-[19px] font-bold leading-snug text-[#0A0A0B] tracking-tight hover:text-[#00B7C7] transition" data-testid={`product-title-${p.id}`}>{p.model_number || p.compatible_models}</Link>
+                <Link to={`/toner/${p.id}`} className="text-[17px] font-bold leading-snug text-[#0A0A0B] tracking-tight hover:text-[#00B7C7] transition" data-testid={`product-title-${p.id}`}>{p.model_number || p.compatible_models}</Link>
                 {p.compatible_models && (
                     <div
-                        className="text-[11.5px] text-[#6E6E73] leading-snug"
+                        className="text-[12.5px] text-[#6E6E73] leading-snug"
                         style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
                         data-testid={`product-compat-${p.id}`}
                     >
-                        Fits: {p.compatible_models}
+                        Compatible models: {p.compatible_models}
                     </div>
                 )}
                 <div className="flex items-center gap-1.5 min-w-0">

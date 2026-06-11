@@ -882,3 +882,18 @@ Closed every "deferred to next batch" item from Wave 6.
 **QA**
 - Supplier QA account recreated (previous one purged in the 06-10 test-data sweep): `qadealer@tonerscart.in / Dealer@123`, approved, Bangalore.
 - Testing agent iteration 39 (buyer surfaces + backend regression, 5/5 pytest in `tests/test_iteration39_brands.py`) and iteration 40 (supplier flows: brand dropdowns, ModelSearchCell grouping/pick, bulk POST + cleanup) — all PASS. Printers/Papers/Consumables bulk dropdowns also live-verified via Playwright.
+
+---
+
+## 2026-06-11b — Cartridge SVG redesign, printers page + finder popup, related products
+
+**Frontend**
+- **TonerProductCard.jsx** — "Fits:" → "Compatible models:" at 12.5px; toner-name title 19px → 17px.
+- **TonerCartridge.jsx** — fully redesigned SVG: upright boxy cartridge with carrying handle on top, top lid, side tabs, brand band (red default kept), toner-level window with colour fill, colour dot, bottom drum/shutter strip with end caps. ViewBox 400×300.
+- **App.js** — `/printers` → `PrintersResults` (listings shown immediately); guided questionnaire moved to `/printers/guide`; `/printers/results` unchanged.
+- **PrintersResults.jsx** — auto "Find your printer" popup: opens 15s after landing on bare `/printers` (no query params), suppressed if the user scrolled or clicked first (`pointerdown`/`scroll` listeners) or if shown earlier this session (`sessionStorage tc_finder_popup_shown`). Modal has clear X (`data-testid finder-popup-close`); both guided-finder text links now point to `/printers/guide`.
+- **PrintersGuide.jsx** — new `embedded` + `onClose` props: compact padding, skips PageMeta, Back on step 1 closes the popup instead of history-back.
+- **NEW RelatedProducts.jsx** — "You may also need" horizontal row on detail pages; cards show image / cartridge SVG / kind icon, brand, title, price; wired into **ProductDetail.jsx** for toner, printer, consumable and scanner kinds.
+
+**Backend**
+- **NEW `GET /api/related/{kind}/{listing_id}`** (routes/products.py) — up to 6 in-stock related products: compatible toners for printers (compatible_models match), same-brand same-kind items, same-brand toners, cheapest paper cross-sell. Tested via curl for toner (6 items), consumable (6), scanner (1).
