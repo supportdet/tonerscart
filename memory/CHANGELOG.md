@@ -1,3 +1,13 @@
+### 2026-06-11 (d) — Brand chip multi-select bug fix (server-side filtering)
+
+- **Bug**: On `/search` (toners), rapidly toggling brand chips eventually showed "0 listings" even when matching products existed. Root cause: paginated endpoint loaded only 24 rows; client-side brand filter on that subset returned empty when the loaded page didn't contain the selected brand.
+- **Fix**:
+  - **Backend** (`routes/search.py`): added `brands` query param (comma-separated) to both `/api/listings/search` and `/api/listings/search/paginated`. When set, uses `.in_("brand", brand_list)`; falls back to single `brand` for backward compat.
+  - **Frontend** (`pages/Search.jsx`): `useEffect` fetch now depends on `selectedBrands` so every chip toggle re-fetches. `buildParams` sends `brands=HP,Canon,…` when non-empty. Removed client-side brand filter from `visibleProducts`.
+- **Verified**: Initial 21 → Canon 19 → Canon+HP 19 → HP-only 0 (legitimately no HP in DB) → All 21 → rapid toggle ending Canon 19. No empty-state on toggle when listings exist for the selected brand.
+
+
+
 ### 2026-06-11 (c) — Iteration 42: UX polish (7 features) + cleanup
 
 - **Printer finder popup fix** (`PrintersResults.jsx`): removed the over-eager `pointerdown` listener that was suppressing the 15s auto-popup; now only a scroll (>400 px) cancels it. sessionStorage flag still prevents re-open.

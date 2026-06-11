@@ -98,6 +98,7 @@ export default function SearchPage() {
     const buildParams = () => {
         const qp = {};
         if (params.get("q")) qp.q = params.get("q");
+        if (selectedBrands.length > 0) qp.brands = selectedBrands.join(",");
         if (params.get("city") && params.get("city") !== "all") qp.city = params.get("city");
         if (params.get("toner_type") && params.get("toner_type") !== "all") qp.toner_type = params.get("toner_type");
         if (params.get("supplier_id")) qp.supplier_id = params.get("supplier_id");
@@ -134,7 +135,7 @@ export default function SearchPage() {
             } finally { setLoading(false); }
         };
         fetch();
-    }, [params]);
+    }, [params, selectedBrands]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const loadMore = async () => {
         if (loadingMore || page >= totalPages) return;
@@ -200,7 +201,6 @@ export default function SearchPage() {
 
     const visibleProducts = useMemo(() => {
         let out = products.filter((p) => {
-            if (selectedBrands.length > 0 && !selectedBrands.includes(p.brand)) return false;
             const price = Number(p.price || 0);
             if (minPrice && price < Number(minPrice)) return false;
             if (maxPrice && price > Number(maxPrice)) return false;
@@ -211,7 +211,7 @@ export default function SearchPage() {
         else if (sortBy === "newest") out = [...out].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
         else out = [...out].sort(byCityThenPrice);
         return out;
-    }, [products, selectedBrands, minPrice, maxPrice, sortBy]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [products, minPrice, maxPrice, sortBy]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const onBuy = (p, qty) => {
         if (user && user.role === "admin") {
