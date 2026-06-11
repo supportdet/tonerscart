@@ -243,12 +243,11 @@ export default function ProductDetail({ kind = "toner" }) {
                             </div>
                         ) : kind === "toner" ? (
                             <div
-                                className="aspect-[1.25/1] w-full max-w-[440px] rounded-2xl border border-black/[0.07] overflow-hidden grid place-items-center"
-                                style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(0,0,0,0.04) 0%, transparent 70%), linear-gradient(180deg, #F5F5F7 0%, #E8E8EC 100%)" }}
+                                className="aspect-[1.6/1] w-full max-w-[440px] rounded-2xl border border-black/[0.07] overflow-hidden grid place-items-center bg-white"
                                 data-testid="product-image-main"
                             >
-                                <div className="w-[82%]">
-                                    <TonerCartridge color={selectedVariant?.color || data.color || "Black"} brand={data.brand} />
+                                <div className="w-[88%]">
+                                    <TonerCartridge brand={data.brand} />
                                 </div>
                             </div>
                         ) : (

@@ -905,3 +905,12 @@ Closed every "deferred to next batch" item from Wave 6.
 - **TonerCartridge.jsx v3** — horizontal cartridge matching the user's reference: wider than tall, cylindrical ends on both sides (capsule shapes with cylindrical shading), rectangular middle body, grip slot at bottom center, soft floor shadow. Brand label is now ALWAYS white-on-red (#C8102E) per instruction — brand accent colors removed.
 - **Test data purge** — deleted users + Supabase Auth for `qadealer@tonerscart.in`, `e2e_deliv_dealer@tonerscart.in`, `e2e_deliv_buyer@tonerscart.in`; supplier rows "QA Dealer Industries" + "E2E Deliv Dealer"; 1 test scanner listing (Canon LiDE 400); 3 test orders. test_credentials.md updated — no QA supplier account exists now.
 - **Finder popup fix** — pointerdown listener scoped to the printers page container (cookie-banner "Accept" or header clicks no longer cancel the popup); scroll suppression now requires >120px. Re-verified with Playwright: popup opens after 15s idle on /printers, X dismisses. Shows once per browser session.
+
+---
+
+## 2026-06-11d — Static toner placeholder image with red brand band overlay
+
+- Downloaded the user's `toner-placeholder.png` (296×144 line drawing) from www.tonerscart.com into `/app/frontend/public/toner-placeholder.png` (it existed in their GitHub/Vercel repo but not in this workspace).
+- **TonerCartridge.jsx** rewritten: SVG wrapper (`viewBox 296×144`) embedding the static PNG via `<image>` with a red `#C8102E` band + white bold brand text (extractBrand) overlaid across the middle. Scales proportionally at every usage size; `color` prop dropped (extra props from old call sites are harmless).
+- ProductDetail toner fallback box adjusted to `aspect-[1.6/1]` white background to match the landscape image.
+- Verified via Playwright on all four surfaces: listing cards, toner detail page, related-products row, SEO /compatible pages.
