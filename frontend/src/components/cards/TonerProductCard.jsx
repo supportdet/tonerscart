@@ -5,6 +5,7 @@ import TonerCartridge from "../TonerCartridge";
 import VerifiedBadge from "../VerifiedBadge";
 import { colorSwatch } from "../../lib/colors";
 import { deliveryLabel } from "../../lib/location";
+import { extractBrand } from "../../lib/brands";
 
 const variantColorFromName = (name) => {
     const v = colorSwatch(name);
@@ -23,7 +24,7 @@ export default function TonerProductCard({ p, qty, setQty, onBuy, onCart, userCi
     return (
         <div className="tc-product-card group relative" data-testid={`product-card-${p.id}`}>
             <Link to={`/toner/${p.id}`} className="tc-product-img block hover:opacity-95 transition" data-testid={`product-link-${p.id}`}>
-                <span className="tc-product-img-label">{p.brand}</span>
+                <span className="tc-product-img-label">{extractBrand(p.brand)}</span>
                 {p.image_url ? (
                     <img src={p.image_url} alt={`${p.brand} ${p.model_number}`} className="w-full h-full object-cover" loading="lazy" />
                 ) : (
@@ -32,12 +33,21 @@ export default function TonerProductCard({ p, qty, setQty, onBuy, onCart, userCi
             </Link>
             <div className="p-4 flex flex-col gap-2 flex-1">
                 <div className="flex items-center justify-between">
-                    <div className="text-[10px] tracking-[0.16em] uppercase font-semibold text-[#6E6E73]">{p.brand}</div>
+                    <div className="text-[10px] tracking-[0.16em] uppercase font-semibold text-[#6E6E73]">{extractBrand(p.brand)}</div>
                     <span className={`text-[10px] font-bold px-2 py-1 rounded-md border uppercase tracking-[0.08em] ${typeStyle}`}>
                         {p.toner_type || "Original"}
                     </span>
                 </div>
-                <Link to={`/toner/${p.id}`} className="text-[18px] font-semibold text-[#0A0A0B] tracking-tight hover:text-[#00B7C7] transition" data-testid={`product-title-${p.id}`}>{p.compatible_models || p.model_number}</Link>
+                <Link to={`/toner/${p.id}`} className="text-[17px] font-bold leading-snug text-[#0A0A0B] tracking-tight hover:text-[#00B7C7] transition" data-testid={`product-title-${p.id}`}>{p.model_number || p.compatible_models}</Link>
+                {p.compatible_models && (
+                    <div
+                        className="text-[12.5px] text-[#6E6E73] leading-snug"
+                        style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+                        data-testid={`product-compat-${p.id}`}
+                    >
+                        Compatible models: {p.compatible_models}
+                    </div>
+                )}
                 <div className="flex items-center gap-1.5 min-w-0">
                     <span className="text-[13px] text-[#1D1D1F] truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
                         {p.supplier_name || "—"}

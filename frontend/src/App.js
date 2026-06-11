@@ -129,7 +129,8 @@ function App() {
                                     <Route path="/checkout" element={<Checkout />} />
                                     <Route path="/sell" element={<Sell />} />
                                     <Route path="/mps" element={<MPS />} />
-                                    <Route path="/printers" element={<PrintersGuide />} />
+                                    <Route path="/printers" element={<PrintersResults />} />
+                                    <Route path="/printers/guide" element={<PrintersGuide />} />
                                     <Route path="/printers/results" element={<PrintersResults />} />
                                     <Route path="/papers" element={<Papers />} />
                                     <Route path="/consumables" element={<Consumables />} />

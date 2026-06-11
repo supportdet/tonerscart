@@ -7,6 +7,8 @@ import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { Skeleton } from "../components/ui/skeleton";
 import PageMeta from "../components/PageMeta";
+import TonerCartridge from "../components/TonerCartridge";
+import RelatedProducts from "../components/RelatedProducts";
 import DealEnquiryDialog from "../components/DealEnquiryDialog";
 import AuthRequiredDialog from "../components/AuthRequiredDialog";
 import VerifiedBadge from "../components/VerifiedBadge";
@@ -235,13 +237,25 @@ export default function ProductDetail({ kind = "toner" }) {
                 <div className="grid lg:grid-cols-[45%_55%] gap-10">
                     {/* LEFT — Image gallery (45%) */}
                     <div>
-                        <div className="aspect-square w-full rounded-2xl border border-black/[0.07] bg-[#FAFAFB] overflow-hidden grid place-items-center" data-testid="product-image-main">
-                            {images[activeImg] ? (
+                        {images[activeImg] ? (
+                            <div className="aspect-square w-full rounded-2xl border border-black/[0.07] bg-[#FAFAFB] overflow-hidden grid place-items-center" data-testid="product-image-main">
                                 <img src={images[activeImg]} alt={productTitle} className="w-full h-full object-contain" />
-                            ) : (
+                            </div>
+                        ) : kind === "toner" ? (
+                            <div
+                                className="aspect-[1.25/1] w-full max-w-[440px] rounded-2xl border border-black/[0.07] overflow-hidden grid place-items-center"
+                                style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(0,0,0,0.04) 0%, transparent 70%), linear-gradient(180deg, #F5F5F7 0%, #E8E8EC 100%)" }}
+                                data-testid="product-image-main"
+                            >
+                                <div className="w-[82%]">
+                                    <TonerCartridge color={selectedVariant?.color || data.color || "Black"} brand={data.brand} />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="aspect-[4/3] w-full max-w-[440px] rounded-2xl border border-black/[0.07] bg-[#FAFAFB] grid place-items-center" data-testid="product-image-main">
                                 <div className="text-[12px] text-[#86868B]">No image uploaded</div>
-                            )}
-                        </div>
+                            </div>
+                        )}
                         {images.length > 1 && (
                             <div className="mt-3 flex items-center gap-2" data-testid="product-image-thumbs">
                                 {images.map((src, i) => (
@@ -384,6 +398,11 @@ export default function ProductDetail({ kind = "toner" }) {
                         </div>
                     </div>
                 </div>
+
+                {/* Related / You may also need */}
+                {["toner", "printer", "consumable", "scanner"].includes(kind) && (
+                    <RelatedProducts kind={kind} id={data.id} />
+                )}
             </div>
 
             {dealDialog && (

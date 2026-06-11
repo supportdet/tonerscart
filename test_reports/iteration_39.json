@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 39 — toner cartridge SVG/title rework + 12-brand canonical lists + bulk model-search. Backend regressions PASS (5/5 pytest in test_iteration39_brands.py — toner search returns brand='Canon' only with non-empty model_number; /api/compat/printers Canon LBP search returns 18 hits). Frontend PASS for buyer-facing surfaces: /search?category=toners shows 21 cards, each with the red-band cartridge SVG containing ONLY the brand text ('CANON'), corner label 'Canon', product-title-{id} (e.g. 'CARTRIDGE CANON 071') at exactly 19px, product-compat-{id} starting with 'Fits: ' at 11.5px (data-testid present). Toner detail page (/toner/{id}) renders the generated SVG inside data-testid='product-image-main' (no 'No image uploaded' fallback), Add to Cart + Buy now present. Add-to-cart from /search appends to tc_cart_v1 (cart=1, success toast 'Added Canon CARTRIDGE CANON 071 to cart'). Buy-now navigates to /checkout with the correct line item. SUPPLIER DASHBOARD COULD NOT BE TESTED — supplier credentials qadealer@tonerscart.in / Dealer@123 (per request + /app/memory/test_credentials.md) return 401 'Incorrect email or password' from POST /api/auth/login, so the listing-brand-select / bulk-cell-0-brand / ModelSearchCell flows are UNVERIFIED end-to-end on the live UI.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Supplier login",
+        "issue": "Credentials qadealer@tonerscart.in / Dealer@123 (per /app/memory/test_credentials.md AND the agent-to-agent context in the review request) return 401 from /api/auth/login. Blocks ALL supplier-side tests for this iteration (single toner upload brand dropdown, bulk toner/printer/paper/consumable dialogs, ModelSearchCell). Verified via curl: {\"detail\":\"Incorrect email or password\"}.",
+        "affected_selectors": ["listing-brand-select", "bulk-cell-0-brand", "bulk-cell-0-compatible_models", "bulk-cell-0-compatible_models-dropdown"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration39_brands.py",
+    "/app/test_reports/pytest/iteration_39.xml"
+  ],
+  "action_items": [
+    "Reset password for qadealer@tonerscart.in to Dealer@123 in Supabase Auth (or create a fresh approved supplier and update /app/memory/test_credentials.md) so the supplier-dashboard 12-brand dropdown, bulk-upload 12-brand dropdown, and ModelSearchCell (2+ chars triggers GET /api/compat/printers, 'Canon models' header first then 'Other brands') can be verified end-to-end on the live UI.",
+    "Once supplier login works, re-run the supplier portions of this iteration's review (single 'Add a toner' modal options must equal exactly the 12-brand list with the 'Select brand…' placeholder; bulk dialogs across toners/printers/papers/consumables; verify a real POST /api/supplier/listings/bulk and /api/supplier/printers/bulk succeeds and delete the test rows afterward)."
+  ],
+  "critical_code_review_comments": [
+    "TonerCartridge.jsx default accent is correctly RED (#C8102E) and the SVG only renders extractBrand(brand) — verified live by reading the <text> element of the rendered SVG ('CANON' for brand='Canon', cartridge name no longer appears anywhere on the artwork).",
+    "TonerProductCard.jsx exposes product-title-{id} and product-compat-{id} as required; computed font-size 19px / 11.5px matches spec; 'Fits: ' prefix verified.",
+    "ProductDetail image-fallback path: when image_url is empty, the proportionate aspect-[1.25/1] box now contains the cartridge SVG instead of the 'No image uploaded' placeholder — verified on /toner/c0d0fb4d-f3b3-444b-ac53-d36871db0586.",
+    "DB cleanup is intact: every brand returned by /api/listings/search?category=toners is in the canonical 12-brand list (test test_all_brands_are_canonical asserts no junk); all 25 sampled listings have a non-empty model_number.",
+    "Minor: /api/toner-master/brands still returns the 8-brand catalog (status 200) — fine because the supplier dashboard no longer fetches it, but consider deprecating the endpoint or hiding it from public surface to avoid future drift.",
+    "bulkConfigs.js paperBulkConfig.emptyRow defaults brand to 'JK Paper' (hint), which is valid but means a user pressing 'Add row' lands on a pre-filled brand. Confirm that is intentional — toner/printer/consumable empty rows default brand to '' (forces the user to pick).",
+    "Could not statically validate ModelSearchCell dropdown grouping ('Canon models' first, 'Other brands' later) on the live supplier UI because of the auth block; backend endpoint that powers it works (returns 18 Canon LBP hits)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration39_brands.py (NEW — 5 regression tests for toner-search cleanup + /api/compat/printers)"
+  ],
+  "success_rate": {
+    "backend": "100% (5/5 pytest)",
+    "frontend": "Buyer surfaces 100% (toner browse SVG/title/compat/detail/add-to-cart/buy-now all verified). Supplier surfaces 0% — BLOCKED by 401 on supplier login."
+  },
+  "test_credentials": "qadealer@tonerscart.in / Dealer@123 — listed in /app/memory/test_credentials.md and in the review request, but returns 401 on POST /api/auth/login. NEEDS RESET. Buyer surfaces tested without auth (cart is localStorage only until /checkout).",
+  "seed_data_creation": "None. No listings/orders/users were created during this iteration. tc_cart_v1 localStorage was used briefly to confirm Add-to-cart but was discarded (test browser is ephemeral).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Buyer-facing toner cards and detail page are fully verified — do NOT re-test those unless the components change. The pending work for the next iteration is supplier-side: (1) get an approved supplier login that works; (2) open Dealer dashboard → Toners tab → 'Add a toner' modal → assert [data-testid='listing-brand-select'] options == ['','HP','Canon','Brother','Epson','Ricoh','Xerox','Kyocera','Samsung','Konica Minolta','Pantum','Riso','Sharp']; (3) Open 'Bulk upload' on each of Toners / Printers / Papers / Consumables tabs and assert bulk-cell-0-brand options match the 12-brand list (papers uses PAPER_BRANDS, not TONER_BRANDS); (4) In a bulk toner row, set brand=Canon and type 'LBP' in bulk-cell-0-compatible_models — assert bulk-cell-0-compatible_models-dropdown shows 'Canon models' group first then 'Other brands'; (5) Submit one valid row and verify POST /api/supplier/listings/bulk returns 200, then DELETE the created listing. The /api/compat/printers backend used by ModelSearchCell is already known-good (18 results for q=LBP brand=Canon).",
+  "rca of the issue": "Supplier-login 401 RCA — the request + /app/memory/test_credentials.md both say qadealer@tonerscart.in / Dealer@123 is an approved supplier, but Supabase Auth rejects the password. Possible causes: (a) the account was rotated since the credentials file was last updated, (b) the seed/setup script did not run on this preview environment, (c) someone changed the dealer's password manually in Supabase. Mitigation: main agent should either (i) update the supplier's password back to Dealer@123 in Supabase, (ii) create a fresh approved supplier via the admin approve flow and refresh test_credentials.md, or (iii) point the script-based seed at this preview environment so qadealer@tonerscart.in/Dealer@123 is recreated."
+}

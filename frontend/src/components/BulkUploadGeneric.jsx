@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { X, Plus, Trash2, Upload, Download, FileSpreadsheet, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
@@ -25,6 +25,88 @@ import api from "../lib/api";
  */
 const normOpts = (opts) =>
     (opts || []).map((o) => (typeof o === "string" ? { value: o, label: o } : o));
+
+/**
+ * Searchable compatibility-DB model cell for bulk tables.
+ * Typing 2+ characters searches printer models; the selected row brand's
+ * models are shown first, then other brands below.
+ *  - single=false (toners/consumables): multi-select, comma-joined string
+ *  - single=true  (printers): picks one model into the cell
+ */
+function ModelSearchCell({ value, brand, single, hasErr, onChange, onPick, testid }) {
+    const [open, setOpen] = useState(false);
+    const [results, setResults] = useState([]);
+    const boxRef = useRef(null);
+    const term = (single ? String(value || "") : (String(value || "").split(",").pop() || "")).trim();
+
+    useEffect(() => {
+        if (!open || term.length < 2) { setResults([]); return; }
+        let active = true;
+        const t = setTimeout(async () => {
+            try {
+                const { data } = await api.get("/compat/printers", { params: { q: term, limit: 12, brand: brand || "" } });
+                if (active) setResults(Array.isArray(data) ? data : []);
+            } catch { if (active) setResults([]); }
+        }, 200);
+        return () => { active = false; clearTimeout(t); };
+    }, [term, brand, open]);
+
+    useEffect(() => {
+        const onDoc = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
+        document.addEventListener("mousedown", onDoc);
+        return () => document.removeEventListener("mousedown", onDoc);
+    }, []);
+
+    const pickModel = (p) => {
+        if (single) {
+            onChange(p.model);
+        } else {
+            const parts = String(value || "").split(",").map((s) => s.trim()).filter(Boolean);
+            if (term) parts.pop(); // replace the partial term being typed
+            if (!parts.some((x) => x.toLowerCase() === p.full_name.toLowerCase())) parts.push(p.full_name);
+            onChange(parts.join(", ") + ", ");
+        }
+        onPick && onPick(p);
+        setResults([]);
+        setOpen(false);
+    };
+
+    const sameBrand = brand ? results.filter((p) => p.brand.toLowerCase() === brand.toLowerCase()) : results;
+    const otherBrand = brand ? results.filter((p) => p.brand.toLowerCase() !== brand.toLowerCase()) : [];
+    const optBtn = (p) => (
+        <button type="button" key={p.slug} onClick={() => pickModel(p)}
+            className="block w-full text-left px-2.5 py-1.5 text-[12.5px] text-[#0A0A0B] hover:bg-[#F2FBFC]"
+            data-testid={`${testid}-option`}>
+            {p.full_name}
+        </button>
+    );
+
+    return (
+        <div ref={boxRef} className="relative">
+            <input
+                value={value}
+                onChange={(e) => { onChange(e.target.value); if (!open) setOpen(true); }}
+                onFocus={() => setOpen(true)}
+                placeholder="Type 2+ letters…"
+                className={`w-full h-8 px-2 text-[12.5px] rounded border ${hasErr ? "border-red-400 bg-red-50" : "border-transparent hover:border-[#E8E8EC] focus:border-[#0A0A0B]"} bg-white focus:outline-none`}
+                data-testid={testid}
+                autoComplete="off"
+            />
+            {open && results.length > 0 && (
+                <div className="absolute z-50 mt-1 w-[320px] bg-white border border-[#E5E5EA] rounded-lg shadow-xl max-h-52 overflow-y-auto" data-testid={`${testid}-dropdown`}>
+                    {brand && sameBrand.length > 0 && (
+                        <div className="px-2.5 pt-1.5 pb-0.5 text-[10px] tracking-[0.12em] uppercase font-bold text-[#86868B]">{brand} models</div>
+                    )}
+                    {sameBrand.map(optBtn)}
+                    {otherBrand.length > 0 && (
+                        <div className="px-2.5 pt-1.5 pb-0.5 text-[10px] tracking-[0.12em] uppercase font-bold text-[#86868B] border-t border-black/[0.05]">Other brands</div>
+                    )}
+                    {otherBrand.map(optBtn)}
+                </div>
+            )}
+        </div>
+    );
+}
 
 function parseCSV(text) {
     const rows = [];
@@ -299,8 +381,27 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
                                                 return (
                                                     <td key={c.key} className="px-1 py-1 border-b border-black/[0.04]">
                                                         <select value={val} onChange={(e) => updateCell(idx, c.key, e.target.value)} className={base} data-testid={`bulk-cell-${idx}-${c.key}`}>
+                                                            {c.placeholder !== undefined && <option value="">{c.placeholder}</option>}
                                                             {opts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                                                         </select>
+                                                    </td>
+                                                );
+                                            }
+                                            if (c.type === "models") {
+                                                return (
+                                                    <td key={c.key} className="px-1 py-1 border-b border-black/[0.04]">
+                                                        <ModelSearchCell
+                                                            value={val}
+                                                            brand={r[c.brandKey || "brand"] || ""}
+                                                            single={!!c.single}
+                                                            hasErr={hasErr}
+                                                            onChange={(v) => updateCell(idx, c.key, v)}
+                                                            onPick={c.autofillBrand ? (p) => {
+                                                                const brandOpts = normOpts(config.selectOptions?.brand);
+                                                                if (brandOpts.some((o) => o.value === p.brand)) updateCell(idx, "brand", p.brand);
+                                                            } : undefined}
+                                                            testid={`bulk-cell-${idx}-${c.key}`}
+                                                        />
                                                     </td>
                                                 );
                                             }

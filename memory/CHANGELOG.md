@@ -861,3 +861,47 @@ Closed every "deferred to next batch" item from Wave 6.
 
 **Migrations still pending for full feature surfacing**
 `supabase_schema_papers.sql`, `supabase_schema_admin_v2.sql`, `supabase_schema_quotation_featured.sql`, `supabase_schema_v3.sql`, `supabase_schema_v4.sql`, `supabase_schema_shipping.sql`, **NEW** `supabase_schema_featured_v2.sql`.
+
+---
+
+## 2026-06-11 — Toner card visuals + fixed brand dropdowns + bulk model search (iterations 39–40)
+
+**Frontend**
+- **NEW `lib/brands.js`** — canonical `TONER_BRANDS` (12) + `extractBrand()` (pulls "Canon" out of "CARTRIDGE CANON 071").
+- **TonerCartridge.jsx** — label band shows ONLY the extracted brand name; default accent is now RED `#C8102E` (was HP blue fallback); accents added for Konica Minolta / Pantum / Riso / Sharp; long brand names auto-shrink font.
+- **TonerProductCard.jsx** — corner label + brand row use `extractBrand`; prominent 19px bold title = `model_number` (toner name); compatible models demoted to 11.5px "Fits: …" 2-line clamp (`data-testid product-compat-{id}`).
+- **ProductDetail.jsx** — toners without dealer images render the generated cartridge SVG in a proportionate `aspect-[1.25/1] max-w-[440px]` box (no more giant empty "No image uploaded" square); non-toner kinds get a smaller 4:3 placeholder box.
+- **SupplierDashboard.jsx** — single toner form brand dropdown = fixed `TONER_BRANDS` list; removed the `/toner-master/brands` fetch (source of junk entries).
+- **BulkUploadGeneric.jsx** — NEW `ModelSearchCell` (column `type:"models"`): 2+ chars → debounced GET `/api/compat/printers?q=&brand=`, dropdown grouped "{Brand} models" first then "Other brands"; multi mode appends comma-joined (toner/consumable compatible models), single mode fills the cell + autofills brand (printer model). Selects now support a `placeholder` empty option.
+- **bulkConfigs.js** — brand columns are selects everywhere: toners/printers/consumables → `TONER_BRANDS`, papers → `PAPER_BRANDS`; brand validated against the list in `rowErrors`; compatible_models payloads normalized via `splitList().join(", ")`.
+
+**Backend / Data**
+- **NEW `backend/cleanup_brands.py`** (one-off, executed): normalized 18 `listings` + 17 `toner_master` rows (e.g. brand "CARTRIDGE CANON 071" → brand="Canon", model_number="CARTRIDGE CANON 071", search_norm recomputed); deleted unreferenced `TEST_W10_*` toner_master rows; fixed `Xeroc`→`Xerox` in consumable_listings.
+- No API changes. `/api/toner-master/brands` still exists but is no longer consumed by the dealer UI.
+
+**QA**
+- Supplier QA account recreated (previous one purged in the 06-10 test-data sweep): `qadealer@tonerscart.in / Dealer@123`, approved, Bangalore.
+- Testing agent iteration 39 (buyer surfaces + backend regression, 5/5 pytest in `tests/test_iteration39_brands.py`) and iteration 40 (supplier flows: brand dropdowns, ModelSearchCell grouping/pick, bulk POST + cleanup) — all PASS. Printers/Papers/Consumables bulk dropdowns also live-verified via Playwright.
+
+---
+
+## 2026-06-11b — Cartridge SVG redesign, printers page + finder popup, related products
+
+**Frontend**
+- **TonerProductCard.jsx** — "Fits:" → "Compatible models:" at 12.5px; toner-name title 19px → 17px.
+- **TonerCartridge.jsx** — fully redesigned SVG: upright boxy cartridge with carrying handle on top, top lid, side tabs, brand band (red default kept), toner-level window with colour fill, colour dot, bottom drum/shutter strip with end caps. ViewBox 400×300.
+- **App.js** — `/printers` → `PrintersResults` (listings shown immediately); guided questionnaire moved to `/printers/guide`; `/printers/results` unchanged.
+- **PrintersResults.jsx** — auto "Find your printer" popup: opens 15s after landing on bare `/printers` (no query params), suppressed if the user scrolled or clicked first (`pointerdown`/`scroll` listeners) or if shown earlier this session (`sessionStorage tc_finder_popup_shown`). Modal has clear X (`data-testid finder-popup-close`); both guided-finder text links now point to `/printers/guide`.
+- **PrintersGuide.jsx** — new `embedded` + `onClose` props: compact padding, skips PageMeta, Back on step 1 closes the popup instead of history-back.
+- **NEW RelatedProducts.jsx** — "You may also need" horizontal row on detail pages; cards show image / cartridge SVG / kind icon, brand, title, price; wired into **ProductDetail.jsx** for toner, printer, consumable and scanner kinds.
+
+**Backend**
+- **NEW `GET /api/related/{kind}/{listing_id}`** (routes/products.py) — up to 6 in-stock related products: compatible toners for printers (compatible_models match), same-brand same-kind items, same-brand toners, cheapest paper cross-sell. Tested via curl for toner (6 items), consumable (6), scanner (1).
+
+---
+
+## 2026-06-11c — Cartridge SVG v3 (reference shape), test-data purge, popup robustness
+
+- **TonerCartridge.jsx v3** — horizontal cartridge matching the user's reference: wider than tall, cylindrical ends on both sides (capsule shapes with cylindrical shading), rectangular middle body, grip slot at bottom center, soft floor shadow. Brand label is now ALWAYS white-on-red (#C8102E) per instruction — brand accent colors removed.
+- **Test data purge** — deleted users + Supabase Auth for `qadealer@tonerscart.in`, `e2e_deliv_dealer@tonerscart.in`, `e2e_deliv_buyer@tonerscart.in`; supplier rows "QA Dealer Industries" + "E2E Deliv Dealer"; 1 test scanner listing (Canon LiDE 400); 3 test orders. test_credentials.md updated — no QA supplier account exists now.
+- **Finder popup fix** — pointerdown listener scoped to the printers page container (cookie-banner "Accept" or header clicks no longer cancel the popup); scroll suppression now requires >120px. Re-verified with Playwright: popup opens after 15s idle on /printers, X dismisses. Shows once per browser session.

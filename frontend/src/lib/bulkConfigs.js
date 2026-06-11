@@ -1,6 +1,9 @@
 // Config objects for the generic bulk-upload dialog (BulkUploadGeneric.jsx).
 // One config per product type — columns map 1:1 to the backend create models.
 
+import { TONER_BRANDS } from "./brands";
+import { PAPER_BRANDS } from "./listingConstants";
+
 const num = (v) => (v === "" || v == null ? null : Number(v));
 const splitList = (v) =>
     String(v || "")
@@ -13,8 +16,8 @@ const splitList = (v) =>
 const TONER_TYPES = ["Original", "Compatible"];
 
 const TONER_COLUMNS = [
-    { key: "brand", label: "Brand", required: true, w: 130 },
-    { key: "compatible_models", label: "Compatible Models", required: true, w: 220 },
+    { key: "brand", label: "Brand", required: true, type: "select", placeholder: "Select brand…", w: 140 },
+    { key: "compatible_models", label: "Compatible Models", required: true, type: "models", w: 240 },
     { key: "color", label: "Color", required: false, w: 110 },
     { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
@@ -43,6 +46,7 @@ const tonerRowErrors = (r) => {
     if (r.price !== "" && Number(r.price) <= 0) errs.add("price");
     if (r.stock !== "" && Number(r.stock) < 0) errs.add("stock");
     if (r.toner_type && !TONER_TYPES.includes(r.toner_type)) errs.add("toner_type");
+    if (r.brand && !TONER_BRANDS.includes(r.brand)) errs.add("brand");
     return errs;
 };
 
@@ -63,7 +67,7 @@ const tonerScalarPayload = (r) => ({
     stock: Number(r.stock),
     toner_type: r.toner_type || "Original",
     gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
-    compatible_models: r.compatible_models?.trim() || null,
+    compatible_models: splitList(r.compatible_models).join(", ") || null,
     page_yield: r.page_yield !== "" ? Number(r.page_yield) : null,
     oem_part_number: r.oem_part_number?.trim() || null,
     intercity_delivery_charge: r.intercity_delivery_charge !== "" ? Number(r.intercity_delivery_charge) : 0,
@@ -81,7 +85,7 @@ export const tonerBulkConfig = {
     endpoint: "/supplier/listings/bulk",
     itemPath: "/supplier/listings",
     columns: TONER_COLUMNS,
-    selectOptions: { toner_type: TONER_TYPES },
+    selectOptions: { toner_type: TONER_TYPES, brand: TONER_BRANDS },
     emptyRow: tonerEmptyRow,
     templateExample: {
         brand: "HP", compatible_models: "P1007, P1008, P1106, P1108", color: "Black", price: "1850",
@@ -148,8 +152,8 @@ const PRINTER_COLORS = [
 ];
 
 const PRINTER_COLUMNS = [
-    { key: "brand", label: "Brand", required: true, w: 130 },
-    { key: "model_number", label: "Model", required: true, w: 150 },
+    { key: "brand", label: "Brand", required: true, type: "select", placeholder: "Select brand…", w: 140 },
+    { key: "model_number", label: "Model", required: true, type: "models", single: true, autofillBrand: true, w: 180 },
     { key: "category", label: "Type", required: true, type: "select", w: 130 },
     { key: "condition", label: "Condition", required: false, type: "select", w: 130 },
     { key: "usage_type", label: "Usage", required: true, type: "select", w: 130 },
@@ -200,6 +204,7 @@ export const printerBulkConfig = {
     endpoint: "/supplier/printers/bulk",
     columns: PRINTER_COLUMNS,
     selectOptions: {
+        brand: TONER_BRANDS,
         category: PRINTER_CATEGORIES,
         condition: PRINTER_CONDITIONS,
         usage_type: PRINTER_USAGES,
@@ -287,9 +292,9 @@ const CONSUMABLE_CONDITIONS = ["New", "Refurbished", "Compatible"];
 const CONSUMABLE_COLUMNS = [
     { key: "subcategory", label: "Subcategory", required: true, type: "select", w: 150 },
     { key: "subcategory_other", label: "If Other, specify", required: false, w: 150 },
-    { key: "brand", label: "Brand", required: true, w: 130 },
+    { key: "brand", label: "Brand", required: true, type: "select", placeholder: "Select brand…", w: 140 },
     { key: "model_number", label: "Model Number", required: true, w: 160 },
-    { key: "compatible_models", label: "Compatible Printers", required: false, w: 200 },
+    { key: "compatible_models", label: "Compatible Printers", required: false, type: "models", w: 220 },
     { key: "condition", label: "Condition", required: false, type: "select", w: 130 },
     { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
@@ -316,6 +321,7 @@ const consumableRowErrors = (r) => {
     if (r.price !== "" && Number(r.price) <= 0) errs.add("price");
     if (r.stock !== "" && Number(r.stock) < 0) errs.add("stock");
     if (r.subcategory && !CONSUMABLE_SUBS.includes(r.subcategory)) errs.add("subcategory");
+    if (r.brand && !TONER_BRANDS.includes(r.brand)) errs.add("brand");
     return errs;
 };
 
@@ -328,7 +334,7 @@ export const consumableBulkConfig = {
     unitLabel: "consumable",
     endpoint: "/supplier/consumables/bulk",
     columns: CONSUMABLE_COLUMNS,
-    selectOptions: { subcategory: CONSUMABLE_SUBS, condition: CONSUMABLE_CONDITIONS },
+    selectOptions: { subcategory: CONSUMABLE_SUBS, condition: CONSUMABLE_CONDITIONS, brand: TONER_BRANDS },
     emptyRow: consumableEmptyRow,
     templateExample: {
         subcategory: "Drums", subcategory_other: "", brand: "Brother", model_number: "DR-2305",
@@ -344,7 +350,7 @@ export const consumableBulkConfig = {
         subcategory_other: r.subcategory_other?.trim() || null,
         brand: r.brand.trim(),
         model_number: r.model_number.trim(),
-        compatible_models: r.compatible_models?.trim() || null,
+        compatible_models: splitList(r.compatible_models).join(", ") || null,
         condition: r.condition || "New",
         price: Number(r.price),
         stock: Number(r.stock),
@@ -375,7 +381,7 @@ export const consumableBulkConfig = {
         subcategory_other: r.subcategory_other?.trim() || null,
         brand: r.brand.trim(),
         model_number: r.model_number.trim(),
-        compatible_models: r.compatible_models?.trim() || null,
+        compatible_models: splitList(r.compatible_models).join(", ") || null,
         condition: r.condition || "New",
         price: Number(r.price),
         stock: Number(r.stock),
@@ -505,7 +511,7 @@ const PAPER_SIZES = ["A4", "A3", "A5", "Letter", "Legal"];
 const PAPER_BRANDS_HINT = "JK Paper";
 
 const PAPER_COLUMNS = [
-    { key: "brand", label: "Brand", required: true, w: 140 },
+    { key: "brand", label: "Brand", required: true, type: "select", placeholder: "Select brand…", w: 150 },
     { key: "size", label: "Size", required: true, type: "select", w: 110 },
     { key: "gsm", label: "GSM", required: true, type: "number", w: 90 },
     { key: "reams_per_box", label: "Reams / Box", required: false, type: "number", w: 110 },
@@ -540,6 +546,7 @@ const paperRowErrors = (r) => {
     if (r.stock !== "" && Number(r.stock) < 0) errs.add("stock");
     if (r.gsm !== "" && (Number(r.gsm) < 40 || Number(r.gsm) > 400)) errs.add("gsm");
     if (r.size && !PAPER_SIZES.includes(r.size)) errs.add("size");
+    if (r.brand && !PAPER_BRANDS.includes(r.brand)) errs.add("brand");
     return errs;
 };
 
@@ -552,7 +559,7 @@ export const paperBulkConfig = {
     unitLabel: "paper",
     endpoint: "/supplier/papers/bulk",
     columns: PAPER_COLUMNS,
-    selectOptions: { size: PAPER_SIZES },
+    selectOptions: { size: PAPER_SIZES, brand: PAPER_BRANDS },
     emptyRow: paperEmptyRow,
     templateExample: {
         brand: "JK Paper", size: "A4", gsm: "75", reams_per_box: "10",

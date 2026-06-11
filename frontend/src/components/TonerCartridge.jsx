@@ -1,26 +1,19 @@
 import React from "react";
+import { extractBrand } from "../lib/brands";
 
 /**
- * Photo-realistic laser toner cartridge SVG.
- * Styled after an HP LaserJet cartridge — light gray plastic body with a
- * brand-coloured label band running across the top. Reads at a glance as a
- * physical product rather than a dark block.
+ * Default toner cartridge product image — clean, minimal SVG modelled on a
+ * real horizontal laser toner cartridge: wider than tall, cylindrical
+ * housings on both ends, rectangular body in the middle, grip at the bottom
+ * center. Light grey/white plastic with subtle shading; the only text is the
+ * brand name in white on a red band across the front face.
  *
  * Props:
- *   color: "Cyan" | "Magenta" | "Yellow" | "Black"
- *   brand: e.g. "HP", "Canon", "Brother" — the only text shown on the cartridge
+ *   color: "Cyan" | "Magenta" | "Yellow" | "Black" (small indicator dot)
+ *   brand: e.g. "HP", "Canon" — extracted to a clean brand name
  */
 
-const BRAND_ACCENTS = {
-    HP:      { label: "#0096D6", text: "#FFFFFF" },   // HP blue
-    Canon:   { label: "#CC0000", text: "#FFFFFF" },   // Canon red
-    Brother: { label: "#E60012", text: "#FFFFFF" },   // Brother red
-    Samsung: { label: "#1428A0", text: "#FFFFFF" },   // Samsung blue
-    Ricoh:   { label: "#D7282F", text: "#FFFFFF" },   // Ricoh red
-    Epson:   { label: "#003399", text: "#FFFFFF" },   // Epson blue
-    Xerox:   { label: "#CE1126", text: "#FFFFFF" },   // Xerox red
-    Kyocera: { label: "#E60012", text: "#FFFFFF" },   // Kyocera red
-};
+const BAND_RED = "#C8102E";
 
 const COLOR_DOT = {
     Cyan:    "#00B7C7",
@@ -30,103 +23,90 @@ const COLOR_DOT = {
 };
 
 export default function TonerCartridge({ color = "Black", brand = "HP" }) {
-    const brandAccent = BRAND_ACCENTS[brand] || BRAND_ACCENTS.HP;
+    const brandName = extractBrand(brand) || "Toner";
     const dot = COLOR_DOT[color] || COLOR_DOT.Black;
-    const uid = `${brand}-${color}`.replace(/[^a-zA-Z0-9]/g, "");
+    const uid = `${brandName}-${color}`.replace(/[^a-zA-Z0-9]/g, "");
 
     return (
-        <svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <svg viewBox="0 0 440 240" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <defs>
-                {/* Main plastic body gradient — light to medium gray */}
+                {/* Cylindrical end shading — dark edge → light center → dark edge */}
+                <linearGradient id={`cyl-${uid}`} x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#9DA0A6" />
+                    <stop offset="28%" stopColor="#E9EAED" />
+                    <stop offset="55%" stopColor="#F6F7F8" />
+                    <stop offset="80%" stopColor="#D4D6DA" />
+                    <stop offset="100%" stopColor="#A5A8AE" />
+                </linearGradient>
+                {/* Middle body — light top → soft grey bottom */}
                 <linearGradient id={`body-${uid}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#F2F3F5" />
-                    <stop offset="35%" stopColor="#D8DADE" />
-                    <stop offset="100%" stopColor="#A8ABB2" />
+                    <stop offset="0%" stopColor="#FBFBFC" />
+                    <stop offset="45%" stopColor="#EDEEF0" />
+                    <stop offset="100%" stopColor="#C6C9CE" />
                 </linearGradient>
-                {/* Top fin / handle */}
-                <linearGradient id={`fin-${uid}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#E6E7EB" />
-                    <stop offset="100%" stopColor="#B4B7BD" />
-                </linearGradient>
-                {/* Brand label band */}
+                {/* Red brand band */}
                 <linearGradient id={`band-${uid}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={brandAccent.label} stopOpacity="1" />
-                    <stop offset="100%" stopColor={brandAccent.label} stopOpacity="0.88" />
+                    <stop offset="0%" stopColor={BAND_RED} />
+                    <stop offset="100%" stopColor={BAND_RED} stopOpacity="0.88" />
                 </linearGradient>
-                {/* Drum roller */}
-                <linearGradient id={`drum-${uid}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3A3D44" />
-                    <stop offset="100%" stopColor="#141518" />
+                {/* Grip plastic */}
+                <linearGradient id={`grip-${uid}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#D9DBDF" />
+                    <stop offset="100%" stopColor="#A8ABB1" />
                 </linearGradient>
-                {/* Drop shadow under cartridge */}
+                {/* Soft drop shadow */}
                 <radialGradient id={`shadow-${uid}`} cx="0.5" cy="0.5" r="0.5">
-                    <stop offset="0%" stopColor="rgba(0,0,0,0.25)" />
+                    <stop offset="0%" stopColor="rgba(0,0,0,0.22)" />
                     <stop offset="100%" stopColor="rgba(0,0,0,0)" />
                 </radialGradient>
             </defs>
 
-            {/* Shadow under cartridge */}
-            <ellipse cx="200" cy="255" rx="160" ry="10" fill={`url(#shadow-${uid})`} />
+            {/* Floor shadow */}
+            <ellipse cx="220" cy="208" rx="162" ry="9" fill={`url(#shadow-${uid})`} />
 
-            {/* ====================== CARTRIDGE BODY ====================== */}
-            {/* Main body — elongated rounded trapezoid */}
-            <path
-                d="M 40 90 Q 40 72 58 72 L 342 72 Q 360 72 360 90 L 360 210 Q 360 232 338 232 L 62 232 Q 40 232 40 210 Z"
-                fill={`url(#body-${uid})`}
-                stroke="rgba(0,0,0,0.12)"
-                strokeWidth="1"
-            />
+            {/* ============ CYLINDRICAL ENDS (left & right) ============ */}
+            {/* Left cylinder */}
+            <rect x="28" y="56" width="64" height="126" rx="32" fill={`url(#cyl-${uid})`} stroke="rgba(0,0,0,0.10)" strokeWidth="1" />
+            <rect x="48" y="66" width="6" height="106" rx="3" fill="rgba(255,255,255,0.55)" />
+            {/* Right cylinder */}
+            <rect x="348" y="56" width="64" height="126" rx="32" fill={`url(#cyl-${uid})`} stroke="rgba(0,0,0,0.10)" strokeWidth="1" />
+            <rect x="368" y="66" width="6" height="106" rx="3" fill="rgba(255,255,255,0.55)" />
 
+            {/* ============ RECTANGULAR MIDDLE BODY ============ */}
+            <rect x="80" y="64" width="280" height="110" rx="9" fill={`url(#body-${uid})`} stroke="rgba(0,0,0,0.10)" strokeWidth="1" />
             {/* Top specular highlight */}
-            <path
-                d="M 46 82 L 354 82 L 340 90 L 60 90 Z"
-                fill="rgba(255,255,255,0.55)"
-                opacity="0.7"
-            />
+            <rect x="92" y="70" width="256" height="5" rx="2.5" fill="rgba(255,255,255,0.7)" />
+            {/* Faint top seam */}
+            <rect x="80" y="86" width="280" height="1.2" fill="rgba(0,0,0,0.07)" />
 
-            {/* Top fin / grip ridge */}
-            <rect x="64" y="58" width="272" height="18" rx="5" fill={`url(#fin-${uid})`} stroke="rgba(0,0,0,0.08)" />
-            <rect x="70" y="62" width="260" height="1.5" rx="1" fill="rgba(255,255,255,0.8)" />
-
-            {/* Grip ridges on top */}
-            {[0, 1, 2].map((i) => (
-                <rect key={i} x={90 + i * 80} y="64" width="40" height="1.5" rx="0.75" fill="rgba(0,0,0,0.15)" />
-            ))}
-
-            {/* ====================== BRAND LABEL BAND ====================== */}
-            <rect x="40" y="106" width="320" height="52" fill={`url(#band-${uid})`} />
-            {/* Subtle top & bottom rails on label */}
-            <rect x="40" y="106" width="320" height="1.5" fill="rgba(255,255,255,0.35)" />
-            <rect x="40" y="156.5" width="320" height="1.5" fill="rgba(0,0,0,0.2)" />
-
-            {/* Brand name — centered; the ONLY text overlaid on the cartridge */}
-            <text x="200" y="141"
-                fill={brandAccent.text}
-                fontSize="30"
+            {/* ============ RED BRAND BAND (front face) ============ */}
+            <rect x="80" y="96" width="280" height="44" fill={`url(#band-${uid})`} />
+            <rect x="80" y="96" width="280" height="1.5" fill="rgba(255,255,255,0.30)" />
+            <rect x="80" y="138.5" width="280" height="1.5" fill="rgba(0,0,0,0.18)" />
+            <text x="220" y="126"
+                fill="#FFFFFF"
+                fontSize={brandName.length > 9 ? 18 : 27}
                 fontWeight="800"
                 fontFamily="'Montserrat', 'Inter', sans-serif"
                 letterSpacing="2"
                 textAnchor="middle"
             >
-                {brand.toUpperCase()}
+                {brandName.toUpperCase()}
             </text>
 
-            {/* ====================== LOWER BODY DETAILS ====================== */}
-            {/* Lower body kept clean — no model / type / label text overlay. */}
+            {/* ============ LOWER BODY DETAILS ============ */}
+            {/* Subtle ridges */}
+            {[0, 1].map((i) => (
+                <rect key={i} x="102" y={150 + i * 8} width="160" height="1.6" rx="0.8" fill="rgba(0,0,0,0.07)" />
+            ))}
+            {/* Colour indicator dot */}
+            <circle cx="334" cy="156" r="6" fill={dot} stroke="rgba(0,0,0,0.12)" strokeWidth="1" />
+            <circle cx="334" cy="156" r="2.2" fill="rgba(255,255,255,0.7)" />
 
-            {/* Color indicator dot bottom-right */}
-            <circle cx="336" cy="181" r="6" fill={dot} stroke="rgba(0,0,0,0.15)" strokeWidth="1" />
-            <circle cx="336" cy="181" r="2.2" fill="rgba(255,255,255,0.7)" />
-
-            {/* ====================== DRUM ROLLER (bottom strip) ====================== */}
-            <rect x="60" y="226" width="280" height="14" rx="7" fill={`url(#drum-${uid})`} stroke="rgba(0,0,0,0.25)" />
-            <rect x="68" y="230" width="264" height="1" rx="0.5" fill="rgba(255,255,255,0.15)" />
-
-            {/* Drum end caps */}
-            <circle cx="60" cy="233" r="9" fill="#2A2C31" stroke="rgba(0,0,0,0.3)" />
-            <circle cx="60" cy="233" r="4" fill="#15171A" />
-            <circle cx="340" cy="233" r="9" fill="#2A2C31" stroke="rgba(0,0,0,0.3)" />
-            <circle cx="340" cy="233" r="4" fill="#15171A" />
+            {/* ============ GRIP / HANDLE (bottom center) ============ */}
+            <rect x="188" y="170" width="64" height="24" rx="8" fill={`url(#grip-${uid})`} stroke="rgba(0,0,0,0.12)" strokeWidth="1" />
+            {/* Grip slot */}
+            <rect x="200" y="177" width="40" height="8" rx="4" fill="rgba(0,0,0,0.18)" />
         </svg>
     );
 }

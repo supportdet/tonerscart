@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
@@ -8,6 +8,7 @@ import CategoryFilters from "../components/CategoryFilters";
 import UniversalSearch from "../components/UniversalSearch";
 import PrinterProductCard from "../components/cards/PrinterProductCard";
 import ProductRequestForm from "../components/ProductRequestForm";
+import PrintersGuide from "./PrintersGuide";
 import { PRINTER_TONER_BRANDS } from "../lib/listingConstants";
 
 const PRINTER_CONDITIONS = [
@@ -55,6 +56,35 @@ export default function Printers() {
     const [filters, setFilters] = useState({
         brand: "", type: "", condition: "", city: "", minPrice: "", maxPrice: "", sort: "local",
     });
+
+    // "Find your printer" popup — auto-opens 15s after landing on /printers,
+    // unless the user already started browsing (scrolled the page or clicked
+    // inside the printers content — header/cookie banners don't count) or it
+    // was already shown this session. Dismissible via a clear X button.
+    const [showFinder, setShowFinder] = useState(false);
+    const interactedRef = useRef(false);
+    const pageRef = useRef(null);
+    useEffect(() => {
+        if ([...params.keys()].length > 0) return; // arrived with finder/query filters — skip
+        try { if (sessionStorage.getItem("tc_finder_popup_shown")) return; } catch { /* ignore */ }
+        const onScroll = () => { if (window.scrollY > 120) interactedRef.current = true; };
+        const onClick = () => { interactedRef.current = true; };
+        const el = pageRef.current;
+        window.addEventListener("scroll", onScroll, { passive: true });
+        el && el.addEventListener("pointerdown", onClick);
+        const t = setTimeout(() => {
+            if (!interactedRef.current) {
+                setShowFinder(true);
+                try { sessionStorage.setItem("tc_finder_popup_shown", "1"); } catch { /* ignore */ }
+            }
+        }, 15000);
+        return () => {
+            clearTimeout(t);
+            window.removeEventListener("scroll", onScroll);
+            el && el.removeEventListener("pointerdown", onClick);
+        };
+        // eslint-disable-next-line
+    }, []);
 
     // Chips reflect the guided-finder selections passed in the URL (category,
     // usage_type, color, …). The brand/condition/price/city filters below are
@@ -118,7 +148,7 @@ export default function Printers() {
     }, [listings, filters, city]);
 
     return (
-        <div className="relative pb-16" data-testid="printers-page">
+        <div ref={pageRef} className="relative pb-16" data-testid="printers-page">
             <div className="tc-hero relative pb-10">
                 <div className="tc-hero-grid" />
                 <div className="tc-container relative pt-12 sm:pt-16">
@@ -129,7 +159,7 @@ export default function Printers() {
                     <h1 className="text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 300, letterSpacing: "-0.025em", lineHeight: 1.12 }}>
                         Verified printers from trusted dealers
                     </h1>
-                    <p className="text-white/70 mt-3 text-[14px] max-w-xl">Not sure what you need? <button onClick={() => navigate("/printers")} className="text-[#00B7C7] font-medium inline-flex items-center gap-1 hover:underline" data-testid="printers-to-guide-link"><Sparkles size={12} /> Use our guided finder</button></p>
+                    <p className="text-white/70 mt-3 text-[14px] max-w-xl">Not sure what you need? <button onClick={() => navigate("/printers/guide")} className="text-[#00B7C7] font-medium inline-flex items-center gap-1 hover:underline" data-testid="printers-to-guide-link"><Sparkles size={12} /> Use our guided finder</button></p>
 
                     {activeChips.length > 0 && (
                         <div className="mt-5 flex flex-wrap items-center gap-2">
@@ -175,7 +205,7 @@ export default function Printers() {
                     <div className="bg-white border border-black/[0.06] rounded-2xl p-10 text-center">
                         <PrinterIcon size={40} className="mx-auto text-[#D2D2D7]" />
                         <div className="mt-3 font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>No printers match these filters yet</div>
-                        <p className="text-[13px] text-[#6E6E73] mt-1">Try removing a filter or <button onClick={() => navigate("/printers")} className="text-[#00B7C7] font-semibold hover:underline" data-testid="printers-guide-cta">use the guided finder</button>.</p>
+                        <p className="text-[13px] text-[#6E6E73] mt-1">Try removing a filter or <button onClick={() => navigate("/printers/guide")} className="text-[#00B7C7] font-semibold hover:underline" data-testid="printers-guide-cta">use the guided finder</button>.</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" data-testid="printers-grid">
@@ -184,6 +214,23 @@ export default function Printers() {
                 )}
                 <ProductRequestForm category="printer" />
             </div>
+
+            {/* "Find your printer" popup — guided finder questionnaire */}
+            {showFinder && (
+                <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm overflow-y-auto p-3 sm:p-6" data-testid="finder-popup-overlay">
+                    <div className="relative max-w-3xl mx-auto my-4 rounded-2xl overflow-hidden shadow-2xl">
+                        <button
+                            onClick={() => setShowFinder(false)}
+                            aria-label="Close printer finder"
+                            className="absolute top-3 right-3 z-10 w-9 h-9 grid place-items-center rounded-full bg-white/10 hover:bg-white/25 text-white border border-white/20 transition"
+                            data-testid="finder-popup-close"
+                        >
+                            <X size={17} />
+                        </button>
+                        <PrintersGuide embedded onClose={() => setShowFinder(false)} />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
