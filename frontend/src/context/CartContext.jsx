@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { inclGstPrice } from "../lib/listingConstants";
 
 const CartContext = createContext(null);
 const STORAGE_KEY = "tc_cart_v1";
@@ -46,13 +47,21 @@ export const CartProvider = ({ children }) => {
     const clear = () => setItems([]);
 
     const count = useMemo(() => items.reduce((n, it) => n + it.qty, 0), [items]);
+    // `subtotal` = sum of base (pre-GST) prices × qty. Used by the checkout
+    // breakdown which itemises GST separately. `subtotalIncl` is what the
+    // buyer sees on cards, cart aside, and the final "Total payable" — base
+    // + per-line GST rolled in. Computing this once here means every screen
+    // reads the same number for the same line.
     const subtotal = useMemo(() => items.reduce((s, it) => s + Number(it.product?.price || 0) * it.qty, 0), [items]);
+    const subtotalIncl = useMemo(() => items.reduce(
+        (s, it) => s + inclGstPrice(it.product?.price, it.product?.gst_rate) * it.qty, 0,
+    ), [items]);
 
     return (
-        <CartContext.Provider value={{ items, addItem, setQty, remove, clear, count, subtotal }}>
+        <CartContext.Provider value={{ items, addItem, setQty, remove, clear, count, subtotal, subtotalIncl }}>
             {children}
         </CartContext.Provider>
     );
 };
 
-export const useCart = () => useContext(CartContext) || { items: [], count: 0, subtotal: 0, addItem: () => {}, setQty: () => {}, remove: () => {}, clear: () => {} };
+export const useCart = () => useContext(CartContext) || { items: [], count: 0, subtotal: 0, subtotalIncl: 0, addItem: () => {}, setQty: () => {}, remove: () => {}, clear: () => {} };

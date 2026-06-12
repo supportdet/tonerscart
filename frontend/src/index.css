@@ -108,6 +108,31 @@
     height: auto;
 }
 
+/* Compact, off-cart-icon toast notifications. Position is bottom-center so
+   the toast never overlaps the cart icon top-right on mobile or desktop. */
+[data-sonner-toaster] .tc-toast,
+[data-sonner-toaster] [data-sonner-toast] {
+    font-size: 13px;
+    padding: 10px 14px;
+    min-height: auto;
+    max-width: 360px;
+    border-radius: 12px;
+}
+@media (max-width: 640px) {
+    [data-sonner-toaster] {
+        bottom: 12px !important;
+        left: 12px !important;
+        right: 12px !important;
+        width: auto !important;
+        max-width: calc(100vw - 24px) !important;
+    }
+    [data-sonner-toaster] .tc-toast,
+    [data-sonner-toaster] [data-sonner-toast] {
+        font-size: 12.5px;
+        padding: 8px 12px;
+    }
+}
+
 .tc-container { max-width: 1280px; margin: 0 auto; padding-left: 24px; padding-right: 24px; }
 @media (min-width: 1024px) { .tc-container { padding-left: 40px; padding-right: 40px; } }
 

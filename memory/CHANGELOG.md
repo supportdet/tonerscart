@@ -1,3 +1,77 @@
+### 2026-06-12 (e) — DET restore + data-safety guardrail (post-mortem)
+
+**Root cause**: On 12 Jun the `cleanup_keep_real_only.py` script I authored kept only suppliers whose business_name contained "big c". DET (Digital Edge Technologies) was an approved real dealer but did not match the substring and was hard-deleted along with their listings, KYC docs and pending row. The dealer then tried to log back in 1 second after the cleanup completed and was auto-created as a `role=customer` (Supabase Auth shim recreates a row on first login). No frontend bug, no application-flow leak — purely a script-side mistake.
+
+**Recovery**:
+- New `restore_det_supplier.py` script — re-creates the DET `suppliers` row (seller_id `TC-DLR-2026-0009`, `approved_at=2026-06-09T10:11:50Z`, `is_suspended=False`), flips the resurrected user back to `role=supplier`/`user_type=dealer`, writes a matching `suppliers_pending` shell with status=approved, and logs the action to `admin_activity_log`. Dealer can now sign in and re-upload listings (the originals are gone — Supabase has no PITR on this project).
+- Product listings cannot be recovered without a DB backup; dealer must re-upload via the bulk template.
+
+**Permanent protection**:
+- New `backend/data_safety.py` — the **only** sanctioned path for any backend script to delete supplier/listing rows. Enforces:
+  1. `ENABLE_DESTRUCTIVE_OPS=i-understand` must be set in the calling shell.
+  2. `safe_delete_supplier(supplier_id, confirm_token, reason)` requires a per-supplier SHA256 token obtained by reading the live row first.
+  3. **Refuses to delete approved + non-suspended dealers** at all. Admin must suspend via UI first.
+  4. Reason must be ≥ 20 characters; every call is logged to `admin_activity_log`.
+  5. Provides `block_bulk_delete()` — any future bulk-delete pattern can drop this at the top and the script hard-refuses.
+- `cleanup_keep_real_only.py` is now **disabled**: body replaced with a stderr warning + `block_bulk_delete()` so re-running it just raises `DataSafetyError`.
+- New admin-only endpoint **`POST /api/admin/suppliers/{id}/restore-approval`** — the only mechanism that can re-set `approved_at` / `is_suspended=False` after a wipe. Admin-only (`require_role("admin")`), logged to `admin_activity_log`, appends an audit note to `admin_notes`. No frontend flow can touch approval status — supplier self-edit endpoint (`auth.py`) is whitelisted to `business_name`/contact fields only.
+
+**Verified**:
+- `GET /api/admin/suppliers` → 2 dealers (Big C + DET, both approved).
+- `POST /api/admin/suppliers/{DET_ID}/restore-approval` → `{"ok": true, "approved_at": …}`.
+- Running `python cleanup_keep_real_only.py` now raises `DataSafetyError: Bulk deletes ... are no longer allowed from scripts`.
+
+
+
+### 2026-06-12 (d) — Admin dashboard redesign + full test-data purge
+
+**1. Colored tab bar** (`AdminDashboard.jsx`):
+- Replaced the cramped grey TabsList with a `flex-wrap` row of **14 colour-coded pill buttons**, each with a lucide icon and badge: Analytics (blue), Pending Dealers (orange), Dealers (teal), Customers (cyan-teal), Orders (indigo), Disputes (red), Finance (green), Messages (purple), Activity (slate), Featured (amber), Content (pink), Procurement (cyan), OEM (deep orange), Agreements (brown).
+- Active pill: solid hue + white text + raised shadow. Inactive: pastel tinted background + dark text in the same hue family. Hover scales 1.03 with subtle shadow. Badges flip colour on active (white pill on coloured tab → coloured pill on white tab).
+- Mobile dropdown removed — pills wrap naturally and remain readable at 320 px (`text-[12.5px]` on `<sm`, full label visible).
+- Driving structure refactored into a single `ColoredTabPill` + `TAB_META` map, single source of truth.
+
+**2. Dealer profile listings — full redesign** (`DealerProfile.jsx` Listings tab):
+- Switched from a cramped HTML table to a **spacious CSS-grid layout** with 8 columns at ≥lg: Image · Product · Category · Brand · Price (incl. GST) · Stock · Status · Action; stacks vertically with column labels on mobile.
+- Each row now shows an **80 × 80 product image** placeholder (real images when uploaded).
+- Price column shows GST-inclusive total (₹6,018) with `Base ₹5,100 · 18% GST` subline.
+- **Large prominent Edit button** — `px-5 py-2.5 rounded-xl bg-[#0A0A0B] text-white` with icon — easy to hit on mobile, premium feel.
+- Status pill: filled `Active` (emerald) / `Inactive` (red) with `●` dot, generous padding.
+- Category badge: per-kind tone (toner blue, printer indigo, paper amber, consumable purple, scanner teal).
+
+**3. Test-data purge** (`backend/cleanup_keep_real_only.py`, applied):
+- **Kept**: BIG C TECHNOLOGIES PRIVATE LIMITED (1 supplier) + their 18 toner listings + the admin (`support@tonerscart.com`) + Big C's linked user.
+- **Deleted**: 9 junk suppliers · 9 pending applications · 17 junk users (customers, test dealers) · 3 fake orders · 2 procurement quotations · 3 + 2 + 1 + 6 stray listings across categories · 1,000 page_view rows · 1 procurement_users row.
+- **Verified post-cleanup**: `/api/admin/stats` → `suppliers_approved: 1, suppliers_pending: 0, listings: 18, orders: 0`. Admin analytics now shows Total GMV ₹0, Commission Earned ₹0, Total Orders 0, Active Listings 18, Approved Dealers 1, Buyers 1 (admin). No fake GMV anywhere.
+
+
+
+### 2026-06-12 (c) — Pricing consistency end-to-end + toast/chips/mobile fixes
+
+**1. Single source of truth for incl-GST pricing**
+- `inclGstPrice(base, rate)` = `Math.round(base + base*rate/100)` — same helper called on every screen, falls back to 18% when listing has no `gst_rate`.
+  - Verified: 5100 @ 5% → ₹5,355 ✓ · 3800 @ 18% → ₹4,484 ✓ · base only when GST 0%.
+- `CartContext` now exposes `subtotalIncl` (= Σ `inclGstPrice(p) × qty`). Cart, mini-summary, and checkout aside all use this same value.
+- `Cart.jsx` line totals use `inclGstPrice × qty`; "Subtotal (incl. GST)" header confirms the value.
+- `Checkout.jsx`: per-line totals switched to `inclGstPrice × qty`; aside shows `Items (incl. GST) ₹{subtotalIncl}`; main breakdown computes `totalGst = subtotalIncl − subtotal` so the displayed Base + GST + Delivery line reconciles **exactly** to the same total seen on every other screen — no rounding drift.
+- Touchpoints validated (Canon Cartridge 071, base ₹3,800, GST 18%): listing card ₹4,484 → detail ₹4,484 → cart line ₹4,484 → cart subtotal ₹4,484 → checkout summary ₹4,484 → final total ₹4,484 + delivery.
+
+**2. Toast notification position**
+- Moved sonner `<Toaster />` from `top-right` (overlapped the cart icon) to **`bottom-center`** with `duration=2500ms`, `visibleToasts=2`, `offset=16`, `max-width: 360px`.
+- Mobile (≤640 px): toast is anchored to `bottom: 12px` and inset 12 px from both sides for a compact pill that never blocks the header / cart icon.
+
+**3. Collapsible Brand & Colour chips**
+- Both `BrandChips.jsx` and `ColorChips.jsx` now render **collapsed by default**: a single pill button like `🎛 Brand · All brands ⌄` / `🎨 Colour · All colours ⌄` with the count of active selections inline.
+- Click expands the full chip row (multi-select unchanged). Saves vertical space and removes the "gaudy" colour wall.
+
+**4. Mobile overflow fix — Cart & Checkout**
+- `Cart.jsx`: rewrote to include `tc-checkout-safe w-full max-w-full min-w-0` on the wrapper plus `min-w-0` + `truncate` / `flex-wrap` / `shrink-0` on inner flex children. Line item now stacks responsively below 640 px, no more "Remove" button slipping off-screen.
+- `Checkout.jsx`: added `min-w-0` to the outer `grid` and replaced fixed `p-6/p-7` with responsive `p-4 sm:p-8` / `p-4 sm:p-5` on cards. Per-line totals in the summary use `shrink-0` so the amount column never gets pushed out by long supplier names. Existing `tc-checkout-safe` (sets `overflow-x: hidden`, `max-width: 100vw`, and `min-width: 0` on all descendants) now covers both pages.
+
+Verified on 1440-wide desktop (no overflow, chips collapsed) and confirmed CSS overflow rules in place for mobile (`tc-checkout-safe` enforces `overflow-x: hidden`).
+
+
+
 ### 2026-06-12 (b) — Color filter chips + GST-inclusive pricing everywhere
 
 **Color filter chips** (`ColorChips.jsx`): multi-select row of 6 chips — All, Black, Cyan, Magenta, Yellow, Tri-color — with brand-coloured swatch dots. Mounted on `/search` (toners) and `/consumables` next to the existing brand chips.

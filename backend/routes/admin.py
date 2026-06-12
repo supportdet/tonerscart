@@ -737,6 +737,38 @@ def admin_update_listing(
     return {"ok": True, "updated": list(upd.keys())}
 
 
+class _RestoreApprovalBody(BaseModel):
+    approved_at: Optional[str] = None  # ISO timestamp; defaults to now()
+    note: Optional[str] = None
+
+
+@router.post("/admin/suppliers/{supplier_id}/restore-approval")
+def admin_restore_supplier_approval(
+    supplier_id: str, body: _RestoreApprovalBody,
+    user: dict = Depends(require_role("admin")),
+):
+    """Re-set a supplier to approved / not-suspended. Created after the
+    12-Jun-2026 incident; remains useful any time an admin needs to
+    re-instate a dealer without sending them through the application flow.
+    ONLY admins can call this — there is no equivalent endpoint exposed to
+    suppliers or customers."""
+    from datetime import datetime, timezone
+    row = sb_admin.table("suppliers").select("*").eq("id", supplier_id).maybe_single().execute()
+    if not row or not row.data:
+        raise HTTPException(404, "Supplier not found")
+    approved_at = body.approved_at or datetime.now(timezone.utc).isoformat()
+    upd: Dict[str, Any] = {"approved_at": approved_at, "is_suspended": False}
+    if body.note:
+        existing_notes = (row.data or {}).get("admin_notes") or ""
+        stamp = datetime.now(timezone.utc).strftime("%d-%b-%Y %H:%M")
+        upd["admin_notes"] = (existing_notes + f"\n[{stamp}] restore-approval: {body.note}").strip()
+    sb_admin.table("suppliers").update(upd).eq("id", supplier_id).execute()
+    _log_admin_action(user, "supplier_approval_restored", "supplier", supplier_id)
+    return {"ok": True, "approved_at": approved_at}
+
+
+
+
 @router.get("/admin/suppliers/{supplier_id}/export")
 def admin_supplier_export(supplier_id: str, user: dict = Depends(require_role("admin"))):
     """Streams a ZIP archive of the dealer's full profile: PDF summary,

@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { Textarea } from "../components/ui/textarea";
 import { toast } from "sonner";
-import { CheckCircle2, XCircle, MapPin, Building2, Phone, Mail, FileText, IndianRupee, Sparkles, AlertTriangle, MinusCircle, Star, Upload, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, MapPin, Building2, Phone, Mail, FileText, IndianRupee, Sparkles, AlertTriangle, MinusCircle, Star, Upload, Loader2, BarChart3, UserPlus, Users, ShoppingBag, ShieldAlert, Wallet, MessageSquare, Activity, Crown, BookOpen, Briefcase, Factory, FileSignature } from "lucide-react";
 import AnalyticsTab from "./admin/AnalyticsTab";
 import DealersTab from "./admin/DealersTab";
 import OrdersTab from "./admin/OrdersTab";
@@ -49,6 +49,60 @@ function AiVerdictPill({ application, testid }) {
         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10.5px] font-semibold uppercase tracking-[0.06em] ${cls}`} data-testid={testid}>
             <Icon size={11} /> {label}
         </span>
+    );
+}
+
+// Colour palette for the admin tab bar. Each tab owns a distinct hue with a
+// "live" colour (active pill background) and a "dim" colour (inactive pill
+// background — washed-out so the active tab stands out clearly). Icons use
+// the live colour on inactive pills and white on active pills.
+const TAB_META = {
+    analytics:   { label: "Analytics",      icon: BarChart3,    live: "#1E40AF", dim: "#EFF4FF", text: "#1E3A8A" }, // blue
+    pending:     { label: "Pending Dealers",icon: UserPlus,     live: "#EA580C", dim: "#FFF1E6", text: "#9A3412" }, // orange
+    dealers:     { label: "Dealers",        icon: Building2,    live: "#0F766E", dim: "#E6F6F4", text: "#115E59" }, // teal
+    customers:   { label: "Customers",      icon: Users,        live: "#0E7490", dim: "#E1F5F9", text: "#0E7490" }, // cyan-teal
+    orders:      { label: "Orders",         icon: ShoppingBag,  live: "#4338CA", dim: "#EEF0FF", text: "#3730A3" }, // indigo
+    disputes:    { label: "Disputes",       icon: ShieldAlert,  live: "#DC2626", dim: "#FEECEC", text: "#991B1B" }, // red
+    finance:     { label: "Finance",        icon: Wallet,       live: "#16A34A", dim: "#E8F7EC", text: "#15803D" }, // green
+    messages:    { label: "Messages",       icon: MessageSquare,live: "#7C3AED", dim: "#F0E9FE", text: "#5B21B6" }, // purple
+    activity:    { label: "Activity",       icon: Activity,     live: "#475569", dim: "#EEF1F5", text: "#334155" }, // slate
+    featured:    { label: "Featured",       icon: Crown,        live: "#D97706", dim: "#FEF4E0", text: "#92400E" }, // amber
+    content:     { label: "Content",        icon: BookOpen,     live: "#DB2777", dim: "#FCE7F0", text: "#9D174D" }, // pink
+    procurement: { label: "Procurement",    icon: Briefcase,    live: "#0891B2", dim: "#DDF4FB", text: "#155E75" }, // cyan
+    oem:         { label: "OEM",            icon: Factory,      live: "#C2410C", dim: "#FFE7DC", text: "#9A3412" }, // deep orange
+    agreements:  { label: "Agreements",     icon: FileSignature,live: "#78350F", dim: "#F5EBDF", text: "#5B2E0B" }, // brown
+};
+
+function ColoredTabPill({ value, active, badge, onClick }) {
+    const meta = TAB_META[value];
+    if (!meta) return null;
+    const Icon = meta.icon;
+    const style = active
+        ? { background: meta.live, color: "#FFFFFF", borderColor: meta.live }
+        : { background: meta.dim, color: meta.text, borderColor: "transparent" };
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            data-testid={`tab-${value}`}
+            className={`group relative inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-full border-2 text-[12.5px] sm:text-[13px] font-semibold whitespace-nowrap transition-all duration-200 hover:scale-[1.03] hover:shadow-sm ${active ? "shadow-md" : "hover:brightness-95"}`}
+            style={style}
+            aria-pressed={active}
+        >
+            <Icon size={14} className="shrink-0" />
+            <span className="hidden sm:inline">{meta.label}</span>
+            <span className="sm:hidden">{meta.label.split(" ")[0]}</span>
+            {badge > 0 && (
+                <span
+                    className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[10px] font-extrabold px-1.5 leading-none"
+                    style={active
+                        ? { background: "#FFFFFF", color: meta.live }
+                        : { background: meta.live, color: "#FFFFFF" }}
+                >
+                    {badge}
+                </span>
+            )}
+        </button>
     );
 }
 
@@ -208,62 +262,37 @@ export default function AdminDashboard() {
             <Tabs value={tab} onValueChange={setTab}>
                 {(() => {
                     const adminTabs = [
-                        { value: "analytics", label: "Analytics" },
-                        { value: "pending", label: "Pending", badge: pending.length || 0 },
-                        { value: "dealers", label: "Dealers" },
-                        { value: "customers", label: "Customers" },
-                        { value: "orders", label: "Orders" },
-                        { value: "disputes", label: "Disputes" },
-                        { value: "finance", label: "Finance" },
-                        { value: "messages", label: "Messages" },
-                        { value: "activity", label: "Activity" },
-                        { value: "featured", label: "Featured", badge: featured.filter((x) => x.status === "new").length || 0 },
-                        { value: "content", label: "Content" },
-                        { value: "procurement", label: "Procurement", badge: procPending || 0 },
-                        { value: "oem", label: "OEM", badge: oemPending || 0 },
-                        { value: "agreements", label: "Agreements" },
+                        { value: "analytics" },
+                        { value: "pending", badge: pending.length || 0 },
+                        { value: "dealers" },
+                        { value: "customers" },
+                        { value: "orders" },
+                        { value: "disputes" },
+                        { value: "finance" },
+                        { value: "messages" },
+                        { value: "activity" },
+                        { value: "featured", badge: featured.filter((x) => x.status === "new").length || 0 },
+                        { value: "content" },
+                        { value: "procurement", badge: procPending || 0 },
+                        { value: "oem", badge: oemPending || 0 },
+                        { value: "agreements" },
                     ];
                     return (
-                        <div className="md:hidden mb-4">
-                            <label htmlFor="admin-tab-select" className="block text-[11px] tracking-[0.14em] uppercase font-semibold text-[#6E6E73] mb-1.5">Section</label>
-                            <select
-                                id="admin-tab-select"
-                                value={tab}
-                                onChange={(e) => setTab(e.target.value)}
-                                className="w-full h-12 rounded-xl border border-[#D2D2D7] bg-white px-3 text-[15px] font-semibold text-[#0A0A0B] outline-none focus:border-[#0A0A0B]"
-                                data-testid="admin-tab-select"
-                            >
+                        <div className="mb-7 -mx-3 sm:-mx-4 lg:-mx-6 px-3 sm:px-4 lg:px-6 overflow-x-auto no-scrollbar" data-testid="admin-tab-bar">
+                            <div className="flex flex-wrap gap-2 sm:gap-2.5 min-w-full justify-start">
                                 {adminTabs.map((t) => (
-                                    <option key={t.value} value={t.value}>{t.label}{t.badge ? ` (${t.badge})` : ""}</option>
+                                    <ColoredTabPill
+                                        key={t.value}
+                                        value={t.value}
+                                        active={tab === t.value}
+                                        badge={t.badge}
+                                        onClick={() => setTab(t.value)}
+                                    />
                                 ))}
-                            </select>
+                            </div>
                         </div>
                     );
                 })()}
-                <TabsList className="hidden md:flex mb-5 w-full max-w-full justify-start gap-1 overflow-x-auto no-scrollbar">
-                    <TabsTrigger value="analytics" data-testid="tab-analytics">Analytics</TabsTrigger>
-                    <TabsTrigger value="pending" data-testid="tab-pending">
-                        Pending {pending.length > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5">{pending.length}</span>)}
-                    </TabsTrigger>
-                    <TabsTrigger value="dealers" data-testid="tab-dealers">Dealers</TabsTrigger>
-                    <TabsTrigger value="customers" data-testid="tab-customers">Customers</TabsTrigger>
-                    <TabsTrigger value="orders" data-testid="tab-orders">Orders</TabsTrigger>
-                    <TabsTrigger value="disputes" data-testid="tab-disputes">Disputes</TabsTrigger>
-                    <TabsTrigger value="finance" data-testid="tab-finance">Finance</TabsTrigger>
-                    <TabsTrigger value="messages" data-testid="tab-messages">Messages</TabsTrigger>
-                    <TabsTrigger value="activity" data-testid="tab-activity">Activity</TabsTrigger>
-                    <TabsTrigger value="featured" data-testid="tab-featured">
-                        Featured {featured.filter((x) => x.status === "new").length > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-[#F5C400] text-[#0A0A0B] text-[10px] font-bold px-1.5">{featured.filter((x) => x.status === "new").length}</span>)}
-                    </TabsTrigger>
-                    <TabsTrigger value="content" data-testid="tab-content">Content</TabsTrigger>
-                    <TabsTrigger value="procurement" data-testid="tab-procurement">
-                        Procurement {procPending > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-[#0B1220] text-white text-[10px] font-bold px-1.5">{procPending}</span>)}
-                    </TabsTrigger>
-                    <TabsTrigger value="oem" data-testid="tab-oem">
-                        OEM {oemPending > 0 && (<span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-[#6d4c41] text-white text-[10px] font-bold px-1.5">{oemPending}</span>)}
-                    </TabsTrigger>
-                    <TabsTrigger value="agreements" data-testid="tab-agreements">Agreements</TabsTrigger>
-                </TabsList>
 
                 <TabsContent value="analytics">
                     {tab === "analytics" && <AnalyticsTab />}
