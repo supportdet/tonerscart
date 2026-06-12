@@ -14,6 +14,7 @@ import DeliveryPolicyNote from "./DeliveryPolicyNote";
 import BulkUploadGeneric from "./BulkUploadGeneric";
 import { printerBulkConfig } from "../lib/bulkConfigs";
 import CompatibleModelsSelect from "./CompatibleModelsSelect";
+import MissingModelLink from "./MissingModelLink";
 import PrinterModelSelect from "./PrinterModelSelect";
 
 // ============================================================
@@ -600,6 +601,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                                     brand={f.brand}
                                     testid="wizard-compatible-toners"
                                 />
+                                <MissingModelLink category="printer" brand={f.brand} testidPrefix="printer-missing-model" />
                             </div>
                         </div>
                     </div>

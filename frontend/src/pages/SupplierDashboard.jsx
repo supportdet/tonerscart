@@ -29,6 +29,7 @@ import BulkUploadGeneric from "../components/BulkUploadGeneric";
 import { tonerBulkConfig } from "../lib/bulkConfigs";
 import D2DRow, { D2DExplainer } from "../components/D2DRow";
 import CompatibleModelsSelect from "../components/CompatibleModelsSelect";
+import MissingModelLink from "../components/MissingModelLink";
 import SupplierAgreementDialog, { hasAcceptedSupplierAgreement } from "../components/SupplierAgreementDialog";
 
 const colorSwatchHex = (name) => {
@@ -1067,6 +1068,7 @@ export default function SupplierDashboard() {
                                     testid="listing-compatible-models"
                                 />
                                 <div className="text-[11px] text-[#86868B] mt-1">This identifies your toner and is shown on the product card.</div>
+                                <MissingModelLink category="toner" brand={brand} testidPrefix="toner-missing-model" />
                             </div>
                         </div>
 

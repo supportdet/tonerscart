@@ -1,3 +1,36 @@
+### 2026-06-12 (f) — Sairam dealer restore + permanent protected-email list
+
+**Trigger**: User reported two real dealer accounts must be restored and permanently protected from any future cleanup operation: `support@digitaledgeindia.com` (DET, primary), `sairam@digitaledgeindia.com` (DET, second authorised user / "Dad's account"). Big C (`sales@bigctech.com`) also to be added to the same protection list.
+
+**State at start**:
+- `support@digitaledgeindia.com` — already restored on 2026-06-12 (e); approved, no listings.
+- `sairam@digitaledgeindia.com` — Supabase Auth user existed (uid `bcf09c77-…`, original password intact) but `users`, `suppliers`, `suppliers_pending` rows were missing → dealer could not log in as supplier.
+- `sales@bigctech.com` — present, approved, 18 listings.
+
+**Recovery (Sairam)**:
+- Inserted `users` row with `role=supplier`, `company=DIGITAL EDGE TECHNOLOGIES PRIVATE LIMITED`.
+- Inserted `suppliers_pending` row with `status=approved` (templated from DET pending row).
+- Inserted `suppliers` row with `approved_at=now`, `is_suspended=False`, and `admin_notes` recording the restore + protected status. Dealer can now sign in with the original password (owned by them) and re-upload listings/KYC.
+
+**Permanent protection**:
+- New `PROTECTED_EMAILS: frozenset[str]` at the top of `backend/data_safety.py` containing all three emails. `is_protected_email(email)` helper is case-insensitive and trims whitespace.
+- `safe_delete_supplier()` now refuses any deletion targeting a protected email with a `DataSafetyError` mentioning `PROTECTED_EMAILS` — no env opt-in or confirm token can override this. Editing the list requires a reviewed code change.
+- Module docstring rule list updated to put PROTECTED_EMAILS as Rule #1.
+
+**Regression test**: `backend/tests/test_protected_emails.py` — 8 cases covering: list membership, case-insensitive helper, all three supplier rows still exist + are approved, and `safe_delete_supplier` refuses each protected supplier even with valid env opt-in + token. `pytest tests/test_protected_emails.py` → **8 passed**.
+
+**Verified**:
+- All three accounts present in `suppliers` table, `approved_at` set, `is_suspended=False`.
+- Direct script-level attempt to delete each protected supplier with `ENABLE_DESTRUCTIVE_OPS=i-understand` + matching confirm token → blocked with `DataSafetyError: ... is in the permanent PROTECTED_EMAILS list`.
+- No backend FastAPI endpoint deletes `suppliers` rows (only listings can be deleted by admin / supplier-self), so no API surface to harden.
+
+**Notes for dealers**:
+- DET (`support@`) and Sairam still need to re-upload product listings and re-confirm KYC docs (lost in the original incident; Supabase project has no PITR).
+- Big C is untouched, 18 active listings preserved.
+
+---
+
+
 ### 2026-06-12 (e) — DET restore + data-safety guardrail (post-mortem)
 
 **Root cause**: On 12 Jun the `cleanup_keep_real_only.py` script I authored kept only suppliers whose business_name contained "big c". DET (Digital Edge Technologies) was an approved real dealer but did not match the substring and was hard-deleted along with their listings, KYC docs and pending row. The dealer then tried to log back in 1 second after the cleanup completed and was auto-created as a `role=customer` (Supabase Auth shim recreates a row on first login). No frontend bug, no application-flow leak — purely a script-side mistake.

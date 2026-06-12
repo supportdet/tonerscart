@@ -13,22 +13,27 @@ maintenance jobs) that needs to delete from these tables:
 
 Hard rules enforced here — there is no kwarg to disable them:
 
-1. **NEVER bulk-delete approved suppliers without an explicit per-supplier
+1. **PROTECTED_EMAILS list — physical deletion forbidden, always.** A small
+   allow-list of real approved-dealer emails (DET, Sairam, Big C) at the top
+   of this module CANNOT be deleted by any caller, regardless of environment
+   opt-in or confirmation token. Suspend via the admin UI instead.
+
+2. **NEVER bulk-delete approved suppliers without an explicit per-supplier
    confirm token.** `safe_delete_supplier(supplier_id, confirm_token=…)`
    requires the caller to first call `approval_to_delete_token(supplier_id)`
    which returns a SHA256 of the supplier row JSON. The caller then passes
    that exact token back, proving they read the live row first.
 
-2. **A hard-coded environment guard** — these functions raise
+3. **A hard-coded environment guard** — these functions raise
    ``DataSafetyError`` if `ENABLE_DESTRUCTIVE_OPS != "i-understand"` in the
    active process. Production runs MUST NOT set this env; admin tooling sets
    it explicitly in the shell before invoking the script.
 
-3. **Every destructive call writes a row to `admin_activity_log`** with the
+4. **Every destructive call writes a row to `admin_activity_log`** with the
    action, supplier_id, and SHA256 of the pre-deletion row so we have a
    paper trail.
 
-4. **No mass operations** — `safe_delete_supplier` deletes ONE supplier at a
+5. **No mass operations** — `safe_delete_supplier` deletes ONE supplier at a
    time. Helpers explicitly forbid `.delete().neq("id", …)` style "delete
    everything except X" patterns.
 
@@ -46,6 +51,30 @@ import uuid
 from datetime import datetime, timezone
 
 logger = logging.getLogger("data_safety")
+
+
+# ---------------------------------------------------------------------------
+# PERMANENTLY PROTECTED SUPPLIER EMAILS
+# ---------------------------------------------------------------------------
+# These are REAL approved dealers whose accounts must NEVER be deleted by ANY
+# cleanup script, maintenance job, or ad-hoc admin tool — regardless of
+# environment opt-in or confirmation tokens. Suspending via the admin UI is
+# allowed; physical row deletion is NOT.
+#
+# To remove an email from this list, a human engineer must edit this file
+# in a reviewed PR. There is no programmatic override.
+#
+# Added 2026-06-12 after the cleanup-script incident that wiped DET.
+PROTECTED_EMAILS: frozenset[str] = frozenset({
+    "support@digitaledgeindia.com",      # Digital Edge Technologies (DET) — primary
+    "sairam@digitaledgeindia.com",       # Digital Edge Technologies — second authorised user
+    "sales@bigctech.com",                # Big C Technologies Private Limited
+})
+
+
+def is_protected_email(email: str | None) -> bool:
+    """True if the given email belongs to a permanently protected dealer."""
+    return bool(email) and email.strip().lower() in PROTECTED_EMAILS
 
 
 class DataSafetyError(RuntimeError):
@@ -113,6 +142,13 @@ def safe_delete_supplier(sb, supplier_id: str, confirm_token: str, reason: str) 
     row = sb.table("suppliers").select("*").eq("id", supplier_id).maybe_single().execute().data
     if not row:
         return
+    if is_protected_email(row.get("email")):
+        raise DataSafetyError(
+            f"Supplier {supplier_id} ({row.get('email')}) is in the permanent "
+            "PROTECTED_EMAILS list — see data_safety.py. These are real "
+            "approved dealers and physical deletion is forbidden. Suspend "
+            "via the admin UI if needed; do NOT delete the row."
+        )
     if row.get("approved_at") and not row.get("is_suspended"):
         raise DataSafetyError(
             f"Supplier {supplier_id} is approved & active. Suspend them via the "

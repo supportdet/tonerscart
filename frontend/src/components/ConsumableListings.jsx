@@ -12,6 +12,7 @@ import DeliveryPolicyNote from "./DeliveryPolicyNote";
 import BulkUploadGeneric from "./BulkUploadGeneric";
 import { consumableBulkConfig } from "../lib/bulkConfigs";
 import CompatibleModelsSelect from "./CompatibleModelsSelect";
+import MissingModelLink from "./MissingModelLink";
 import { CONSUMABLE_SUBCATEGORIES, CONSUMABLE_CONDITIONS } from "../lib/consumableConstants";
 
 const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
@@ -232,6 +233,7 @@ export default function ConsumableListings() {
                                     brand={form.brand}
                                     testid="consumable-compatible"
                                 />
+                                <MissingModelLink category="consumable" brand={form.brand} testidPrefix="consumable-missing-model" />
                             </div>
                             <div>
                                 <Label>Price (₹) <span className="text-red-500">*</span></Label>
