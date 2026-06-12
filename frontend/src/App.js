@@ -78,7 +78,14 @@ function Chrome({ children }) {
             {!bare && <AIChatWidget />}
             {!bare && <FeedbackTab />}
             <CookieConsent />
-            <Toaster richColors position="top-right" />
+            <Toaster
+                richColors
+                position="bottom-center"
+                duration={2500}
+                visibleToasts={2}
+                offset={16}
+                toastOptions={{ className: "tc-toast" }}
+            />
         </>
     );
 }

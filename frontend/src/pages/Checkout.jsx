@@ -17,7 +17,7 @@ import { inclGstPrice } from "../lib/listingConstants";
 
 export default function Checkout() {
     const { user, login, signupCustomer } = useAuth();
-    const { items, subtotal, count, clear } = useCart();
+    const { items, subtotal, subtotalIncl, count, clear } = useCart();
     const { city: appCity } = useCity();
     const navigate = useNavigate();
     const [step, setStep] = useState(1); // 1 = details, 2 = summary
@@ -55,8 +55,12 @@ export default function Checkout() {
         });
     }, [items, delivery]);
     const totalDelivery = delivery.total;
-    const totalGst = useMemo(() => deliveryBreakdown.reduce((s, d) => s + Number(d.lineGst || 0), 0), [deliveryBreakdown]);
-    const grandTotal = subtotal + totalGst + totalDelivery;
+    // GST = inclusive total − base. Computing it this way guarantees that
+    // breakdown (Items subtotal + GST + Delivery) ALWAYS reconciles to the
+    // same incl-GST total that was shown on cards / detail / cart — no
+    // per-line rounding drift across screens.
+    const totalGst = Math.max(0, subtotalIncl - subtotal);
+    const grandTotal = subtotalIncl + totalDelivery;
 
     const fullAddress = [streetAddress, area, orderCity && pincode ? `${orderCity} - ${pincode}` : (orderCity || pincode), orderState].filter(Boolean).join(", ");
 
@@ -180,9 +184,9 @@ export default function Checkout() {
                         : "Verify your items, delivery and total. You can place the order request now — online payments coming soon."}
                 </p>
 
-                <div className="grid lg:grid-cols-12 gap-6 mt-8 text-[#0A0A0B]">
+                <div className="grid lg:grid-cols-12 gap-6 mt-8 text-[#0A0A0B] min-w-0">
                     {step === 1 ? (
-                        <form onSubmit={proceedToSummary} className="lg:col-span-7 min-w-0 bg-white border border-black/[0.06] rounded-2xl p-6 sm:p-8 space-y-7">
+                        <form onSubmit={proceedToSummary} className="lg:col-span-7 min-w-0 bg-white border border-black/[0.06] rounded-2xl p-4 sm:p-8 space-y-7">
                             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#86868B]">Buyer details</div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                                 <div className="space-y-1.5"><Label className="text-[12.5px] font-medium text-[#3a3a40]">Your name</Label><Input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Full name" className="h-11" data-testid="checkout-name" /></div>
@@ -263,15 +267,15 @@ export default function Checkout() {
                                 <div className="divide-y divide-black/[0.06]">
                                     {items.map((it) => {
                                         const br = deliveryBreakdown.find((d) => d.id === it.id);
-                                        const lineTotal = Number(it.product.price) * it.qty;
+                                        const lineTotal = inclGstPrice(it.product?.price, it.product?.gst_rate) * it.qty;
                                         return (
                                             <div key={it.id} className="py-3" data-testid={`summary-item-${it.id}`}>
-                                                <div className="flex items-center justify-between gap-3">
+                                                <div className="flex items-center justify-between gap-3 min-w-0">
                                                     <div className="min-w-0">
                                                         <div className="font-mono text-[13.5px] font-semibold text-[#0A0A0B] truncate">{it.product.brand} {it.product.model_number}</div>
-                                                        <div className="text-[11.5px] text-[#6E6E73]">{it.product.supplier_name || "Supplier"}{it.product.city ? ` · ${it.product.city}` : ""} · ×{it.qty}</div>
+                                                        <div className="text-[11.5px] text-[#6E6E73] truncate">{it.product.supplier_name || "Supplier"}{it.product.city ? ` · ${it.product.city}` : ""} · ×{it.qty} · incl. GST</div>
                                                     </div>
-                                                    <div className="font-mono text-[14px] font-semibold text-[#0A0A0B]">₹{lineTotal.toLocaleString("en-IN")}</div>
+                                                    <div className="font-mono text-[14px] font-semibold text-[#0A0A0B] shrink-0">₹{lineTotal.toLocaleString("en-IN")}</div>
                                                 </div>
                                                 <div className="mt-1 text-[11.5px]">
                                                     {br?.sameCity ? (
@@ -351,25 +355,25 @@ export default function Checkout() {
                         </div>
                     )}
 
-                    <aside className="lg:col-span-5 min-w-0 bg-white border border-black/[0.06] rounded-2xl p-5">
+                    <aside className="lg:col-span-5 min-w-0 bg-white border border-black/[0.06] rounded-2xl p-4 sm:p-5">
                         <div className="text-[12px] font-semibold uppercase tracking-wider text-[#0A0A0B] mb-3">Items ({count})</div>
                         <div className="divide-y divide-black/[0.06]">
                             {items.map((it) => {
                                 const inclPerUnit = inclGstPrice(it.product?.price, it.product?.gst_rate);
                                 return (
-                                    <div key={it.id} className="py-2.5 flex items-center justify-between gap-3">
-                                        <div className="min-w-0">
+                                    <div key={it.id} className="py-2.5 flex items-center justify-between gap-3 min-w-0">
+                                        <div className="min-w-0 flex-1">
                                             <div className="font-mono text-[13px] font-semibold text-[#0A0A0B] truncate">{it.product.brand} {it.product.model_number}</div>
                                             <div className="text-[11px] text-[#6E6E73] truncate">{it.product.supplier_name || "Supplier"} · ×{it.qty} · incl. GST</div>
                                         </div>
-                                        <div className="font-mono text-[13px] font-semibold text-[#0A0A0B]">₹{(inclPerUnit * it.qty).toLocaleString("en-IN")}</div>
+                                        <div className="font-mono text-[13px] font-semibold text-[#0A0A0B] shrink-0">₹{(inclPerUnit * it.qty).toLocaleString("en-IN")}</div>
                                     </div>
                                 );
                             })}
                         </div>
                         <div className="mt-3 pt-3 border-t border-black/[0.06] flex items-center justify-between">
                             <span className="text-[12px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">Items (incl. GST)</span>
-                            <span className="font-mono text-[20px] font-semibold text-[#0A0A0B]">₹{(subtotal + totalGst).toLocaleString("en-IN")}</span>
+                            <span className="font-mono text-[20px] font-semibold text-[#0A0A0B]" data-testid="aside-items-incl">₹{subtotalIncl.toLocaleString("en-IN")}</span>
                         </div>
                         {step === 2 && totalDelivery > 0 && (
                             <div className="mt-1 flex items-center justify-between text-[12.5px]">

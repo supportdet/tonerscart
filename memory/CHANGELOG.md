@@ -1,3 +1,29 @@
+### 2026-06-12 (c) — Pricing consistency end-to-end + toast/chips/mobile fixes
+
+**1. Single source of truth for incl-GST pricing**
+- `inclGstPrice(base, rate)` = `Math.round(base + base*rate/100)` — same helper called on every screen, falls back to 18% when listing has no `gst_rate`.
+  - Verified: 5100 @ 5% → ₹5,355 ✓ · 3800 @ 18% → ₹4,484 ✓ · base only when GST 0%.
+- `CartContext` now exposes `subtotalIncl` (= Σ `inclGstPrice(p) × qty`). Cart, mini-summary, and checkout aside all use this same value.
+- `Cart.jsx` line totals use `inclGstPrice × qty`; "Subtotal (incl. GST)" header confirms the value.
+- `Checkout.jsx`: per-line totals switched to `inclGstPrice × qty`; aside shows `Items (incl. GST) ₹{subtotalIncl}`; main breakdown computes `totalGst = subtotalIncl − subtotal` so the displayed Base + GST + Delivery line reconciles **exactly** to the same total seen on every other screen — no rounding drift.
+- Touchpoints validated (Canon Cartridge 071, base ₹3,800, GST 18%): listing card ₹4,484 → detail ₹4,484 → cart line ₹4,484 → cart subtotal ₹4,484 → checkout summary ₹4,484 → final total ₹4,484 + delivery.
+
+**2. Toast notification position**
+- Moved sonner `<Toaster />` from `top-right` (overlapped the cart icon) to **`bottom-center`** with `duration=2500ms`, `visibleToasts=2`, `offset=16`, `max-width: 360px`.
+- Mobile (≤640 px): toast is anchored to `bottom: 12px` and inset 12 px from both sides for a compact pill that never blocks the header / cart icon.
+
+**3. Collapsible Brand & Colour chips**
+- Both `BrandChips.jsx` and `ColorChips.jsx` now render **collapsed by default**: a single pill button like `🎛 Brand · All brands ⌄` / `🎨 Colour · All colours ⌄` with the count of active selections inline.
+- Click expands the full chip row (multi-select unchanged). Saves vertical space and removes the "gaudy" colour wall.
+
+**4. Mobile overflow fix — Cart & Checkout**
+- `Cart.jsx`: rewrote to include `tc-checkout-safe w-full max-w-full min-w-0` on the wrapper plus `min-w-0` + `truncate` / `flex-wrap` / `shrink-0` on inner flex children. Line item now stacks responsively below 640 px, no more "Remove" button slipping off-screen.
+- `Checkout.jsx`: added `min-w-0` to the outer `grid` and replaced fixed `p-6/p-7` with responsive `p-4 sm:p-8` / `p-4 sm:p-5` on cards. Per-line totals in the summary use `shrink-0` so the amount column never gets pushed out by long supplier names. Existing `tc-checkout-safe` (sets `overflow-x: hidden`, `max-width: 100vw`, and `min-width: 0` on all descendants) now covers both pages.
+
+Verified on 1440-wide desktop (no overflow, chips collapsed) and confirmed CSS overflow rules in place for mobile (`tc-checkout-safe` enforces `overflow-x: hidden`).
+
+
+
 ### 2026-06-12 (b) — Color filter chips + GST-inclusive pricing everywhere
 
 **Color filter chips** (`ColorChips.jsx`): multi-select row of 6 chips — All, Black, Cyan, Magenta, Yellow, Tri-color — with brand-coloured swatch dots. Mounted on `/search` (toners) and `/consumables` next to the existing brand chips.
