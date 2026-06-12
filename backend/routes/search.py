@@ -35,6 +35,7 @@ def toner_master_brands():
 @router.get("/listings/search")
 def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
                     brands: Optional[str] = None,
+                    colors: Optional[str] = None,
                     city: Optional[str] = None, toner_type: Optional[str] = None,
                     supplier_id: Optional[str] = None,
                     d2d_only: bool = False,
@@ -42,6 +43,7 @@ def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
     # Multi-brand chip filter — `brands=HP,Canon,Brother` takes precedence over
     # the legacy single `brand` query string when both are provided.
     brand_list = [b.strip() for b in (brands or "").split(",") if b.strip()]
+    color_list = [c.strip() for c in (colors or "").split(",") if c.strip()]
     qry = sb_admin.table("listings").select(
         "*,suppliers!inner(business_name,city,is_suspended)"
     ).order("price").limit(limit)
@@ -116,6 +118,24 @@ def search_listings(q: Optional[str] = None, brand: Optional[str] = None,
                 logger.warning("variant bulk attach failed: %s", e)
             for r in out:
                 r["variants"] = []
+    # Colour-chip multi-select filter — applied AFTER variants are attached so
+    # that a listing whose parent colour is "Black" still surfaces when the
+    # buyer ticks "Cyan" but the listing has a Cyan variant. "Tri-color" also
+    # matches listings that bundle C+M+Y as variants.
+    if color_list:
+        wanted = {c.lower() for c in color_list}
+        cmy_wanted = "tri-color" in wanted or "tricolor" in wanted
+        kept = []
+        for r in out:
+            parent = (r.get("color") or "").strip().lower()
+            variant_cols = {(v.get("color") or "").strip().lower() for v in (r.get("variants") or [])}
+            all_cols = variant_cols | ({parent} if parent else set())
+            if all_cols & wanted:
+                kept.append(r)
+                continue
+            if cmy_wanted and {"cyan", "magenta", "yellow"} <= all_cols:
+                kept.append(r)
+        out = kept
     return out
 
 
@@ -511,12 +531,13 @@ def listings_grouped(city: Optional[str] = None, limit: int = 12):
 def search_listings_paginated(
     q: Optional[str] = None, brand: Optional[str] = None,
     brands: Optional[str] = None,
+    colors: Optional[str] = None,
     city: Optional[str] = None, toner_type: Optional[str] = None,
     supplier_id: Optional[str] = None,
     near_city: Optional[str] = None,
     page: int = 1, limit: int = 20,
 ):
-    all_rows = search_listings(q=q, brand=brand, brands=brands, city=city, toner_type=toner_type, supplier_id=supplier_id, limit=2000)
+    all_rows = search_listings(q=q, brand=brand, brands=brands, colors=colors, city=city, toner_type=toner_type, supplier_id=supplier_id, limit=2000)
     # Location-based ordering: surface the buyer's-city listings first (only
     # when not already hard-filtered by city).
     if near_city and not (city and city != "all"):

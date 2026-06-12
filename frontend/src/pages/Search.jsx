@@ -18,6 +18,7 @@ import PaperProductCard from "../components/cards/PaperProductCard";
 import ConsumableProductCard from "../components/cards/ConsumableProductCard";
 import ScannerProductCard from "../components/cards/ScannerProductCard";
 import BrandChips from "../components/BrandChips";
+import ColorChips from "../components/ColorChips";
 import useReveal from "../hooks/useReveal";
 import { cityMatch } from "../lib/location";
 
@@ -47,6 +48,7 @@ export default function SearchPage() {
         const b = params.get("brand");
         return b && b !== "all" ? [b] : [];
     });
+    const [selectedColors, setSelectedColors] = useState([]);
     const [filterCity, setFilterCity] = useState(params.get("city") || "all");
     const [tonerType, setTonerType] = useState(params.get("toner_type") || "all");
     const [refilledWarn, setRefilledWarn] = useState(false);
@@ -99,6 +101,7 @@ export default function SearchPage() {
         const qp = {};
         if (params.get("q")) qp.q = params.get("q");
         if (selectedBrands.length > 0) qp.brands = selectedBrands.join(",");
+        if (selectedColors.length > 0) qp.colors = selectedColors.join(",");
         if (params.get("city") && params.get("city") !== "all") qp.city = params.get("city");
         if (params.get("toner_type") && params.get("toner_type") !== "all") qp.toner_type = params.get("toner_type");
         if (params.get("supplier_id")) qp.supplier_id = params.get("supplier_id");
@@ -135,7 +138,7 @@ export default function SearchPage() {
             } finally { setLoading(false); }
         };
         fetch();
-    }, [params, selectedBrands]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [params, selectedBrands, selectedColors]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const loadMore = async () => {
         if (loadingMore || page >= totalPages) return;
@@ -167,7 +170,7 @@ export default function SearchPage() {
         }
     };
 
-    const clearAll = () => { setQ(""); setSelectedBrands([]); setTonerType("all"); setFilterCity("all"); setMinPrice(""); setMaxPrice(""); setSortBy("local"); setParams(new URLSearchParams()); };
+    const clearAll = () => { setQ(""); setSelectedBrands([]); setSelectedColors([]); setTonerType("all"); setFilterCity("all"); setMinPrice(""); setMaxPrice(""); setSortBy("local"); setParams(new URLSearchParams()); };
 
     const getQty = (pid) => qtyMap[pid] ?? 1;
     const setQty = (pid, n) => setQtyMap((m) => ({ ...m, [pid]: n }));
@@ -393,6 +396,11 @@ export default function SearchPage() {
                         value={selectedBrands}
                         onChange={setSelectedBrands}
                         testidPrefix="toner-brand-chip"
+                    />
+                    <ColorChips
+                        value={selectedColors}
+                        onChange={setSelectedColors}
+                        testidPrefix="toner-color-chip"
                     />
                     <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-3 pb-3 bg-[#F5F5F7]/95 backdrop-blur" data-testid="toners-filters-wrapper">
                         <CategoryFilters

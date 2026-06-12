@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { CheckCircle2, ShoppingBag, Lock, ArrowRight, ChevronLeft } from "lucide-react";
 import PhonePrefixInput from "../components/PhonePrefixInput";
 import { computeCartDelivery } from "../lib/delivery";
+import { inclGstPrice } from "../lib/listingConstants";
 
 export default function Checkout() {
     const { user, login, signupCustomer } = useAuth();
@@ -353,19 +354,22 @@ export default function Checkout() {
                     <aside className="lg:col-span-5 min-w-0 bg-white border border-black/[0.06] rounded-2xl p-5">
                         <div className="text-[12px] font-semibold uppercase tracking-wider text-[#0A0A0B] mb-3">Items ({count})</div>
                         <div className="divide-y divide-black/[0.06]">
-                            {items.map((it) => (
-                                <div key={it.id} className="py-2.5 flex items-center justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <div className="font-mono text-[13px] font-semibold text-[#0A0A0B] truncate">{it.product.brand} {it.product.model_number}</div>
-                                        <div className="text-[11px] text-[#6E6E73] truncate">{it.product.supplier_name || "Supplier"} · ×{it.qty}</div>
+                            {items.map((it) => {
+                                const inclPerUnit = inclGstPrice(it.product?.price, it.product?.gst_rate);
+                                return (
+                                    <div key={it.id} className="py-2.5 flex items-center justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="font-mono text-[13px] font-semibold text-[#0A0A0B] truncate">{it.product.brand} {it.product.model_number}</div>
+                                            <div className="text-[11px] text-[#6E6E73] truncate">{it.product.supplier_name || "Supplier"} · ×{it.qty} · incl. GST</div>
+                                        </div>
+                                        <div className="font-mono text-[13px] font-semibold text-[#0A0A0B]">₹{(inclPerUnit * it.qty).toLocaleString("en-IN")}</div>
                                     </div>
-                                    <div className="font-mono text-[13px] font-semibold text-[#0A0A0B]">₹{(Number(it.product.price) * it.qty).toLocaleString("en-IN")}</div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                         <div className="mt-3 pt-3 border-t border-black/[0.06] flex items-center justify-between">
-                            <span className="text-[12px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">Subtotal</span>
-                            <span className="font-mono text-[20px] font-semibold text-[#0A0A0B]">₹{subtotal.toLocaleString("en-IN")}</span>
+                            <span className="text-[12px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">Items (incl. GST)</span>
+                            <span className="font-mono text-[20px] font-semibold text-[#0A0A0B]">₹{(subtotal + totalGst).toLocaleString("en-IN")}</span>
                         </div>
                         {step === 2 && totalDelivery > 0 && (
                             <div className="mt-1 flex items-center justify-between text-[12.5px]">

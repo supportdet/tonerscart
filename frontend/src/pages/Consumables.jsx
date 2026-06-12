@@ -9,6 +9,7 @@ import UniversalSearch from "../components/UniversalSearch";
 import ConsumableProductCard from "../components/cards/ConsumableProductCard";
 import ProductRequestForm from "../components/ProductRequestForm";
 import BrandChips from "../components/BrandChips";
+import ColorChips from "../components/ColorChips";
 import { CONSUMABLE_SUBCATEGORIES, CONSUMABLE_CONDITIONS } from "../lib/consumableConstants";
 
 const SORT_OPTIONS = [
@@ -24,7 +25,7 @@ export default function Consumables() {
     const [loading, setLoading] = useState(true);
     const [sub, setSub] = useState("all");
     const [filters, setFilters] = useState({
-        brands: [], condition: "", city: "", minPrice: "", maxPrice: "", sort: "local",
+        brands: [], colors: [], condition: "", city: "", minPrice: "", maxPrice: "", sort: "local",
     });
 
     const load = async () => {
@@ -45,8 +46,27 @@ export default function Consumables() {
     useEffect(() => { load(); }, [sub]);
 
     const visible = useMemo(() => {
+        // Consumables don't have a dedicated `color` column — match against
+        // the listing's text (subcategory / model_number / description /
+        // compatible_models). "Tri-color" matches text containing tri- /
+        // tricolor or all of Cyan+Magenta+Yellow keywords.
+        const matchesColor = (r) => {
+            if (filters.colors.length === 0) return true;
+            const hay = [r.subcategory, r.model_number, r.description, r.compatible_models, r.subcategory_other]
+                .filter(Boolean).join(" ").toLowerCase();
+            for (const c of filters.colors) {
+                if (c === "Tri-color") {
+                    if (/tri\s*-?\s*colou?r/.test(hay)) return true;
+                    if (/cyan/.test(hay) && /magenta/.test(hay) && /yellow/.test(hay)) return true;
+                } else if (hay.includes(c.toLowerCase())) {
+                    return true;
+                }
+            }
+            return false;
+        };
         let out = rows.filter((r) => {
             if (filters.brands.length > 0 && !filters.brands.includes(r.brand)) return false;
+            if (!matchesColor(r)) return false;
             if (filters.condition && (r.condition || "New") !== filters.condition) return false;
             const rc = r.supplier_city || r.city;
             if (filters.city && rc !== filters.city) return false;
@@ -107,6 +127,12 @@ export default function Consumables() {
                     value={filters.brands}
                     onChange={(b) => setFilters({ ...filters, brands: b })}
                     testidPrefix="consumable-brand-chip"
+                />
+                {/* Color filter chips */}
+                <ColorChips
+                    value={filters.colors}
+                    onChange={(c) => setFilters({ ...filters, colors: c })}
+                    testidPrefix="consumable-color-chip"
                 />
 
                 <div className="sticky top-[64px] z-30 -mx-3 sm:-mx-6 px-3 sm:px-6 pt-3 pb-3 mt-5 bg-[#F5F5F7]/95 backdrop-blur" data-testid="consumables-filters-wrapper">

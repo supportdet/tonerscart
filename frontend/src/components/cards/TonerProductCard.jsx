@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { MapPin, Plus, Minus, ShoppingCart } from "lucide-react";
 import TonerCartridge from "../TonerCartridge";
 import VerifiedBadge from "../VerifiedBadge";
+import PriceInclGst from "../PriceInclGst";
 import { colorSwatch } from "../../lib/colors";
 import { deliveryLabel } from "../../lib/location";
 import { extractBrand } from "../../lib/brands";
@@ -83,10 +84,7 @@ export default function TonerProductCard({ p, qty, setQty, onBuy, onCart, userCi
                 )}
 
                 <div className="mt-2 pt-3 border-t border-black/[0.05] flex items-end justify-between gap-2">
-                    <div>
-                        <div className="text-[10px] tracking-[0.14em] uppercase font-semibold text-[#86868B]">Price</div>
-                        <div className="font-mono text-[18px] font-semibold text-[#0A0A0B]">₹{Number(p.price).toLocaleString('en-IN')}</div>
-                    </div>
+                    <PriceInclGst base={p.price} gstRate={p.gst_rate} size="md" testId={`product-price-${p.id}`} />
                     <div className="tc-qty" data-testid={`qty-${p.id}`}>
                         <button type="button" onClick={() => setQty(Math.max(1, qty - 1))} disabled={qty <= 1} aria-label="Decrease"><Minus size={14} /></button>
                         <span data-testid={`qty-value-${p.id}`}>{qty}</span>

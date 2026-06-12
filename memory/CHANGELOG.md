@@ -1,3 +1,25 @@
+### 2026-06-12 (b) — Color filter chips + GST-inclusive pricing everywhere
+
+**Color filter chips** (`ColorChips.jsx`): multi-select row of 6 chips — All, Black, Cyan, Magenta, Yellow, Tri-color — with brand-coloured swatch dots. Mounted on `/search` (toners) and `/consumables` next to the existing brand chips.
+
+- **Backend** (`routes/search.py`): `/api/listings/search` and `/listings/search/paginated` now accept a `colors=` (comma-separated) param. Filtering runs *after* variants are attached so a listing whose parent colour is "Black" still surfaces when buyer ticks "Cyan" and that listing has a Cyan variant. "Tri-color" also matches listings that bundle Cyan + Magenta + Yellow as variants.
+- **Frontend toners** (`Search.jsx`): chips drive a `selectedColors` array, re-fetch on toggle (same pattern as brand chips). State synced across loadMore.
+- **Frontend consumables** (`Consumables.jsx`): the consumables table has no `color` column, so the chips filter client-side by text match against `subcategory`, `model_number`, `description`, `compatible_models` (case-insensitive). "Tri-color" matches text containing "tri-color" / "tricolor" OR text mentioning all three of cyan, magenta and yellow.
+
+**GST-inclusive pricing on every listing** (`PriceInclGst.jsx` + helpers):
+- New helper `inclGstPrice(base, gst_rate)` falls back to 18% default when `gst_rate` is missing — uses the per-listing field when present.
+- Cards updated: `TonerProductCard`, `ConsumableProductCard`, `PrinterProductCard`, `PaperProductCard`, `ScannerProductCard`, `CompatListingCard` — all show the GST-inclusive amount in a slightly smaller font (text-[16px], or text-[14px] on per-ream/per-box paper) with a small "PRICE INCL. GST" tag underneath.
+- `ProductDetail.jsx`: hero price now shows the inclusive amount; old "+ X% GST applied at checkout" line replaced with "Price incl. GST (X%)".
+- `Checkout.jsx`: right-aside item list now shows per-line incl-GST amounts ("× qty · incl. GST"); top label changed from "Subtotal" to "Items (incl. GST)". The main summary panel keeps the full breakdown: Items subtotal (base) + GST + Delivery = Total payable.
+- Supplier-form copy updated: removed "Buyer sees only the base price… GST is added on checkout" in `PrinterListings`, `PaperListings`, `ConsumableListings`, `SupplierDashboard`. Replaced with "Listing cards now show the full price including GST. The dealer's GST share is itemised on the buyer's invoice."
+
+**Verified live**:
+- Backend: `colors=Black` → 15 results, `colors=Cyan,Magenta` → 4 results, `colors=Tri-color` → 0 (no Tri-color listings yet).
+- Frontend (toners): 21 → Black 15 → Black+Cyan 17. 17 "Price incl. GST" tags rendered. Sample price ₹3,800 base × 18% → ₹4,484 incl-GST shown on card and detail. ProductDetail hint shows "Price incl. GST (18%)".
+- Frontend (consumables): Color chip row renders alongside brand chips. Multi-select toggling works.
+
+
+
 ### 2026-06-12 — Terms §10A + Admin Dealer Profile (ZIP export + Listings tab)
 
 **Terms of Service v2.1 → v2.2**: added §10A "Seller Payouts" — 5-day auto-confirm rule, 2 business-day payout window, explicit Razorpay bank-share consent.
