@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import PageMeta from "../components/PageMeta";
 
-export const TERMS_VERSION = "2.1";
+export const TERMS_VERSION = "2.2";
 
 export default function Terms() {
     return (
@@ -95,6 +95,15 @@ export default function Terms() {
                         Buyers may request a return for <strong>unopened toner cartridges within 7 days</strong> of delivery, and for
                         <strong> dead-on-arrival (DOA) printers within 3 days</strong> of delivery. Returns are subject to seller verification
                         in coordination with TonersCart support. Approved refunds are processed to the original payment method.
+                    </Section>
+
+                    <Section title="10A. Seller Payouts">
+                        Seller payouts are processed after order completion. An order is marked complete when the buyer confirms delivery,
+                        or <strong>automatically after 5 days</strong> of buyer silence following the seller marking the order as delivered.
+                        Payouts are released <strong>within 2 business days</strong> of order completion, after deducting TonersCart&apos;s
+                        platform commission. Seller bank account details provided during registration are shared with
+                        <strong> Razorpay</strong>, TonersCart&apos;s payment partner, <strong>solely for the purpose of processing
+                        payouts</strong>. Sellers consent to this sharing by registering on the platform.
                     </Section>
 
                     <Section title="11. Dispute Resolution">
