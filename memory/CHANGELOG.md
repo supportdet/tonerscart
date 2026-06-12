@@ -1,3 +1,28 @@
+### 2026-06-12 (e) — DET restore + data-safety guardrail (post-mortem)
+
+**Root cause**: On 12 Jun the `cleanup_keep_real_only.py` script I authored kept only suppliers whose business_name contained "big c". DET (Digital Edge Technologies) was an approved real dealer but did not match the substring and was hard-deleted along with their listings, KYC docs and pending row. The dealer then tried to log back in 1 second after the cleanup completed and was auto-created as a `role=customer` (Supabase Auth shim recreates a row on first login). No frontend bug, no application-flow leak — purely a script-side mistake.
+
+**Recovery**:
+- New `restore_det_supplier.py` script — re-creates the DET `suppliers` row (seller_id `TC-DLR-2026-0009`, `approved_at=2026-06-09T10:11:50Z`, `is_suspended=False`), flips the resurrected user back to `role=supplier`/`user_type=dealer`, writes a matching `suppliers_pending` shell with status=approved, and logs the action to `admin_activity_log`. Dealer can now sign in and re-upload listings (the originals are gone — Supabase has no PITR on this project).
+- Product listings cannot be recovered without a DB backup; dealer must re-upload via the bulk template.
+
+**Permanent protection**:
+- New `backend/data_safety.py` — the **only** sanctioned path for any backend script to delete supplier/listing rows. Enforces:
+  1. `ENABLE_DESTRUCTIVE_OPS=i-understand` must be set in the calling shell.
+  2. `safe_delete_supplier(supplier_id, confirm_token, reason)` requires a per-supplier SHA256 token obtained by reading the live row first.
+  3. **Refuses to delete approved + non-suspended dealers** at all. Admin must suspend via UI first.
+  4. Reason must be ≥ 20 characters; every call is logged to `admin_activity_log`.
+  5. Provides `block_bulk_delete()` — any future bulk-delete pattern can drop this at the top and the script hard-refuses.
+- `cleanup_keep_real_only.py` is now **disabled**: body replaced with a stderr warning + `block_bulk_delete()` so re-running it just raises `DataSafetyError`.
+- New admin-only endpoint **`POST /api/admin/suppliers/{id}/restore-approval`** — the only mechanism that can re-set `approved_at` / `is_suspended=False` after a wipe. Admin-only (`require_role("admin")`), logged to `admin_activity_log`, appends an audit note to `admin_notes`. No frontend flow can touch approval status — supplier self-edit endpoint (`auth.py`) is whitelisted to `business_name`/contact fields only.
+
+**Verified**:
+- `GET /api/admin/suppliers` → 2 dealers (Big C + DET, both approved).
+- `POST /api/admin/suppliers/{DET_ID}/restore-approval` → `{"ok": true, "approved_at": …}`.
+- Running `python cleanup_keep_real_only.py` now raises `DataSafetyError: Bulk deletes ... are no longer allowed from scripts`.
+
+
+
 ### 2026-06-12 (d) — Admin dashboard redesign + full test-data purge
 
 **1. Colored tab bar** (`AdminDashboard.jsx`):
