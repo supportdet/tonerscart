@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
+import { inclGstPrice, formatINR } from "../lib/listingConstants";
 import {
     ArrowLeft, Loader2, FileText, Download, ExternalLink, Save, ShieldCheck,
-    Package, Edit3,
+    Package, Edit3, Image as ImageIcon,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
@@ -38,8 +39,10 @@ function flattenListings(data) {
         name: l.model_number || l.compatible_models || "—",
         brand: l.brand,
         price: l.price,
+        gst_rate: l.gst_rate,
         stock: l.stock,
         description: l.compatible_models || "",
+        image_url: l.image_url || (Array.isArray(l.image_urls) && l.image_urls[0]) || null,
         created_at: l.created_at,
     }));
     (data?.printer_listings || []).forEach((l) => out.push({
@@ -48,8 +51,10 @@ function flattenListings(data) {
         name: l.model_number || l.name || "—",
         brand: l.brand,
         price: l.price,
+        gst_rate: l.gst_rate,
         stock: l.stock,
         description: l.description || "",
+        image_url: l.image_url || (Array.isArray(l.image_urls) && l.image_urls[0]) || null,
         created_at: l.created_at,
     }));
     (data?.paper_listings || []).forEach((l) => out.push({
@@ -58,8 +63,10 @@ function flattenListings(data) {
         name: `${l.size || "—"} · ${l.gsm || "—"} GSM`,
         brand: l.brand,
         price: l.price_per_ream,
+        gst_rate: l.gst_rate,
         stock: l.stock,
         description: l.description || "",
+        image_url: l.image_url || null,
         created_at: l.created_at,
     }));
     (data?.consumable_listings || []).forEach((l) => out.push({
@@ -68,8 +75,10 @@ function flattenListings(data) {
         name: l.model_number || l.subcategory || "—",
         brand: l.brand,
         price: l.price,
+        gst_rate: l.gst_rate,
         stock: l.stock,
         description: l.description || "",
+        image_url: l.image_url || null,
         created_at: l.created_at,
     }));
     (data?.scanner_listings || []).forEach((l) => out.push({
@@ -78,12 +87,22 @@ function flattenListings(data) {
         name: l.model_number || "—",
         brand: l.brand,
         price: l.price,
+        gst_rate: l.gst_rate,
         stock: l.stock,
         description: l.description || "",
+        image_url: l.image_url || null,
         created_at: l.created_at,
     }));
     return out.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 }
+
+const CATEGORY_TONE = {
+    toner: "bg-blue-50 text-blue-700 border-blue-200",
+    printer: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    paper: "bg-amber-50 text-amber-700 border-amber-200",
+    consumable: "bg-purple-50 text-purple-700 border-purple-200",
+    scanner: "bg-teal-50 text-teal-700 border-teal-200",
+};
 
 export default function DealerProfile() {
     const { id } = useParams();
@@ -331,48 +350,73 @@ export default function DealerProfile() {
             {tab === "listings" && (
                 <Section title="All listings" testid="section-listings">
                     {listings.length === 0 ? (
-                        <div className="text-[13px] text-[#86868B] inline-flex items-center gap-2"><Package size={14} /> No listings yet.</div>
+                        <div className="text-[14px] text-[#86868B] inline-flex items-center gap-2"><Package size={16} /> No listings yet.</div>
                     ) : (
-                        <div className="overflow-x-auto -mx-1">
-                            <table className="w-full text-[13px] min-w-[680px]" data-testid="dealer-listings-table">
-                                <thead className="text-[10px] tracking-[0.14em] uppercase text-[#86868B]">
-                                    <tr>
-                                        <th className="text-left py-2">Product</th>
-                                        <th className="text-left py-2">Category</th>
-                                        <th className="text-left py-2">Brand</th>
-                                        <th className="text-right py-2">Price</th>
-                                        <th className="text-right py-2">Stock</th>
-                                        <th className="text-left py-2">Status</th>
-                                        <th className="text-left py-2">Listed</th>
-                                        <th className="text-right py-2"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {listings.map((l) => {
-                                        const active = Number(l.stock || 0) > 0;
-                                        return (
-                                            <tr key={`${l.kind}-${l.id}`} className="border-t border-black/[0.05]" data-testid={`listing-row-${l.id}`}>
-                                                <td className="py-2 font-medium text-[#0A0A0B] max-w-[240px]"><span className="block truncate">{l.name}</span></td>
-                                                <td className="py-2 capitalize text-[#6E6E73]">{l.kind}</td>
-                                                <td className="py-2 text-[#6E6E73]">{l.brand || "—"}</td>
-                                                <td className="py-2 text-right font-mono">{fmtMoney(l.price)}</td>
-                                                <td className="py-2 text-right font-mono">{l.stock ?? "—"}</td>
-                                                <td className="py-2">
-                                                    {active
-                                                        ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Active</span>
-                                                        : <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">Inactive</span>}
-                                                </td>
-                                                <td className="py-2 text-[11.5px] text-[#6E6E73]">{fmtDate(l.created_at)}</td>
-                                                <td className="py-2 text-right">
-                                                    <button onClick={() => setEditing(l)} className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#00838f] hover:underline" data-testid={`listing-edit-${l.id}`}>
-                                                        <Edit3 size={12} /> Edit
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                        <div className="-mx-1 sm:mx-0">
+                            <div className="hidden lg:grid grid-cols-[80px_1fr_120px_120px_140px_120px_120px_130px] gap-4 px-4 pb-3 text-[10px] tracking-[0.18em] uppercase font-semibold text-[#86868B] border-b border-black/[0.05]">
+                                <div>Image</div>
+                                <div>Product</div>
+                                <div>Category</div>
+                                <div>Brand</div>
+                                <div className="text-right">Price (incl. GST)</div>
+                                <div className="text-right">Stock</div>
+                                <div>Status</div>
+                                <div className="text-right">Action</div>
+                            </div>
+                            <div className="divide-y divide-black/[0.05]" data-testid="dealer-listings-table">
+                                {listings.map((l) => {
+                                    const active = Number(l.stock || 0) > 0;
+                                    const tone = CATEGORY_TONE[l.kind] || "bg-slate-50 text-slate-700 border-slate-200";
+                                    return (
+                                        <div
+                                            key={`${l.kind}-${l.id}`}
+                                            className="grid grid-cols-1 lg:grid-cols-[80px_1fr_120px_120px_140px_120px_120px_130px] gap-3 lg:gap-4 px-3 sm:px-4 py-4 items-center hover:bg-black/[0.015] rounded-xl transition"
+                                            data-testid={`listing-row-${l.id}`}
+                                        >
+                                            <div className="w-16 h-16 rounded-xl bg-[#F5F5F7] border border-black/[0.06] grid place-items-center overflow-hidden shrink-0">
+                                                {l.image_url ? (
+                                                    <img src={l.image_url} alt={l.name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <ImageIcon size={22} className="text-[#C7C7CC]" />
+                                                )}
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="text-[14.5px] font-semibold text-[#0A0A0B] truncate">{l.name}</div>
+                                                {l.description && <div className="text-[12px] text-[#86868B] truncate mt-0.5">{l.description}</div>}
+                                                <div className="text-[10.5px] text-[#C7C7CC] mt-1 lg:hidden">Listed {fmtDate(l.created_at)}</div>
+                                            </div>
+                                            <div className="lg:block">
+                                                <span className={`inline-block px-2.5 py-1 rounded-md border text-[10.5px] font-bold capitalize ${tone}`}>{l.kind}</span>
+                                            </div>
+                                            <div className="text-[13.5px] font-semibold text-[#1D1D1F]">{l.brand || "—"}</div>
+                                            <div className="lg:text-right">
+                                                <div className="text-[10px] tracking-[0.14em] uppercase text-[#86868B] lg:hidden">Price (incl. GST)</div>
+                                                <div className="font-mono text-[15.5px] font-bold text-[#0A0A0B]">{formatINR(inclGstPrice(l.price, l.gst_rate))}</div>
+                                                <div className="text-[10px] text-[#86868B] mt-0.5">Base {formatINR(l.price)} · {l.gst_rate ?? 18}% GST</div>
+                                            </div>
+                                            <div className="lg:text-right font-mono text-[14.5px] font-semibold text-[#1D1D1F]">
+                                                <span className="text-[10px] tracking-[0.14em] uppercase text-[#86868B] lg:hidden mr-2">Stock</span>
+                                                {l.stock ?? "—"}
+                                            </div>
+                                            <div>
+                                                {active
+                                                    ? <span className="inline-flex items-center gap-1 text-[11.5px] font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">● Active</span>
+                                                    : <span className="inline-flex items-center gap-1 text-[11.5px] font-bold px-3 py-1 rounded-full bg-red-50 text-red-700 border border-red-200">● Inactive</span>}
+                                            </div>
+                                            <div className="lg:text-right">
+                                                <button
+                                                    onClick={() => setEditing(l)}
+                                                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#0A0A0B] text-white text-[13px] font-semibold hover:bg-black/85 active:scale-95 transition shadow-sm w-full lg:w-auto"
+                                                    data-testid={`listing-edit-${l.id}`}
+                                                >
+                                                    <Edit3 size={14} /> Edit
+                                                </button>
+                                            </div>
+                                            <div className="hidden lg:block text-[10.5px] text-[#86868B] col-span-full lg:hidden">Listed {fmtDate(l.created_at)}</div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
                     )}
                 </Section>

@@ -1,3 +1,26 @@
+### 2026-06-12 (d) — Admin dashboard redesign + full test-data purge
+
+**1. Colored tab bar** (`AdminDashboard.jsx`):
+- Replaced the cramped grey TabsList with a `flex-wrap` row of **14 colour-coded pill buttons**, each with a lucide icon and badge: Analytics (blue), Pending Dealers (orange), Dealers (teal), Customers (cyan-teal), Orders (indigo), Disputes (red), Finance (green), Messages (purple), Activity (slate), Featured (amber), Content (pink), Procurement (cyan), OEM (deep orange), Agreements (brown).
+- Active pill: solid hue + white text + raised shadow. Inactive: pastel tinted background + dark text in the same hue family. Hover scales 1.03 with subtle shadow. Badges flip colour on active (white pill on coloured tab → coloured pill on white tab).
+- Mobile dropdown removed — pills wrap naturally and remain readable at 320 px (`text-[12.5px]` on `<sm`, full label visible).
+- Driving structure refactored into a single `ColoredTabPill` + `TAB_META` map, single source of truth.
+
+**2. Dealer profile listings — full redesign** (`DealerProfile.jsx` Listings tab):
+- Switched from a cramped HTML table to a **spacious CSS-grid layout** with 8 columns at ≥lg: Image · Product · Category · Brand · Price (incl. GST) · Stock · Status · Action; stacks vertically with column labels on mobile.
+- Each row now shows an **80 × 80 product image** placeholder (real images when uploaded).
+- Price column shows GST-inclusive total (₹6,018) with `Base ₹5,100 · 18% GST` subline.
+- **Large prominent Edit button** — `px-5 py-2.5 rounded-xl bg-[#0A0A0B] text-white` with icon — easy to hit on mobile, premium feel.
+- Status pill: filled `Active` (emerald) / `Inactive` (red) with `●` dot, generous padding.
+- Category badge: per-kind tone (toner blue, printer indigo, paper amber, consumable purple, scanner teal).
+
+**3. Test-data purge** (`backend/cleanup_keep_real_only.py`, applied):
+- **Kept**: BIG C TECHNOLOGIES PRIVATE LIMITED (1 supplier) + their 18 toner listings + the admin (`support@tonerscart.com`) + Big C's linked user.
+- **Deleted**: 9 junk suppliers · 9 pending applications · 17 junk users (customers, test dealers) · 3 fake orders · 2 procurement quotations · 3 + 2 + 1 + 6 stray listings across categories · 1,000 page_view rows · 1 procurement_users row.
+- **Verified post-cleanup**: `/api/admin/stats` → `suppliers_approved: 1, suppliers_pending: 0, listings: 18, orders: 0`. Admin analytics now shows Total GMV ₹0, Commission Earned ₹0, Total Orders 0, Active Listings 18, Approved Dealers 1, Buyers 1 (admin). No fake GMV anywhere.
+
+
+
 ### 2026-06-12 (c) — Pricing consistency end-to-end + toast/chips/mobile fixes
 
 **1. Single source of truth for incl-GST pricing**
