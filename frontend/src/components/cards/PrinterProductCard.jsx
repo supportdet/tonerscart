@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "../ui/button";
 import VerifiedBadge from "../VerifiedBadge";
 import ProductPlaceholder from "../ProductPlaceholder";
+import PriceInclGst from "../PriceInclGst";
 import { useCity } from "../../context/CityContext";
 import { useCart } from "../../context/CartContext";
 import { deliveryLabel } from "../../lib/location";
@@ -70,7 +71,9 @@ export default function PrinterProductCard({ p }) {
                         {loc.local ? "Local · Free delivery" : loc.text}
                     </span>
                 )}
-                <div className="font-mono text-[18px] font-bold text-[#0A0A0B] mt-2">₹{Number(p.price).toLocaleString("en-IN")}</div>
+                <div className="mt-2">
+                    <PriceInclGst base={p.price} gstRate={p.gst_rate} size="md" testId={`printer-price-${p.id}`} />
+                </div>
                 <div className="text-[10.5px] text-emerald-700 font-semibold">{p.stock} in stock</div>
                 <div className="grid grid-cols-2 gap-2 pt-1">
                     <Button size="sm" variant="outline" className="text-[12px] h-9 gap-1.5" onClick={onAdd} data-testid={`printer-add-to-cart-${p.id}`}>

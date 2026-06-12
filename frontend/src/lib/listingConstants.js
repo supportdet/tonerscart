@@ -30,8 +30,18 @@ export const gstAmount = (basePrice, rate) =>
 export const withGst = (basePrice, rate) =>
     Math.round(Number(basePrice || 0) + (Number(basePrice || 0) * Number(rate || 0)) / 100);
 
+// Convenience: read a listing row's GST-inclusive price using its gst_rate
+// field, falling back to DEFAULT_GST_RATE (18%) when absent.
+export const inclGstPrice = (basePrice, gst_rate) =>
+    withGst(basePrice, gst_rate ?? DEFAULT_GST_RATE);
+
 export const formatINR = (n) =>
     `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
+
+// Master list of toner / consumable colours used by the colour filter chip
+// row and bulk-upload dropdowns. Keep in sync with backend listing colour
+// values. "Tri-color" represents combo cartridges that contain C+M+Y in one.
+export const TONER_COLORS = ["Black", "Cyan", "Magenta", "Yellow", "Tri-color"];
 
 export const PRINTER_SPECIAL_FEATURES = [
     { id: "Duplex Printing",       label: "Duplex Printing" },

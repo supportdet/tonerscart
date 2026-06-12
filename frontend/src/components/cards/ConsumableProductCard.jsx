@@ -7,6 +7,7 @@ import ProductPlaceholder from "../ProductPlaceholder";
 import { useCity } from "../../context/CityContext";
 import { useCart } from "../../context/CartContext";
 import { deliveryLabel } from "../../lib/location";
+import PriceInclGst from "../PriceInclGst";
 
 const fmtMoney = (n) => `₹${Number(n).toLocaleString("en-IN")}`;
 
@@ -75,10 +76,7 @@ export default function ConsumableProductCard({ c }) {
                     <div className="mt-2 text-[11.5px] text-[#6E6E73] line-clamp-2">Fits: {c.compatible_models}</div>
                 )}
                 <div className="mt-3 flex items-center justify-between">
-                    <div>
-                        <div className="text-[10.5px] uppercase tracking-wider text-[#86868B]">Price</div>
-                        <div className="font-mono text-[18px] font-semibold text-[#0A0A0B]">{fmtMoney(c.price)}</div>
-                    </div>
+                    <PriceInclGst base={c.price} gstRate={c.gst_rate} size="md" testId={`consumable-price-${c.id}`} />
                     <span className={`inline-flex items-center gap-1 text-[10.5px] font-semibold px-2 py-0.5 rounded-full ${outOfStock ? "text-red-700 bg-red-50 border border-red-200" : "text-emerald-700 bg-emerald-50 border border-emerald-200"}`}>
                         {outOfStock ? "Out of stock" : `${c.stock} in stock`}
                     </span>

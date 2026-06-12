@@ -1176,7 +1176,7 @@ export default function SupplierDashboard() {
                                         </div>
                                     );
                                 })()}
-                                <div className="text-[11px] text-[#86868B] mt-1">Buyer sees only the base price on listing cards. GST is added on the checkout summary.</div>
+                                <div className="text-[11px] text-[#86868B] mt-1">Listing cards now show the full price including GST. The dealer&apos;s GST share is itemised on the buyer&apos;s invoice.</div>
                             </div>
                             <div className="col-span-2">
                                 <DeliveryPolicyNote />

@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { MapPin, ShoppingCart, Zap } from "lucide-react";
 import { toast } from "sonner";
 import VerifiedBadge from "../VerifiedBadge";
+import PriceInclGst from "../PriceInclGst";
 import { useCity } from "../../context/CityContext";
 import { useCart } from "../../context/CartContext";
 import { deliveryLabel } from "../../lib/location";
@@ -70,13 +71,14 @@ export default function PaperProductCard({ p }) {
                 <div className="mt-3 grid grid-cols-2 gap-3 text-[12.5px]">
                     <div>
                         <div className="text-[10.5px] uppercase tracking-wider text-[#86868B]">Per ream</div>
-                        <div className="font-mono font-semibold text-[#0A0A0B]">{fmtMoney(p.price_per_ream)}</div>
+                        <PriceInclGst base={p.price_per_ream} gstRate={p.gst_rate} size="sm" tag={false} testId={`paper-price-ream-${p.id}`} />
                     </div>
                     <div>
                         <div className="text-[10.5px] uppercase tracking-wider text-[#86868B]">Per box ({p.reams_per_box})</div>
-                        <div className="font-mono font-semibold text-[#0A0A0B]">{fmtMoney(pricePerBox)}</div>
+                        <PriceInclGst base={pricePerBox} gstRate={p.gst_rate} size="sm" tag={false} testId={`paper-price-box-${p.id}`} />
                     </div>
                 </div>
+                <div className="text-[9.5px] font-medium tracking-[0.05em] text-[#86868B] mt-1 uppercase">Price incl. GST</div>
                 <div className="mt-3 flex items-center justify-between text-[11.5px] text-[#6E6E73] gap-2">
                     <span className="inline-flex items-center gap-1 min-w-0">
                         <span className="truncate max-w-[120px]">{p.supplier_name}</span>

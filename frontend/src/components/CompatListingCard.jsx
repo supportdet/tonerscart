@@ -19,7 +19,7 @@ export default function CompatListingCard({ l }) {
             </div>
             {l.compatible_models && <div className="mt-2 text-[11.5px] text-[#6E6E73] line-clamp-2">Suitable for: {l.compatible_models}</div>}
             <div className="mt-3 flex items-center justify-between">
-                <div className="font-mono text-[16px] font-semibold text-[#0A0A0B]">{fmtMoney(l.price)}</div>
+                <PriceInclGst base={l.price} gstRate={l.gst_rate} size="sm" testId={`compat-price-${l.id}`} />
                 <span className="text-[12px] text-[#00B7C7] font-semibold inline-flex items-center gap-1">View <ArrowRight size={13} /></span>
             </div>
             <div className="text-[11.5px] text-[#86868B] mt-1">{l.stock} in stock · {l.condition || "New"}</div>

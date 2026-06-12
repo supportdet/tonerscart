@@ -13,6 +13,7 @@ import RelatedProducts from "../components/RelatedProducts";
 import DealEnquiryDialog from "../components/DealEnquiryDialog";
 import AuthRequiredDialog from "../components/AuthRequiredDialog";
 import VerifiedBadge from "../components/VerifiedBadge";
+import { inclGstPrice } from "../lib/listingConstants";
 import { colorSwatch, isLightSwatch } from "../lib/colors";
 import { useCity } from "../context/CityContext";
 import { isIntercity, deliveryRate } from "../lib/delivery";
@@ -337,14 +338,12 @@ export default function ProductDetail({ kind = "toner" }) {
 
                         {/* Price + stock — left aligned */}
                         <div className="mt-6 flex items-end justify-start gap-4">
-                            <div className="text-[#0A0A0B] leading-none" style={{ fontFamily: "'Roboto', Helvetica, Arial, sans-serif", fontWeight: 700, fontSize: "clamp(24px, 3vw, 36px)" }} data-testid="product-price">{fmtMoney(displayPrice)}</div>
+                            <div className="text-[#0A0A0B] leading-none" style={{ fontFamily: "'Roboto', Helvetica, Arial, sans-serif", fontWeight: 700, fontSize: "clamp(20px, 2.5vw, 30px)" }} data-testid="product-price">{fmtMoney(inclGstPrice(displayPrice, data.gst_rate))}</div>
                             <span className={`text-[11.5px] font-semibold px-2.5 py-1 rounded-full border ${stockLabel.cls}`} data-testid="product-stock">{stockLabel.txt}</span>
                         </div>
-                        {(data.gst_rate ?? 18) > 0 && (
-                            <div className="text-[11.5px] text-[#86868B] mt-1.5" data-testid="product-gst-hint">
-                                + {data.gst_rate ?? 18}% GST applied at checkout
-                            </div>
-                        )}
+                        <div className="text-[10px] font-medium tracking-[0.05em] text-[#86868B] mt-1.5 uppercase" data-testid="product-gst-hint">
+                            Price incl. GST{(data.gst_rate ?? 18) > 0 ? ` (${data.gst_rate ?? 18}%)` : ""}
+                        </div>
 
                         {/* Delivery info */}
                         <DeliveryInfo data={data} kind={kind} />
