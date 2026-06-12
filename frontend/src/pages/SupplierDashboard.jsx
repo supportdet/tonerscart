@@ -22,6 +22,7 @@ import SupplierEarnings from "../components/SupplierEarnings";
 import SupplierInsights from "../components/SupplierInsights";
 import CommissionBanner from "../components/CommissionBanner";
 import CompetitivePricingNote from "../components/CompetitivePricingNote";
+import TonerModelSearchSelect from "../components/TonerModelSearchSelect";
 import CommissionCalculator from "../components/CommissionCalculator";
 import { commissionFor } from "../lib/commission";
 import { Copy, Check, ChevronLeft, Upload, ArrowRight, Store, Building2, Layers } from "lucide-react";
@@ -274,6 +275,10 @@ export default function SupplierDashboard() {
     const [refilledWarning, setRefilledWarning] = useState(false);
     // Structured specs (Wave 4)
     const [compatibleModels, setCompatibleModels] = useState("");
+    // Toner cartridge model number — picked from compatibility_db.py via
+    // the searchable dropdown. When dealer selects a known model we auto-
+    // populate `compatibleModels` with that toner's known printers.
+    const [tonerModel, setTonerModel] = useState("");
     const [oemPartNumber, setOemPartNumber] = useState("");
     const [cartridgeWeight, setCartridgeWeight] = useState("");
     const [warranty, setWarranty] = useState("");
@@ -360,7 +365,7 @@ export default function SupplierDashboard() {
         setPrice(""); setStock(""); setTonerType("Original"); setPageYield("");
         setImageFiles([]); setImagePreviews([]);
         setBrochureFile(null);
-        setCompatibleModels(""); setOemPartNumber(""); setCartridgeWeight(""); setWarranty(""); setWarrantyOther(""); setPrintTechnology("Laser"); setIntercityCharge("0"); setGstRate(18); setPriceType("incl");
+        setCompatibleModels(""); setTonerModel(""); setOemPartNumber(""); setCartridgeWeight(""); setWarranty(""); setWarrantyOther(""); setPrintTechnology("Laser"); setIntercityCharge("0"); setGstRate(18); setPriceType("incl");
         setVariants([{ color: "Black", price: "", stock: "" }]);
         setEditingId(null);
         setExistingImages([]);
@@ -540,9 +545,11 @@ export default function SupplierDashboard() {
             const totalStock = cleanedVariants.reduce((s, v) => s + v.stock, 0);
             const warrantyValue = warranty === "Other" ? (warrantyOther.trim() ? `${warrantyOther.trim()} months` : null) : (warranty || null);
 
-            // Model number is no longer collected — derive a stable identifier
-            // from the first compatible printer model so search / orders work.
-            const derivedModel = (compatibleModels.split(/[,;|]/)[0] || compatibleModels || brand).trim().slice(0, 50);
+            // Model number — prefer the dealer-selected cartridge model from the
+            // compatibility-DB dropdown; otherwise fall back to the first
+            // compatible printer model so search/orders still work.
+            const fallbackModel = (compatibleModels.split(/[,;|]/)[0] || compatibleModels || brand).trim().slice(0, 50);
+            const derivedModel = (tonerModel || "").trim() || fallbackModel;
 
             const payload = {
                 brand,
@@ -1068,6 +1075,24 @@ export default function SupplierDashboard() {
                                 </select>
                             </div>
                             <div>
+                                <Label>Toner model number</Label>
+                                <TonerModelSearchSelect
+                                    value={tonerModel}
+                                    onChange={setTonerModel}
+                                    onSelect={(model, printers) => {
+                                        // Auto-populate "Suitable for" with the
+                                        // cartridge's known printers. Dealer can
+                                        // still add/remove from the populated list.
+                                        if (model && Array.isArray(printers) && printers.length > 0) {
+                                            setCompatibleModels(printers.join(", "));
+                                        }
+                                    }}
+                                    brand={brand}
+                                    testIdPrefix="listing-toner-model"
+                                />
+                                <div className="text-[11px] text-[#86868B] mt-1">Pick from the catalogue or type your own — we&apos;ll auto-fill compatible printers.</div>
+                            </div>
+                            <div className="sm:col-span-2">
                                 <Label>Suitable for<span className="text-red-500"> *</span></Label>
                                 <CompatibleModelsSelect
                                     mode="printers"

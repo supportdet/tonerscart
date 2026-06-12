@@ -29,6 +29,7 @@ const TONER_TYPES = ["Original", "Compatible"];
 
 const TONER_COLUMNS = [
     { key: "brand", label: "Brand", required: true, type: "select", placeholder: "Select brand…", w: 140 },
+    { key: "model_number", label: "Toner Model Number", required: false, w: 170 },
     { key: "compatible_models", label: "Suitable For", required: true, type: "models", w: 240 },
     { key: "color", label: "Color", required: false, w: 110 },
     { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
@@ -41,13 +42,13 @@ const TONER_COLUMNS = [
 ];
 
 const tonerEmptyRow = () => ({
-    brand: "", compatible_models: "", color: "Black", price: "", gst_rate: "18", price_type: "incl",
+    brand: "", model_number: "", compatible_models: "", color: "Black", price: "", gst_rate: "18", price_type: "incl",
     stock: "", page_yield: "", oem_part_number: "",
     toner_type: "Original", intercity_delivery_charge: "0",
 });
 
 const tonerIsRowEmpty = (r) =>
-    !["brand", "compatible_models", "price", "stock", "page_yield", "oem_part_number"]
+    !["brand", "model_number", "compatible_models", "price", "stock", "page_yield", "oem_part_number"]
         .some((k) => String(r[k] ?? "").trim() !== "");
 
 const tonerRowErrors = (r) => {
@@ -64,10 +65,12 @@ const tonerRowErrors = (r) => {
     return errs;
 };
 
-// Model number is no longer collected from dealers. The toner's identity is its
-// brand + the compatible printer models. We derive a stable model_number from
-// the first compatible model so existing search / order surfaces keep working.
+// Stable identifier for the toner listing. Prefer the dealer-entered cartridge
+// model number (e.g. "Q2612A"); fall back to the first compatible printer
+// model, then the brand, so legacy rows without a model_number still save.
 const deriveTonerModel = (r) => {
+    const direct = String(r.model_number || "").trim();
+    if (direct) return direct.slice(0, 50);
     const src = String(r.compatible_models || r.brand || "").trim();
     const first = src.split(/[,;|]/)[0].trim();
     return (first || src || "—").slice(0, 50);
@@ -91,7 +94,7 @@ export const tonerBulkConfig = {
     title: "Bulk upload toners",
     editTitle: "Edit toners",
     editSubtitle: "Edit your existing toners inline, then save. Add new rows to publish more. Required: Brand, Suitable For, Price, Stock, Toner Type, Page Yield.",
-    subtitle: "Fill the table or upload a CSV / Excel. Required: Brand, Suitable For, Price, Stock, Toner Type, Page Yield.",
+    subtitle: "Fill the table or upload a CSV / Excel. Required: Brand, Suitable For, Price, Stock, Toner Type, Page Yield. Toner Model Number is optional — when supplied, buyers can find your listing by cartridge code (e.g. Q2612A).",
     sheetName: "Toners",
     templateFilename: "tonerscart_bulk_toners_template.xlsx",
     currentFilename: "tonerscart_bulk_toners.xlsx",
@@ -102,7 +105,7 @@ export const tonerBulkConfig = {
     selectOptions: { toner_type: TONER_TYPES, brand: TONER_BRANDS, price_type: PRICE_TYPES },
     emptyRow: tonerEmptyRow,
     templateExample: {
-        brand: "HP", compatible_models: "P1007, P1008, P1106, P1108", color: "Black", price: "2183",
+        brand: "HP", model_number: "CC388A", compatible_models: "P1007, P1008, P1106, P1108", color: "Black", price: "2183",
         gst_rate: "18", price_type: "incl", stock: "10",
         page_yield: "1500", oem_part_number: "CC388A", toner_type: "Original",
         intercity_delivery_charge: "150",
@@ -117,6 +120,7 @@ export const tonerBulkConfig = {
         return {
             _id: l.id,
             brand: l.brand || "",
+            model_number: l.model_number || "",
             compatible_models: l.compatible_models || "",
             color: l.color || "Black",
             price: incl !== "" ? String(incl) : "",
