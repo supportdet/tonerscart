@@ -1,3 +1,23 @@
+### 2026-06-12 — Terms §10A + Admin Dealer Profile (ZIP export + Listings tab)
+
+**Terms of Service v2.1 → v2.2**: added §10A "Seller Payouts" — 5-day auto-confirm rule, 2 business-day payout window, explicit Razorpay bank-share consent.
+
+**Admin → Dealer Profile** (`/admin/dealers/:id`, `DealerProfile.jsx` rewritten):
+- New **"Download Full Profile"** button → `GET /api/admin/suppliers/{id}/export` streams a ZIP containing:
+  - **{Dealer}__Dealer_Profile.pdf** — Business / Bank / KYC sections (reportlab).
+  - **Dealer_Analytics.xlsx** — Total Orders, GMV, Commission to TonersCart, Payouts to Dealer, Orders by Status (Requested/Confirmed/Dispatched/Delivered/Completed/Cancelled), Listings by Category, AOV, Member Since, Last Active (openpyxl).
+  - **KYC/** — every uploaded document re-downloaded from `supplier-documents` storage with original extension.
+  - **README.txt** — manifest.
+- New **"Listings" tab** — flattened table across toners/printers/papers/consumables/scanners with Product, Category, Brand, Price, Stock, Status (Active/Inactive badge), Date Listed, Edit.
+- New **Edit dialog** → `PUT /api/admin/listings/{kind}/{id}` updates Price, Stock, Description, Status (Inactive zeroes stock so listing drops from public browse). All 5 kinds supported via `_KIND_TABLE` map. Papers use `price_per_ream` automatically.
+- Backend `admin_supplier_detail` now also returns `consumable_listings` + `consumable_count` so all 5 categories appear in the tab and the analytics export.
+
+**Files**: new `backend/dealer_export.py`, updated `backend/routes/admin.py`, rewrite of `frontend/src/pages/DealerProfile.jsx`. Dependency added: `openpyxl==3.1.5` (pip frozen into requirements.txt).
+
+**Verified live**: ZIP export HTTP 200, 8.8 MB, 9 files including 6 KYC PNGs. PUT update test: price 3800 → 99999 → revert; status active ↔ inactive flips stock correctly. Frontend dialog opens & saves.
+
+
+
 ### 2026-06-11 (d) — Brand chip multi-select bug fix (server-side filtering)
 
 - **Bug**: On `/search` (toners), rapidly toggling brand chips eventually showed "0 listings" even when matching products existed. Root cause: paginated endpoint loaded only 24 rows; client-side brand filter on that subset returned empty when the loaded page didn't contain the selected brand.

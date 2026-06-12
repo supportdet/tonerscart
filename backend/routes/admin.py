@@ -442,6 +442,12 @@ def admin_supplier_detail(supplier_id: str, user: dict = Depends(require_role("a
         ).execute().data or []
     except Exception:
         scanners = []
+    try:
+        consumables = sb_admin.table("consumable_listings").select("*").eq("supplier_id", supplier_id).order(
+            "created_at", desc=True
+        ).execute().data or []
+    except Exception:
+        consumables = []
     orders = sb_admin.table("orders").select("*,listings(brand,model_number)").eq("supplier_id", supplier_id).order(
         "created_at", desc=True
     ).limit(500).execute().data or []
@@ -513,6 +519,7 @@ def admin_supplier_detail(supplier_id: str, user: dict = Depends(require_role("a
     active_printers = len([p for p in printers if int(p.get("stock") or 0) > 0])
     active_papers = len([p for p in papers if int(p.get("stock") or 0) > 0])
     active_scanners = len([s for s in scanners if int(s.get("stock") or 0) > 0])
+    active_consumables = len([c for c in consumables if int(c.get("stock") or 0) > 0])
 
     return {
         "supplier": sup,
@@ -520,16 +527,18 @@ def admin_supplier_detail(supplier_id: str, user: dict = Depends(require_role("a
         "printer_listings": printers,
         "paper_listings": papers,
         "scanner_listings": scanners,
+        "consumable_listings": consumables,
         "orders": orders,
         "documents": documents,
         "agreements": agreements,
         "stats": {
-            "listing_count": len(toners) + len(printers) + len(papers) + len(scanners),
-            "active_listing_count": active_toners + active_printers + active_papers + active_scanners,
+            "listing_count": len(toners) + len(printers) + len(papers) + len(scanners) + len(consumables),
+            "active_listing_count": active_toners + active_printers + active_papers + active_scanners + active_consumables,
             "toner_count": len(toners),
             "printer_count": len(printers),
             "paper_count": len(papers),
             "scanner_count": len(scanners),
+            "consumable_count": len(consumables),
             "order_count": len(orders),
             "gmv": round(gmv, 2),
             "commission_earned": round(commission_earned, 2),
@@ -657,6 +666,98 @@ def admin_delete_listing(listing_id: str, user: dict = Depends(require_role("adm
     sb_admin.table("listings").delete().eq("id", listing_id).execute()
     _log_admin_action(user, "listing_deleted", "listing", listing_id)
     return {"ok": True}
+
+
+class AdminListingUpdate(BaseModel):
+    price: Optional[float] = None
+    stock: Optional[int] = None
+    description: Optional[str] = None
+    status: Optional[str] = None  # "active" | "inactive" — flips stock 0/min when toggling
+
+
+_KIND_TABLE = {
+    "toner": "listings",
+    "printer": "printer_listings",
+    "paper": "paper_listings",
+    "consumable": "consumable_listings",
+    "scanner": "scanner_listings",
+}
+
+
+@router.put("/admin/listings/{kind}/{listing_id}")
+def admin_update_listing(
+    kind: str, listing_id: str, payload: AdminListingUpdate,
+    user: dict = Depends(require_role("admin")),
+):
+    """Single endpoint for admins to edit any listing across all 5 product
+    categories. Updates price / stock / description; status=inactive zeroes
+    stock (so the listing falls out of public browse), active restores 1 if
+    the row was at 0."""
+    table = _KIND_TABLE.get(kind)
+    if not table:
+        raise HTTPException(400, f"Unknown listing kind '{kind}'")
+    upd: Dict[str, Any] = {}
+    if payload.price is not None:
+        if payload.price < 0:
+            raise HTTPException(400, "Price must be ≥ 0")
+        # papers use price_per_ream, everything else uses price
+        upd["price_per_ream" if kind == "paper" else "price"] = float(payload.price)
+    if payload.stock is not None:
+        if payload.stock < 0:
+            raise HTTPException(400, "Stock must be ≥ 0")
+        upd["stock"] = int(payload.stock)
+    if payload.description is not None:
+        upd["description"] = payload.description.strip() or None
+    if payload.status in ("active", "inactive"):
+        # If admin didn't also pass a stock value, derive from current row.
+        if "stock" not in upd:
+            try:
+                cur = sb_admin.table(table).select("stock").eq("id", listing_id).maybe_single().execute()
+                cur_stock = int((cur.data or {}).get("stock") or 0) if cur and cur.data else 0
+            except Exception:
+                cur_stock = 0
+            if payload.status == "inactive":
+                upd["stock"] = 0
+            elif payload.status == "active" and cur_stock <= 0:
+                upd["stock"] = 1
+    if not upd:
+        return {"ok": True, "updated": []}
+    try:
+        sb_admin.table(table).update(upd).eq("id", listing_id).execute()
+    except Exception as e:
+        msg = str(e)
+        if "description" in msg and "description" in upd:
+            # Table doesn't have a description column — retry without it.
+            upd.pop("description", None)
+            if upd:
+                sb_admin.table(table).update(upd).eq("id", listing_id).execute()
+        else:
+            raise HTTPException(500, f"Update failed: {e}") from e
+    _log_admin_action(user, f"{kind}_listing_edited", "listing", listing_id)
+    return {"ok": True, "updated": list(upd.keys())}
+
+
+@router.get("/admin/suppliers/{supplier_id}/export")
+def admin_supplier_export(supplier_id: str, user: dict = Depends(require_role("admin"))):
+    """Streams a ZIP archive of the dealer's full profile: PDF summary,
+    Excel analytics, and every uploaded KYC document. Used by the
+    "Download Full Profile" button on the admin dealer profile page."""
+    from fastapi.responses import Response
+    from dealer_export import build_dealer_export_zip
+
+    # Reuse the existing detail endpoint payload — keeps the export aligned
+    # with whatever fields the admin profile currently shows.
+    detail = admin_supplier_detail(supplier_id, user=user)  # type: ignore[arg-type]
+    blob, filename = build_dealer_export_zip(sb_admin, supplier_id, detail)
+    _log_admin_action(user, "dealer_export_downloaded", "supplier", supplier_id)
+    return Response(
+        content=blob,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(blob)),
+        },
+    )
 
 
 @router.delete("/admin/printers/{printer_id}")
