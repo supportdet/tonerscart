@@ -1,3 +1,42 @@
+### 2026-06-12 (g) — Incl/excl GST toggle on every upload form + 7s popup + competitive-pricing nudge
+
+**Trigger**: User requested (1) a "Price includes GST" / "Price excludes GST" toggle on all 5 dealer upload forms (toners, printers, papers, consumables, scanners) — default incl, with a "Buyer will see: ₹X (incl. GST)" helper line, GST rate selected first; (2) same toggle as a `Price Type` column in the bulk-upload templates; (3) drop the `/printers` guided-finder popup from 15s → 7s and make it fire on mobile (was silent on mobile); (4) a competitive-pricing nudge above Publish on every form.
+
+**New components**:
+- `frontend/src/components/PriceWithGstToggle.jsx` — controlled, reusable price input with GST dropdown rendered first, incl/excl toggle pills (default incl), price input, and live helper line "Buyer will see: ₹X (incl. GST) · Base: ₹Y + GST n%: ₹Z". Exports a `getBasePrice(value, priceType, gstRate)` helper that parents call on submit to convert the typed value into the stored base price.
+- `frontend/src/components/CompetitivePricingNote.jsx` — small amber-tinted one-liner with a `TrendingUp` icon ("Tip: Setting a competitive price significantly boosts your sales — buyers compare dealer prices side-by-side, and sharper pricing puts you at the top of the results.") rendered just above the Publish button on every upload form.
+
+**Helper added** (`frontend/src/lib/listingConstants.js`): `priceFromInclusive(inclPrice, rate) = Math.round(incl / (1 + r/100))` — inverse of the existing `withGst()`. Math verified: 11800 ↔ 10000 round-trip at 18% GST.
+
+**Single-upload forms wired**:
+- `PaperListings.jsx` — Add/Edit Paper modal: new toggle, edit-load now pre-fills the input with the buyer-facing inclusive price.
+- `ConsumableListings.jsx` — Add/Edit Consumable modal: same pattern.
+- `ScannerListings.jsx` — Add/Edit Scanner modal: same pattern.
+- `PrinterListings.jsx` — printer wizard step 3 (Pricing & stock): GST/toggle/price block; step 4 (Review) now shows the GST-inclusive figure with an `incl. GST` label.
+- `SupplierDashboard.jsx` toner Add form: GST-rate dropdown promoted above the variants table; one global "Variant prices include GST | Variant prices exclude GST" toggle (default incl) applies to every variant row; each row shows its own "Buyer will see: ₹X (incl. GST)" helper. Submit() converts each variant via `priceFromInclusive` before POST.
+
+**Bulk-upload templates updated** (`frontend/src/lib/bulkConfigs.js`):
+- New helper `basePriceFromRow(typed, row)` — converts row.price using row.price_type ("incl" default) and row.gst_rate (18 default).
+- All 5 configs (toner, printer, paper, consumable, scanner) gained a `price_type` column (select: `incl` / `excl`, default `incl`). `emptyRow`, `templateExample`, `selectOptions`, and `toPayload` / `toUpdatePayload` updated.
+- `fromListing` in every config now reconstructs the GST-inclusive price for the displayed cell so the edit-view of an existing listing matches what was originally entered.
+- Downloaded XLSX templates now include a `price_type` header with `incl` in the example row.
+
+**Popup timer**: `frontend/src/pages/PrintersResults.jsx` line ~75 — `setTimeout(…, 15000)` → `setTimeout(…, 7000)`. The 400px-scroll suppression and sessionStorage "shown-once" guards are kept. Testing agent confirmed the popup now fires correctly on both desktop (1920×800) and mobile (390×844) viewports at the new 7s mark.
+
+**Backend impact**: zero. Backend storage convention is unchanged (base price + gst_rate). All conversion happens client-side before POST/PUT.
+
+**Verified** (`/app/test_reports/iteration_43.json`):
+- Popup auto-opens after ~7s on **both** desktop and mobile viewports (overlay `data-testid="finder-popup-overlay"`).
+- All 3 protected dealers (DET, Sairam, Big C) still Active on /admin → Dealers.
+- 0 console errors across /printers, /toners, /papers, /consumables, /scanners.
+- Code-level grep confirmed every upload form imports `PriceWithGstToggle`, `getBasePrice`, and `CompetitivePricingNote`; all 5 bulk configs include the `price_type` column with `basePriceFromRow` conversion.
+- Round-trip math: typed 11800 (incl, 18%) → stored base 10000 → reopened in edit shows 11800 again. Acceptable ≤₹1 drift at .5 boundaries (INR).
+
+**Not live-exercised** (no shared supplier credentials per `test_credentials.md`): the actual Add-* modal click-throughs. Code wiring + math + helpers are verified; one-time disposable supplier can be created via /register → admin-approve if a future iteration needs live click validation.
+
+---
+
+
 ### 2026-06-12 (f) — Sairam dealer restore + permanent protected-email list
 
 **Trigger**: User reported two real dealer accounts must be restored and permanently protected from any future cleanup operation: `support@digitaledgeindia.com` (DET, primary), `sairam@digitaledgeindia.com` (DET, second authorised user / "Dad's account"). Big C (`sales@bigctech.com`) also to be added to the same protection list.
