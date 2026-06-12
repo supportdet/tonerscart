@@ -30,6 +30,17 @@ export const gstAmount = (basePrice, rate) =>
 export const withGst = (basePrice, rate) =>
     Math.round(Number(basePrice || 0) + (Number(basePrice || 0) * Number(rate || 0)) / 100);
 
+// Reverse of withGst — given a GST-inclusive price (what the buyer sees) and
+// the GST rate, return the base price that gets stored on the listing.
+// Used by dealer upload forms when the dealer toggles "Price includes GST".
+export const priceFromInclusive = (inclPrice, rate) => {
+    const r = Number(rate ?? DEFAULT_GST_RATE);
+    const incl = Number(inclPrice || 0);
+    if (incl <= 0) return 0;
+    if (r <= 0) return Math.round(incl);
+    return Math.round(incl / (1 + r / 100));
+};
+
 // Convenience: read a listing row's GST-inclusive price using its gst_rate
 // field, falling back to DEFAULT_GST_RATE (18%) when absent.
 export const inclGstPrice = (basePrice, gst_rate) =>

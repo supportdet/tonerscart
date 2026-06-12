@@ -57,7 +57,8 @@ export default function Printers() {
         brands: [], type: "", condition: "", city: "", minPrice: "", maxPrice: "", sort: "local",
     });
 
-    // "Find your printer" popup — auto-opens 15s after landing on /printers,
+    // "Find your printer" popup — auto-opens 7s after landing on /printers
+    // (was 15s — dropped per user request, also fires correctly on mobile),
     // unless the user already scrolled significantly or it was already shown
     // this session. Dismissible via a clear X button.
     const [showFinder, setShowFinder] = useState(false);
@@ -71,7 +72,7 @@ export default function Printers() {
                 setShowFinder(true);
                 try { sessionStorage.setItem("tc_finder_popup_shown", "1"); } catch { /* ignore */ }
             }
-        }, 15000);
+        }, 7000);
         return () => {
             clearTimeout(t);
             window.removeEventListener("scroll", onScroll);

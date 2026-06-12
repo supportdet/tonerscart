@@ -8,7 +8,7 @@ import { Label } from "../components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
 import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle, Camera, Loader2, Package, ShoppingCart, Clock, Printer, FileText, Pencil, X as XIcon } from "lucide-react";
-import { GST_RATES, gstAmount, formatINR } from "../lib/listingConstants";
+import { GST_RATES, formatINR, withGst, priceFromInclusive } from "../lib/listingConstants";
 import { TONER_BRANDS } from "../lib/brands";
 import { supabase, PRODUCT_BUCKET } from "../lib/supabase";
 import RefilledWarningDialog from "../components/RefilledWarningDialog";
@@ -21,6 +21,7 @@ import DeliveryPolicyNote from "../components/DeliveryPolicyNote";
 import SupplierEarnings from "../components/SupplierEarnings";
 import SupplierInsights from "../components/SupplierInsights";
 import CommissionBanner from "../components/CommissionBanner";
+import CompetitivePricingNote from "../components/CompetitivePricingNote";
 import CommissionCalculator from "../components/CommissionCalculator";
 import { commissionFor } from "../lib/commission";
 import { Copy, Check, ChevronLeft, Upload, ArrowRight, Store, Building2, Layers } from "lucide-react";
@@ -280,6 +281,10 @@ export default function SupplierDashboard() {
     const [printTechnology, setPrintTechnology] = useState("Laser");
     const [intercityCharge, setIntercityCharge] = useState("0");
     const [gstRate, setGstRate] = useState(18);
+    // Whether the per-variant prices below were entered as GST-inclusive
+    // (default — Indian dealers usually quote final price) or GST-exclusive.
+    // Applies to ALL variants in this listing.
+    const [priceType, setPriceType] = useState("incl");
     // Variants
     const [variants, setVariants] = useState([{ color: "Black", price: "", stock: "" }]);
 
@@ -355,7 +360,7 @@ export default function SupplierDashboard() {
         setPrice(""); setStock(""); setTonerType("Original"); setPageYield("");
         setImageFiles([]); setImagePreviews([]);
         setBrochureFile(null);
-        setCompatibleModels(""); setOemPartNumber(""); setCartridgeWeight(""); setWarranty(""); setWarrantyOther(""); setPrintTechnology("Laser"); setIntercityCharge("0"); setGstRate(18);
+        setCompatibleModels(""); setOemPartNumber(""); setCartridgeWeight(""); setWarranty(""); setWarrantyOther(""); setPrintTechnology("Laser"); setIntercityCharge("0"); setGstRate(18); setPriceType("incl");
         setVariants([{ color: "Black", price: "", stock: "" }]);
         setEditingId(null);
         setExistingImages([]);
@@ -510,10 +515,14 @@ export default function SupplierDashboard() {
         if (!brand) { toast.error("Please select a brand"); return; }
         if (!compatibleModels.trim()) { toast.error("Please enter the suitable printer models"); return; }
         if (!pageYield || parseInt(pageYield, 10) <= 0) { toast.error("Page yield (sheets) is required"); return; }
-        // Wave 10 — images are optional. Animated cartridge fallback is shown
-        // automatically when no image is provided.
+        // Convert variant prices to base (GST-exclusive) before saving — the
+        // global priceType toggle applies to every row in this listing.
         const cleanedVariants = variants
-            .map((v) => ({ color: (v.color || "").trim(), price: parseFloat(v.price), stock: parseInt(v.stock, 10) }))
+            .map((v) => {
+                const typed = parseFloat(v.price);
+                const base = priceType === "incl" ? priceFromInclusive(typed, gstRate) : typed;
+                return { color: (v.color || "").trim(), price: base, stock: parseInt(v.stock, 10) };
+            })
             .filter((v) => v.color && v.price > 0 && v.stock >= 0);
         if (cleanedVariants.length === 0) {
             toast.error("Add at least one colour variant with a colour name, price and stock");
@@ -1098,20 +1107,69 @@ export default function SupplierDashboard() {
 
                         <div className="tc-form-section">Colours &amp; pricing</div>
                         <div className="text-[12px] text-[#86868B] mb-2">Add at least one colour variant. Up to 15 colours allowed. Buyers will pick a colour on the product page; stock deducts from that specific variant.</div>
-                        <div className="space-y-2" data-testid="variant-list">
-                            {variants.map((v, i) => (
-                                <div key={i} className="grid grid-cols-12 gap-2 items-center bg-[#FAFAFB] border border-black/[0.06] rounded-lg p-2" data-testid={`variant-row-${i}`}>
-                                    <div className="col-span-5 sm:col-span-4 flex items-center gap-2">
-                                        <span className="inline-block w-5 h-5 rounded-full border border-black/10 shrink-0" style={{ backgroundColor: colorSwatchHex(v.color) }} />
-                                        <Input value={v.color} onChange={(e) => updateVariant(i, "color", e.target.value)} placeholder="Black / Cyan / Light Magenta…" className="tc-input-lg" data-testid={`variant-color-${i}`} />
-                                    </div>
-                                    <Input type="number" min="0" step="1" value={v.price} onChange={(e) => updateVariant(i, "price", e.target.value)} placeholder="Price ₹" className="tc-input-lg col-span-3 sm:col-span-3" data-testid={`variant-price-${i}`} />
-                                    <Input type="number" min="0" step="1" value={v.stock} onChange={(e) => updateVariant(i, "stock", e.target.value)} placeholder="Stock" className="tc-input-lg col-span-3 sm:col-span-3" data-testid={`variant-stock-${i}`} />
-                                    <button type="button" onClick={() => removeVariant(i)} className="col-span-1 sm:col-span-2 h-9 inline-flex items-center justify-center text-red-600 hover:bg-red-50 rounded-md" aria-label="Remove variant" data-testid={`variant-remove-${i}`}>
-                                        <Trash2 size={14} />
+
+                        {/* GST rate must be picked first so the incl./excl. conversion is accurate */}
+                        <div className="mb-3">
+                            <Label>GST rate (%) <span className="text-red-500">*</span></Label>
+                            <select
+                                value={gstRate}
+                                onChange={(e) => setGstRate(Number(e.target.value))}
+                                className="tc-input-lg w-full"
+                                data-testid="listing-gst-rate"
+                            >
+                                {GST_RATES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+                            </select>
+                            <div className="text-[11px] text-[#86868B] mt-1">Set the correct GST rate first — the toggle below uses it to convert prices.</div>
+                        </div>
+
+                        {/* Global incl/excl GST toggle — applies to every variant row */}
+                        <div className="inline-flex w-full rounded-lg border border-black/[0.08] overflow-hidden bg-white mb-2" role="radiogroup" aria-label="Variant price type">
+                            {[
+                                { id: "incl", label: "Variant prices include GST" },
+                                { id: "excl", label: "Variant prices exclude GST" },
+                            ].map((opt) => {
+                                const sel = priceType === opt.id;
+                                return (
+                                    <button
+                                        type="button"
+                                        key={opt.id}
+                                        role="radio"
+                                        aria-checked={sel}
+                                        onClick={() => setPriceType(opt.id)}
+                                        className={`flex-1 px-3 h-9 text-[12.5px] font-semibold transition ${sel ? "bg-[#0A0A0B] text-white" : "bg-white text-[#3a3a40] hover:bg-black/[0.03]"}`}
+                                        data-testid={`listing-price-type-${opt.id}`}
+                                    >
+                                        {opt.label}
                                     </button>
+                                );
+                            })}
+                        </div>
+
+                        <div className="space-y-2" data-testid="variant-list">
+                            {variants.map((v, i) => {
+                                const typed = parseFloat(v.price || 0);
+                                const buyerSees = priceType === "incl" ? Math.round(typed) : withGst(typed, gstRate);
+                                return (
+                                <div key={i} className="bg-[#FAFAFB] border border-black/[0.06] rounded-lg p-2" data-testid={`variant-row-${i}`}>
+                                    <div className="grid grid-cols-12 gap-2 items-center">
+                                        <div className="col-span-5 sm:col-span-4 flex items-center gap-2">
+                                            <span className="inline-block w-5 h-5 rounded-full border border-black/10 shrink-0" style={{ backgroundColor: colorSwatchHex(v.color) }} />
+                                            <Input value={v.color} onChange={(e) => updateVariant(i, "color", e.target.value)} placeholder="Black / Cyan / Light Magenta…" className="tc-input-lg" data-testid={`variant-color-${i}`} />
+                                        </div>
+                                        <Input type="number" min="0" step="1" value={v.price} onChange={(e) => updateVariant(i, "price", e.target.value)} placeholder={priceType === "incl" ? "Final price ₹" : "Base price ₹"} className="tc-input-lg col-span-3 sm:col-span-3" data-testid={`variant-price-${i}`} />
+                                        <Input type="number" min="0" step="1" value={v.stock} onChange={(e) => updateVariant(i, "stock", e.target.value)} placeholder="Stock" className="tc-input-lg col-span-3 sm:col-span-3" data-testid={`variant-stock-${i}`} />
+                                        <button type="button" onClick={() => removeVariant(i)} className="col-span-1 sm:col-span-2 h-9 inline-flex items-center justify-center text-red-600 hover:bg-red-50 rounded-md" aria-label="Remove variant" data-testid={`variant-remove-${i}`}>
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                    {typed > 0 && (
+                                        <div className="text-[11.5px] text-[#0A0A0B] mt-1.5 pl-1" data-testid={`variant-buyer-sees-${i}`}>
+                                            Buyer will see: <strong>{formatINR(buyerSees)} (incl. GST)</strong>
+                                        </div>
+                                    )}
                                 </div>
-                            ))}
+                                );
+                            })}
                             <button type="button" onClick={addVariant} className="inline-flex items-center gap-1.5 mt-1 text-[12.5px] text-[#00B7C7] hover:text-[#0096a3] font-semibold" data-testid="variant-add-btn">
                                 <Plus size={13} /> Add colour
                             </button>
@@ -1155,38 +1213,14 @@ export default function SupplierDashboard() {
                                 )}
                             </div>
                             <div className="col-span-2">
-                                <Label>GST rate (%)</Label>
-                                <select
-                                    value={gstRate}
-                                    onChange={(e) => setGstRate(Number(e.target.value))}
-                                    className="tc-input-lg w-full"
-                                    data-testid="listing-gst-rate"
-                                >
-                                    {GST_RATES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
-                                </select>
-                                {(() => {
-                                    const cheapest = variants.reduce((a, b) => {
-                                        const pa = parseFloat(a.price || 0); const pb = parseFloat(b.price || 0);
-                                        if (!pa) return b; if (!pb) return a; return pa <= pb ? a : b;
-                                    }, variants[0]);
-                                    const base = parseFloat(cheapest?.price || 0);
-                                    if (!base) return null;
-                                    const gst = gstAmount(base, gstRate);
-                                    return (
-                                        <div className="text-[12px] text-[#0A0A0B] bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 mt-2" data-testid="listing-gst-preview">
-                                            Base price: <strong>{formatINR(base)}</strong> + GST ({gstRate}%): <strong>{formatINR(gst)}</strong> = Total: <strong>{formatINR(base + gst)}</strong>
-                                        </div>
-                                    );
-                                })()}
-                                <div className="text-[11px] text-[#86868B] mt-1">Listing cards now show the full price including GST. The dealer&apos;s GST share is itemised on the buyer&apos;s invoice.</div>
-                            </div>
-                            <div className="col-span-2">
                                 <DeliveryPolicyNote />
                             </div>
                         </div>
 
                         {/* Wave 12 — image upload removed for toners. Animated cartridge
                             graphic is shown automatically on every listing card. */}
+
+                        <CompetitivePricingNote />
 
                         <DialogFooter className="mt-6">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>

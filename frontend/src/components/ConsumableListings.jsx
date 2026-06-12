@@ -5,9 +5,11 @@ import { Label } from "./ui/label";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { Trash2, Boxes, Pencil, ChevronLeft, ImageIcon, X } from "lucide-react";
-import { GST_RATES, gstAmount, formatINR } from "../lib/listingConstants";
+import { withGst } from "../lib/listingConstants";
+import PriceWithGstToggle, { getBasePrice } from "./PriceWithGstToggle";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
+import CompetitivePricingNote from "./CompetitivePricingNote";
 import DeliveryPolicyNote from "./DeliveryPolicyNote";
 import BulkUploadGeneric from "./BulkUploadGeneric";
 import { consumableBulkConfig } from "../lib/bulkConfigs";
@@ -20,7 +22,7 @@ const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")
 function emptyForm() {
     return {
         subcategory: "Ink Cartridges", subcategory_other: "", brand: "", model_number: "",
-        compatible_models: "", condition: "New", price: "", gst_rate: 18, stock: "", description: "",
+        compatible_models: "", condition: "New", price: "", gst_rate: 18, price_type: "incl", stock: "", description: "",
     };
 }
 
@@ -39,6 +41,8 @@ export default function ConsumableListings() {
     const openAdd = () => { setEditingId(null); setForm(emptyForm()); setImageFiles([]); setImagePreviews([]); setOpen(true); };
     const openEdit = (c) => {
         setEditingId(c.id);
+        const gstRate = c.gst_rate != null ? Number(c.gst_rate) : 18;
+        const inclPrice = c.price != null ? withGst(Number(c.price), gstRate) : "";
         setForm({
             subcategory: c.subcategory || "Ink Cartridges",
             subcategory_other: c.subcategory_other || "",
@@ -46,8 +50,9 @@ export default function ConsumableListings() {
             model_number: c.model_number || "",
             compatible_models: c.compatible_models || "",
             condition: c.condition || "New",
-            price: String(c.price ?? ""),
-            gst_rate: c.gst_rate != null ? Number(c.gst_rate) : 18,
+            price: inclPrice !== "" ? String(inclPrice) : "",
+            gst_rate: gstRate,
+            price_type: "incl",
             stock: String(c.stock ?? ""),
             description: c.description || "",
         });
@@ -114,6 +119,7 @@ export default function ConsumableListings() {
                     if (data?.url) uploadedUrls.push(data.url);
                 }
             }
+            const basePrice = getBasePrice(form.price, form.price_type, form.gst_rate);
             const payload = {
                 subcategory: form.subcategory,
                 subcategory_other: form.subcategory === "Other" ? form.subcategory_other.trim() : null,
@@ -121,7 +127,7 @@ export default function ConsumableListings() {
                 model_number: form.model_number.trim(),
                 compatible_models: (form.compatible_models || "").trim() || null,
                 condition: form.condition || "New",
-                price: Number(form.price),
+                price: basePrice,
                 gst_rate: Number(form.gst_rate || 18),
                 stock: Number(form.stock),
                 description: (form.description || "").trim() || null,
@@ -236,28 +242,21 @@ export default function ConsumableListings() {
                                 <MissingModelLink category="consumable" brand={form.brand} testidPrefix="consumable-missing-model" />
                             </div>
                             <div>
-                                <Label>Price (₹) <span className="text-red-500">*</span></Label>
-                                <Input type="number" min="1" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} required className="tc-input-lg" data-testid="consumable-price-input" />
-                            </div>
-                            <div>
                                 <Label>Stock <span className="text-red-500">*</span></Label>
                                 <Input type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} required className="tc-input-lg" data-testid="consumable-stock-input" />
                             </div>
                             <div className="col-span-2">
-                                <Label>GST rate (%)</Label>
-                                <select value={form.gst_rate} onChange={(e) => setForm({ ...form, gst_rate: Number(e.target.value) })} className="tc-input-lg w-full" data-testid="consumable-gst-rate">
-                                    {GST_RATES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
-                                </select>
-                                {(() => {
-                                    const base = parseFloat(form.price || 0);
-                                    if (!base) return null;
-                                    const gst = gstAmount(base, form.gst_rate);
-                                    return (
-                                        <div className="text-[12px] text-[#0A0A0B] bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 mt-2" data-testid="consumable-gst-preview">
-                                            Base price: <strong>{formatINR(base)}</strong> + GST ({form.gst_rate}%): <strong>{formatINR(gst)}</strong> = Total: <strong>{formatINR(base + gst)}</strong>
-                                        </div>
-                                    );
-                                })()}
+                                <PriceWithGstToggle
+                                    priceLabel="Price (₹)"
+                                    required
+                                    value={form.price}
+                                    onChange={(v) => setForm({ ...form, price: v })}
+                                    priceType={form.price_type}
+                                    onPriceTypeChange={(t) => setForm({ ...form, price_type: t })}
+                                    gstRate={form.gst_rate}
+                                    onGstRateChange={(r) => setForm({ ...form, gst_rate: r })}
+                                    testIdPrefix="consumable"
+                                />
                             </div>
                         </div>
 
@@ -288,6 +287,7 @@ export default function ConsumableListings() {
 
                         <DeliveryPolicyNote />
                         <CommissionBanner />
+                        <CompetitivePricingNote />
                         <DialogFooter className="mt-3">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
                             <Button type="submit" className="btn-pill-cta" disabled={saving} data-testid="consumable-save-btn">

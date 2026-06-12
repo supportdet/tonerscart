@@ -5,9 +5,11 @@ import { Label } from "./ui/label";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { Trash2, ScanLine, Pencil, ChevronLeft, ImageIcon, X } from "lucide-react";
-import { GST_RATES, gstAmount, formatINR, PRINTER_TONER_BRANDS } from "../lib/listingConstants";
+import { withGst, PRINTER_TONER_BRANDS } from "../lib/listingConstants";
+import PriceWithGstToggle, { getBasePrice } from "./PriceWithGstToggle";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
+import CompetitivePricingNote from "./CompetitivePricingNote";
 import DeliveryPolicyNote from "./DeliveryPolicyNote";
 import BulkUploadGeneric from "./BulkUploadGeneric";
 import { scannerBulkConfig } from "../lib/bulkConfigs";
@@ -22,7 +24,7 @@ function emptyForm() {
     return {
         brand: "", model_number: "", scanner_type: "Flatbed", condition: "New",
         scan_resolution: "1200dpi", connectivity: [], scan_speed_ppm: "", color_mode: "Color",
-        warranty: "No warranty", price: "", gst_rate: 18, stock: "", description: "",
+        warranty: "No warranty", price: "", gst_rate: 18, price_type: "incl", stock: "", description: "",
     };
 }
 
@@ -41,6 +43,8 @@ export default function ScannerListings() {
     const openAdd = () => { setEditingId(null); setForm(emptyForm()); setImageFiles([]); setImagePreviews([]); setOpen(true); };
     const openEdit = (s) => {
         setEditingId(s.id);
+        const gstRate = s.gst_rate != null ? Number(s.gst_rate) : 18;
+        const inclPrice = s.price != null ? withGst(Number(s.price), gstRate) : "";
         setForm({
             brand: s.brand || "",
             model_number: s.model_number || "",
@@ -51,8 +55,9 @@ export default function ScannerListings() {
             scan_speed_ppm: s.scan_speed_ppm != null ? String(s.scan_speed_ppm) : "",
             color_mode: s.color_mode || "Color",
             warranty: s.warranty || "No warranty",
-            price: String(s.price ?? ""),
-            gst_rate: s.gst_rate != null ? Number(s.gst_rate) : 18,
+            price: inclPrice !== "" ? String(inclPrice) : "",
+            gst_rate: gstRate,
+            price_type: "incl",
             stock: String(s.stock ?? ""),
             description: s.description || "",
         });
@@ -123,6 +128,7 @@ export default function ScannerListings() {
                     if (data?.url) uploadedUrls.push(data.url);
                 }
             }
+            const basePrice = getBasePrice(form.price, form.price_type, form.gst_rate);
             const payload = {
                 brand: form.brand.trim(),
                 model_number: form.model_number.trim(),
@@ -133,7 +139,7 @@ export default function ScannerListings() {
                 scan_speed_ppm: form.scan_speed_ppm !== "" ? Number(form.scan_speed_ppm) : null,
                 color_mode: form.color_mode || "Color",
                 warranty: form.warranty || "No warranty",
-                price: Number(form.price),
+                price: basePrice,
                 gst_rate: Number(form.gst_rate || 18),
                 stock: Number(form.stock),
                 description: (form.description || "").trim() || null,
@@ -272,28 +278,21 @@ export default function ScannerListings() {
                                 </select>
                             </div>
                             <div>
-                                <Label>Price (₹) <span className="text-red-500">*</span></Label>
-                                <Input type="number" min="1" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} required className="tc-input-lg" data-testid="scanner-price-input" />
-                            </div>
-                            <div>
                                 <Label>Stock <span className="text-red-500">*</span></Label>
                                 <Input type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} required className="tc-input-lg" data-testid="scanner-stock-input" />
                             </div>
                             <div className="col-span-2">
-                                <Label>GST rate (%)</Label>
-                                <select value={form.gst_rate} onChange={(e) => setForm({ ...form, gst_rate: Number(e.target.value) })} className="tc-input-lg w-full" data-testid="scanner-gst-rate">
-                                    {GST_RATES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
-                                </select>
-                                {(() => {
-                                    const base = parseFloat(form.price || 0);
-                                    if (!base) return null;
-                                    const gst = gstAmount(base, form.gst_rate);
-                                    return (
-                                        <div className="text-[12px] text-[#0A0A0B] bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 mt-2" data-testid="scanner-gst-preview">
-                                            Base price: <strong>{formatINR(base)}</strong> + GST ({form.gst_rate}%): <strong>{formatINR(gst)}</strong> = Total: <strong>{formatINR(base + gst)}</strong>
-                                        </div>
-                                    );
-                                })()}
+                                <PriceWithGstToggle
+                                    priceLabel="Price (₹)"
+                                    required
+                                    value={form.price}
+                                    onChange={(v) => setForm({ ...form, price: v })}
+                                    priceType={form.price_type}
+                                    onPriceTypeChange={(t) => setForm({ ...form, price_type: t })}
+                                    gstRate={form.gst_rate}
+                                    onGstRateChange={(r) => setForm({ ...form, gst_rate: r })}
+                                    testIdPrefix="scanner"
+                                />
                             </div>
                         </div>
 
@@ -324,6 +323,7 @@ export default function ScannerListings() {
 
                         <DeliveryPolicyNote />
                         <CommissionBanner />
+                        <CompetitivePricingNote />
                         <DialogFooter className="mt-3">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
                             <Button type="submit" className="btn-pill-cta" disabled={saving} data-testid="scanner-save-btn">

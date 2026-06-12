@@ -2,7 +2,7 @@
 // One config per product type — columns map 1:1 to the backend create models.
 
 import { TONER_BRANDS } from "./brands";
-import { PAPER_BRANDS } from "./listingConstants";
+import { PAPER_BRANDS, priceFromInclusive } from "./listingConstants";
 
 const num = (v) => (v === "" || v == null ? null : Number(v));
 const splitList = (v) =>
@@ -10,6 +10,18 @@ const splitList = (v) =>
         .split(/[,;|]/)
         .map((x) => x.trim())
         .filter(Boolean);
+
+// Convert a row's typed price into the stored base price using the row's
+// price_type ("incl" | "excl", default "incl") and gst_rate (default 18).
+// Used by every bulk-upload toPayload below.
+const PRICE_TYPES = ["incl", "excl"];
+const basePriceFromRow = (typed, row) => {
+    const t = Number(typed || 0);
+    if (t <= 0) return 0;
+    const pt = (row.price_type || "incl").toLowerCase();
+    const rate = row.gst_rate !== "" && row.gst_rate != null ? Number(row.gst_rate) : 18;
+    return pt === "excl" ? Math.round(t) : priceFromInclusive(t, rate);
+};
 
 // ============================ TONERS ============================
 
@@ -19,8 +31,9 @@ const TONER_COLUMNS = [
     { key: "brand", label: "Brand", required: true, type: "select", placeholder: "Select brand…", w: 140 },
     { key: "compatible_models", label: "Suitable For", required: true, type: "models", w: 240 },
     { key: "color", label: "Color", required: false, w: 110 },
-    { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
+    { key: "price_type", label: "Price Type", required: false, type: "select", w: 100 },
+    { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "stock", label: "Stock", required: true, type: "number", w: 90 },
     { key: "page_yield", label: "Page Yield", required: true, type: "number", w: 110 },
     { key: "oem_part_number", label: "OEM Part Number", required: false, w: 150 },
@@ -28,7 +41,7 @@ const TONER_COLUMNS = [
 ];
 
 const tonerEmptyRow = () => ({
-    brand: "", compatible_models: "", color: "Black", price: "", gst_rate: "18",
+    brand: "", compatible_models: "", color: "Black", price: "", gst_rate: "18", price_type: "incl",
     stock: "", page_yield: "", oem_part_number: "",
     toner_type: "Original", intercity_delivery_charge: "0",
 });
@@ -64,7 +77,7 @@ const tonerScalarPayload = (r) => ({
     brand: r.brand.trim(),
     model_number: deriveTonerModel(r),
     color: r.color || "Black",
-    price: Number(r.price),
+    price: basePriceFromRow(r.price, r),
     stock: Number(r.stock),
     toner_type: r.toner_type || "Original",
     gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
@@ -86,11 +99,11 @@ export const tonerBulkConfig = {
     endpoint: "/supplier/listings/bulk",
     itemPath: "/supplier/listings",
     columns: TONER_COLUMNS,
-    selectOptions: { toner_type: TONER_TYPES, brand: TONER_BRANDS },
+    selectOptions: { toner_type: TONER_TYPES, brand: TONER_BRANDS, price_type: PRICE_TYPES },
     emptyRow: tonerEmptyRow,
     templateExample: {
-        brand: "HP", compatible_models: "P1007, P1008, P1106, P1108", color: "Black", price: "1850",
-        gst_rate: "18", stock: "10",
+        brand: "HP", compatible_models: "P1007, P1008, P1106, P1108", color: "Black", price: "2183",
+        gst_rate: "18", price_type: "incl", stock: "10",
         page_yield: "1500", oem_part_number: "CC388A", toner_type: "Original",
         intercity_delivery_charge: "150",
     },
@@ -98,26 +111,31 @@ export const tonerBulkConfig = {
     isRowEmpty: tonerIsRowEmpty,
     rowErrors: tonerRowErrors,
     // Edit mode — map an existing listing into an editable row.
-    fromListing: (l) => ({
-        _id: l.id,
-        brand: l.brand || "",
-        compatible_models: l.compatible_models || "",
-        color: l.color || "Black",
-        price: String(l.price ?? ""),
-        gst_rate: String(l.gst_rate ?? 18),
-        stock: String(l.stock ?? ""),
-        page_yield: l.page_yield ? String(l.page_yield) : "",
-        oem_part_number: l.oem_part_number || "",
-        toner_type: l.toner_type || "Original",
-        intercity_delivery_charge: String(l.intercity_delivery_charge ?? 0),
-    }),
+    fromListing: (l) => {
+        const gst = l.gst_rate != null ? Number(l.gst_rate) : 18;
+        const incl = l.price != null ? Math.round(Number(l.price) * (1 + gst / 100)) : "";
+        return {
+            _id: l.id,
+            brand: l.brand || "",
+            compatible_models: l.compatible_models || "",
+            color: l.color || "Black",
+            price: incl !== "" ? String(incl) : "",
+            gst_rate: String(gst),
+            price_type: "incl",
+            stock: String(l.stock ?? ""),
+            page_yield: l.page_yield ? String(l.page_yield) : "",
+            oem_part_number: l.oem_part_number || "",
+            toner_type: l.toner_type || "Original",
+            intercity_delivery_charge: String(l.intercity_delivery_charge ?? 0),
+        };
+    },
     // PUT payload for an existing listing — never touches images or variants.
     toUpdatePayload: tonerScalarPayload,
     toPayload: (r) => ({
         ...tonerScalarPayload(r),
         image_url: "",
         image_urls: [],
-        variants: [{ color: r.color || "Black", price: Number(r.price), stock: Number(r.stock) }],
+        variants: [{ color: r.color || "Black", price: basePriceFromRow(r.price, r), stock: Number(r.stock) }],
     }),
 };
 
@@ -159,8 +177,9 @@ const PRINTER_COLUMNS = [
     { key: "condition", label: "Condition", required: false, type: "select", w: 130 },
     { key: "usage_type", label: "Usage", required: true, type: "select", w: 130 },
     { key: "color", label: "Color", required: false, type: "select", w: 120 },
-    { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
+    { key: "price_type", label: "Price Type", required: false, type: "select", w: 100 },
+    { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "stock", label: "Stock", required: true, type: "number", w: 90 },
     { key: "print_speed_ppm", label: "Speed (ppm)", required: false, type: "number", w: 110 },
     { key: "monthly_volume_min", label: "Vol. Min", required: false, type: "number", w: 100 },
@@ -172,7 +191,7 @@ const PRINTER_COLUMNS = [
 
 const printerEmptyRow = () => ({
     brand: "", model_number: "", category: "laser", condition: "new",
-    usage_type: "corporate", color: "color", price: "", gst_rate: "18", stock: "",
+    usage_type: "corporate", color: "color", price: "", gst_rate: "18", price_type: "incl", stock: "",
     print_speed_ppm: "", monthly_volume_min: "", monthly_volume_max: "",
     connectivity: "", paper_sizes: "", description: "",
 });
@@ -210,11 +229,12 @@ export const printerBulkConfig = {
         condition: PRINTER_CONDITIONS,
         usage_type: PRINTER_USAGES,
         color: PRINTER_COLORS,
+        price_type: PRICE_TYPES,
     },
     emptyRow: printerEmptyRow,
     templateExample: {
         brand: "HP", model_number: "LaserJet M404dn", category: "laser", condition: "new",
-        usage_type: "corporate", color: "bw", price: "28000", gst_rate: "18", stock: "5",
+        usage_type: "corporate", color: "bw", price: "33040", gst_rate: "18", price_type: "incl", stock: "5",
         print_speed_ppm: "38", monthly_volume_min: "750", monthly_volume_max: "4000",
         connectivity: "Wi-Fi, Ethernet, USB", paper_sizes: "A4, A5, Legal",
         description: "Compact mono laser printer with auto-duplex.",
@@ -230,7 +250,7 @@ export const printerBulkConfig = {
         usage_type: r.usage_type || "corporate",
         usage_types: [r.usage_type || "corporate"],
         color: r.color || "color",
-        price: Number(r.price),
+        price: basePriceFromRow(r.price, r),
         stock: Number(r.stock),
         gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
         print_speed_ppm: num(r.print_speed_ppm),
@@ -244,24 +264,29 @@ export const printerBulkConfig = {
     }),
     // Edit mode
     itemPath: "/supplier/printers",
-    fromListing: (l) => ({
-        _id: l.id,
-        brand: l.brand || "",
-        model_number: l.model_number || "",
-        category: l.category || "laser",
-        condition: l.condition || "new",
-        usage_type: (Array.isArray(l.usage_types) && l.usage_types[0]) || l.usage_type || "corporate",
-        color: l.color || "color",
-        price: String(l.price ?? ""),
-        gst_rate: String(l.gst_rate ?? 18),
-        stock: String(l.stock ?? ""),
-        print_speed_ppm: l.print_speed_ppm ? String(l.print_speed_ppm) : "",
-        monthly_volume_min: l.monthly_volume_min ? String(l.monthly_volume_min) : "",
-        monthly_volume_max: l.monthly_volume_max ? String(l.monthly_volume_max) : "",
-        connectivity: joinList(l.connectivity),
-        paper_sizes: joinList(l.paper_sizes),
-        description: l.description || "",
-    }),
+    fromListing: (l) => {
+        const gst = l.gst_rate != null ? Number(l.gst_rate) : 18;
+        const incl = l.price != null ? Math.round(Number(l.price) * (1 + gst / 100)) : "";
+        return {
+            _id: l.id,
+            brand: l.brand || "",
+            model_number: l.model_number || "",
+            category: l.category || "laser",
+            condition: l.condition || "new",
+            usage_type: (Array.isArray(l.usage_types) && l.usage_types[0]) || l.usage_type || "corporate",
+            color: l.color || "color",
+            price: incl !== "" ? String(incl) : "",
+            gst_rate: String(gst),
+            price_type: "incl",
+            stock: String(l.stock ?? ""),
+            print_speed_ppm: l.print_speed_ppm ? String(l.print_speed_ppm) : "",
+            monthly_volume_min: l.monthly_volume_min ? String(l.monthly_volume_min) : "",
+            monthly_volume_max: l.monthly_volume_max ? String(l.monthly_volume_max) : "",
+            connectivity: joinList(l.connectivity),
+            paper_sizes: joinList(l.paper_sizes),
+            description: l.description || "",
+        };
+    },
     toUpdatePayload: (r) => ({
         brand: r.brand.trim(),
         model_number: r.model_number.trim(),
@@ -270,7 +295,7 @@ export const printerBulkConfig = {
         usage_type: r.usage_type || "corporate",
         usage_types: [r.usage_type || "corporate"],
         color: r.color || "color",
-        price: Number(r.price),
+        price: basePriceFromRow(r.price, r),
         stock: Number(r.stock),
         gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
         print_speed_ppm: num(r.print_speed_ppm),
@@ -297,15 +322,16 @@ const CONSUMABLE_COLUMNS = [
     { key: "model_number", label: "Model Number", required: true, w: 160 },
     { key: "compatible_models", label: "Suitable For", required: false, type: "models", w: 220 },
     { key: "condition", label: "Condition", required: false, type: "select", w: 130 },
-    { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
+    { key: "price_type", label: "Price Type", required: false, type: "select", w: 100 },
+    { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "stock", label: "Stock", required: true, type: "number", w: 90 },
     { key: "description", label: "Description", required: false, w: 220 },
 ];
 
 const consumableEmptyRow = () => ({
     subcategory: "Ink Cartridges", subcategory_other: "", brand: "", model_number: "",
-    compatible_models: "", condition: "New", price: "", gst_rate: "18", stock: "",
+    compatible_models: "", condition: "New", price: "", gst_rate: "18", price_type: "incl", stock: "",
     intercity_delivery_charge: "0", description: "",
 });
 
@@ -335,12 +361,12 @@ export const consumableBulkConfig = {
     unitLabel: "consumable",
     endpoint: "/supplier/consumables/bulk",
     columns: CONSUMABLE_COLUMNS,
-    selectOptions: { subcategory: CONSUMABLE_SUBS, condition: CONSUMABLE_CONDITIONS, brand: TONER_BRANDS },
+    selectOptions: { subcategory: CONSUMABLE_SUBS, condition: CONSUMABLE_CONDITIONS, brand: TONER_BRANDS, price_type: PRICE_TYPES },
     emptyRow: consumableEmptyRow,
     templateExample: {
         subcategory: "Drums", subcategory_other: "", brand: "Brother", model_number: "DR-2305",
-        compatible_models: "HL-L2321D, DCP-L2541DW", condition: "New", price: "2200",
-        gst_rate: "18", stock: "12", intercity_delivery_charge: "150",
+        compatible_models: "HL-L2321D, DCP-L2541DW", condition: "New", price: "2596",
+        gst_rate: "18", price_type: "incl", stock: "12", intercity_delivery_charge: "150",
         description: "Genuine drum unit, 12000-page yield.",
     },
     requiredKeys: ["subcategory", "brand", "model_number", "price", "stock"],
@@ -353,7 +379,7 @@ export const consumableBulkConfig = {
         model_number: r.model_number.trim(),
         compatible_models: splitList(r.compatible_models).join(", ") || null,
         condition: r.condition || "New",
-        price: Number(r.price),
+        price: basePriceFromRow(r.price, r),
         stock: Number(r.stock),
         gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
         intercity_delivery_charge: r.intercity_delivery_charge !== "" ? Number(r.intercity_delivery_charge) : 0,
@@ -363,20 +389,25 @@ export const consumableBulkConfig = {
     }),
     // Edit mode
     itemPath: "/supplier/consumables",
-    fromListing: (l) => ({
-        _id: l.id,
-        subcategory: l.subcategory || "Other",
-        subcategory_other: l.subcategory_other || "",
-        brand: l.brand || "",
-        model_number: l.model_number || "",
-        compatible_models: l.compatible_models || "",
-        condition: l.condition || "New",
-        price: String(l.price ?? ""),
-        gst_rate: String(l.gst_rate ?? 18),
-        stock: String(l.stock ?? ""),
-        intercity_delivery_charge: String(l.intercity_delivery_charge ?? 0),
-        description: l.description || "",
-    }),
+    fromListing: (l) => {
+        const gst = l.gst_rate != null ? Number(l.gst_rate) : 18;
+        const incl = l.price != null ? Math.round(Number(l.price) * (1 + gst / 100)) : "";
+        return {
+            _id: l.id,
+            subcategory: l.subcategory || "Other",
+            subcategory_other: l.subcategory_other || "",
+            brand: l.brand || "",
+            model_number: l.model_number || "",
+            compatible_models: l.compatible_models || "",
+            condition: l.condition || "New",
+            price: incl !== "" ? String(incl) : "",
+            gst_rate: String(gst),
+            price_type: "incl",
+            stock: String(l.stock ?? ""),
+            intercity_delivery_charge: String(l.intercity_delivery_charge ?? 0),
+            description: l.description || "",
+        };
+    },
     toUpdatePayload: (r) => ({
         subcategory: r.subcategory || "Other",
         subcategory_other: r.subcategory_other?.trim() || null,
@@ -384,7 +415,7 @@ export const consumableBulkConfig = {
         model_number: r.model_number.trim(),
         compatible_models: splitList(r.compatible_models).join(", ") || null,
         condition: r.condition || "New",
-        price: Number(r.price),
+        price: basePriceFromRow(r.price, r),
         stock: Number(r.stock),
         gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
         intercity_delivery_charge: r.intercity_delivery_charge !== "" ? Number(r.intercity_delivery_charge) : 0,
@@ -410,8 +441,9 @@ const SCANNER_COLUMNS = [
     { key: "scan_speed_ppm", label: "Speed (ppm)", required: false, type: "number", w: 110 },
     { key: "color_mode", label: "Color/Mono", required: false, type: "select", w: 120 },
     { key: "warranty", label: "Warranty", required: false, type: "select", w: 130 },
-    { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
+    { key: "price_type", label: "Price Type", required: false, type: "select", w: 100 },
+    { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "stock", label: "Stock", required: true, type: "number", w: 90 },
     { key: "description", label: "Description", required: false, w: 220 },
 ];
@@ -419,7 +451,7 @@ const SCANNER_COLUMNS = [
 const scannerEmptyRow = () => ({
     brand: "", model_number: "", scanner_type: "Flatbed", condition: "New",
     scan_resolution: "1200dpi", connectivity: "", scan_speed_ppm: "", color_mode: "Color",
-    warranty: "No warranty", price: "", gst_rate: "18", stock: "",
+    warranty: "No warranty", price: "", gst_rate: "18", price_type: "incl", stock: "",
     intercity_delivery_charge: "0", description: "",
 });
 
@@ -449,7 +481,7 @@ const scannerScalarPayload = (r) => ({
     scan_speed_ppm: num(r.scan_speed_ppm),
     color_mode: r.color_mode || "Color",
     warranty: r.warranty || "No warranty",
-    price: Number(r.price),
+    price: basePriceFromRow(r.price, r),
     stock: Number(r.stock),
     gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
     intercity_delivery_charge: r.intercity_delivery_charge !== "" ? Number(r.intercity_delivery_charge) : 0,
@@ -471,12 +503,13 @@ export const scannerBulkConfig = {
         scan_resolution: SCANNER_RESOLUTIONS,
         color_mode: SCANNER_COLOR_MODES,
         warranty: SCANNER_WARRANTIES,
+        price_type: PRICE_TYPES,
     },
     emptyRow: scannerEmptyRow,
     templateExample: {
         brand: "Canon", model_number: "CanoScan LiDE 400", scanner_type: "Flatbed", condition: "New",
         scan_resolution: "4800dpi", connectivity: "USB", scan_speed_ppm: "8", color_mode: "Color",
-        warranty: "1 year", price: "8500", gst_rate: "18", stock: "10",
+        warranty: "1 year", price: "10030", gst_rate: "18", price_type: "incl", stock: "10",
         intercity_delivery_charge: "150", description: "Compact flatbed scanner, 4800 dpi optical resolution.",
     },
     requiredKeys: ["brand", "model_number", "scanner_type", "price", "stock"],
@@ -488,23 +521,28 @@ export const scannerBulkConfig = {
         image_urls: [],
     }),
     itemPath: "/supplier/scanners",
-    fromListing: (l) => ({
-        _id: l.id,
-        brand: l.brand || "",
-        model_number: l.model_number || "",
-        scanner_type: l.scanner_type || "Flatbed",
-        condition: l.condition || "New",
-        scan_resolution: l.scan_resolution || "1200dpi",
-        connectivity: joinList(l.connectivity),
-        scan_speed_ppm: l.scan_speed_ppm ? String(l.scan_speed_ppm) : "",
-        color_mode: l.color_mode || "Color",
-        warranty: l.warranty || "No warranty",
-        price: String(l.price ?? ""),
-        gst_rate: String(l.gst_rate ?? 18),
-        stock: String(l.stock ?? ""),
-        intercity_delivery_charge: String(l.intercity_delivery_charge ?? 0),
-        description: l.description || "",
-    }),
+    fromListing: (l) => {
+        const gst = l.gst_rate != null ? Number(l.gst_rate) : 18;
+        const incl = l.price != null ? Math.round(Number(l.price) * (1 + gst / 100)) : "";
+        return {
+            _id: l.id,
+            brand: l.brand || "",
+            model_number: l.model_number || "",
+            scanner_type: l.scanner_type || "Flatbed",
+            condition: l.condition || "New",
+            scan_resolution: l.scan_resolution || "1200dpi",
+            connectivity: joinList(l.connectivity),
+            scan_speed_ppm: l.scan_speed_ppm ? String(l.scan_speed_ppm) : "",
+            color_mode: l.color_mode || "Color",
+            warranty: l.warranty || "No warranty",
+            price: incl !== "" ? String(incl) : "",
+            gst_rate: String(gst),
+            price_type: "incl",
+            stock: String(l.stock ?? ""),
+            intercity_delivery_charge: String(l.intercity_delivery_charge ?? 0),
+            description: l.description || "",
+        };
+    },
     toUpdatePayload: scannerScalarPayload,
 };
 
@@ -516,8 +554,9 @@ const PAPER_COLUMNS = [
     { key: "size", label: "Size", required: true, type: "select", w: 110 },
     { key: "gsm", label: "GSM", required: true, type: "number", w: 90 },
     { key: "reams_per_box", label: "Reams / Box", required: false, type: "number", w: 110 },
-    { key: "price_per_ream", label: "Price/Ream (₹)", required: true, type: "number", w: 130 },
     { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
+    { key: "price_type", label: "Price Type", required: false, type: "select", w: 100 },
+    { key: "price_per_ream", label: "Price/Ream (₹)", required: true, type: "number", w: 130 },
     { key: "stock", label: "Stock (boxes)", required: true, type: "number", w: 110 },
     { key: "brightness", label: "Brightness", required: false, type: "number", w: 100 },
     { key: "suitable_for", label: "Suitable For", required: false, w: 160 },
@@ -526,7 +565,7 @@ const PAPER_COLUMNS = [
 
 const paperEmptyRow = () => ({
     brand: PAPER_BRANDS_HINT, size: "A4", gsm: "75", reams_per_box: "10",
-    price_per_ream: "", gst_rate: "18", stock: "", brightness: "",
+    price_per_ream: "", gst_rate: "18", price_type: "incl", stock: "", brightness: "",
     suitable_for: "", description: "",
 });
 
@@ -560,11 +599,11 @@ export const paperBulkConfig = {
     unitLabel: "paper",
     endpoint: "/supplier/papers/bulk",
     columns: PAPER_COLUMNS,
-    selectOptions: { size: PAPER_SIZES, brand: PAPER_BRANDS },
+    selectOptions: { size: PAPER_SIZES, brand: PAPER_BRANDS, price_type: PRICE_TYPES },
     emptyRow: paperEmptyRow,
     templateExample: {
         brand: "JK Paper", size: "A4", gsm: "75", reams_per_box: "10",
-        price_per_ream: "260", gst_rate: "12", stock: "40", brightness: "102",
+        price_per_ream: "291", gst_rate: "12", price_type: "incl", stock: "40", brightness: "102",
         suitable_for: "Inkjet, Laser, Copier",
         description: "Premium copier paper, smooth finish.",
     },
@@ -576,7 +615,7 @@ export const paperBulkConfig = {
         size: r.size || "A4",
         gsm: Number(r.gsm),
         reams_per_box: r.reams_per_box !== "" ? Number(r.reams_per_box) : 10,
-        price_per_ream: Number(r.price_per_ream),
+        price_per_ream: basePriceFromRow(r.price_per_ream, r),
         stock: Number(r.stock),
         gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
         brightness: num(r.brightness),
@@ -587,25 +626,30 @@ export const paperBulkConfig = {
     }),
     // Edit mode
     itemPath: "/supplier/papers",
-    fromListing: (l) => ({
-        _id: l.id,
-        brand: l.brand || "JK Paper",
-        size: l.size || "A4",
-        gsm: String(l.gsm ?? 75),
-        reams_per_box: String(l.reams_per_box ?? 10),
-        price_per_ream: String(l.price_per_ream ?? ""),
-        gst_rate: String(l.gst_rate ?? 18),
-        stock: String(l.stock ?? ""),
-        brightness: l.brightness ? String(l.brightness) : "",
-        suitable_for: joinList(l.suitable_for),
-        description: l.description || "",
-    }),
+    fromListing: (l) => {
+        const gst = l.gst_rate != null ? Number(l.gst_rate) : 18;
+        const incl = l.price_per_ream != null ? Math.round(Number(l.price_per_ream) * (1 + gst / 100)) : "";
+        return {
+            _id: l.id,
+            brand: l.brand || "JK Paper",
+            size: l.size || "A4",
+            gsm: String(l.gsm ?? 75),
+            reams_per_box: String(l.reams_per_box ?? 10),
+            price_per_ream: incl !== "" ? String(incl) : "",
+            gst_rate: String(gst),
+            price_type: "incl",
+            stock: String(l.stock ?? ""),
+            brightness: l.brightness ? String(l.brightness) : "",
+            suitable_for: joinList(l.suitable_for),
+            description: l.description || "",
+        };
+    },
     toUpdatePayload: (r) => ({
         brand: r.brand.trim(),
         size: r.size || "A4",
         gsm: Number(r.gsm),
         reams_per_box: r.reams_per_box !== "" ? Number(r.reams_per_box) : 10,
-        price_per_ream: Number(r.price_per_ream),
+        price_per_ream: basePriceFromRow(r.price_per_ream, r),
         stock: Number(r.stock),
         gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
         brightness: num(r.brightness),
