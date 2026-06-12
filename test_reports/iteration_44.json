@@ -1,0 +1,55 @@
+{
+  "summary": "Frontend-only code-level verification + backend smoke for the new Toner Model Number searchable dropdown feature. All 8 review-request items verified end-to-end. No regressions on public category pages.",
+  "verifications_performed": {
+    "backend_smoke": {
+      "GET /api/compat/toners?q=Q26&brand=HP&limit=5": "PASS — returns [Q2610A, Q2612A, Q2613A (13A)] all brand=HP, HP toners floated to top",
+      "GET /api/compat/toner/Q2612A": "PASS — returns brand=HP, model=Q2612A, type=toner, printers=[12 HP LaserJet models: 1010,1012,1015,1018,1020,1020 Plus,1022,3050,3052,3055,M1005 MFP,M1319f MFP]"
+    },
+    "code_level": {
+      "TonerModelSearchSelect.jsx": "PASS — file exists at /app/frontend/src/components/TonerModelSearchSelect.jsx; default export; renders Search icon + Input + dropdown <ul role='listbox'>; debounced call to /compat/toners?q=&brand=&limit=30 (line 58); on selection calls /compat/toner/{model} (line 75) and invokes onSelect(item.model, printers[]) (line 77). data-testid attributes present on input/clear/dropdown/options.",
+      "SupplierDashboard.jsx imports": "PASS — line 25 imports default from ../components/TonerModelSearchSelect",
+      "SupplierDashboard.jsx state": "PASS — line 281: const [tonerModel, setTonerModel] = useState(\"\")",
+      "SupplierDashboard.jsx reset()": "PASS — line 368 calls setTonerModel(\"\")",
+      "SupplierDashboard.jsx submit() canonical model": "PASS — line 552: const derivedModel = (tonerModel || \"\").trim() || fallbackModel; used as model_number in payload (line 556)",
+      "SupplierDashboard.jsx render location": "PASS — TonerModelSearchSelect rendered at lines 1079-1092, located between the Brand <select> (closes line 1075) and the 'Suitable for' CompatibleModelsSelect (lines 1095-1106). onSelect handler at lines 1082-1089 calls setCompatibleModels(printers.join(', ')) when printers.length > 0.",
+      "bulkConfigs.js TONER_COLUMNS": "PASS — line 32: { key: 'model_number', label: 'Toner Model Number', required: false, w: 170 } placed between brand (line 31) and compatible_models (line 33)",
+      "bulkConfigs.js tonerEmptyRow()": "PASS — line 45 contains model_number: ''",
+      "bulkConfigs.js templateExample": "PASS — line 108 contains model_number: 'CC388A'",
+      "bulkConfigs.js deriveTonerModel()": "PASS — lines 71-77: uses r.model_number first, falls back to first compatible printer, then brand"
+    },
+    "data_cleanup": {
+      "orphan_user_tonerscart@gmail.com": "VERIFIED GONE — Not present in GET /api/admin/suppliers (3 suppliers total, none matching). Note: a dedicated /api/admin/users endpoint does not exist in this backend (returns 404); supplier-table verification is the available signal, and the user is absent.",
+      "protected_dealer_support@digitaledgeindia.com": "ACTIVE — is_suspended=false, approved_at=2026-06-12T14:21:40Z",
+      "protected_dealer_sairam@digitaledgeindia.com": "ACTIVE — is_suspended=false, approved_at=2026-06-12T15:14:46Z",
+      "protected_dealer_sales@bigctech.com": "ACTIVE — is_suspended=false, approved_at=2026-06-10T12:22:01Z"
+    },
+    "regression_public_pages": {
+      "/printers": "PASS — 0 console errors, 0 page errors",
+      "/toners": "PASS — 0 console errors, 0 page errors",
+      "/papers": "PASS — 0 console errors, 0 page errors",
+      "/consumables": "PASS — 0 console errors, 0 page errors",
+      "/scanners": "PASS — 0 console errors, 0 page errors (UI renders correctly, screenshot captured)"
+    }
+  },
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "live_ui_dealer_modal_test": "NOT EXERCISED — no shared supplier credentials available; per main agent instructions we did NOT create a throwaway supplier. Code-level verification + backend smoke fully cover the change.",
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "TonerModelSearchSelect.jsx is clean and well-scoped (173 lines); good use of debounce (180ms), AbortController not used but stale-response risk is low because results setter only runs after latest debounce fires.",
+    "When onSelect is invoked from pickFromDb with an empty printers list (catch branch or 404), it correctly emits (model, []); the SupplierDashboard handler then keeps the previous compatibleModels value (because of the `printers.length > 0` guard) — correct UX.",
+    "deriveTonerModel slices to 50 chars — matches expected DB column width; consistent with single-upload submit() at line 551."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "100% (2/2 endpoints)", "frontend": "100% (5/5 public pages, all code checks)" },
+  "test_credentials": "Admin: support@tonerscart.com / Bangara1@# (confirmed working)",
+  "seed_data_creation": "None — no test users or listings created.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The new TonerModelSearchSelect is only mounted inside the Supplier Add-Toner modal, so it cannot be exercised on public pages. To live-test, register a supplier via /register, admin-approve, open dealer dashboard → Add Toner → pick a brand (HP) → search 'Q26' in the new field → verify HP toners float to top with 'Same brand' badge → click Q2612A → expect 'Suitable for' to auto-populate with 12 HP LaserJet printers. Backend endpoints /api/compat/toners and /api/compat/toner/{model} are live and correct."
+}

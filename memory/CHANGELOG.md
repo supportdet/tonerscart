@@ -1,3 +1,83 @@
+### 2026-06-12 (h) — Toner Model Number searchable dropdown + bulk column + test-data cleanup
+
+**Trigger**: User requested (1) a new "Toner model number" field on the single toner upload form sitting BETWEEN the Brand dropdown and the "Suitable for" compatible-printers field — searchable against the ~585 toner models in `compatibility_db.py`, same-brand floated to top, and on selection auto-populates "Suitable for" with the cartridge's known compatible printers; (2) a matching "Toner Model Number" column in the bulk template; (3) cleanup of any test users/products created BY the agent during testing — but NOTHING else.
+
+**New component**: `frontend/src/components/TonerModelSearchSelect.jsx`
+- Default-export searchable dropdown with debounced (180ms) calls to `/api/compat/toners?q=…&brand=…&limit=30`.
+- Same-brand toners float to top and carry an emerald "Same brand" pill.
+- On selection: fetches `/api/compat/toner/{model}` for the full `printers` array and emits `onSelect(model, printers[])`.
+- Free-typed values are also valid — dropdown shows "No catalogued model — your listing will still be saved" so dealers with unlisted cartridges can proceed.
+- Keyboard nav: ArrowUp/Down/Enter/Escape; click-outside closes; clear (X) button.
+
+**Wiring** (`frontend/src/pages/SupplierDashboard.jsx` toner Add modal):
+- New state `tonerModel` (reset in `reset()`), rendered between the Brand select and the "Suitable for" `CompatibleModelsSelect`.
+- `onSelect` handler calls `setCompatibleModels(printers.join(", "))` when printers.length > 0 — auto-populating Suitable For with the cartridge's known printers. Dealer can still add/remove from that pre-filled list.
+- Submit() now uses `tonerModel` as the canonical `model_number` (with the previous derived fallback retained so legacy code paths still work).
+
+**Bulk** (`frontend/src/lib/bulkConfigs.js`):
+- New `model_number` column labelled "Toner Model Number" (required: false, w: 170) — first column after Brand.
+- `tonerEmptyRow()` includes `model_number: ""`; `templateExample.model_number: "CC388A"`; `tonerIsRowEmpty` and `tonerRowErrors` updated to consider the new key.
+- `deriveTonerModel(r)` now prefers `r.model_number` (slice to 50), falling back to the first compatible printer model, then brand — backward compatible.
+- Subtitle updated to mention "Toner Model Number is optional — when supplied, buyers can find your listing by cartridge code (e.g. Q2612A)".
+
+**Backend**: zero changes. Existing endpoints `/api/compat/toners?q=&brand=&limit=` and `/api/compat/toner/{model}` already returned the data needed.
+
+**Test-data cleanup** (per user's instruction "delete any test users, products CREATED BY YOU"):
+- Identified one orphan: `tonerscart@gmail.com` (Supabase auth UID `d34882a5-eca5-4e85-ab95-48a8314eb12c`, role=customer, no supplier/pending/listings/orders) — created by the testing agent during iteration-43's "register a fresh supplier" attempt. Deleted from both `users` table and Supabase Auth after explicit safety checks (not in PROTECTED_EMAILS, no linked supplier data).
+- HP printer listing `b44b149a-cb3f-49a5-a4f4-41d4b1fb2bb1` ("HP LaserJet Pro 4004dn") owned by protected dealer DET — NOT touched. The testing agent has no DET credentials, so this listing was added by the real DET dealer (not test data).
+- All 3 protected dealers still Active (verified by iteration-44).
+
+**Verified** (`/app/test_reports/iteration_44.json`):
+- Backend smoke: HP Q26 search → [Q2610A, Q2612A, Q2613A] all HP, top-prioritised.
+- Q2612A detail returns 12 compatible HP LaserJet printers.
+- Code wiring at exact line numbers confirmed in SupplierDashboard.jsx + bulkConfigs.js + TonerModelSearchSelect.jsx.
+- Orphan test user gone from auth + users.
+- 0 console errors on /printers, /toners, /papers, /consumables, /scanners.
+
+**Not live-exercised**: Dealer Add-Toner modal click-through requires a supplier session — none shared. Code + math + backend all green; one disposable supplier would close the loop if future iterations need it.
+
+---
+
+
+### 2026-06-12 (g) — Incl/excl GST toggle on every upload form + 7s popup + competitive-pricing nudge
+
+**Trigger**: User requested (1) a "Price includes GST" / "Price excludes GST" toggle on all 5 dealer upload forms (toners, printers, papers, consumables, scanners) — default incl, with a "Buyer will see: ₹X (incl. GST)" helper line, GST rate selected first; (2) same toggle as a `Price Type` column in the bulk-upload templates; (3) drop the `/printers` guided-finder popup from 15s → 7s and make it fire on mobile (was silent on mobile); (4) a competitive-pricing nudge above Publish on every form.
+
+**New components**:
+- `frontend/src/components/PriceWithGstToggle.jsx` — controlled, reusable price input with GST dropdown rendered first, incl/excl toggle pills (default incl), price input, and live helper line "Buyer will see: ₹X (incl. GST) · Base: ₹Y + GST n%: ₹Z". Exports a `getBasePrice(value, priceType, gstRate)` helper that parents call on submit to convert the typed value into the stored base price.
+- `frontend/src/components/CompetitivePricingNote.jsx` — small amber-tinted one-liner with a `TrendingUp` icon ("Tip: Setting a competitive price significantly boosts your sales — buyers compare dealer prices side-by-side, and sharper pricing puts you at the top of the results.") rendered just above the Publish button on every upload form.
+
+**Helper added** (`frontend/src/lib/listingConstants.js`): `priceFromInclusive(inclPrice, rate) = Math.round(incl / (1 + r/100))` — inverse of the existing `withGst()`. Math verified: 11800 ↔ 10000 round-trip at 18% GST.
+
+**Single-upload forms wired**:
+- `PaperListings.jsx` — Add/Edit Paper modal: new toggle, edit-load now pre-fills the input with the buyer-facing inclusive price.
+- `ConsumableListings.jsx` — Add/Edit Consumable modal: same pattern.
+- `ScannerListings.jsx` — Add/Edit Scanner modal: same pattern.
+- `PrinterListings.jsx` — printer wizard step 3 (Pricing & stock): GST/toggle/price block; step 4 (Review) now shows the GST-inclusive figure with an `incl. GST` label.
+- `SupplierDashboard.jsx` toner Add form: GST-rate dropdown promoted above the variants table; one global "Variant prices include GST | Variant prices exclude GST" toggle (default incl) applies to every variant row; each row shows its own "Buyer will see: ₹X (incl. GST)" helper. Submit() converts each variant via `priceFromInclusive` before POST.
+
+**Bulk-upload templates updated** (`frontend/src/lib/bulkConfigs.js`):
+- New helper `basePriceFromRow(typed, row)` — converts row.price using row.price_type ("incl" default) and row.gst_rate (18 default).
+- All 5 configs (toner, printer, paper, consumable, scanner) gained a `price_type` column (select: `incl` / `excl`, default `incl`). `emptyRow`, `templateExample`, `selectOptions`, and `toPayload` / `toUpdatePayload` updated.
+- `fromListing` in every config now reconstructs the GST-inclusive price for the displayed cell so the edit-view of an existing listing matches what was originally entered.
+- Downloaded XLSX templates now include a `price_type` header with `incl` in the example row.
+
+**Popup timer**: `frontend/src/pages/PrintersResults.jsx` line ~75 — `setTimeout(…, 15000)` → `setTimeout(…, 7000)`. The 400px-scroll suppression and sessionStorage "shown-once" guards are kept. Testing agent confirmed the popup now fires correctly on both desktop (1920×800) and mobile (390×844) viewports at the new 7s mark.
+
+**Backend impact**: zero. Backend storage convention is unchanged (base price + gst_rate). All conversion happens client-side before POST/PUT.
+
+**Verified** (`/app/test_reports/iteration_43.json`):
+- Popup auto-opens after ~7s on **both** desktop and mobile viewports (overlay `data-testid="finder-popup-overlay"`).
+- All 3 protected dealers (DET, Sairam, Big C) still Active on /admin → Dealers.
+- 0 console errors across /printers, /toners, /papers, /consumables, /scanners.
+- Code-level grep confirmed every upload form imports `PriceWithGstToggle`, `getBasePrice`, and `CompetitivePricingNote`; all 5 bulk configs include the `price_type` column with `basePriceFromRow` conversion.
+- Round-trip math: typed 11800 (incl, 18%) → stored base 10000 → reopened in edit shows 11800 again. Acceptable ≤₹1 drift at .5 boundaries (INR).
+
+**Not live-exercised** (no shared supplier credentials per `test_credentials.md`): the actual Add-* modal click-throughs. Code wiring + math + helpers are verified; one-time disposable supplier can be created via /register → admin-approve if a future iteration needs live click validation.
+
+---
+
+
 ### 2026-06-12 (f) — Sairam dealer restore + permanent protected-email list
 
 **Trigger**: User reported two real dealer accounts must be restored and permanently protected from any future cleanup operation: `support@digitaledgeindia.com` (DET, primary), `sairam@digitaledgeindia.com` (DET, second authorised user / "Dad's account"). Big C (`sales@bigctech.com`) also to be added to the same protection list.

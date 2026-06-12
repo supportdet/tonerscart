@@ -1,0 +1,50 @@
+{
+  "summary": "Iteration 43 — Verified GST toggle wiring + 7s popup on mobile + protected dealers + no console errors on listing pages. Did NOT exercise the dealer Add-* modals (no shared supplier account). Code-level checks confirm all 5 forms wire PriceWithGstToggle + CompetitivePricingNote, toner form has GST dropdown above variants + global incl/excl toggle, and every bulkConfig has a price_type column with basePriceFromRow conversion.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_features": [
+    "Finder popup on /printers fires at ~7.5s on MOBILE 390x844 (was 15s) — sessionStorage reset + reload confirmed. Already verified on desktop in iteration-42 and again in this run.",
+    "No console errors on /printers, /toners, /papers, /consumables, /scanners listing pages (0 errors each).",
+    "/admin (Admin Console → Dealers tab) shows 3 of 3 approved suppliers: DIGITAL EDGE TECHNOLOGIES PRIVATE LIMITED (Active), DET — sister account TC-DLR-2026-0009 (Active), BIG C TECHNOLOGIES PRIVATE LIMITED TC-DLR-2026-0008 (Active). All three protected REAL dealers present and not in any pending/suspended state. (Email columns are hidden in the UI for PII; protection is enforced by data_safety.PROTECTED_EMAILS server-side.)",
+    "Code-level verification of GST toggle wiring (grep confirmed):",
+    "  • PaperListings.jsx imports PriceWithGstToggle + getBasePrice + CompetitivePricingNote; renders toggle at line 276, note above Publish at 352.",
+    "  • ConsumableListings.jsx — toggle line 249, note line 290.",
+    "  • ScannerListings.jsx — toggle line 285, note line 326.",
+    "  • PrinterListings.jsx — wizard step 3 toggle line 742, step-3 note line 763, step-4 review note line 806.",
+    "  • SupplierDashboard.jsx toner form: GST_RATES dropdown at line 1113 (above variants), global incl/excl toggle at lines 1125-1131, per-variant 'Buyer will see' helper at line 1167, CompetitivePricingNote line 1223. Submit() at lines 518-523 converts incl→base via priceFromInclusive(typed, gstRate).",
+    "  • bulkConfigs.js — price_type column present in all 5 configs (toner, printer, paper, consumable, scanner); basePriceFromRow helper (lines 17-24) calls priceFromInclusive(t, rate) when price_type='incl' (default). selectOptions includes price_type: ['incl','excl']. templateExample rows all set price_type:'incl' so XLSX downloads will have the column populated.",
+    "  • listingConstants.js — priceFromInclusive(inclPrice, rate) = Math.round(incl / (1 + r/100)); withGst() and gstAmount() unchanged. 11800 / 1.18 = 10000 base, withGst(10000,18)=11800 — round-trip math is correct.",
+    "  • PrintersResults.jsx line 75: setTimeout(…, 7000) — confirmed."
+  ],
+  "not_tested_due_to_missing_account": [
+    "Live UI exercise of Add Toner / Add Printer / Add Paper / Add Consumable / Add Scanner modals on the Supplier Dashboard (no shared supplier credentials per /app/memory/test_credentials.md; main agent's review_request explicitly states real dealer passwords are NOT shared).",
+    "Bulk-upload roundtrip: download template XLSX → confirm 'price_type' column with 'incl' example → POST a row with price=2360, gst_rate=18, price_type=incl → confirm stored base ≈ 2000 → re-fetch in Edit bulk view → confirm row re-shows 2360 with price_type='incl'.",
+    "Recommendation for main agent: a one-time disposable QA supplier (register → admin approve → run modal tests → delete) is required to fully exercise the Add-* and Bulk-* flows live. The code-level review above shows the wiring is correct and math is correct."
+  ],
+  "test_report_links": [
+    "/app/test_reports/iteration_43.json"
+  ],
+  "action_items": [
+    "If end-to-end modal validation is required, create a disposable QA supplier and re-run the dealer-side modal tests. The code wiring + math is verified — only live UI clicks remain unexercised."
+  ],
+  "critical_code_review_comments": [
+    "bulkConfigs.js fromListing() in all 5 configs reconstructs the GST-inclusive price as Math.round(base * (1 + gst/100)). priceFromInclusive uses Math.round on the way down, so a stored base of 10000 (saved from typed 11800) will show as 11800 in edit — round-trip works for the example value. Edge case: very small rounding deltas (1-rupee drift) may surface for prices where base*1.18 is a .5 boundary. Acceptable for INR.",
+    "SupplierDashboard.jsx already flagged at 1247 lines in iteration-42; iteration-43 added more GST/toggle markup. Recommend extracting TonerAddForm into its own module.",
+    "CompetitivePricingNote uses amber/50 background with #5a4400 text — contrast ratio is OK (~7:1). No fix needed."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "n/a (frontend-only review)",
+    "frontend": "100% on what was testable (popup timing + protected dealers + console-error sweep + code-level wiring). 0% live UI exercise of the Add-* modals due to no supplier account."
+  },
+  "test_credentials": "Admin: support@tonerscart.com / Bangara1@# (Supabase) — works. No supplier account available; main agent explicitly stated real-dealer passwords are not shared.",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration-43 confirmed: (a) 7s popup on mobile 390x844 — overlay data-testid='finder-popup-overlay' fires ~7.5s after page load with sessionStorage cleared; (b) all 3 protected dealers (Digital Edge, DET, Big C Tech) visible on /admin → Dealers tab as Active; (c) 0 console errors on /printers, /toners, /papers, /consumables, /scanners; (d) code-level wiring of PriceWithGstToggle + CompetitivePricingNote + bulk price_type columns verified by grep. The Add-* modal UI flows could not be live-tested (no shared supplier credentials). If next iteration needs live modal validation, create a disposable supplier via /register then admin-approve.",
+  "rca of the issue": "N/A — no bugs found this iteration."
+}

@@ -6,9 +6,11 @@ import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { Plus, Trash2, Package, Copy, Check, Pencil, ChevronLeft, ImageIcon, X } from "lucide-react";
 import D2DRow from "./D2DRow";
-import { GST_RATES, gstAmount, formatINR } from "../lib/listingConstants";
+import { withGst } from "../lib/listingConstants";
+import PriceWithGstToggle, { getBasePrice } from "./PriceWithGstToggle";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
+import CompetitivePricingNote from "./CompetitivePricingNote";
 import DeliveryPolicyNote from "./DeliveryPolicyNote";
 import BulkUploadGeneric from "./BulkUploadGeneric";
 import { paperBulkConfig } from "../lib/bulkConfigs";
@@ -20,7 +22,7 @@ const GSMS = [70, 75, 80, 90, 100, 120, 150];
 const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
 
 function emptyForm() {
-    return { brand: "JK Paper", size: "A4", gsm: 75, reams_per_box: 10, price_per_ream: "", stock: "", description: "", brightness: "", thickness_microns: "", acid_free: false, suitable_for: [] };
+    return { brand: "JK Paper", size: "A4", gsm: 75, reams_per_box: 10, price_per_ream: "", stock: "", description: "", brightness: "", thickness_microns: "", acid_free: false, suitable_for: [], gst_rate: 18, price_type: "incl" };
 }
 
 export default function PaperListings() {
@@ -38,19 +40,25 @@ export default function PaperListings() {
     const openAdd = () => { setEditingId(null); setForm(emptyForm()); setImageFiles([]); setImagePreviews([]); setOpen(true); };
     const openEdit = (p) => {
         setEditingId(p.id);
+        const gstRate = p.gst_rate != null ? Number(p.gst_rate) : 18;
+        // Default to incl-GST type and pre-fill the input with the buyer-facing
+        // price so the dealer immediately sees what's published. They can flip
+        // the toggle to "excl" to see the base price instead.
+        const inclPrice = p.price_per_ream != null ? withGst(Number(p.price_per_ream), gstRate) : "";
         setForm({
             brand: p.brand || "JK Paper",
             size: p.size || "A4",
             gsm: p.gsm || 75,
             reams_per_box: p.reams_per_box || 10,
-            price_per_ream: String(p.price_per_ream ?? ""),
+            price_per_ream: inclPrice !== "" ? String(inclPrice) : "",
             stock: String(p.stock ?? ""),
             description: p.description || "",
             brightness: p.brightness ? String(p.brightness) : "",
             thickness_microns: p.thickness_microns ? String(p.thickness_microns) : "",
             acid_free: !!p.acid_free,
             suitable_for: Array.isArray(p.suitable_for) ? p.suitable_for : [],
-            gst_rate: p.gst_rate != null ? Number(p.gst_rate) : 18,
+            gst_rate: gstRate,
+            price_type: "incl",
         });
         setImageFiles([]); setImagePreviews([]);
         setOpen(true);
@@ -114,12 +122,13 @@ export default function PaperListings() {
                     if (data?.url) uploadedUrls.push(data.url);
                 }
             }
+            const basePrice = getBasePrice(form.price_per_ream, form.price_type, form.gst_rate);
             const payload = {
                 brand: form.brand,
                 size: form.size,
                 gsm: Number(form.gsm),
                 reams_per_box: Number(form.reams_per_box),
-                price_per_ream: Number(form.price_per_ream),
+                price_per_ream: basePrice,
                 stock: Number(form.stock),
                 description: (form.description || "").trim() || null,
                 brightness: form.brightness ? Number(form.brightness) : null,
@@ -260,29 +269,21 @@ export default function PaperListings() {
                                 <Input type="number" min="1" value={form.reams_per_box} onChange={(e) => setForm({ ...form, reams_per_box: e.target.value })} required className="tc-input-lg" data-testid="paper-reams-input" />
                             </div>
                             <div>
-                                <Label>Price per ream (₹) <span className="text-red-500">*</span></Label>
-                                <Input type="number" min="1" step="0.01" value={form.price_per_ream} onChange={(e) => setForm({ ...form, price_per_ream: e.target.value })} required className="tc-input-lg" data-testid="paper-price-input" />
-                            </div>
-                            <div>
                                 <Label>Stock (boxes) <span className="text-red-500">*</span></Label>
                                 <Input type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} required className="tc-input-lg" data-testid="paper-stock-input" />
                             </div>
                             <div className="col-span-2">
-                                <Label>GST rate (%)</Label>
-                                <select value={form.gst_rate} onChange={(e) => setForm({ ...form, gst_rate: Number(e.target.value) })} className="tc-input-lg w-full" data-testid="paper-gst-rate">
-                                    {GST_RATES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
-                                </select>
-                                {(() => {
-                                    const base = parseFloat(form.price_per_ream || 0);
-                                    if (!base) return null;
-                                    const gst = gstAmount(base, form.gst_rate);
-                                    return (
-                                        <div className="text-[12px] text-[#0A0A0B] bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 mt-2" data-testid="paper-gst-preview">
-                                            Base price: <strong>{formatINR(base)}</strong> + GST ({form.gst_rate}%): <strong>{formatINR(gst)}</strong> = Total: <strong>{formatINR(base + gst)}</strong>
-                                        </div>
-                                    );
-                                })()}
-                                <div className="text-[11px] text-[#86868B] mt-1">Listing cards now show the full price including GST. The dealer&apos;s GST share is itemised on the buyer&apos;s invoice.</div>
+                                <PriceWithGstToggle
+                                    priceLabel="Price per ream (₹)"
+                                    required
+                                    value={form.price_per_ream}
+                                    onChange={(v) => setForm({ ...form, price_per_ream: v })}
+                                    priceType={form.price_type}
+                                    onPriceTypeChange={(t) => setForm({ ...form, price_type: t })}
+                                    gstRate={form.gst_rate}
+                                    onGstRateChange={(r) => setForm({ ...form, gst_rate: r })}
+                                    testIdPrefix="paper"
+                                />
                             </div>
                         </div>
 
@@ -348,6 +349,7 @@ export default function PaperListings() {
                         </div>
                         <DeliveryPolicyNote />
                         <CommissionBanner />
+                        <CompetitivePricingNote />
                         <DialogFooter className="mt-3">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
                             <Button type="submit" className="btn-pill-cta" disabled={saving} data-testid="paper-save-btn">

@@ -7,9 +7,11 @@ import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { Plus, Trash2, Image as ImageIcon, ChevronLeft, ChevronRight, CheckCircle2, FileText, Pencil, X as XIcon } from "lucide-react";
 import D2DRow from "./D2DRow";
-import { GST_RATES, gstAmount, formatINR, PRINTER_SPECIAL_FEATURES } from "../lib/listingConstants";
+import { withGst, PRINTER_SPECIAL_FEATURES } from "../lib/listingConstants";
+import PriceWithGstToggle, { getBasePrice } from "./PriceWithGstToggle";
 import api, { formatApiError } from "../lib/api";
 import CommissionBanner from "./CommissionBanner";
+import CompetitivePricingNote from "./CompetitivePricingNote";
 import DeliveryPolicyNote from "./DeliveryPolicyNote";
 import BulkUploadGeneric from "./BulkUploadGeneric";
 import { printerBulkConfig } from "../lib/bulkConfigs";
@@ -124,6 +126,7 @@ const EMPTY = {
     mobile_printing: [],
     intercity_delivery_charge: "0",
     gst_rate: 18,
+    price_type: "incl",
     price: "",
     stock: "1",
     condition: "new",
@@ -303,7 +306,8 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                 paper_sizes: Array.isArray(editing.paper_sizes) ? editing.paper_sizes : [],
                 mobile_printing: Array.isArray(editing.mobile_printing) ? editing.mobile_printing : [],
                 intercity_delivery_charge: editing.intercity_delivery_charge != null ? String(editing.intercity_delivery_charge) : "0",
-                price: editing.price != null ? String(editing.price) : "",
+                price_type: "incl",
+                price: editing.price != null ? String(withGst(Number(editing.price), editing.gst_rate != null ? Number(editing.gst_rate) : 18)) : "",
                 stock: editing.stock != null ? String(editing.stock) : "1",
                 condition: editing.condition || "new",
             });
@@ -451,7 +455,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                 paper_sizes: f.paper_sizes || [],
                 mobile_printing: f.mobile_printing || [],
                 intercity_delivery_charge: parseFloat(f.intercity_delivery_charge || 0) || 0,
-                price: parseFloat(f.price),
+                price: getBasePrice(f.price, f.price_type, f.gst_rate),
                 stock: parseInt(f.stock || "1", 10),
             };
             if (editing && editing.id) {
@@ -731,16 +735,21 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                     <div data-testid="wizard-step-3">
                         <div className="tc-form-section">Pricing &amp; stock</div>
                         <div className="space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div>
-                                    <Label>Price (₹) <span className="text-red-500">*</span></Label>
-                                    <Input type="number" min="0" step="0.01" value={f.price} onChange={upd("price")} className="tc-input-lg" data-testid="wizard-price" />
-                                </div>
-                                <div>
-                                    <Label>Stock quantity <span className="text-red-500">*</span></Label>
-                                    <Input type="number" min="0" value={f.stock} onChange={upd("stock")} className="tc-input-lg" data-testid="wizard-stock" />
-                                </div>
+                            <div>
+                                <Label>Stock quantity <span className="text-red-500">*</span></Label>
+                                <Input type="number" min="0" value={f.stock} onChange={upd("stock")} className="tc-input-lg" data-testid="wizard-stock" />
                             </div>
+                            <PriceWithGstToggle
+                                priceLabel="Price (₹)"
+                                required
+                                value={f.price}
+                                onChange={(v) => setVal("price", v)}
+                                priceType={f.price_type}
+                                onPriceTypeChange={(t) => setVal("price_type", t)}
+                                gstRate={f.gst_rate}
+                                onGstRateChange={(r) => setVal("gst_rate", r)}
+                                testIdPrefix="wizard"
+                            />
                             <CommissionBanner />
                             <div>
                                 <Label>Condition <span className="text-red-500">*</span></Label>
@@ -751,28 +760,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                                     testKey="condition"
                                 />
                             </div>
-                            <div>
-                                <Label>GST rate (%)</Label>
-                                <select
-                                    value={f.gst_rate}
-                                    onChange={(e) => setVal("gst_rate", Number(e.target.value))}
-                                    className="tc-input-lg w-full"
-                                    data-testid="wizard-gst-rate"
-                                >
-                                    {GST_RATES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
-                                </select>
-                                {(() => {
-                                    const base = parseFloat(f.price || 0);
-                                    if (!base) return null;
-                                    const gst = gstAmount(base, f.gst_rate);
-                                    return (
-                                        <div className="text-[12px] text-[#0A0A0B] bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 mt-2" data-testid="wizard-gst-preview">
-                                            Base price: <strong>{formatINR(base)}</strong> + GST ({f.gst_rate}%): <strong>{formatINR(gst)}</strong> = Total: <strong>{formatINR(base + gst)}</strong>
-                                        </div>
-                                    );
-                                })()}
-                                <div className="text-[11px] text-[#86868B] mt-1">Listing cards now show the full price including GST. The dealer&apos;s GST share is itemised on the buyer&apos;s invoice.</div>
-                            </div>
+                            <CompetitivePricingNote />
                             <div>
                                 <DeliveryPolicyNote />
                             </div>
@@ -797,7 +785,16 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                                 <div className="text-[10px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">{f.brand}</div>
                                 <div className="font-mono text-[16px] font-semibold mt-0.5">{f.model_number}</div>
                                 {f.description && <div className="text-[12.5px] text-[#6E6E73] mt-1 line-clamp-2">{f.description}</div>}
-                                <div className="mt-2 font-mono text-[18px] font-bold">₹{Number(f.price || 0).toLocaleString("en-IN")} <span className="text-[12px] text-[#6E6E73] font-normal">· {f.stock} in stock · {fmt(f.condition)}</span></div>
+                                {(() => {
+                                    const typed = Number(f.price || 0);
+                                    const buyerSees = f.price_type === "incl" ? Math.round(typed) : withGst(typed, f.gst_rate);
+                                    return (
+                                        <div className="mt-2 font-mono text-[18px] font-bold" data-testid="wizard-review-price">
+                                            ₹{buyerSees.toLocaleString("en-IN")} <span className="text-[11px] text-[#6E6E73] font-normal uppercase tracking-[0.05em]">incl. GST</span>
+                                            <span className="text-[12px] text-[#6E6E73] font-normal"> · {f.stock} in stock · {fmt(f.condition)}</span>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
 
@@ -806,6 +803,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                         <ReviewRow k="Color"           v={fmt(f.color)} />
                         <ReviewRow k="Functions"       v={(f.functions || []).map(fmt).join(", ") || "—"} />
                         <ReviewRow k="Monthly volume"  v={`${Number(f.monthly_volume_min || 0).toLocaleString("en-IN")} – ${Number(f.monthly_volume_max || 0).toLocaleString("en-IN")} pages`} />
+                        <CompetitivePricingNote />
                     </div>
                 )}
 
