@@ -33,6 +33,8 @@ const DOC_LABELS = {
 // Maps each kind's listing rows into a normalised row used by the Listings tab.
 function flattenListings(data) {
     const out = [];
+    // Each row keeps the full original under `_raw` so the edit dialog can
+    // surface every field for the admin to modify.
     (data?.toner_listings || []).forEach((l) => out.push({
         kind: "toner",
         id: l.id,
@@ -44,6 +46,7 @@ function flattenListings(data) {
         description: l.compatible_models || "",
         image_url: l.image_url || (Array.isArray(l.image_urls) && l.image_urls[0]) || null,
         created_at: l.created_at,
+        _raw: l,
     }));
     (data?.printer_listings || []).forEach((l) => out.push({
         kind: "printer",
@@ -56,6 +59,7 @@ function flattenListings(data) {
         description: l.description || "",
         image_url: l.image_url || (Array.isArray(l.image_urls) && l.image_urls[0]) || null,
         created_at: l.created_at,
+        _raw: l,
     }));
     (data?.paper_listings || []).forEach((l) => out.push({
         kind: "paper",
@@ -68,6 +72,7 @@ function flattenListings(data) {
         description: l.description || "",
         image_url: l.image_url || null,
         created_at: l.created_at,
+        _raw: l,
     }));
     (data?.consumable_listings || []).forEach((l) => out.push({
         kind: "consumable",
@@ -80,6 +85,7 @@ function flattenListings(data) {
         description: l.description || "",
         image_url: l.image_url || null,
         created_at: l.created_at,
+        _raw: l,
     }));
     (data?.scanner_listings || []).forEach((l) => out.push({
         kind: "scanner",
@@ -90,8 +96,9 @@ function flattenListings(data) {
         gst_rate: l.gst_rate,
         stock: l.stock,
         description: l.description || "",
-        image_url: l.image_url || null,
+        image_url: l.image_url || (Array.isArray(l.image_urls) && l.image_urls[0]) || null,
         created_at: l.created_at,
+        _raw: l,
     }));
     return out.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 }
@@ -433,50 +440,208 @@ export default function DealerProfile() {
     );
 }
 
+// Fields exposed for editing, per product kind. Each entry: [api_key, label,
+// type, opts]. We use this single source of truth to (a) seed the form from
+// the listing's _raw row, (b) render the inputs, and (c) shape the PUT
+// payload. New fields can be added in one place without changing two layers.
+const ADMIN_EDIT_FIELDS = {
+    toner: [
+        ["brand", "Brand", "text"],
+        ["model_number", "Toner model number", "text"],
+        ["compatible_models", "Suitable for (compatible printers)", "textarea"],
+        ["color", "Color", "text"],
+        ["toner_type", "Toner type", "select", ["Original", "Compatible", "Refilled"]],
+        ["price", "Price (₹) base / excl. GST", "number"],
+        ["gst_rate", "GST rate (%)", "number"],
+        ["stock", "Stock", "number"],
+        ["page_yield", "Page yield (sheets)", "number"],
+        ["oem_part_number", "OEM part number", "text"],
+        ["cartridge_weight", "Cartridge weight (g)", "number"],
+        ["warranty", "Warranty", "text"],
+        ["print_technology", "Print technology", "select", ["Laser", "Inkjet", "Thermal", "Dot Matrix"]],
+        ["intercity_delivery_charge", "Intercity delivery charge (₹)", "number"],
+        ["image_url", "Primary image URL", "text"],
+    ],
+    printer: [
+        ["brand", "Brand", "text"],
+        ["model_number", "Model number", "text"],
+        ["category", "Technology", "select", ["laser", "inkjet", "led", "thermal", "dot_matrix", "multifunction"]],
+        ["condition", "Condition", "select", ["new", "refurbished"]],
+        ["usage_type", "Usage type", "select", ["corporate", "home", "soho", "commercial"]],
+        ["color", "Output color", "select", ["bw", "color"]],
+        ["price", "Price (₹) base / excl. GST", "number"],
+        ["gst_rate", "GST rate (%)", "number"],
+        ["stock", "Stock", "number"],
+        ["print_speed_ppm", "Print speed (ppm)", "number"],
+        ["monthly_volume_min", "Monthly volume — min", "number"],
+        ["monthly_volume_max", "Monthly volume — max", "number"],
+        ["connectivity", "Connectivity (comma-separated)", "list"],
+        ["paper_sizes", "Paper sizes (comma-separated)", "list"],
+        ["functions", "Functions (comma-separated)", "list"],
+        ["intercity_delivery_charge", "Intercity delivery charge (₹)", "number"],
+        ["description", "Description", "textarea"],
+        ["image_url", "Primary image URL", "text"],
+    ],
+    paper: [
+        ["brand", "Brand", "text"],
+        ["size", "Size", "select", ["A4", "A3", "A5", "Letter", "Legal", "Executive"]],
+        ["gsm", "GSM", "number"],
+        ["reams_per_box", "Reams per box", "number"],
+        ["price", "Price per ream (₹) base / excl. GST", "number"],
+        ["gst_rate", "GST rate (%)", "number"],
+        ["stock", "Stock (boxes)", "number"],
+        ["brightness", "Brightness", "number"],
+        ["thickness_microns", "Thickness (μm)", "number"],
+        ["acid_free", "Acid-free", "bool"],
+        ["suitable_for", "Suitable for (comma-separated)", "list"],
+        ["description", "Description", "textarea"],
+        ["image_url", "Primary image URL", "text"],
+    ],
+    consumable: [
+        ["subcategory", "Subcategory", "select", ["Ink Cartridges", "Drums", "Imaging Units", "Maintenance Kits", "Fusers", "Belts", "Waste Toner Bottles", "Other"]],
+        ["subcategory_other", "If 'Other', specify", "text"],
+        ["brand", "Brand", "text"],
+        ["model_number", "Model number", "text"],
+        ["compatible_models", "Suitable for", "textarea"],
+        ["condition", "Condition", "select", ["New", "Refurbished", "Used"]],
+        ["price", "Price (₹) base / excl. GST", "number"],
+        ["gst_rate", "GST rate (%)", "number"],
+        ["stock", "Stock", "number"],
+        ["intercity_delivery_charge", "Intercity delivery charge (₹)", "number"],
+        ["description", "Description", "textarea"],
+        ["image_url", "Primary image URL", "text"],
+    ],
+    scanner: [
+        ["brand", "Brand", "text"],
+        ["model_number", "Model number", "text"],
+        ["scanner_type", "Scanner type", "select", ["Flatbed", "Sheet-fed", "Drum", "Portable", "Photo"]],
+        ["condition", "Condition", "select", ["New", "Refurbished", "Used"]],
+        ["scan_resolution", "Scan resolution", "select", ["600dpi", "1200dpi", "2400dpi", "4800dpi", "9600dpi"]],
+        ["scan_speed_ppm", "Scan speed (ppm)", "number"],
+        ["color_mode", "Color/Mono", "select", ["Color", "Mono", "Both"]],
+        ["warranty", "Warranty", "text"],
+        ["connectivity", "Connectivity (comma-separated)", "list"],
+        ["price", "Price (₹) base / excl. GST", "number"],
+        ["gst_rate", "GST rate (%)", "number"],
+        ["stock", "Stock", "number"],
+        ["intercity_delivery_charge", "Intercity delivery charge (₹)", "number"],
+        ["description", "Description", "textarea"],
+        ["image_url", "Primary image URL", "text"],
+    ],
+};
+
+// Map a listing row (raw from API) → form state.
+function seedFormFromRaw(kind, raw) {
+    const form = {};
+    const fields = ADMIN_EDIT_FIELDS[kind] || [];
+    for (const [key, , type] of fields) {
+        // The paper table stores price_per_ream, not price — surface that
+        // under the unified `price` key so the editor stays generic.
+        let val = raw[key];
+        if (key === "price" && kind === "paper") val = raw.price_per_ream;
+        if (type === "bool") form[key] = !!val;
+        else if (type === "list") form[key] = Array.isArray(val) ? val.join(", ") : (val || "");
+        else if (val == null) form[key] = "";
+        else form[key] = String(val);
+    }
+    return form;
+}
+
+// Convert form state → API payload (only non-empty entries).
+function payloadFromForm(kind, form) {
+    const payload = {};
+    const fields = ADMIN_EDIT_FIELDS[kind] || [];
+    for (const [key, , type] of fields) {
+        const v = form[key];
+        if (v === "" || v == null) continue;
+        if (type === "number") {
+            const n = Number(v);
+            if (Number.isFinite(n)) payload[key] = n;
+        } else if (type === "bool") {
+            payload[key] = !!v;
+        } else if (type === "list") {
+            const arr = String(v).split(/[,;|]/).map((x) => x.trim()).filter(Boolean);
+            payload[key] = arr;
+        } else {
+            payload[key] = String(v);
+        }
+    }
+    return payload;
+}
+
 function EditListingDialog({ listing, onClose, onSaved }) {
-    const [price, setPrice] = useState(String(listing.price ?? ""));
-    const [stock, setStock] = useState(String(listing.stock ?? ""));
-    const [description, setDescription] = useState(listing.description || "");
+    const kind = listing.kind;
+    const fields = ADMIN_EDIT_FIELDS[kind] || [];
+    const [form, setForm] = useState(() => seedFormFromRaw(kind, listing._raw || listing));
     const [status, setStatus] = useState(Number(listing.stock || 0) > 0 ? "active" : "inactive");
     const [saving, setSaving] = useState(false);
+    const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
     const submit = async (e) => {
         e.preventDefault();
         setSaving(true);
         try {
-            await api.put(`/admin/listings/${listing.kind}/${listing.id}`, {
-                price: price === "" ? null : Number(price),
-                stock: stock === "" ? null : Number(stock),
-                description,
-                status,
-            });
+            const payload = payloadFromForm(kind, form);
+            payload.status = status;
+            await api.put(`/admin/listings/${kind}/${listing.id}`, payload);
             toast.success("Listing updated");
             onSaved();
-        } catch (e) { toast.error(formatApiError(e) || "Update failed"); }
+        } catch (err) { toast.error(formatApiError(err) || "Update failed"); }
         finally { setSaving(false); }
     };
 
     return (
         <Dialog open onOpenChange={(o) => !o && onClose()}>
-            <DialogContent className="max-w-md" data-testid="edit-listing-dialog">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="edit-listing-dialog">
                 <DialogHeader>
-                    <DialogTitle>Edit {listing.kind} listing</DialogTitle>
+                    <DialogTitle>Edit {kind} listing — every field is editable</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={submit} className="space-y-4 mt-2">
-                    <div>
+                    <div className="bg-black/[0.03] border border-black/[0.06] rounded-lg p-3">
                         <Label className="text-[11px] uppercase tracking-[0.14em] text-[#86868B]">Product</Label>
                         <div className="text-[14px] font-semibold text-[#0A0A0B] mt-1">{listing.brand || ""} {listing.name}</div>
+                        <div className="text-[11.5px] text-[#86868B] mt-0.5">Price stored as <strong>base / excl. GST</strong>. The buyer-facing card adds GST on display.</div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <Label htmlFor="edit-price">Price (₹)</Label>
-                            <Input id="edit-price" type="number" min="0" step="1" value={price} onChange={(e) => setPrice(e.target.value)} data-testid="edit-listing-price" />
-                        </div>
-                        <div>
-                            <Label htmlFor="edit-stock">Stock</Label>
-                            <Input id="edit-stock" type="number" min="0" step="1" value={stock} onChange={(e) => setStock(e.target.value)} data-testid="edit-listing-stock" />
-                        </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {fields.map(([key, label, type, opts]) => {
+                            const wide = type === "textarea" || type === "list";
+                            return (
+                                <div key={key} className={wide ? "sm:col-span-2" : ""}>
+                                    <Label htmlFor={`edit-${key}`}>{label}</Label>
+                                    {type === "textarea" ? (
+                                        <Textarea id={`edit-${key}`} rows={2} value={form[key] ?? ""} onChange={(e) => set(key, e.target.value)} data-testid={`edit-${kind}-${key}`} />
+                                    ) : type === "select" ? (
+                                        <select
+                                            id={`edit-${key}`}
+                                            value={form[key] ?? ""}
+                                            onChange={(e) => set(key, e.target.value)}
+                                            className="w-full h-10 px-3 rounded-md border border-[#D2D2D7] bg-white text-[14px]"
+                                            data-testid={`edit-${kind}-${key}`}
+                                        >
+                                            <option value="">—</option>
+                                            {(opts || []).map((o) => <option key={o} value={o}>{o}</option>)}
+                                        </select>
+                                    ) : type === "bool" ? (
+                                        <div className="flex items-center gap-2 h-10">
+                                            <input id={`edit-${key}`} type="checkbox" checked={!!form[key]} onChange={(e) => set(key, e.target.checked)} data-testid={`edit-${kind}-${key}`} />
+                                            <span className="text-[13px] text-[#3a3a40]">Yes</span>
+                                        </div>
+                                    ) : (
+                                        <Input
+                                            id={`edit-${key}`}
+                                            type={type === "number" ? "number" : "text"}
+                                            step={type === "number" ? "1" : undefined}
+                                            value={form[key] ?? ""}
+                                            onChange={(e) => set(key, e.target.value)}
+                                            data-testid={`edit-${kind}-${key}`}
+                                        />
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
+
                     <div>
                         <Label htmlFor="edit-status">Status</Label>
                         <select
@@ -491,14 +656,11 @@ function EditListingDialog({ listing, onClose, onSaved }) {
                         </select>
                         <div className="text-[11px] text-[#86868B] mt-1">Inactive zeroes stock so the listing falls out of public browse.</div>
                     </div>
-                    <div>
-                        <Label htmlFor="edit-desc">Description</Label>
-                        <Textarea id="edit-desc" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} data-testid="edit-listing-description" />
-                    </div>
+
                     <DialogFooter className="gap-2">
                         <Button type="button" variant="outline" onClick={onClose} data-testid="edit-listing-cancel">Cancel</Button>
                         <Button type="submit" disabled={saving} className="bg-[#0A0A0B] text-white hover:bg-black/80" data-testid="edit-listing-save">
-                            {saving ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Save size={14} className="mr-1.5" />} Save changes
+                            {saving ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Save size={14} className="mr-1.5" />} Save all fields
                         </Button>
                     </DialogFooter>
                 </form>

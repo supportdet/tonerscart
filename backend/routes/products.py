@@ -1261,6 +1261,15 @@ def supplier_patch_listing(listing_id: str, payload: ListingPatch, user: dict = 
         retry = {k: v for k, v in upd.items() if k not in msg}
         if retry:
             sb_admin.table("listings").update(retry).eq("id", listing_id).eq("supplier_id", s.data["id"]).execute()
+    # Keep listing_variants.price in sync — bulk-edit and single-edit forms
+    # only expose ONE price input. If a card uses listings.price and the
+    # detail page uses variant.price, divergence here causes the buyer to
+    # see two different numbers for the same SKU (CRG 303 incident).
+    if "price" in upd:
+        try:
+            sb_admin.table("listing_variants").update({"price": upd["price"]}).eq("listing_id", listing_id).execute()
+        except Exception as e:
+            logger.warning("variant price sync failed for listing %s: %s", listing_id, e)
     return {"ok": True, "updated": list(upd.keys())}
 
 

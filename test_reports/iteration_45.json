@@ -1,0 +1,70 @@
+{
+  "summary": "Wave 45 — 5 fixes (GST toggle redesign, CRG303 pricing bug, expanded Admin Edit dialog, ScrollToTop, /printers popup cooldown). Backend 10/10 pytest pass. Frontend: live verification of popup (mobile+desktop+cooldown), CRG303 detail page (₹6,018, no ₹5,362), scroll fix (scrollY=0), Admin Edit Dialog (toner, 18 fields with all required testids), 5 public pages (0 console errors), 3 protected dealers Active. GST toggle redesign + supplier modals + printer/paper/consumable/scanner Admin Edit kinds verified by exhaustive code review (no shared supplier creds, Big C profile has only toner listings).",
+  "verifications_performed": {
+    "bug2_crg303_pricing": {
+      "GET /api/listings/02f296c4-ffdc-471f-a7a8-981d55a7c0f5": "PASS — listing.price=5100.0, variants[0].price=5100.0 (synced)",
+      "Live UI /toner/{id}": "PASS — shows ₹6,018 (5100×1.18), does NOT show ₹5,362 anywhere",
+      "Live UI Admin Dealer Profile (Big C)": "PASS — CRG 303 row shows ₹6,018 with 'Base ₹5,100 · 18% GST' caption — card & detail prices match",
+      "Admin PUT /api/admin/listings/toner/{id} price sync": "PASS — sending {price: orig+100} updates both listings.price AND listing_variants[0].price (verified via GET; restored after test)",
+      "Code review backend/routes/products.py L1264-1271": "PASS — supplier PUT also syncs variant price when 'price' in upd"
+    },
+    "bug3_admin_listing_edit_expansion": {
+      "AdminListingUpdate model (admin.py L671-724)": "PASS — 38 fields exposed across all 5 kinds (price/stock/desc/status/gst_rate/intercity_delivery_charge, brand, model_number, color, toner_type, compatible_models, page_yield, oem_part_number, cartridge_weight, warranty, print_technology, category, condition, usage_type, usage_types, print_speed_ppm, monthly_volume_min/max, connectivity, paper_sizes, functions, size, gsm, reams_per_box, brightness, thickness_microns, acid_free, suitable_for, subcategory, subcategory_other, scanner_type, scan_resolution, scan_speed_ppm, color_mode, image_url, image_urls)",
+      "Endpoint column-strip retry (admin.py L795-820)": "PASS — up-to-8-retry strips columns the DB doesn't have, never 500s; raises only when an essential column is missing",
+      "Backend test full-field-set": "PASS — sending {brand, model_number, page_yield, color, toner_type, warranty, gst_rate} to toner returns 200",
+      "Frontend ADMIN_EDIT_FIELDS map (DealerProfile.jsx L447-531)": "PASS — toner=15 fields, printer=18, paper=13, consumable=12, scanner=15; all keys match backend model",
+      "Frontend EditListingDialog testid generation (L607-642)": "PASS — emits data-testid='edit-${kind}-${key}' for every field; dialog has data-testid='edit-listing-dialog'",
+      "Live UI Big C toner Edit dialog": "PASS — opened via 'Edit' button, 18 testids found incl. edit-toner-brand, edit-toner-model_number, edit-toner-page_yield, edit-toner-compatible_models, edit-toner-color, edit-toner-toner_type, edit-toner-price, edit-toner-gst_rate, edit-toner-stock, edit-toner-oem_part_number, edit-toner-cartridge_weight, edit-toner-warranty, edit-toner-print_technology, edit-toner-intercity_delivery_charge, edit-toner-image_url. Title 'Edit toner listing — every field is editable'.",
+      "Other kinds (printer/paper/consumable/scanner)": "Code-level only — Big C profile contains only toner listings; ADMIN_EDIT_FIELDS map proves edit-printer-print_speed_ppm, edit-paper-gsm, edit-consumable-subcategory, edit-scanner-scan_resolution are defined and will render with same dialog code path."
+    },
+    "scrolltotop_fix": {
+      "Code review (ScrollToTop.jsx)": "PASS — sets history.scrollRestoration='manual', scrolls window+scrollingElement+documentElement+body, runs once+rAF+rAF",
+      "Live UI /toner/{CRG303}": "PASS — direct nav lands at scrollY=0"
+    },
+    "printers_popup_cooldown": {
+      "Mobile (390x844) cleared cooldown": "PASS — popup data-testid='finder-popup-overlay' visible after 9s wait",
+      "Desktop (1440x900) cleared cooldown": "PASS — popup visible after 9s wait",
+      "6h cooldown verified": "PASS — after dismissing popup, navigating away and back, popup did NOT reappear (cooldown honoured via localStorage tc_finder_popup_last)"
+    },
+    "gst_toggle_redesign_code_review": {
+      "PriceWithGstToggle.jsx": "PASS — small inline pills (h-7 px-3, rounded-full, 11.5px), both UNSELECTED by default, price input has `disabled={!priceType}`, error prop drives red border on pills + input + inline error msg 'Pick whether...', testIdPrefix-based ids (e.g. paper-price-type-incl/excl/error, paper-price-input, paper-price-block)",
+      "SupplierDashboard toner form": "PASS — priceType=null default (L292), priceTypeError state (L293), red error indicator wired (L1162, L1178)",
+      "PaperListings/ConsumableListings/ScannerListings": "PASS — priceTypeError state, error={priceTypeError && !form.price_type} prop, form.price_type defaults null",
+      "PrinterListings wizard step 3": "PASS — price_type:null default (L129), canNext() returns false when !f.price_type (L389), PriceWithGstToggle error prop wired (L752: error={!f.price_type && Number(f.price) > 0})",
+      "Live UI in supplier forms": "NOT EXERCISED — no shared supplier credentials and main agent instructed not to register throwaway supplier; code-level verification is comprehensive."
+    },
+    "regressions": {
+      "Protected dealers Active": "PASS — support@digitaledgeindia.com, sairam@digitaledgeindia.com, sales@bigctech.com all is_suspended=false with approved_at set",
+      "Public pages 0 console errors": "PASS — /printers, /toners, /papers, /consumables, /scanners"
+    }
+  },
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/printers guided-finder popup (mobile 390x844)", "issues": ["Close button (data-testid='finder-popup-close') reports 'outside of viewport' when Playwright tries to click. Visual screenshot confirms close X is rendered but its hit box may be clipped above the visible portion when the modal occupies full height with cookie banner. Functional close still works via direct DOM click. Low priority — only affected automated click; humans see it fine."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave45_admin_listing_edit.py",
+    "/app/test_reports/pytest/wave45.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "admin.py admin_update_listing column-strip retry uses substring match (`if k in msg`) — risk: a column name that's also a substring of an unrelated error word could be stripped erroneously. In practice the Supabase error includes the exact column name in single quotes, so this is acceptable but could be hardened with a regex like /column \"([^\"]+)\"/.",
+    "PriceWithGstToggle disables the price input until a pill is picked, but does not also disable form Submit. The page-level submit handler in each form must guard with priceTypeError — verified to be wired in toner/paper/consumable/scanner/printer forms.",
+    "DealerProfile EditListingDialog payload sends fields as-is (no type coercion for number/bool client-side). Backend AdminListingUpdate has Optional[int]/Optional[float]/Optional[bool] so Pydantic coerces. Watch for empty-string → 0 surprises; payloadFromForm strips empties so OK.",
+    "Big C dealer profile contains 18 toner listings but zero printer/paper/consumable/scanner listings. Future testing of expanded Admin Edit dialog on those kinds would require a dealer with multi-kind inventory or seeded fixtures."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_wave45_admin_listing_edit.py (new)"
+  ],
+  "success_rate": { "backend": "100% (10/10 pytest)", "frontend": "100% on exercised flows (popup, scroll, detail-page price, public pages, admin toner edit dialog); supplier-side GST toggle UI not live-tested (code-level only)" },
+  "test_credentials": "Admin: support@tonerscart.com / Bangara1@# (confirmed working). No shared supplier credentials available.",
+  "seed_data_creation": "None — backend tests update CRG 303 toner price by +₹100 then restore in finally block.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Live UI testing of (a) the new GST toggle pills in supplier Add Toner / Paper / Consumable / Scanner / Printer-Step3 modals and (b) Admin Edit dialog for printer/paper/consumable/scanner kinds requires a dealer with multi-kind inventory OR a fresh supplier session. Current dealers: Big C (18 toner only), Digital Edge × 2. Backend variant-price sync and field expansion are fully covered by /app/backend/tests/test_wave45_admin_listing_edit.py — re-run after any change to admin.py L795-829 or products.py L1264-1271.",
+  "rca of the issue": "BUG #2 RCA: prior edit-flow only updated parent listings.price but NOT child listing_variants.price, causing detail page (reads variant.price) to show stale ₹5,362 (4542×1.18) while card (reads listing.price) showed correct ₹6,018 (5100×1.18). Fix: backend now ALWAYS mirrors price into listing_variants on both supplier PUT (products.py L1264) and admin PUT (admin.py L825). Verified by Wave45 backend test."
+}

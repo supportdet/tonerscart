@@ -22,7 +22,7 @@ const GSMS = [70, 75, 80, 90, 100, 120, 150];
 const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
 
 function emptyForm() {
-    return { brand: "JK Paper", size: "A4", gsm: 75, reams_per_box: 10, price_per_ream: "", stock: "", description: "", brightness: "", thickness_microns: "", acid_free: false, suitable_for: [], gst_rate: 18, price_type: "incl" };
+    return { brand: "JK Paper", size: "A4", gsm: 75, reams_per_box: 10, price_per_ream: "", stock: "", description: "", brightness: "", thickness_microns: "", acid_free: false, suitable_for: [], gst_rate: 18, price_type: null };
 }
 
 export default function PaperListings() {
@@ -107,8 +107,12 @@ export default function PaperListings() {
         };
     }, []);
 
+    const [priceTypeError, setPriceTypeError] = useState(false);
+
     const submit = async (e) => {
         e.preventDefault();
+        if (!form.price_type) { setPriceTypeError(true); toast.error("Pick whether the price is Incl. or Excl. GST"); return; }
+        setPriceTypeError(false);
         if (!form.price_per_ream || !form.stock) { toast.error("Price and stock are required"); return; }
         setSaving(true);
         try {
@@ -279,9 +283,10 @@ export default function PaperListings() {
                                     value={form.price_per_ream}
                                     onChange={(v) => setForm({ ...form, price_per_ream: v })}
                                     priceType={form.price_type}
-                                    onPriceTypeChange={(t) => setForm({ ...form, price_type: t })}
+                                    onPriceTypeChange={(t) => { setForm({ ...form, price_type: t }); setPriceTypeError(false); }}
                                     gstRate={form.gst_rate}
                                     onGstRateChange={(r) => setForm({ ...form, gst_rate: r })}
+                                    error={priceTypeError && !form.price_type}
                                     testIdPrefix="paper"
                                 />
                             </div>

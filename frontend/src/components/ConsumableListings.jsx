@@ -22,7 +22,7 @@ const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")
 function emptyForm() {
     return {
         subcategory: "Ink Cartridges", subcategory_other: "", brand: "", model_number: "",
-        compatible_models: "", condition: "New", price: "", gst_rate: 18, price_type: "incl", stock: "", description: "",
+        compatible_models: "", condition: "New", price: "", gst_rate: 18, price_type: null, stock: "", description: "",
     };
 }
 
@@ -103,9 +103,13 @@ export default function ConsumableListings() {
         };
     }, []);
 
+    const [priceTypeError, setPriceTypeError] = useState(false);
+
     const submit = async (e) => {
         e.preventDefault();
         if (!form.brand.trim() || !form.model_number.trim()) { toast.error("Brand and model are required"); return; }
+        if (!form.price_type) { setPriceTypeError(true); toast.error("Pick whether the price is Incl. or Excl. GST"); return; }
+        setPriceTypeError(false);
         if (!form.price || !form.stock) { toast.error("Price and stock are required"); return; }
         if (form.subcategory === "Other" && !form.subcategory_other.trim()) { toast.error("Please specify the consumable type"); return; }
         setSaving(true);
@@ -252,9 +256,10 @@ export default function ConsumableListings() {
                                     value={form.price}
                                     onChange={(v) => setForm({ ...form, price: v })}
                                     priceType={form.price_type}
-                                    onPriceTypeChange={(t) => setForm({ ...form, price_type: t })}
+                                    onPriceTypeChange={(t) => { setForm({ ...form, price_type: t }); setPriceTypeError(false); }}
                                     gstRate={form.gst_rate}
                                     onGstRateChange={(r) => setForm({ ...form, gst_rate: r })}
+                                    error={priceTypeError && !form.price_type}
                                     testIdPrefix="consumable"
                                 />
                             </div>

@@ -58,19 +58,35 @@ export default function Printers() {
     });
 
     // "Find your printer" popup — auto-opens 7s after landing on /printers
-    // (was 15s — dropped per user request, also fires correctly on mobile),
-    // unless the user already scrolled significantly or it was already shown
-    // this session. Dismissible via a clear X button.
+    // (was 15s and silently never fired on mobile because users scrolled past
+    // 400px in 15s). Re-engineered logic:
+    //   • Permanent sessionStorage suppression replaced with a 6-hour cooldown
+    //     in localStorage so the popup re-appears after a meaningful gap
+    //     between sessions rather than only on the very first visit.
+    //   • A 1.2s grace window after mount where scroll events are ignored —
+    //     this prevents stale scrollY readings from the previous page (when
+    //     ScrollToTop hasn't fully settled yet) from instantly suppressing.
+    //   • Mobile and desktop now both fire at the 7s mark.
     const [showFinder, setShowFinder] = useState(false);
     const interactedRef = useRef(false);
     useEffect(() => {
-        try { if (sessionStorage.getItem("tc_finder_popup_shown")) return; } catch { /* ignore */ }
-        const onScroll = () => { if (window.scrollY > 400) interactedRef.current = true; };
+        try {
+            const last = Number(localStorage.getItem("tc_finder_popup_last") || 0);
+            if (last && Date.now() - last < 6 * 60 * 60 * 1000) return;
+        } catch { /* ignore */ }
+        const mountedAt = Date.now();
+        const onScroll = () => {
+            // Ignore scroll events fired within 1.2s of mount — ScrollToTop
+            // may still be settling and the previous route's scroll position
+            // can leak through on some browsers.
+            if (Date.now() - mountedAt < 1200) return;
+            if (window.scrollY > 400) interactedRef.current = true;
+        };
         window.addEventListener("scroll", onScroll, { passive: true });
         const t = setTimeout(() => {
             if (!interactedRef.current) {
                 setShowFinder(true);
-                try { sessionStorage.setItem("tc_finder_popup_shown", "1"); } catch { /* ignore */ }
+                try { localStorage.setItem("tc_finder_popup_last", String(Date.now())); } catch { /* ignore */ }
             }
         }, 7000);
         return () => {
