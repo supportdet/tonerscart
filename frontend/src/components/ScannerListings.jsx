@@ -24,7 +24,7 @@ function emptyForm() {
     return {
         brand: "", model_number: "", scanner_type: "Flatbed", condition: "New",
         scan_resolution: "1200dpi", connectivity: [], scan_speed_ppm: "", color_mode: "Color",
-        warranty: "No warranty", price: "", gst_rate: 18, price_type: "incl", stock: "", description: "",
+        warranty: "No warranty", price: "", gst_rate: 18, price_type: null, stock: "", description: "",
     };
 }
 
@@ -113,9 +113,13 @@ export default function ScannerListings() {
         };
     }, []);
 
+    const [priceTypeError, setPriceTypeError] = useState(false);
+
     const submit = async (e) => {
         e.preventDefault();
         if (!form.brand.trim() || !form.model_number.trim()) { toast.error("Brand and model are required"); return; }
+        if (!form.price_type) { setPriceTypeError(true); toast.error("Pick whether the price is Incl. or Excl. GST"); return; }
+        setPriceTypeError(false);
         if (!form.price || !form.stock) { toast.error("Price and stock are required"); return; }
         setSaving(true);
         try {
@@ -288,9 +292,10 @@ export default function ScannerListings() {
                                     value={form.price}
                                     onChange={(v) => setForm({ ...form, price: v })}
                                     priceType={form.price_type}
-                                    onPriceTypeChange={(t) => setForm({ ...form, price_type: t })}
+                                    onPriceTypeChange={(t) => { setForm({ ...form, price_type: t }); setPriceTypeError(false); }}
                                     gstRate={form.gst_rate}
                                     onGstRateChange={(r) => setForm({ ...form, gst_rate: r })}
+                                    error={priceTypeError && !form.price_type}
                                     testIdPrefix="scanner"
                                 />
                             </div>

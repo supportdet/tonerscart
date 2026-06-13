@@ -12,15 +12,17 @@ const splitList = (v) =>
         .filter(Boolean);
 
 // Convert a row's typed price into the stored base price using the row's
-// price_type ("incl" | "excl", default "incl") and gst_rate (default 18).
-// Used by every bulk-upload toPayload below.
+// price_type ("incl" | "excl"). The dealer must pick one — there's no
+// silent default in the single forms. For bulk uploads, an empty cell
+// triggers a validation error in the BulkUploadGeneric grid; we only
+// reach this helper with a valid price_type.
 const PRICE_TYPES = ["incl", "excl"];
 const basePriceFromRow = (typed, row) => {
     const t = Number(typed || 0);
     if (t <= 0) return 0;
-    const pt = (row.price_type || "incl").toLowerCase();
+    const pt = (row.price_type || "").toLowerCase();
     const rate = row.gst_rate !== "" && row.gst_rate != null ? Number(row.gst_rate) : 18;
-    return pt === "excl" ? Math.round(t) : priceFromInclusive(t, rate);
+    return pt === "excl" ? Math.round(t) : Math.round(t / (1 + rate / 100));
 };
 
 // ============================ TONERS ============================

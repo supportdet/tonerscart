@@ -126,7 +126,7 @@ const EMPTY = {
     mobile_printing: [],
     intercity_delivery_charge: "0",
     gst_rate: 18,
-    price_type: "incl",
+    price_type: null,
     price: "",
     stock: "1",
     condition: "new",
@@ -386,6 +386,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
             return true;
         }
         if (step === 3) {
+            if (!f.price_type) return false;
             if (!f.price || Number(f.price) <= 0) return false;
             if (f.stock === "" || Number(f.stock) < 0) return false;
             if (!f.condition) return false;
@@ -748,6 +749,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                                 onPriceTypeChange={(t) => setVal("price_type", t)}
                                 gstRate={f.gst_rate}
                                 onGstRateChange={(r) => setVal("gst_rate", r)}
+                                error={!f.price_type && Number(f.price) > 0}
                                 testIdPrefix="wizard"
                             />
                             <CommissionBanner />

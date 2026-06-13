@@ -1,3 +1,43 @@
+### 2026-06-13 (a) — 5-pack: GST toggle redesign, CRG 303 pricing bug, full Admin Edit, ScrollToTop, popup cooldown
+
+**Trigger**: User reported 5 issues in one message — see Wave 45 brief.
+
+**Fix #1 — GST toggle redesign (small pills, mandatory pick)**:
+- `frontend/src/components/PriceWithGstToggle.jsx` REWRITTEN: small `h-7 px-3 rounded-full text-[11.5px]` pills "Incl. GST" / "Excl. GST" sitting inline on the same row as the price label. Both UNSELECTED by default. Price input is `disabled` until a pill is picked. New `error` prop (parent-driven) flips pills + input border red and shows inline message "Pick whether this price includes or excludes GST before publishing." `getBasePrice()` now returns 0 for null priceType — parent is expected to validate before calling.
+- Toner form (`SupplierDashboard.jsx`): `priceType` defaults `null`, `priceTypeError` state, redesigned small inline pills next to the variants table, validation in submit, "Buyer will see" line hidden until a pill is chosen.
+- Paper / Consumable / Scanner / Printer-wizard step 3: same null default + `priceTypeError` state + `error` prop wired. Printer wizard's `canNext()` blocks Next on step 3 when `price_type` is null.
+
+**Fix #2 — CRG 303 pricing bug (root cause: data divergence)**:
+- DB resync: `listing_variants.price` for CRG 303 was stale at 4542 while `listings.price=5100`. Synced variant → 5100; both card and detail page now show ₹6,018.
+- Backend `PUT /api/supplier/listings/{id}` (`routes/products.py` ~L1264): when `price` is in the update set, all variants of that listing are also updated. Prevents future divergence.
+- Backend `PUT /api/admin/listings/{kind}/{id}` for `kind=toner` (`routes/admin.py` ~L825): same sync. Verified via Wave45 backend test (`/app/backend/tests/test_wave45_admin_listing_edit.py`).
+- DB storage convention reaffirmed: **base / GST-exclusive** is the only price stored. Display layer (`PriceInclGst`) adds GST exactly once.
+
+**Fix #3 — Admin DealerProfile Listings tab: comprehensive edit dialog**:
+- `routes/admin.py` `AdminListingUpdate` model expanded from 4 fields → 38 covering every per-kind attribute (toner, printer, paper, consumable, scanner). Endpoint now strips unknown columns (up-to-8 retries) instead of 500ing — same payload safely works against tables that lack particular columns.
+- `pages/DealerProfile.jsx` introduces `ADMIN_EDIT_FIELDS` (single source of truth, per-kind field list with [api_key, label, type, opts]), `seedFormFromRaw()`, `payloadFromForm()`. `flattenListings()` now preserves the raw row under `_raw` so the dialog can re-hydrate any field. New dialog title: "Edit {kind} listing — every field is editable". Every field gets `data-testid="edit-{kind}-{key}"`.
+- Live UI verified: Big C toner Edit dialog renders 18 testids (brand, model_number, page_yield, compatible_models, color, toner_type, price, gst_rate, stock, oem_part_number, cartridge_weight, warranty, print_technology, intercity_delivery_charge, image_url + status). Edits persist after reload.
+
+**Fix #4 — ScrollToTop (robust)**:
+- `components/ScrollToTop.jsx` REWRITTEN: sets `history.scrollRestoration='manual'` once on mount; on every pathname change, scrolls `window`, `document.scrollingElement`, `document.documentElement`, and `document.body` (defensive — different browsers honour different targets); runs once immediately, again after `requestAnimationFrame`, and a third time on the next frame to beat late-running layouts that can bounce the scroll down. Hash anchors (`#section`) are preserved.
+- Verified: navigate to /printers, scroll down 832px, click in-app link → land on next route with `scrollY=0`.
+
+**Fix #5 — /printers guided-finder popup (was "not working")**:
+- Root cause: `sessionStorage` permanently suppressed the popup after the very first show. Once a user saw it once in a session, every later visit "showed nothing" — they perceived it as broken.
+- `pages/PrintersResults.jsx` ~L64-89: replaced permanent suppression with a 6-hour cooldown stored in `localStorage["tc_finder_popup_last"]`. Also added a 1.2s grace period after mount where scroll events are ignored — prevents stale `scrollY` from the previous page (when ScrollToTop hasn't fully settled) from instantly tripping `interactedRef`.
+- Verified on both mobile (390×844) and desktop (1440×900) — popup fires at the 7s mark on both. Cooldown verified — closing then re-visiting within 6h does NOT re-show.
+
+**Test-data cleanup**: none this session — Wave 45 backend tests update CRG 303 by +₹100 then restore in finally; no permanent rows created.
+
+**Wave 45 test report**: `/app/test_reports/iteration_45.json` — 0 bugs, 0 action items, 100% on every exercisable flow.
+
+**Open code-review notes** (non-blocking):
+- `admin.py` column-strip retry uses substring match — Supabase error format makes this safe today; could be hardened with regex `/column "([^"]+)"/i` in a future cleanup.
+- Big C is the only multi-listing dealer in the system and has only toners. Future iterations may want a multi-kind seeded fixture so the printer/paper/consumable/scanner Edit dialogs can be live-clicked end-to-end.
+
+---
+
+
 ### 2026-06-12 (h) — Toner Model Number searchable dropdown + bulk column + test-data cleanup
 
 **Trigger**: User requested (1) a new "Toner model number" field on the single toner upload form sitting BETWEEN the Brand dropdown and the "Suitable for" compatible-printers field — searchable against the ~585 toner models in `compatibility_db.py`, same-brand floated to top, and on selection auto-populates "Suitable for" with the cartridge's known compatible printers; (2) a matching "Toner Model Number" column in the bulk template; (3) cleanup of any test users/products created BY the agent during testing — but NOTHING else.

@@ -286,10 +286,11 @@ export default function SupplierDashboard() {
     const [printTechnology, setPrintTechnology] = useState("Laser");
     const [intercityCharge, setIntercityCharge] = useState("0");
     const [gstRate, setGstRate] = useState(18);
-    // Whether the per-variant prices below were entered as GST-inclusive
-    // (default — Indian dealers usually quote final price) or GST-exclusive.
-    // Applies to ALL variants in this listing.
-    const [priceType, setPriceType] = useState("incl");
+    // Whether the per-variant prices below were entered as GST-inclusive or
+    // GST-exclusive. Starts UNSELECTED — dealer must pick one before
+    // publishing. Applies to ALL variants in this listing.
+    const [priceType, setPriceType] = useState(null);
+    const [priceTypeError, setPriceTypeError] = useState(false);
     // Variants
     const [variants, setVariants] = useState([{ color: "Black", price: "", stock: "" }]);
 
@@ -365,7 +366,7 @@ export default function SupplierDashboard() {
         setPrice(""); setStock(""); setTonerType("Original"); setPageYield("");
         setImageFiles([]); setImagePreviews([]);
         setBrochureFile(null);
-        setCompatibleModels(""); setTonerModel(""); setOemPartNumber(""); setCartridgeWeight(""); setWarranty(""); setWarrantyOther(""); setPrintTechnology("Laser"); setIntercityCharge("0"); setGstRate(18); setPriceType("incl");
+        setCompatibleModels(""); setTonerModel(""); setOemPartNumber(""); setCartridgeWeight(""); setWarranty(""); setWarrantyOther(""); setPrintTechnology("Laser"); setIntercityCharge("0"); setGstRate(18); setPriceType(null); setPriceTypeError(false);
         setVariants([{ color: "Black", price: "", stock: "" }]);
         setEditingId(null);
         setExistingImages([]);
@@ -520,6 +521,8 @@ export default function SupplierDashboard() {
         if (!brand) { toast.error("Please select a brand"); return; }
         if (!compatibleModels.trim()) { toast.error("Please enter the suitable printer models"); return; }
         if (!pageYield || parseInt(pageYield, 10) <= 0) { toast.error("Page yield (sheets) is required"); return; }
+        if (!priceType) { setPriceTypeError(true); toast.error("Pick whether variant prices are Incl. or Excl. GST"); return; }
+        setPriceTypeError(false);
         // Convert variant prices to base (GST-exclusive) before saving — the
         // global priceType toggle applies to every row in this listing.
         const cleanedVariants = variants
@@ -1147,27 +1150,36 @@ export default function SupplierDashboard() {
                             <div className="text-[11px] text-[#86868B] mt-1">Set the correct GST rate first — the toggle below uses it to convert prices.</div>
                         </div>
 
-                        {/* Global incl/excl GST toggle — applies to every variant row */}
-                        <div className="inline-flex w-full rounded-lg border border-black/[0.08] overflow-hidden bg-white mb-2" role="radiogroup" aria-label="Variant price type">
-                            {[
-                                { id: "incl", label: "Variant prices include GST" },
-                                { id: "excl", label: "Variant prices exclude GST" },
-                            ].map((opt) => {
-                                const sel = priceType === opt.id;
-                                return (
-                                    <button
-                                        type="button"
-                                        key={opt.id}
-                                        role="radio"
-                                        aria-checked={sel}
-                                        onClick={() => setPriceType(opt.id)}
-                                        className={`flex-1 px-3 h-9 text-[12.5px] font-semibold transition ${sel ? "bg-[#0A0A0B] text-white" : "bg-white text-[#3a3a40] hover:bg-black/[0.03]"}`}
-                                        data-testid={`listing-price-type-${opt.id}`}
-                                    >
-                                        {opt.label}
-                                    </button>
-                                );
-                            })}
+                        {/* Small inline incl/excl GST pill toggle — must be picked, no default */}
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <span className="text-[11.5px] font-semibold text-[#3a3a40]">Variant prices:</span>
+                            <div className="inline-flex items-center gap-1.5" role="radiogroup" aria-label="Variant price type">
+                                {[
+                                    { id: "incl", label: "Incl. GST" },
+                                    { id: "excl", label: "Excl. GST" },
+                                ].map((opt) => {
+                                    const sel = priceType === opt.id;
+                                    const showErr = priceTypeError && !priceType;
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={opt.id}
+                                            role="radio"
+                                            aria-checked={sel}
+                                            onClick={() => { setPriceType(opt.id); setPriceTypeError(false); }}
+                                            className={`h-7 px-3 text-[11.5px] font-semibold rounded-full transition ${sel ? "bg-[#0A0A0B] text-white shadow-sm" : showErr ? "bg-white text-red-600 border border-red-400 hover:bg-red-50" : "bg-white text-[#6E6E73] border border-black/[0.12] hover:bg-black/[0.04]"}`}
+                                            data-testid={`listing-price-type-${opt.id}`}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {priceTypeError && !priceType && (
+                                <span className="text-[11.5px] text-red-600 w-full" data-testid="listing-price-type-error">
+                                    Pick whether variant prices <strong>include</strong> or <strong>exclude</strong> GST.
+                                </span>
+                            )}
                         </div>
 
                         <div className="space-y-2" data-testid="variant-list">
@@ -1187,7 +1199,7 @@ export default function SupplierDashboard() {
                                             <Trash2 size={14} />
                                         </button>
                                     </div>
-                                    {typed > 0 && (
+                                    {typed > 0 && priceType && (
                                         <div className="text-[11.5px] text-[#0A0A0B] mt-1.5 pl-1" data-testid={`variant-buyer-sees-${i}`}>
                                             Buyer will see: <strong>{formatINR(buyerSees)} (incl. GST)</strong>
                                         </div>

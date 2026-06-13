@@ -669,10 +669,59 @@ def admin_delete_listing(listing_id: str, user: dict = Depends(require_role("adm
 
 
 class AdminListingUpdate(BaseModel):
+    """Admin edit payload — every field across all 5 product categories.
+    Only fields that are not None are written. Per-category fields are
+    silently dropped if they don't apply to that kind's table (best-effort
+    via the column-not-found retry below)."""
+    # Pricing & stock — shared across all kinds
     price: Optional[float] = None
     stock: Optional[int] = None
     description: Optional[str] = None
     status: Optional[str] = None  # "active" | "inactive" — flips stock 0/min when toggling
+    gst_rate: Optional[int] = None
+    intercity_delivery_charge: Optional[float] = None
+    # Identity
+    brand: Optional[str] = None
+    model_number: Optional[str] = None
+    # Toner-specific
+    color: Optional[str] = None
+    toner_type: Optional[str] = None  # Original / Compatible / Refilled
+    compatible_models: Optional[str] = None
+    page_yield: Optional[int] = None
+    oem_part_number: Optional[str] = None
+    cartridge_weight: Optional[int] = None
+    warranty: Optional[str] = None
+    print_technology: Optional[str] = None
+    # Printer-specific
+    category: Optional[str] = None  # laser / inkjet / multifunction etc
+    condition: Optional[str] = None
+    usage_type: Optional[str] = None
+    usage_types: Optional[List[str]] = None
+    print_speed_ppm: Optional[int] = None
+    monthly_volume_min: Optional[int] = None
+    monthly_volume_max: Optional[int] = None
+    connectivity: Optional[List[str]] = None
+    paper_sizes: Optional[List[str]] = None
+    functions: Optional[List[str]] = None
+    # Paper-specific
+    size: Optional[str] = None
+    gsm: Optional[int] = None
+    reams_per_box: Optional[int] = None
+    brightness: Optional[int] = None
+    thickness_microns: Optional[int] = None
+    acid_free: Optional[bool] = None
+    suitable_for: Optional[List[str]] = None
+    # Consumable-specific
+    subcategory: Optional[str] = None
+    subcategory_other: Optional[str] = None
+    # Scanner-specific
+    scanner_type: Optional[str] = None
+    scan_resolution: Optional[str] = None
+    scan_speed_ppm: Optional[int] = None
+    color_mode: Optional[str] = None
+    # Images
+    image_url: Optional[str] = None
+    image_urls: Optional[List[str]] = None
 
 
 _KIND_TABLE = {
@@ -708,6 +757,26 @@ def admin_update_listing(
         upd["stock"] = int(payload.stock)
     if payload.description is not None:
         upd["description"] = payload.description.strip() or None
+    # Pass-through fields — the column-not-found retry strips any field that
+    # doesn't exist on the target table, so consumable_listings.color (etc.)
+    # is silently dropped without 500ing the whole request.
+    _SIMPLE_FIELDS = (
+        "brand", "model_number", "color", "toner_type", "compatible_models",
+        "page_yield", "oem_part_number", "cartridge_weight", "warranty",
+        "print_technology", "category", "condition", "usage_type",
+        "usage_types", "print_speed_ppm", "monthly_volume_min",
+        "monthly_volume_max", "connectivity", "paper_sizes", "functions",
+        "size", "gsm", "reams_per_box", "brightness", "thickness_microns",
+        "acid_free", "suitable_for", "subcategory", "subcategory_other",
+        "scanner_type", "scan_resolution", "scan_speed_ppm", "color_mode",
+        "image_url", "image_urls", "gst_rate", "intercity_delivery_charge",
+    )
+    for k in _SIMPLE_FIELDS:
+        v = getattr(payload, k, None)
+        if v is not None:
+            upd[k] = v
+    if "toner_type" in upd and upd["toner_type"] not in ("Original", "Compatible", "Refilled"):
+        raise HTTPException(400, "toner_type must be Original, Compatible or Refilled")
     if payload.status in ("active", "inactive"):
         # If admin didn't also pass a stock value, derive from current row.
         if "stock" not in upd:
@@ -726,13 +795,38 @@ def admin_update_listing(
         sb_admin.table(table).update(upd).eq("id", listing_id).execute()
     except Exception as e:
         msg = str(e)
-        if "description" in msg and "description" in upd:
-            # Table doesn't have a description column — retry without it.
-            upd.pop("description", None)
-            if upd:
-                sb_admin.table(table).update(upd).eq("id", listing_id).execute()
-        else:
-            raise HTTPException(500, f"Update failed: {e}") from e
+        # Some fields don't exist on every product table (e.g. `color` only
+        # on listings/printer_listings, `subcategory` only on
+        # consumable_listings). Strip any column the DB complains about and
+        # retry up to 8 times; if a column we explicitly need is missing,
+        # bubble the error.
+        attempts = 0
+        while attempts < 8 and upd:
+            stripped = False
+            for k in list(upd.keys()):
+                if k in msg:
+                    upd.pop(k, None)
+                    stripped = True
+                    break
+            if not stripped:
+                raise HTTPException(500, f"Update failed: {e}") from e
+            try:
+                if upd:
+                    sb_admin.table(table).update(upd).eq("id", listing_id).execute()
+                break
+            except Exception as e2:
+                msg = str(e2)
+                attempts += 1
+                continue
+    # Keep listing_variants in sync when an admin edits a toner price —
+    # the buyer-facing card pulls from listings.price but the detail page
+    # pulls from listing_variants.price; if they diverge the same SKU shows
+    # two different prices (CRG 303 incident, 2026-06-12).
+    if kind == "toner" and "price" in upd:
+        try:
+            sb_admin.table("listing_variants").update({"price": upd["price"]}).eq("listing_id", listing_id).execute()
+        except Exception:
+            pass
     _log_admin_action(user, f"{kind}_listing_edited", "listing", listing_id)
     return {"ok": True, "updated": list(upd.keys())}
 
