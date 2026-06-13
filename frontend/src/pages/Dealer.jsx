@@ -17,10 +17,7 @@ function D2DCard({ kind, p, onBuy }) {
     const list = Number(p.price ?? p.price_per_ream ?? 0);
     const d2d = Number(p.d2d_price ?? 0);
     const savings = d2d && list ? Math.max(0, list - d2d) : 0;
-    const detailHref =
-        kind === "toner" ? `/toner/${p.id}` :
-            kind === "printer" ? `/printer/${p.id}` :
-                `/paper/${p.id}`;
+    const detailHref = `/d2d/${kind}/${p.id}`;
     const title = kind === "paper"
         ? `${p.brand} · ${p.size} · ${p.gsm} GSM`
         : `${p.brand} ${p.model_number}`;
