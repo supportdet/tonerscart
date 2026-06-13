@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Search, Check, X } from "lucide-react";
+import { Search, Check, X, PlusCircle } from "lucide-react";
+import { toast } from "sonner";
 import { Input } from "./ui/input";
 import api from "../lib/api";
 
@@ -34,6 +35,7 @@ export default function TonerModelSearchSelect({
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(false);
     const [activeIdx, setActiveIdx] = useState(-1);
+    const [submitting, setSubmitting] = useState(false);
     const containerRef = useRef(null);
     const debounceRef = useRef(null);
 
@@ -70,6 +72,11 @@ export default function TonerModelSearchSelect({
     const pickFromDb = async (item) => {
         onChange(item.model);
         setOpen(false);
+        // Custom (dealer-added) models have no printer compat list yet.
+        if (item.is_custom) {
+            onSelect && onSelect(item.model, []);
+            return;
+        }
         // Fetch full toner detail to get the compatible printers list
         try {
             const { data } = await api.get(`/compat/toner/${encodeURIComponent(item.model)}`);
@@ -77,6 +84,27 @@ export default function TonerModelSearchSelect({
             onSelect && onSelect(item.model, printers);
         } catch {
             onSelect && onSelect(item.model, []);
+        }
+    };
+
+    const submitCustom = async () => {
+        const model = (value || "").trim();
+        if (!model || !brand) {
+            toast.error(brand ? "Type the cartridge model first" : "Pick a brand first, then add a custom model");
+            return;
+        }
+        setSubmitting(true);
+        try {
+            const { data } = await api.post("/compat/custom-toner", { brand, model });
+            toast.success("Saved! Your model is now available as a suggestion.");
+            onChange(data.model || model);
+            onSelect && onSelect(data.model || model, []);
+            setOpen(false);
+        } catch (e) {
+            const msg = e?.response?.data?.detail || "Could not save custom model";
+            toast.error(msg);
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -135,8 +163,26 @@ export default function TonerModelSearchSelect({
                     {loading ? (
                         <div className="px-3 py-3 text-[12.5px] text-[#86868B]">Searching…</div>
                     ) : results.length === 0 ? (
-                        <div className="px-3 py-3 text-[12.5px] text-[#86868B]">
-                            No catalogued model matches. Type your model number and continue — your listing will still be saved.
+                        <div className="px-3 py-3" data-testid={`${testIdPrefix}-empty`}>
+                            <div className="text-[12.5px] text-[#86868B]">
+                                No catalogued model matches{value ? <> for <span className="font-mono text-[#0A0A0B]">{value}</span></> : null}.
+                            </div>
+                            {value && brand ? (
+                                <button
+                                    type="button"
+                                    onClick={submitCustom}
+                                    disabled={submitting}
+                                    className="mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-[#0A6E78] hover:text-[#00838f] bg-[#ECFBFD] border border-[#C2EFF5] rounded-md px-2.5 py-1.5 disabled:opacity-60"
+                                    data-testid={`${testIdPrefix}-add-custom`}
+                                >
+                                    <PlusCircle size={13} />
+                                    {submitting ? "Saving…" : <>Add &ldquo;<span className="font-mono">{brand} {value}</span>&rdquo; as new model</>}
+                                </button>
+                            ) : (
+                                <div className="mt-1 text-[11.5px] text-[#86868B]">
+                                    Pick a brand first to save this as a custom model.
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <ul role="listbox" data-testid={`${testIdPrefix}-options`}>
@@ -159,12 +205,27 @@ export default function TonerModelSearchSelect({
                                             <div className="text-[11px] text-[#6E6E73] truncate">
                                                 {r.brand}{r.type ? ` · ${r.type}` : ""}
                                                 {sameBrand && <span className="ml-1.5 inline-block px-1.5 py-[1px] bg-emerald-50 text-emerald-700 rounded text-[10px] font-semibold uppercase tracking-wide">Same brand</span>}
+                                                {r.is_custom && <span className="ml-1.5 inline-block px-1.5 py-[1px] bg-amber-50 text-amber-700 border border-amber-200 rounded text-[10px] font-semibold uppercase tracking-wide" data-testid={`${testIdPrefix}-custom-badge`}>Added by dealer</span>}
                                             </div>
                                         </div>
                                         {isSelected && <Check size={14} className="text-emerald-600 shrink-0" />}
                                     </li>
                                 );
                             })}
+                            {value && brand && !results.some((r) => r.model.toLowerCase() === (value || "").trim().toLowerCase()) ? (
+                                <li className="px-3 py-2 border-t border-black/[0.06] bg-[#FAFAFB]">
+                                    <button
+                                        type="button"
+                                        onClick={submitCustom}
+                                        disabled={submitting}
+                                        className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-[#0A6E78] hover:text-[#00838f] disabled:opacity-60"
+                                        data-testid={`${testIdPrefix}-add-custom-inline`}
+                                    >
+                                        <PlusCircle size={13} />
+                                        {submitting ? "Saving…" : <>Don&rsquo;t see it? Add &ldquo;<span className="font-mono">{brand} {value}</span>&rdquo; as new</>}
+                                    </button>
+                                </li>
+                            ) : null}
                         </ul>
                     )}
                 </div>

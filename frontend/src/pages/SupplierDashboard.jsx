@@ -8,7 +8,7 @@ import { Label } from "../components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
 import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle, Camera, Loader2, Package, ShoppingCart, Clock, Printer, FileText, Pencil, X as XIcon } from "lucide-react";
-import { GST_RATES, formatINR, withGst, priceFromInclusive } from "../lib/listingConstants";
+import { GST_RATES, formatINR, withGst, priceFromInclusive, inclGstPrice } from "../lib/listingConstants";
 import { TONER_BRANDS } from "../lib/brands";
 import { supabase, PRODUCT_BUCKET } from "../lib/supabase";
 import RefilledWarningDialog from "../components/RefilledWarningDialog";
@@ -990,7 +990,10 @@ export default function SupplierDashboard() {
                                         <div className="text-[12px] text-[#6E6E73]">{l.color}</div>
                                     )}
                                     <div className="mt-1 flex items-center justify-between">
-                                        <div className="font-mono text-[18px] font-semibold text-[#0A0A0B]">₹{Number(l.price).toLocaleString("en-IN")}</div>
+                                        <div className="leading-tight">
+                                            <div className="font-mono text-[18px] font-semibold text-[#0A0A0B]" data-testid={`listing-incl-price-${l.id}`}>{formatINR(inclGstPrice(l.price, l.gst_rate))}</div>
+                                            <div className="text-[10px] text-[#86868B] tracking-[0.06em]">incl. {l.gst_rate ?? 18}% GST · base {formatINR(l.price)}</div>
+                                        </div>
                                         <InlineStock stock={l.stock} onSave={(v) => patchStock(l.id, v)} testId={`stock-edit-${l.id}`} />
                                     </div>
                                     <div className="mt-2 flex items-center gap-3">
@@ -1046,7 +1049,7 @@ export default function SupplierDashboard() {
                                 <tr>
                                     <th className="text-left p-3">Product name</th>
                                     <th className="text-left p-3">Category</th>
-                                    <th className="text-left p-3">Price</th>
+                                    <th className="text-left p-3">Price (incl. GST)</th>
                                     <th className="text-left p-3">Stock</th>
                                     <th className="text-left p-3">Status</th>
                                     <th className="text-right p-3">Actions</th>
@@ -1059,7 +1062,14 @@ export default function SupplierDashboard() {
                                         <tr key={`${p.kind}-${p.id}`} className="border-t border-black/[0.06]" data-testid={`all-row-${p.id}`}>
                                             <td className="p-3 font-medium text-[#0A0A0B] max-w-[280px] truncate">{p.name || "—"}</td>
                                             <td className="p-3"><span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${CAT_BADGE[p.cat] || ""}`}>{p.cat}</span></td>
-                                            <td className="p-3">{p.price != null ? formatINR(p.price) : "—"}</td>
+                                            <td className="p-3" data-testid={`all-row-price-${p.id}`}>
+                                                {p.price != null ? (
+                                                    <>
+                                                        <div className="font-mono text-[#0A0A0B]">{formatINR(inclGstPrice(p.price, p.gst_rate))}</div>
+                                                        <div className="text-[10px] text-[#86868B] mt-0.5">incl. {p.gst_rate ?? 18}% GST</div>
+                                                    </>
+                                                ) : "—"}
+                                            </td>
                                             <td className="p-3">{p.stock ?? 0}</td>
                                             <td className="p-3">
                                                 <span className={`inline-flex items-center gap-1.5 text-[12px] font-semibold ${active ? "text-emerald-600" : "text-[#9A9AA0]"}`}>

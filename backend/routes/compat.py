@@ -10,11 +10,12 @@ import re
 import threading
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 
 from supabase_client import sb_admin
 import compatibility_db as cdb
+from server import require_user, require_role
 
 logger = logging.getLogger("tonerscart")
 router = APIRouter(prefix="/api/compat")
@@ -116,14 +117,219 @@ def compat_brands():
 @router.get("/printers")
 def compat_search_printers(q: str = "", limit: int = 20, brand: str = "", brand_only: bool = False):
     """Searchable printer catalogue. `brand` prioritises that brand first (or, with
-    brand_only=true, filters to it) for the dealer upload dropdowns."""
-    return cdb.search_printers(q, min(max(limit, 1), 50), brand=brand or None, brand_only=brand_only)
+    brand_only=true, filters to it) for the dealer upload dropdowns.
+    Merges dealer-submitted custom models (status='pending'|'approved')
+    flagged as `is_custom: true` so the UI can render an 'Added by dealer' badge."""
+    base = cdb.search_printers(q, min(max(limit, 1), 50), brand=brand or None, brand_only=brand_only)
+    custom = _search_custom_printers(q, brand or None, brand_only, limit=12)
+    if not custom:
+        return base
+    seen = {(r.get("brand", "").lower(), r.get("model", "").lower()) for r in base}
+    extras = [c for c in custom if (c["brand"].lower(), c["model"].lower()) not in seen]
+    return base + extras
 
 
 @router.get("/toners")
 def compat_search_toners(q: str = "", limit: int = 20, brand: str = ""):
-    """Searchable toner/cartridge catalogue; `brand` floats that brand to the top."""
-    return cdb.search_toners(q, min(max(limit, 1), 50), brand=brand or None)
+    """Searchable toner/cartridge catalogue; `brand` floats that brand to the top.
+    Merges dealer-submitted custom toner models (flagged `is_custom: true`)."""
+    base = cdb.search_toners(q, min(max(limit, 1), 50), brand=brand or None)
+    custom = _search_custom_toners(q, brand or None, limit=12)
+    if not custom:
+        return base
+    seen = {(r.get("brand", "").lower(), r.get("model", "").lower()) for r in base}
+    extras = [c for c in custom if (c["brand"].lower(), c["model"].lower()) not in seen]
+    return base + extras
+
+
+def _search_custom_printers(q: str, brand: str | None, brand_only: bool, limit: int = 12) -> list:
+    try:
+        qb = sb_admin.table("custom_printer_models").select(
+            "id,brand,model,type,full_name"
+        ).in_("status", ["pending", "approved"]).limit(limit)
+        if q:
+            qb = qb.ilike("model", f"%{q}%")
+        if brand and brand_only:
+            qb = qb.ilike("brand", brand)
+        rows = qb.execute().data or []
+    except Exception as e:
+        logger.debug("custom_printer_models search skipped: %s", e)
+        return []
+    out = []
+    for r in rows:
+        full = r.get("full_name") or f"{r.get('brand', '')} {r.get('model', '')}".strip()
+        out.append({
+            "brand": r.get("brand", ""),
+            "model": r.get("model", ""),
+            "type": r.get("type") or "",
+            "full_name": full,
+            "slug": cdb.slugify("", full),
+            "toners_count": 0,
+            "is_custom": True,
+        })
+    # If a specific brand is requested without brand_only, still float matching brand first
+    if brand and not brand_only:
+        out.sort(key=lambda x: 0 if (x["brand"] or "").lower() == brand.lower() else 1)
+    return out
+
+
+def _search_custom_toners(q: str, brand: str | None, limit: int = 12) -> list:
+    try:
+        qb = sb_admin.table("custom_toner_models").select(
+            "id,brand,model,type"
+        ).in_("status", ["pending", "approved"]).limit(limit)
+        if q:
+            qb = qb.ilike("model", f"%{q}%")
+        rows = qb.execute().data or []
+    except Exception as e:
+        logger.debug("custom_toner_models search skipped: %s", e)
+        return []
+    out = []
+    for r in rows:
+        out.append({
+            "brand": r.get("brand", ""),
+            "model": r.get("model", ""),
+            "type": r.get("type") or "toner",
+            "slug": cdb.toner_slugify(r.get("brand", ""), r.get("model", "")),
+            "printers_count": 0,
+            "is_custom": True,
+        })
+    if brand:
+        out.sort(key=lambda x: 0 if (x["brand"] or "").lower() == brand.lower() else 1)
+    return out
+
+
+class CustomPrinterPayload(BaseModel):
+    brand: str
+    model: str
+    type: str = ""
+
+
+class CustomTonerPayload(BaseModel):
+    brand: str
+    model: str
+    type: str = "toner"
+
+
+def _record_message(msg_type: str, name: str, email: str, description: str, selections: dict | None = None):
+    """Best-effort: drop a row into mps_inquiries so admins see the request in
+    the Messages tab. Never raises — DB is optional."""
+    try:
+        sb_admin.table("mps_inquiries").insert({
+            "name": name or "Dealer",
+            "email": email or "",
+            "msg_type": msg_type,
+            "description": description,
+            "selections": selections or {},
+            "is_read": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }).execute()
+    except Exception as e:
+        logger.debug("mps_inquiries insert skipped (custom-model): %s", e)
+
+
+@router.post("/custom-printer")
+def add_custom_printer(payload: CustomPrinterPayload, user: dict = Depends(require_role("supplier"))):
+    """Dealer submits a printer model that isn't in the central compatibility DB.
+    Saved as 'pending' for admin review; immediately surfaces as a suggestion."""
+    brand = (payload.brand or "").strip()
+    model = (payload.model or "").strip()
+    if not brand or not model:
+        raise HTTPException(400, "Brand and model are required")
+    full_name = f"{brand} {model}".strip()
+    row = {
+        "brand": brand,
+        "model": model,
+        "type": (payload.type or "").strip(),
+        "full_name": full_name,
+        "created_by": user.get("id"),
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        res = sb_admin.table("custom_printer_models").insert(row).execute()
+        inserted = (res.data or [{}])[0]
+    except Exception as e:
+        # Duplicate (already submitted by another dealer) — treat as success.
+        if "duplicate key" in str(e).lower() or "unique" in str(e).lower():
+            try:
+                existing = sb_admin.table("custom_printer_models").select("*").ilike(
+                    "brand", brand
+                ).ilike("model", model).limit(1).execute().data or []
+                inserted = existing[0] if existing else row
+            except Exception:
+                inserted = row
+        elif "custom_printer_models" in str(e):
+            raise HTTPException(503, "Custom models table not migrated yet. Run supabase_schema_custom_models.sql.")
+        else:
+            raise HTTPException(500, f"Could not save custom printer model: {e}")
+    _record_message(
+        "custom_printer_model",
+        user.get("name") or user.get("email") or "Dealer",
+        user.get("email") or "",
+        f"Dealer requested a new printer model:\n  {full_name}\n  Type: {payload.type or '—'}",
+        {"brand": brand, "model": model, "type": payload.type or "", "kind": "printer"},
+    )
+    return {
+        "ok": True,
+        "id": inserted.get("id"),
+        "brand": brand,
+        "model": model,
+        "full_name": full_name,
+        "type": payload.type or "",
+        "slug": cdb.slugify("", full_name),
+        "is_custom": True,
+    }
+
+
+@router.post("/custom-toner")
+def add_custom_toner(payload: CustomTonerPayload, user: dict = Depends(require_role("supplier"))):
+    """Dealer submits a toner cartridge model that isn't catalogued. Saved
+    pending and surfaces in subsequent dropdown searches as 'Added by dealer'."""
+    brand = (payload.brand or "").strip()
+    model = (payload.model or "").strip()
+    if not brand or not model:
+        raise HTTPException(400, "Brand and model are required")
+    row = {
+        "brand": brand,
+        "model": model,
+        "type": (payload.type or "toner").strip(),
+        "created_by": user.get("id"),
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        res = sb_admin.table("custom_toner_models").insert(row).execute()
+        inserted = (res.data or [{}])[0]
+    except Exception as e:
+        if "duplicate key" in str(e).lower() or "unique" in str(e).lower():
+            try:
+                existing = sb_admin.table("custom_toner_models").select("*").ilike(
+                    "brand", brand
+                ).ilike("model", model).limit(1).execute().data or []
+                inserted = existing[0] if existing else row
+            except Exception:
+                inserted = row
+        elif "custom_toner_models" in str(e):
+            raise HTTPException(503, "Custom toner models table not migrated yet. Run supabase_schema_custom_models.sql.")
+        else:
+            raise HTTPException(500, f"Could not save custom toner model: {e}")
+    _record_message(
+        "custom_toner_model",
+        user.get("name") or user.get("email") or "Dealer",
+        user.get("email") or "",
+        f"Dealer requested a new toner model:\n  {brand} {model}\n  Type: {payload.type or 'toner'}",
+        {"brand": brand, "model": model, "type": payload.type or "toner", "kind": "toner"},
+    )
+    return {
+        "ok": True,
+        "id": inserted.get("id"),
+        "brand": brand,
+        "model": model,
+        "type": payload.type or "toner",
+        "slug": cdb.toner_slugify(brand, model),
+        "is_custom": True,
+    }
 
 
 def _public_listing(L: dict, kind: str) -> dict:

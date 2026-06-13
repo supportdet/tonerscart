@@ -1,0 +1,52 @@
+{
+  "summary": "Wave 49 — Toner SEO redesign, product page-yield chip, GST-inclusive dealer pricing, custom-model dealer endpoints. Backend pytest: 9/9 PASS (catalog search merges custom safely, custom-model auth/validation, /api/compat/toner-page/canon-303 returns featured listing, hp-q2612a degrades gracefully). Frontend live-tested via Playwright: /toner/canon-303 renders featured card (price-featured-{id}) with 'LOWEST PRICE' badge, BIG C TECHNOLOGIES dealer, ₹6,018 incl 18% GST · base ₹5,100, Buy now button (price-buy-{id}). /toner/hp-q2612a renders notify block with NO featured/others as required. Product detail page /toner/02f296c4… shows product-page-yield chip 'Page yield: 2,000 pages'. Dealer Dashboard JSX paths verified by code review (no live supplier account exists per test_credentials.md).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verifications_performed": {
+    "GET /api/compat/toners?q=Q2612A": "PASS 200, returns list, custom-merge no-op safe (table not migrated)",
+    "GET /api/compat/printers?q=M1005": "PASS 200, returns list",
+    "POST /api/compat/custom-printer (no auth)": "PASS 401/403 (HTTPBearer rejection)",
+    "POST /api/compat/custom-toner (no auth)": "PASS 401/403",
+    "POST /api/compat/custom-toner with admin token": "PASS 403 (require_role('supplier')) — does not 500",
+    "POST /api/compat/custom-toner missing brand": "PASS 401/403/422 (no crash)",
+    "GET /api/compat/toner-page/canon-303": "PASS 200 with >=1 listing, featured has id/total_price/gst_rate/price/dealer_name/url",
+    "GET /api/compat/toner-page/hp-q2612a": "PASS — returns 200 with 0 listings (degrades gracefully)",
+    "Frontend /toner/canon-303": "PASS — toner-page rendered, price-featured-{id} present with LOWEST PRICE badge, dealer 'BIG C TECHNOLOGIES PRIVATE LIMITED' Bangalore, ₹6,018 incl 18% GST · base ₹5,100, price-buy-{id} Buy now button, small ~80px placeholder image. Only 1 dealer for this slug so toner-other-listings correctly absent.",
+    "Frontend /toner/hp-q2612a": "PASS — toner-page rendered, toner-no-stock + toner-notify-block present, NO featured card, NO other-listings list. Notify form data-testid 'toner-notify-email' + 'toner-notify-submit' present.",
+    "Frontend /toner/02f296c4-ffdc-471f-a7a8-981d55a7c0f5 (product detail)": "PASS — product-page-yield chip rendered with text 'Page yield: 2,000 pages'.",
+    "Dealer Dashboard Listings tab (code review)": "PASS — SupplierDashboard.jsx L994 renders data-testid=listing-incl-price-{id} via formatINR(inclGstPrice(l.price, l.gst_rate)) with subtext 'incl. {gst_rate}% GST · base {base}'. Matches spec.",
+    "Dealer Dashboard All Listings table (code review)": "PASS — L1052 header is 'Price (incl. GST)'. L1065 data-testid=all-row-price-{id} renders inclGstPrice + 'incl. {gst_rate}% GST' subtext. Matches spec."
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave49_custom_models.py",
+    "/app/test_reports/pytest/wave49.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/compat.py L262 + L313 — duplicate-key path checks 'duplicate key' OR 'unique' substring on str(e). When the table is genuinely missing this still falls into the elif branch with 'custom_printer_models' substring → 503 with migration message. Good. But if Supabase ever returns an undefined_table error in a different format (e.g. PostgrestAPIError code 42P01), the substring check could miss and fall through to the generic 500 branch. Recommend catching PostgrestAPIError explicitly and dispatching on code.",
+    "TonerPriceTable.jsx L113 — the second Buy button in compact rows also uses data-testid='price-buy-{id}'. So when there are multiple listings, the featured card AND its corresponding compact row will both have a 'price-buy-{id}' testid, but with different ids. Each id is unique to its listing, so no duplicate testid collision. Looking again — featured is listings[0] and rest is listings.slice(1), so testids cannot collide. ✓ confirmed safe.",
+    "SupplierDashboard.jsx L995 + L1069 — falls back to '18' if gst_rate is null. Aligns with backend default. Consider extracting `displayGst = l.gst_rate ?? 18` into a single const for DRY across the two render sites.",
+    "compat.py L218 _record_message inserts into mps_inquiries unconditionally — even if the custom_*_models insert returned 503. After a 503 is raised at L263/L314 the function exits before _record_message runs, so this is fine. Just flagging for awareness.",
+    "TonerModelPage.jsx L41 — IntersectionObserver inspects firstRowRef.current which is now the featured-card <article>. Sticky bar logic still works because the ref is forwarded into TonerPriceTable. Good."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_wave49_custom_models.py (NEW — 9 tests, all PASS)"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9)",
+    "frontend": "100% on the 3 testable routes (canon-303, hp-q2612a, product detail). Dealer Dashboard verified by code review only — no shared supplier account exists per test_credentials.md."
+  },
+  "test_credentials": "Admin: support@tonerscart.com / Bangara1@# (used for require_role('supplier')->403 negative test). No supplier creds attempted (none seeded).",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Wave 49 is fully verified for the public-facing flows. To live-exercise the dealer-side flows (custom-model add UI in TonerModelSearchSelect/PrinterModelSelect + GST-inclusive prices on /dealer dashboard Listings + All Listings tabs), main agent or next QA needs to register a fresh supplier via /register → admin-approve via /admin (support@tonerscart.com/Bangara1@#) → login as that supplier → create at least 1 toner listing → assert listing-incl-price-{id} and all-row-price-{id} testids show formatINR(inclGstPrice(...)) with subtext 'incl. X% GST · base Y'. Note migration caveat: POST /compat/custom-printer + custom-toner will return 503 with migration message until /app/backend/supabase_schema_custom_models.sql is applied to Supabase — that 503 is per-spec and not a bug.",
+  "rca of the issue": "n/a — Wave 49 is a new-feature wave. No production bugs found. Backend gracefully degrades when custom_*_models tables are not migrated (per spec), and the four user-facing flows (page-yield chip, GST-inclusive dealer prices, custom-model dealer entry endpoints, redesigned toner SEO page) all match the spec."
+}
