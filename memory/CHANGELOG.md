@@ -1,3 +1,37 @@
+### 2026-06-13 (d) — Wave 48: SEO toner page connection verified + alias-matching hardened
+
+**Trigger**: User asked to verify that when a dealer uploads a toner and picks a model from the new TonerModelSearchSelect dropdown (Wave 44), the listing actually shows up on the corresponding SEO toner page (e.g. `/toner/hp-q2612a`). Test with 3 different brands; fix globally if broken.
+
+**End-to-end verification** (3 brands, disposable supplier + listings, cleaned up immediately):
+| Dropdown selection | SEO slug | Connection |
+|---|---|---|
+| HP **Q2612A** | `/toner/hp-q2612a` | ✅ PASS |
+| Canon **328** | `/toner/canon-328` | ✅ PASS |
+| Brother **TN-2280** | `/toner/brother-tn-2280` | ✅ PASS |
+
+Connection itself is working — the dropdown writes the exact catalogue model code into `listings.model_number`, and `/api/compat/toner-page/{slug}` matches it via `_toner_aliases` + `_alias_hit`.
+
+**Hardening** (`backend/routes/compat.py`):
+- `_toner_aliases(model)` now emits hyphen/space/squashed variants too (e.g. `TN-2280` → `["TN-2280", "TN2280", "TN 2280"]`).
+- `_alias_hit(model_number, aliases)` now also tries a separator-stripped match (e.g. `Brother TN2280` matches alias `TN-2280`).
+- Common dealer typing variations now connect to the SEO page even when the dealer types free-form instead of using the dropdown. Reduces missed-listing-on-SEO-page risk for the hyphenated-code product families (TN-2280, MLT-D101, etc.).
+
+**Regression tests** (`backend/tests/test_wave48_seo_connection.py` — 7/7 PASS):
+- Aliases include the model itself.
+- Hyphenated codes also emit squashed + space-separated variants.
+- Dropdown-exact codes hit themselves.
+- Brand-prefixed dealer input ("HP Q2612A", "Canon 328", "Brother TN-2280") all hit.
+- Descriptive dealer input ("CARTRIDGE HP Q2612A", "CRG-328") all hit.
+- Hyphen/space/no-separator variants all hit ("TN2280", "TN 2280", "Brother TN2280").
+- Unrelated models do NOT false-positive ("Q2613A" ≠ Q2612A, "728" ≠ 328).
+
+**Test-data cleanup**: The 1 test supplier + 3 test toner listings + 3 variant rows created during this wave's live verification were ALL deleted in the same script's `finally` block. Verified post-cleanup: `suppliers=0`, `users=0`, `listings=0` for the test email. No other data touched.
+
+**Not touched** (per directives): CORS, Razorpay, Twilio, scripts, protected dealers.
+
+---
+
+
 ### 2026-06-13 (c) — Wave 47: dedicated D2D product detail page
 
 **Trigger**: User reported D2D listings linked to the customer detail page (`/toner/:id`, `/printer/:id`, `/paper/:id`) showing retail pricing — wholesale dealers were seeing retail figures. Risk: dealers paying customer-facing GST-inclusive prices instead of D2D wholesale.
