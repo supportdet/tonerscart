@@ -1,3 +1,47 @@
+### 2026-06-13 (b) — Wave 46: commission fix, Terms v2.3, bulk borders, D2D gate, search perf, dealer header redesign
+
+**Trigger**: Single user message with 7 distinct fixes (+ 1 deferred to next wave: dedicated /d2d/:id page).
+
+**#1 Commission calculator — base-price-only math**:
+- `lib/commission.js` rewritten with `payoutBreakdown(typedPrice, priceType, gstRate)` that:
+  - Strips GST first when priceType==='incl': `base = round(typed / (1 + gst/100), 2)`
+  - Calculates commission ONLY on `base`, paisa-precise: `Math.round(base * tier.rate * 100) / 100`
+  - Returns `{ basePrice, buyerInclPrice, gstAmount, commission, rate, rateLabel, dealerPayout }` where `dealerPayout = base − commission + gstAmount` (GST passthrough)
+- `components/CommissionCalculator.jsx` rewritten: GST dropdown + Incl/Excl pills (default unselected) + price input + 5-row breakdown (Buyer pays · Base price · Commission · GST passed through · Your payout). Verified math: 5355 Incl @ 5% → ₹4,743 payout; 5100 Excl @ 5% → identical ₹4,743 payout; 1000 Excl @ 18% → ₹1,060 payout; 1000 Incl @ 18% → ₹898 payout (matches user spec exactly).
+- Backend was already correct (`orders.total = unit_price × qty` where unit_price is base). No backend change needed.
+
+**#2 Commission notice copy** — `COMMISSION_BANNER_TEXT` updated to exact user wording: "TonersCart commission is calculated on your base price (excluding GST) only. GST and delivery charges are passed through to you in full. Commission tiers: under ₹15K = 12% · ₹15K–₹30K = 10% · ₹30K–₹75K = 8% · ₹75K–₹1L = 6% · ₹1L & above = 5%." `CommissionBanner` consumes this; renders on every upload form.
+
+**#3 Terms of Service v2.3**:
+- `TERMS_VERSION = "2.3"` (was 2.2)
+- Section 2 JSX whitespace bug fixed: `<strong>...distributor</strong>\n                        of` was rendering as `distributorof` (JSX swallows newlines across element boundaries). Added explicit `{" "}` to force the space.
+- Renumbered 10A → 11, then 11→12, 12→13, 13→14, 14→15, 15→16, 16→17, 17→18, 18→19, 19→20, 20→21, 21→22. Inner cross-reference "clause 17" → "clause 18" updated. Verified live: 22 sections, all unique, no gaps, no "10A" remaining.
+
+**#4 Bulk-upload grid borders** — `BulkUploadGeneric.jsx` cell input className changed from `border-transparent hover:border-[#E8E8EC]` → `border-[#D2D2D7] hover:border-[#86868B]` in both render paths (standard input + ModelSearchCell). Empty cells now visibly bordered.
+
+**#5 D2D gate race fix** — `pages/Dealer.jsx` useEffect: on user identity change, immediately `setStatus(null)` so the spinner gates rendering until /d2d/me resolves (was leaving stale verified=false state from a prior render → flash of "Become a verified dealer"). Added 8s timeout to /d2d/me.
+
+**#6 Search performance**:
+- New `lib/searchCache.js` — in-memory cache, 5min TTL, 200-entry LRU cap, keyed by url + sorted params.
+- `components/UniversalSearch.jsx` rewritten: 300ms debounced typeahead, min-length=2 gate (no API call for single chars), skeleton loading rows during fetch, categorised dropdown of 8 results, in-cache hits render instantly. Visible Loader2 spinner inside the input during pending fetches.
+- `pages/Search.jsx` cache integration: both `/search/universal`+`/search/ai` and `/listings/search/paginated` consult cache before fetching; AI call skipped when q<3 chars (Gemini is the slowest dependency).
+- Verified: 300ms debounce works (1 call for "hp"), skeleton renders, min-length gate (single-char produced 0 calls).
+
+**#7 Dealer dashboard tab bar — modern redesign** (`SupplierDashboard.jsx` `DealerTabBar`):
+- White/95 + backdrop blur sticky bar, 1px hairline border + subtle 2-tier shadow
+- Each tab: accent dot (1.5px, category colour) + label in Inter font (weight 500/600), underline 2px below active tab, hover transitions text colour
+- Spacing tightened, padding 3.5 vertical, gap 1 between tabs, overflow-x-auto on mobile
+- `role=tablist` + `aria-selected` for a11y; `data-testid="catalog-tabs"` + `tab-{key}` preserved
+
+**Wave 46 test report**: `/app/test_reports/iteration_46.json` — 0 blocking issues, 0 critical, 1 minor (cache repeat-query produced 1 extra network call — debounce already throttles, low impact). Backend 4/4 pytest pass via new `tests/test_wave46_regression.py`. Live-verified: Terms numbering+typo+v2.3, UniversalSearch debounce+skeleton+min-length, Dealer guest gate, CRG 303 sync (Wave 45 regression). Code-reviewed (no supplier creds): commission calc math, bulk grid borders, dealer tab redesign — all confirmed correct.
+
+**Deferred to Wave 47**: dedicated `/d2d/:id` D2D product detail page with wholesale-only pricing + dealer buy flow. Out of scope this wave per user direction.
+
+**Page-reload signs-out (user #4)** — could not reproduce. Admin session persists on reload (`tc-supabase-auth` localStorage intact, /admin route re-renders logged-in). User to re-test and report which role / browser / page if still observed.
+
+---
+
+
 ### 2026-06-13 (a) — 5-pack: GST toggle redesign, CRG 303 pricing bug, full Admin Edit, ScrollToTop, popup cooldown
 
 **Trigger**: User reported 5 issues in one message — see Wave 45 brief.

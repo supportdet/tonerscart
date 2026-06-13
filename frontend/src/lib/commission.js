@@ -28,7 +28,7 @@ export function commissionFor(basePrice) {
     const p = Number(basePrice) || 0;
     if (p <= 0) return null;
     const tier = COMMISSION_TIERS.find((t) => p < t.upTo) || COMMISSION_TIERS[COMMISSION_TIERS.length - 1];
-    const commission = Math.round(p * tier.rate);
+    const commission = Math.round(p * tier.rate * 100) / 100;
     return {
         price: p,
         rate: tier.rate,
