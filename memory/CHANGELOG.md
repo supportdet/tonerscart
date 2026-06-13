@@ -1,3 +1,37 @@
+### 2026-06-13 (c) — Wave 47: dedicated D2D product detail page
+
+**Trigger**: User reported D2D listings linked to the customer detail page (`/toner/:id`, `/printer/:id`, `/paper/:id`) showing retail pricing — wholesale dealers were seeing retail figures. Risk: dealers paying customer-facing GST-inclusive prices instead of D2D wholesale.
+
+**Backend** (`routes/search.py` L191-236):
+- New `GET /api/d2d/listing/{kind}/{listing_id}` (kind ∈ toner|printer|paper → listings|printer_listings|paper_listings)
+- Gates: must be authenticated, role==supplier, suppliers.approved_at set, is_suspended=false, listing.d2d_enabled=true
+- Returns row + `d2d_price` + embedded `supplier {id, business_name, city, state, phone, email}` + `is_own_listing` flag
+- Errors: 401 (guest), 403 (admin/customer/un-approved supplier), 404 (unknown kind or d2d_enabled=false), 503 if D2D columns not migrated
+
+**Frontend**:
+- New page `pages/D2DProductDetail.jsx` — dealer-only wholesale view with: D2D base + GST-incl price block, line-through customer list price + savings badge, selling-dealer identity card with VerifiedBadge, spec grid (kind-aware), D2D terms (5 bullets), Place-dealer-order button (disabled when own listing or out of stock). Reuses `OrderRequestDialog` for the buy flow with `d2d:true` hint.
+- Route at `/d2d/:kind/:id` (`App.js` L48 + L150). Guests redirect to `/login?next=/d2d/...`. Non-suppliers see a clear `d2d-detail-error` block with the backend's 403 message and a "Back to D2D marketplace" link.
+- `pages/Dealer.jsx` D2DCard.detailHref simplified from per-kind customer routes to `/d2d/${kind}/${p.id}`.
+
+**Testing** (`/app/test_reports/iteration_47.json` + `backend/tests/test_wave47_d2d_detail.py`):
+- Backend pytest 7/7 PASS (gating, kind validation, customer-price regression, terms route).
+- Frontend live-verified: guest → /login?next redirect; logged-in customer → error block renders with correct message + Back link.
+- Verified-supplier happy path: code-reviewed line-by-line; not live-exercised (would have required mutating production data with an approved supplier). All data-testids present in the page source: `d2d-detail-page`, `d2d-detail-title`, `d2d-price-base`, `d2d-price-incl`, `d2d-list-price`, `d2d-savings`, `d2d-supplier-name`, `d2d-terms-block`, `d2d-place-order-btn`.
+
+**Fixes from review**:
+- Removed premature success toast that fired on dialog close (was misleading UX); leaves toasts to OrderRequestDialog itself.
+- Cleaned up the test customer `qa.cust.w47.elac8650@example.com` created by the testing agent (orphan customer row, no supplier/listing/order linkage, not in PROTECTED_EMAILS).
+
+**Code-review nits** (deferred, none blocking):
+- Postgrest column alias `verified_at:approved_at` is unused downstream — drop or wire into the supplier card.
+- 503 fallback substring check on "d2d_enabled" could be broadened to PostgrestAPIError code 42703.
+- Paper-vs-printer `price` field mapping has a silent fallback in `data.price ?? data.price_per_ream`.
+
+**Not touched** (per directives): CORS, Razorpay, Twilio, scripts, protected dealers.
+
+---
+
+
 ### 2026-06-13 (b) — Wave 46: commission fix, Terms v2.3, bulk borders, D2D gate, search perf, dealer header redesign
 
 **Trigger**: Single user message with 7 distinct fixes (+ 1 deferred to next wave: dedicated /d2d/:id page).

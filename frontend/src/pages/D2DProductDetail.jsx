@@ -207,7 +207,7 @@ export default function D2DProductDetail() {
                         d2d: true,
                         supplier: data.supplier,
                     }}
-                    onClose={() => { setBuyOpen(false); toast.success("Dealer order request placed — the selling dealer will confirm shortly."); }}
+                    onClose={() => setBuyOpen(false)}
                 />
             )}
         </div>
