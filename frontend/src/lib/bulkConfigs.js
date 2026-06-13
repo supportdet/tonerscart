@@ -16,7 +16,10 @@ const splitList = (v) =>
 // silent default in the single forms. For bulk uploads, an empty cell
 // triggers a validation error in the BulkUploadGeneric grid; we only
 // reach this helper with a valid price_type.
-const PRICE_TYPES = ["incl", "excl"];
+const PRICE_TYPES = [
+    { value: "incl", label: "Incl GST" },
+    { value: "excl", label: "Excl GST" },
+];
 const basePriceFromRow = (typed, row) => {
     const t = Number(typed || 0);
     if (t <= 0) return 0;

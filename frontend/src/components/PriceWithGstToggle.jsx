@@ -127,8 +127,7 @@ export default function PriceWithGstToggle({
                     required={required}
                     className={`tc-input-lg ${error ? "border-red-400 focus-visible:ring-red-300" : ""}`}
                     data-testid={`${testIdPrefix}-price-input`}
-                    placeholder={isIncl ? "Final price the buyer pays" : isExcl ? "Base price before GST" : "Pick Incl./Excl. GST above first"}
-                    disabled={!priceType}
+                    placeholder={isIncl ? "Final price the buyer pays" : isExcl ? "Base price before GST" : "Type the price, then pick Incl. or Excl. GST"}
                 />
                 {error && (
                     <div className="text-[12px] text-red-600 mt-1.5" data-testid={`${testIdPrefix}-price-type-error`}>
@@ -147,6 +146,10 @@ export default function PriceWithGstToggle({
                         <span className="text-[#6E6E73]">
                             Base: {formatINR(base)} + GST {gstRate}%: {formatINR(buyerSees - base)}
                         </span>
+                    </div>
+                ) : typed > 0 && !priceType && !error ? (
+                    <div className="text-[11.5px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mt-2" data-testid={`${testIdPrefix}-price-type-hint`}>
+                        Now pick <strong>Incl. GST</strong> or <strong>Excl. GST</strong> above so we know whether the figure you typed is the final price or the base price.
                     </div>
                 ) : (!error && (
                     <div className="text-[11px] text-[#86868B] mt-1">

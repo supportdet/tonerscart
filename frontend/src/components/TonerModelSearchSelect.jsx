@@ -100,7 +100,7 @@ export default function TonerModelSearchSelect({
     return (
         <div className="relative" ref={containerRef}>
             <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B] pointer-events-none" />
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B] pointer-events-none z-10" />
                 <Input
                     type="text"
                     value={value || ""}
@@ -109,7 +109,8 @@ export default function TonerModelSearchSelect({
                     onKeyDown={onKeyDown}
                     required={required}
                     placeholder={placeholder}
-                    className="tc-input-lg pl-9 pr-9"
+                    className="tc-input-lg"
+                    style={{ paddingLeft: 36, paddingRight: 36 }}
                     data-testid={`${testIdPrefix}-input`}
                     autoComplete="off"
                 />
