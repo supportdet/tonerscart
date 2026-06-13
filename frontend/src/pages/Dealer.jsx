@@ -149,9 +149,16 @@ export default function Dealer() {
     // Verification check
     useEffect(() => {
         if (authLoading) return;
+        // Don't flash the gate while the session is still being restored from
+        // localStorage — wait for auth to fully resolve. If we end up logged
+        // out, then show the guest gate. If logged in, hit /d2d/me; the
+        // listings render only once we have a confirmed verified=true.
         if (!user) { setStatus({ verified: false, reason: "guest" }); return; }
+        // Reset to "still checking" whenever user identity changes so the
+        // spinner replaces any stale gate from a previous role.
+        setStatus(null);
         let cancelled = false;
-        api.get("/d2d/me")
+        api.get("/d2d/me", { timeout: 8000 })
             .then((r) => { if (!cancelled) setStatus(r.data); })
             .catch(() => { if (!cancelled) setStatus({ verified: false, reason: "error" }); });
         return () => { cancelled = true; };

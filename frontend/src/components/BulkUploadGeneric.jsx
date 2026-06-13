@@ -88,7 +88,7 @@ function ModelSearchCell({ value, brand, single, hasErr, onChange, onPick, testi
                 onChange={(e) => { onChange(e.target.value); if (!open) setOpen(true); }}
                 onFocus={() => setOpen(true)}
                 placeholder="Type 2+ letters…"
-                className={`w-full h-8 px-2 text-[12.5px] rounded border ${hasErr ? "border-red-400 bg-red-50" : "border-transparent hover:border-[#E8E8EC] focus:border-[#0A0A0B]"} bg-white focus:outline-none`}
+                className={`w-full h-8 px-2 text-[12.5px] rounded border ${hasErr ? "border-red-400 bg-red-50" : "border-[#D2D2D7] hover:border-[#86868B] focus:border-[#0A0A0B]"} bg-white focus:outline-none`}
                 data-testid={testid}
                 autoComplete="off"
             />
@@ -375,7 +375,8 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
                                         {COLUMNS.map((c) => {
                                             const val = r[c.key] ?? "";
                                             const hasErr = errs.has(c.key);
-                                            const base = `w-full h-8 px-2 text-[12.5px] rounded border ${hasErr ? "border-red-400 bg-red-50" : "border-transparent hover:border-[#E8E8EC] focus:border-[#0A0A0B]"} bg-white focus:outline-none`;
+                                            // Visible border on every cell so empty inputs don't look like blank space.
+                                            const base = `w-full h-8 px-2 text-[12.5px] rounded border ${hasErr ? "border-red-400 bg-red-50" : "border-[#D2D2D7] hover:border-[#86868B] focus:border-[#0A0A0B]"} bg-white focus:outline-none`;
                                             if (c.type === "select") {
                                                 const opts = normOpts(config.selectOptions?.[c.key]);
                                                 return (
