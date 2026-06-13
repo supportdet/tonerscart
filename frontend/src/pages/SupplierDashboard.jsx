@@ -356,11 +356,11 @@ export default function SupplierDashboard() {
         ]);
         const arr = (r) => (r.status === "fulfilled" && Array.isArray(r.value.data) ? r.value.data : []);
         const j = (...parts) => parts.filter(Boolean).join(" ").trim();
-        const toners = arr(reqs[0]).map((l) => ({ id: l.id, kind: "toner", cat: "Toner", name: j(l.brand, l.compatible_models || l.model_number), price: l.price, stock: l.stock }));
-        const printers = arr(reqs[1]).map((l) => ({ id: l.id, kind: "printer", cat: "Printer", name: j(l.brand, l.model_number), price: l.price, stock: l.stock }));
-        const papers = arr(reqs[2]).map((l) => ({ id: l.id, kind: "paper", cat: "Paper", name: j(l.brand, l.size, l.gsm ? `${l.gsm}GSM` : ""), price: l.price_per_ream, stock: l.stock }));
-        const cons = arr(reqs[3]).map((l) => ({ id: l.id, kind: "consumable", cat: "Consumable", name: j(l.brand, l.model_number), price: l.price, stock: l.stock }));
-        const scanners = arr(reqs[4]).map((l) => ({ id: l.id, kind: "scanner", cat: "Scanner", name: j(l.brand, l.model_number), price: l.price, stock: l.stock }));
+        const toners = arr(reqs[0]).map((l) => ({ id: l.id, kind: "toner", cat: "Toner", name: j(l.brand, l.compatible_models || l.model_number), price: l.price, gst_rate: l.gst_rate, stock: l.stock }));
+        const printers = arr(reqs[1]).map((l) => ({ id: l.id, kind: "printer", cat: "Printer", name: j(l.brand, l.model_number), price: l.price, gst_rate: l.gst_rate, stock: l.stock }));
+        const papers = arr(reqs[2]).map((l) => ({ id: l.id, kind: "paper", cat: "Paper", name: j(l.brand, l.size, l.gsm ? `${l.gsm}GSM` : ""), price: l.price_per_ream, gst_rate: l.gst_rate, stock: l.stock }));
+        const cons = arr(reqs[3]).map((l) => ({ id: l.id, kind: "consumable", cat: "Consumable", name: j(l.brand, l.model_number), price: l.price, gst_rate: l.gst_rate, stock: l.stock }));
+        const scanners = arr(reqs[4]).map((l) => ({ id: l.id, kind: "scanner", cat: "Scanner", name: j(l.brand, l.model_number), price: l.price, gst_rate: l.gst_rate, stock: l.stock }));
         setAllProducts([...toners, ...printers, ...papers, ...cons, ...scanners]);
     };
 

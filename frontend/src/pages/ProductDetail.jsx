@@ -301,11 +301,21 @@ export default function ProductDetail({ kind = "toner" }) {
                             <span className="text-[#0A0A0B]">{kind === "paper" ? `${data.size} · ${data.gsm} GSM` : (data.model_number || data.name)}</span>
                         </h1>
 
-                        {/* Compatibility shoutout (toners) */}
-                        {kind === "toner" && data.compatible_models && (
-                            <div className="mt-4 inline-flex items-start gap-2 bg-[#FFF8E0] border border-[#F5E5A6] rounded-lg px-3 py-2 text-[12.5px] text-[#5C4A00]" data-testid="product-compatibility">
-                                <CheckCircle2 size={14} className="mt-0.5 text-[#8C6A00] shrink-0" />
-                                <div><span className="font-semibold">Suitable for:</span> {data.compatible_models}</div>
+                        {/* Compatibility shoutout + page yield (toners) — key buying signals shown prominently */}
+                        {kind === "toner" && (
+                            <div className="mt-4 flex flex-wrap gap-2" data-testid="product-highlight-row">
+                                {data.compatible_models && (
+                                    <div className="inline-flex items-start gap-2 bg-[#FFF8E0] border border-[#F5E5A6] rounded-lg px-3 py-2 text-[12.5px] text-[#5C4A00]" data-testid="product-compatibility">
+                                        <CheckCircle2 size={14} className="mt-0.5 text-[#8C6A00] shrink-0" />
+                                        <div><span className="font-semibold">Suitable for:</span> {data.compatible_models}</div>
+                                    </div>
+                                )}
+                                {data.page_yield ? (
+                                    <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-[12.5px] text-emerald-900" data-testid="product-page-yield">
+                                        <span className="font-semibold">Page yield:</span>
+                                        <span className="font-mono">{Number(data.page_yield).toLocaleString("en-IN")} pages</span>
+                                    </div>
+                                ) : null}
                             </div>
                         )}
 
