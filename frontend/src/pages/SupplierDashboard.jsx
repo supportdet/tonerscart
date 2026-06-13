@@ -61,33 +61,66 @@ const CAT_BADGE = {
     Consumable: "bg-[#EDFBEF] text-[#16A34A] border-[#C2EFCA]",
 };
 
-// Full-width dealer control bar that replaces the customer category pills.
+// Full-width dealer control bar — sleek horizontal tab bar with subtle
+// underline-based active state, accent dots reflecting each tab's category
+// colour, and generous spacing. Built to feel like a premium SaaS dashboard
+// (Linear / Stripe / Vercel-style) rather than a coloured admin panel.
 function DealerTabBar({ active, onSelect }) {
     return (
-        <div className="w-full bg-white border-b border-black/10 sticky top-[64px] z-[90] shadow-sm" data-testid="catalog-tabs">
-            <div className="flex w-full overflow-x-auto tc-cat-scroll">
-                {DEALER_TABS.map((t) => {
-                    const isActive = active === t.key;
-                    return (
-                        <button
-                            key={t.key}
-                            onClick={() => onSelect(t.key)}
-                            data-testid={`tab-${t.key}`}
-                            aria-current={isActive ? "page" : undefined}
-                            className="flex-1 min-w-[118px] px-3 py-3.5 text-[12.5px] font-bold text-center whitespace-nowrap border-r border-black/[0.07] last:border-r-0 outline-none"
-                            style={{
-                                color: "#1F2937",
-                                backgroundColor: isActive ? t.bgActive : t.bg,
-                                boxShadow: isActive ? `inset 0 -3px 0 ${t.accent}` : "inset 0 -3px 0 transparent",
-                                transition: "background-color 150ms ease, box-shadow 150ms ease",
-                            }}
-                            onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = t.bgHover; }}
-                            onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = t.bg; }}
-                        >
-                            {t.label}
-                        </button>
-                    );
-                })}
+        <div
+            className="w-full bg-white/95 backdrop-blur border-b border-black/[0.07] sticky top-[64px] z-[90]"
+            style={{ boxShadow: "0 1px 0 rgba(0,0,0,0.03), 0 2px 6px -2px rgba(0,0,0,0.04)" }}
+            data-testid="catalog-tabs"
+        >
+            <div className="tc-container px-0 sm:px-2">
+                <div
+                    className="flex items-center gap-1 overflow-x-auto tc-cat-scroll px-3 sm:px-1"
+                    role="tablist"
+                    aria-label="Dealer dashboard sections"
+                >
+                    {DEALER_TABS.map((t) => {
+                        const isActive = active === t.key;
+                        return (
+                            <button
+                                key={t.key}
+                                onClick={() => onSelect(t.key)}
+                                data-testid={`tab-${t.key}`}
+                                aria-current={isActive ? "page" : undefined}
+                                role="tab"
+                                aria-selected={isActive}
+                                className={`group relative inline-flex items-center gap-2 px-3.5 sm:px-4 py-3.5 text-[13px] whitespace-nowrap outline-none transition-colors duration-150 ${
+                                    isActive
+                                        ? "text-[#0A0A0B]"
+                                        : "text-[#6E6E73] hover:text-[#0A0A0B]"
+                                }`}
+                                style={{
+                                    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+                                    fontWeight: isActive ? 600 : 500,
+                                    letterSpacing: "-0.005em",
+                                }}
+                            >
+                                <span
+                                    aria-hidden
+                                    className="inline-block w-1.5 h-1.5 rounded-full transition-all duration-150"
+                                    style={{
+                                        background: t.accent,
+                                        opacity: isActive ? 1 : 0.35,
+                                        transform: isActive ? "scale(1)" : "scale(0.85)",
+                                    }}
+                                />
+                                {t.label}
+                                <span
+                                    aria-hidden
+                                    className="pointer-events-none absolute left-2.5 right-2.5 bottom-0 h-[2px] rounded-full transition-all duration-200"
+                                    style={{
+                                        background: isActive ? t.accent : "transparent",
+                                        opacity: isActive ? 1 : 0,
+                                    }}
+                                />
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
         </div>
     );

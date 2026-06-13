@@ -189,6 +189,53 @@ def d2d_me(user: dict = Depends(require_user)):
     return {"verified": True, "business_name": s.data.get("business_name"), "supplier_id": s.data["id"]}
 
 
+_D2D_TABLES = {
+    "toner": "listings",
+    "printer": "printer_listings",
+    "paper": "paper_listings",
+}
+
+
+@router.get("/d2d/listing/{kind}/{listing_id}")
+def d2d_listing_detail(kind: str, listing_id: str, user: dict = Depends(require_user)):
+    """Per-listing detail used by the dedicated /d2d/:kind/:id dealer page.
+    Returns the row + wholesale d2d_price + supplier info. Gated to verified
+    (approved) suppliers — customers must NEVER see D2D wholesale pricing."""
+    if kind not in _D2D_TABLES:
+        raise HTTPException(404, "unknown kind")
+    # Verify caller is a verified dealer (mirrors /d2d/me)
+    if user.get("role") != "supplier":
+        raise HTTPException(403, "D2D listings are visible to approved dealers only")
+    s = sb_admin.table("suppliers").select("id,approved_at,is_suspended").eq("user_id", user["id"]).maybe_single().execute()
+    if not s or not s.data or not s.data.get("approved_at") or s.data.get("is_suspended"):
+        raise HTTPException(403, "Your dealer account is not approved for D2D access yet")
+    table = _D2D_TABLES[kind]
+    try:
+        row = sb_admin.table(table).select("*,suppliers(id,business_name,city,state,phone,email,verified_at:approved_at)").eq("id", listing_id).maybe_single().execute()
+    except Exception as e:
+        if "d2d_enabled" in str(e):
+            raise HTTPException(503, "D2D columns not migrated. Apply supabase_schema_d2d.sql.") from e
+        raise
+    if not row or not row.data:
+        raise HTTPException(404, "Listing not found")
+    data = row.data
+    if not data.get("d2d_enabled"):
+        raise HTTPException(404, "This listing is not enabled for Dealer-to-Dealer purchases")
+    # Don't let a dealer "buy" their own D2D listing
+    own = (data.get("supplier_id") == s.data["id"])
+    sup = data.pop("suppliers", None) or {}
+    data["supplier"] = {
+        "id": sup.get("id"),
+        "business_name": sup.get("business_name"),
+        "city": sup.get("city"),
+        "state": sup.get("state"),
+        "phone": sup.get("phone"),
+        "email": sup.get("email"),
+    }
+    data["is_own_listing"] = own
+    return data
+
+
 @router.get("/search/universal")
 def search_universal(q: str, limit_per_type: int = 12):
     """Wave 9 — universal fuzzy search across toners, printers and papers.

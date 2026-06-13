@@ -17,10 +17,7 @@ function D2DCard({ kind, p, onBuy }) {
     const list = Number(p.price ?? p.price_per_ream ?? 0);
     const d2d = Number(p.d2d_price ?? 0);
     const savings = d2d && list ? Math.max(0, list - d2d) : 0;
-    const detailHref =
-        kind === "toner" ? `/toner/${p.id}` :
-            kind === "printer" ? `/printer/${p.id}` :
-                `/paper/${p.id}`;
+    const detailHref = `/d2d/${kind}/${p.id}`;
     const title = kind === "paper"
         ? `${p.brand} · ${p.size} · ${p.gsm} GSM`
         : `${p.brand} ${p.model_number}`;
@@ -149,9 +146,16 @@ export default function Dealer() {
     // Verification check
     useEffect(() => {
         if (authLoading) return;
+        // Don't flash the gate while the session is still being restored from
+        // localStorage — wait for auth to fully resolve. If we end up logged
+        // out, then show the guest gate. If logged in, hit /d2d/me; the
+        // listings render only once we have a confirmed verified=true.
         if (!user) { setStatus({ verified: false, reason: "guest" }); return; }
+        // Reset to "still checking" whenever user identity changes so the
+        // spinner replaces any stale gate from a previous role.
+        setStatus(null);
         let cancelled = false;
-        api.get("/d2d/me")
+        api.get("/d2d/me", { timeout: 8000 })
             .then((r) => { if (!cancelled) setStatus(r.data); })
             .catch(() => { if (!cancelled) setStatus({ verified: false, reason: "error" }); });
         return () => { cancelled = true; };

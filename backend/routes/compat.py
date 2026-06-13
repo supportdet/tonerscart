@@ -224,14 +224,38 @@ def _toner_related(t: dict) -> dict:
 
 
 def _toner_aliases(model: str) -> list:
-    """Meaningful model tokens to match dealer listings, e.g. 'CB388A (88A)' -> ['CB388A','88A']."""
-    return [tok for tok in re.findall(r"[A-Za-z0-9\-]+", model or "") if len(tok) >= 2]
+    """Meaningful model tokens to match dealer listings.
+
+    Includes hyphen/space/no-separator variants so a catalogue model like
+    'TN-2280' also matches dealer-typed 'TN2280' or 'TN 2280' — these are
+    common variations dealers actually type instead of the exact dropdown code.
+    Example: 'CB388A (88A)' → ['CB388A','88A']
+    Example: 'TN-2280' → ['TN-2280','TN2280']
+    """
+    out: list = []
+    seen = set()
+    for tok in re.findall(r"[A-Za-z0-9\-]+", model or ""):
+        if len(tok) < 2:
+            continue
+        for variant in (tok, tok.replace("-", ""), tok.replace("-", " ")):
+            v = variant.strip()
+            if len(v) >= 2 and v.lower() not in seen:
+                seen.add(v.lower())
+                out.append(v)
+    return out
 
 
 def _alias_hit(model_number: str, aliases: list) -> bool:
     mn = (model_number or "").lower()
+    # Also try the listing's model_number with separators normalised so
+    # 'TN2280' matches the 'TN-2280' alias and vice versa.
+    mn_squashed = re.sub(r"[\s\-]+", "", mn)
     for a in aliases:
-        if re.search(r"(?<![a-z0-9])" + re.escape(a.lower()) + r"(?![a-z0-9])", mn):
+        al = a.lower()
+        if re.search(r"(?<![a-z0-9])" + re.escape(al) + r"(?![a-z0-9])", mn):
+            return True
+        al_sq = re.sub(r"[\s\-]+", "", al)
+        if al_sq and len(al_sq) >= 3 and re.search(r"(?<![a-z0-9])" + re.escape(al_sq) + r"(?![a-z0-9])", mn_squashed):
             return True
     return False
 

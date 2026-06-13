@@ -45,6 +45,7 @@ import Bulk from "./pages/Bulk";
 import Consumables from "./pages/Consumables";
 import Scanners from "./pages/Scanners";
 import Dealer from "./pages/Dealer";
+import D2DProductDetail from "./pages/D2DProductDetail";
 import DealerStore from "./pages/DealerStore";
 import OEM from "./pages/OEM";
 import CompatiblePage from "./pages/CompatiblePage";
@@ -146,6 +147,7 @@ function App() {
                                     <Route path="/scanners" element={<Scanners />} />
                                     <Route path="/bulk" element={<Bulk />} />
                                     <Route path="/dealer" element={<Dealer />} />
+                                    <Route path="/d2d/:kind/:id" element={<D2DProductDetail />} />
                                     <Route path="/store/:supplierId" element={<DealerStore />} />
                                     <Route path="/oem" element={<OEM />} />
                                     <Route path="/compatible/:slug" element={<CompatiblePage />} />

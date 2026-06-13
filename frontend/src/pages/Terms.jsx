@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import PageMeta from "../components/PageMeta";
 
-export const TERMS_VERSION = "2.2";
+export const TERMS_VERSION = "2.3";
 
 export default function Terms() {
     return (
@@ -29,7 +29,7 @@ export default function Terms() {
 
                     <Section title="2. Nature of the Platform — Intermediary, Not Seller">
                         TonersCart is an <strong>intermediary</strong> within the meaning of the Information Technology Act, 2000.
-                        We are a technology marketplace and are <strong>not the seller, manufacturer, importer or distributor</strong>
+                        We are a technology marketplace and are <strong>not the seller, manufacturer, importer or distributor</strong>{" "}
                         of any product listed. Sellers independently list, price, describe, warrant, invoice and dispatch their own
                         goods. The contract of sale for any order is formed <strong>directly between the buyer and the seller</strong>.
                         TonersCart only facilitates discovery, communication and order coordination.
@@ -97,7 +97,7 @@ export default function Terms() {
                         in coordination with TonersCart support. Approved refunds are processed to the original payment method.
                     </Section>
 
-                    <Section title="10A. Seller Payouts">
+                    <Section title="11. Seller Payouts">
                         Seller payouts are processed after order completion. An order is marked complete when the buyer confirms delivery,
                         or <strong>automatically after 5 days</strong> of buyer silence following the seller marking the order as delivered.
                         Payouts are released <strong>within 2 business days</strong> of order completion, after deducting TonersCart&apos;s
@@ -106,13 +106,13 @@ export default function Terms() {
                         payouts</strong>. Sellers consent to this sharing by registering on the platform.
                     </Section>
 
-                    <Section title="11. Dispute Resolution">
+                    <Section title="12. Dispute Resolution">
                         For any dispute, contact <a href="mailto:support@tonerscart.com" className="text-[#00B7C7] hover:underline">support@tonerscart.com</a> within
                         <strong> 48 hours</strong> of the event. TonersCart will first attempt good-faith <strong>mediation</strong> between buyer and
-                        seller. Unresolved disputes are subject to the governing law and jurisdiction in clause 17.
+                        seller. Unresolved disputes are subject to the governing law and jurisdiction in clause 18.
                     </Section>
 
-                    <Section title="12. Prohibited Activities">
+                    <Section title="13. Prohibited Activities">
                         The following are strictly prohibited and are grounds for suspension or termination:
                         <List items={[
                             "Listing or selling counterfeit, pirated or otherwise unauthorised goods",
@@ -124,36 +124,36 @@ export default function Terms() {
                         ]} />
                     </Section>
 
-                    <Section title="13. Intellectual Property">
+                    <Section title="14. Intellectual Property">
                         All intellectual property in the Platform — including software, design, trademarks, logos, content and databases —
                         is owned by or licensed to <strong>TonersCart Private Limited</strong>. You may not copy, reproduce or create derivative
                         works without our prior written consent. Product names and brand marks belong to their respective owners.
                     </Section>
 
-                    <Section title="14. Limitation of Liability">
+                    <Section title="15. Limitation of Liability">
                         To the maximum extent permitted by law, TonersCart&apos;s aggregate liability for any claim arising from or relating to
                         the Platform or an order is <strong>limited to the commission actually received by TonersCart on the underlying order</strong>.
                         We are not liable for indirect, incidental, special or consequential damages.
                     </Section>
 
-                    <Section title="15. Intermediary Liability Disclaimer">
+                    <Section title="16. Intermediary Liability Disclaimer">
                         As an intermediary, TonersCart is <strong>not liable for the acts, omissions, products or content of sellers or other
                         users</strong>, in accordance with <strong>Section 79 of the Information Technology Act, 2000</strong> and the Intermediary
                         Guidelines, 2021. We act on valid takedown and grievance requests as required by law.
                     </Section>
 
-                    <Section title="16. Account Termination">
+                    <Section title="17. Account Termination">
                         We may suspend or terminate your account, with or without notice, for breach of these Terms, suspected fraud, or to
                         comply with law. You may close your account at any time by contacting support; certain records are retained as required
                         by law (see our Privacy Policy).
                     </Section>
 
-                    <Section title="17. Governing Law & Jurisdiction">
+                    <Section title="18. Governing Law & Jurisdiction">
                         These Terms are governed by the laws of India. The governing jurisdiction is the State of <strong>Karnataka, India</strong>,
                         and the courts at <strong>Bangalore</strong> shall have exclusive jurisdiction over any dispute.
                     </Section>
 
-                    <Section title="18. Grievance Officer">
+                    <Section title="19. Grievance Officer">
                         In accordance with the IT (Intermediary Guidelines) Rules, 2021, grievances may be addressed to our Grievance Officer:
                         <br />
                         <strong>Grievance Officer:</strong> Rohit Sairam, TonersCart Private Limited,
@@ -162,17 +162,17 @@ export default function Terms() {
                         Response time: <strong>48 hours</strong>.
                     </Section>
 
-                    <Section title="19. Amendments">
+                    <Section title="20. Amendments">
                         We may update these Terms from time to time. Material changes will be notified to registered users by email, and
                         continued use of the Platform after the effective date constitutes acceptance of the revised Terms.
                     </Section>
 
-                    <Section title="20. Contact">
+                    <Section title="21. Contact">
                         Questions about these Terms? Email <a href="mailto:support@tonerscart.com" className="text-[#00B7C7] hover:underline">support@tonerscart.com</a>.
                         TonersCart Private Limited, Bangalore, Karnataka, India. See also our <Link to="/privacy" className="text-[#00B7C7] hover:underline">Privacy Policy</Link>.
                     </Section>
 
-                    <Section title="21. Nodal Officer">
+                    <Section title="22. Nodal Officer">
                         In accordance with the Consumer Protection (E-Commerce) Rules, 2020, the Nodal Officer of TonersCart Private Limited is:
                         <br />
                         <strong>Nodal Officer:</strong> Rohit Sairam, TonersCart Private Limited, Bangalore, Karnataka, India,

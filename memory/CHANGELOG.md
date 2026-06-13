@@ -1,3 +1,115 @@
+### 2026-06-13 (d) — Wave 48: SEO toner page connection verified + alias-matching hardened
+
+**Trigger**: User asked to verify that when a dealer uploads a toner and picks a model from the new TonerModelSearchSelect dropdown (Wave 44), the listing actually shows up on the corresponding SEO toner page (e.g. `/toner/hp-q2612a`). Test with 3 different brands; fix globally if broken.
+
+**End-to-end verification** (3 brands, disposable supplier + listings, cleaned up immediately):
+| Dropdown selection | SEO slug | Connection |
+|---|---|---|
+| HP **Q2612A** | `/toner/hp-q2612a` | ✅ PASS |
+| Canon **328** | `/toner/canon-328` | ✅ PASS |
+| Brother **TN-2280** | `/toner/brother-tn-2280` | ✅ PASS |
+
+Connection itself is working — the dropdown writes the exact catalogue model code into `listings.model_number`, and `/api/compat/toner-page/{slug}` matches it via `_toner_aliases` + `_alias_hit`.
+
+**Hardening** (`backend/routes/compat.py`):
+- `_toner_aliases(model)` now emits hyphen/space/squashed variants too (e.g. `TN-2280` → `["TN-2280", "TN2280", "TN 2280"]`).
+- `_alias_hit(model_number, aliases)` now also tries a separator-stripped match (e.g. `Brother TN2280` matches alias `TN-2280`).
+- Common dealer typing variations now connect to the SEO page even when the dealer types free-form instead of using the dropdown. Reduces missed-listing-on-SEO-page risk for the hyphenated-code product families (TN-2280, MLT-D101, etc.).
+
+**Regression tests** (`backend/tests/test_wave48_seo_connection.py` — 7/7 PASS):
+- Aliases include the model itself.
+- Hyphenated codes also emit squashed + space-separated variants.
+- Dropdown-exact codes hit themselves.
+- Brand-prefixed dealer input ("HP Q2612A", "Canon 328", "Brother TN-2280") all hit.
+- Descriptive dealer input ("CARTRIDGE HP Q2612A", "CRG-328") all hit.
+- Hyphen/space/no-separator variants all hit ("TN2280", "TN 2280", "Brother TN2280").
+- Unrelated models do NOT false-positive ("Q2613A" ≠ Q2612A, "728" ≠ 328).
+
+**Test-data cleanup**: The 1 test supplier + 3 test toner listings + 3 variant rows created during this wave's live verification were ALL deleted in the same script's `finally` block. Verified post-cleanup: `suppliers=0`, `users=0`, `listings=0` for the test email. No other data touched.
+
+**Not touched** (per directives): CORS, Razorpay, Twilio, scripts, protected dealers.
+
+---
+
+
+### 2026-06-13 (c) — Wave 47: dedicated D2D product detail page
+
+**Trigger**: User reported D2D listings linked to the customer detail page (`/toner/:id`, `/printer/:id`, `/paper/:id`) showing retail pricing — wholesale dealers were seeing retail figures. Risk: dealers paying customer-facing GST-inclusive prices instead of D2D wholesale.
+
+**Backend** (`routes/search.py` L191-236):
+- New `GET /api/d2d/listing/{kind}/{listing_id}` (kind ∈ toner|printer|paper → listings|printer_listings|paper_listings)
+- Gates: must be authenticated, role==supplier, suppliers.approved_at set, is_suspended=false, listing.d2d_enabled=true
+- Returns row + `d2d_price` + embedded `supplier {id, business_name, city, state, phone, email}` + `is_own_listing` flag
+- Errors: 401 (guest), 403 (admin/customer/un-approved supplier), 404 (unknown kind or d2d_enabled=false), 503 if D2D columns not migrated
+
+**Frontend**:
+- New page `pages/D2DProductDetail.jsx` — dealer-only wholesale view with: D2D base + GST-incl price block, line-through customer list price + savings badge, selling-dealer identity card with VerifiedBadge, spec grid (kind-aware), D2D terms (5 bullets), Place-dealer-order button (disabled when own listing or out of stock). Reuses `OrderRequestDialog` for the buy flow with `d2d:true` hint.
+- Route at `/d2d/:kind/:id` (`App.js` L48 + L150). Guests redirect to `/login?next=/d2d/...`. Non-suppliers see a clear `d2d-detail-error` block with the backend's 403 message and a "Back to D2D marketplace" link.
+- `pages/Dealer.jsx` D2DCard.detailHref simplified from per-kind customer routes to `/d2d/${kind}/${p.id}`.
+
+**Testing** (`/app/test_reports/iteration_47.json` + `backend/tests/test_wave47_d2d_detail.py`):
+- Backend pytest 7/7 PASS (gating, kind validation, customer-price regression, terms route).
+- Frontend live-verified: guest → /login?next redirect; logged-in customer → error block renders with correct message + Back link.
+- Verified-supplier happy path: code-reviewed line-by-line; not live-exercised (would have required mutating production data with an approved supplier). All data-testids present in the page source: `d2d-detail-page`, `d2d-detail-title`, `d2d-price-base`, `d2d-price-incl`, `d2d-list-price`, `d2d-savings`, `d2d-supplier-name`, `d2d-terms-block`, `d2d-place-order-btn`.
+
+**Fixes from review**:
+- Removed premature success toast that fired on dialog close (was misleading UX); leaves toasts to OrderRequestDialog itself.
+- Cleaned up the test customer `qa.cust.w47.elac8650@example.com` created by the testing agent (orphan customer row, no supplier/listing/order linkage, not in PROTECTED_EMAILS).
+
+**Code-review nits** (deferred, none blocking):
+- Postgrest column alias `verified_at:approved_at` is unused downstream — drop or wire into the supplier card.
+- 503 fallback substring check on "d2d_enabled" could be broadened to PostgrestAPIError code 42703.
+- Paper-vs-printer `price` field mapping has a silent fallback in `data.price ?? data.price_per_ream`.
+
+**Not touched** (per directives): CORS, Razorpay, Twilio, scripts, protected dealers.
+
+---
+
+
+### 2026-06-13 (b) — Wave 46: commission fix, Terms v2.3, bulk borders, D2D gate, search perf, dealer header redesign
+
+**Trigger**: Single user message with 7 distinct fixes (+ 1 deferred to next wave: dedicated /d2d/:id page).
+
+**#1 Commission calculator — base-price-only math**:
+- `lib/commission.js` rewritten with `payoutBreakdown(typedPrice, priceType, gstRate)` that:
+  - Strips GST first when priceType==='incl': `base = round(typed / (1 + gst/100), 2)`
+  - Calculates commission ONLY on `base`, paisa-precise: `Math.round(base * tier.rate * 100) / 100`
+  - Returns `{ basePrice, buyerInclPrice, gstAmount, commission, rate, rateLabel, dealerPayout }` where `dealerPayout = base − commission + gstAmount` (GST passthrough)
+- `components/CommissionCalculator.jsx` rewritten: GST dropdown + Incl/Excl pills (default unselected) + price input + 5-row breakdown (Buyer pays · Base price · Commission · GST passed through · Your payout). Verified math: 5355 Incl @ 5% → ₹4,743 payout; 5100 Excl @ 5% → identical ₹4,743 payout; 1000 Excl @ 18% → ₹1,060 payout; 1000 Incl @ 18% → ₹898 payout (matches user spec exactly).
+- Backend was already correct (`orders.total = unit_price × qty` where unit_price is base). No backend change needed.
+
+**#2 Commission notice copy** — `COMMISSION_BANNER_TEXT` updated to exact user wording: "TonersCart commission is calculated on your base price (excluding GST) only. GST and delivery charges are passed through to you in full. Commission tiers: under ₹15K = 12% · ₹15K–₹30K = 10% · ₹30K–₹75K = 8% · ₹75K–₹1L = 6% · ₹1L & above = 5%." `CommissionBanner` consumes this; renders on every upload form.
+
+**#3 Terms of Service v2.3**:
+- `TERMS_VERSION = "2.3"` (was 2.2)
+- Section 2 JSX whitespace bug fixed: `<strong>...distributor</strong>\n                        of` was rendering as `distributorof` (JSX swallows newlines across element boundaries). Added explicit `{" "}` to force the space.
+- Renumbered 10A → 11, then 11→12, 12→13, 13→14, 14→15, 15→16, 16→17, 17→18, 18→19, 19→20, 20→21, 21→22. Inner cross-reference "clause 17" → "clause 18" updated. Verified live: 22 sections, all unique, no gaps, no "10A" remaining.
+
+**#4 Bulk-upload grid borders** — `BulkUploadGeneric.jsx` cell input className changed from `border-transparent hover:border-[#E8E8EC]` → `border-[#D2D2D7] hover:border-[#86868B]` in both render paths (standard input + ModelSearchCell). Empty cells now visibly bordered.
+
+**#5 D2D gate race fix** — `pages/Dealer.jsx` useEffect: on user identity change, immediately `setStatus(null)` so the spinner gates rendering until /d2d/me resolves (was leaving stale verified=false state from a prior render → flash of "Become a verified dealer"). Added 8s timeout to /d2d/me.
+
+**#6 Search performance**:
+- New `lib/searchCache.js` — in-memory cache, 5min TTL, 200-entry LRU cap, keyed by url + sorted params.
+- `components/UniversalSearch.jsx` rewritten: 300ms debounced typeahead, min-length=2 gate (no API call for single chars), skeleton loading rows during fetch, categorised dropdown of 8 results, in-cache hits render instantly. Visible Loader2 spinner inside the input during pending fetches.
+- `pages/Search.jsx` cache integration: both `/search/universal`+`/search/ai` and `/listings/search/paginated` consult cache before fetching; AI call skipped when q<3 chars (Gemini is the slowest dependency).
+- Verified: 300ms debounce works (1 call for "hp"), skeleton renders, min-length gate (single-char produced 0 calls).
+
+**#7 Dealer dashboard tab bar — modern redesign** (`SupplierDashboard.jsx` `DealerTabBar`):
+- White/95 + backdrop blur sticky bar, 1px hairline border + subtle 2-tier shadow
+- Each tab: accent dot (1.5px, category colour) + label in Inter font (weight 500/600), underline 2px below active tab, hover transitions text colour
+- Spacing tightened, padding 3.5 vertical, gap 1 between tabs, overflow-x-auto on mobile
+- `role=tablist` + `aria-selected` for a11y; `data-testid="catalog-tabs"` + `tab-{key}` preserved
+
+**Wave 46 test report**: `/app/test_reports/iteration_46.json` — 0 blocking issues, 0 critical, 1 minor (cache repeat-query produced 1 extra network call — debounce already throttles, low impact). Backend 4/4 pytest pass via new `tests/test_wave46_regression.py`. Live-verified: Terms numbering+typo+v2.3, UniversalSearch debounce+skeleton+min-length, Dealer guest gate, CRG 303 sync (Wave 45 regression). Code-reviewed (no supplier creds): commission calc math, bulk grid borders, dealer tab redesign — all confirmed correct.
+
+**Deferred to Wave 47**: dedicated `/d2d/:id` D2D product detail page with wholesale-only pricing + dealer buy flow. Out of scope this wave per user direction.
+
+**Page-reload signs-out (user #4)** — could not reproduce. Admin session persists on reload (`tc-supabase-auth` localStorage intact, /admin route re-renders logged-in). User to re-test and report which role / browser / page if still observed.
+
+---
+
+
 ### 2026-06-13 (a) — 5-pack: GST toggle redesign, CRG 303 pricing bug, full Admin Edit, ScrollToTop, popup cooldown
 
 **Trigger**: User reported 5 issues in one message — see Wave 45 brief.

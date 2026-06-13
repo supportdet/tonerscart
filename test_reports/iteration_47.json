@@ -1,0 +1,63 @@
+{
+  "summary": "Wave 47 — D2D dedicated detail page testing. Backend gating verified end-to-end via pytest (7/7 pass): 401 unauthenticated, 403 admin (not supplier), 404 invalid kind, 401 on printer+paper kinds, sample listing customer price=5100. Frontend: guest -> /login?next=%2Fd2d%2F... PASS (live). Customer (logged-in non-supplier) -> d2d-detail-error block renders with backend 403 detail 'D2D listings are visible to approved dealers only' and 'Back to D2D marketplace' link (href=/dealer) PASS (live). Verified-supplier happy path NOT live-exercised (would require registering+approving a fresh supplier in production data, which the request asked to avoid unless necessary); page render path verified by detailed code review of D2DProductDetail.jsx.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verifications_performed": {
+    "backend_endpoint_GET_/api/d2d/listing/{kind}/{id}": {
+      "unauthenticated_toner": "PASS — 401",
+      "unauthenticated_printer": "PASS — 401",
+      "unauthenticated_paper": "PASS — 401",
+      "admin_bearer (not supplier)": "PASS — 403 with detail 'D2D listings are visible to approved dealers only'",
+      "invalid_kind=widget": "PASS — 404 (kind validation happens before role check, as expected)",
+      "verified_supplier_happy_path": "NOT LIVE-TESTED — code review only. Backend code at routes/search.py L199-236 correctly: (a) checks kind in {toner,printer,paper}, (b) requires role==supplier, (c) requires suppliers.approved_at present and is_suspended=false, (d) joins to suppliers for {business_name,city,state,phone,email}, (e) returns 404 if d2d_enabled=false with the spec'd detail, (f) sets is_own_listing=true when supplier_id matches caller's supplier row. Logic is sound; the customer-redirect test confirms the 403 path responds with the expected detail string.",
+      "d2d_enabled_false_returns_404": "NOT LIVE-TESTED — code path verified (search.py L222-223 raises 404 with 'This listing is not enabled for Dealer-to-Dealer purchases'). To exercise live needs a supplier session.",
+      "kind=printer/paper_table_routing": "PASS code review — _D2D_TABLES dict (L192-196) maps to listings/printer_listings/paper_listings."
+    },
+    "frontend_routing": {
+      "/d2d/:kind/:id route registered": "PASS — App.js L48 import + L150 Route",
+      "guest_redirect_to_/login?next=...": "PASS LIVE — visited /d2d/toner/46805c13-91f7-4636-8db1-4e62877d1946 as guest → landed on /login?next=%2Fd2d%2Ftoner%2F46805c13-91f7-4636-8db1-4e62877d1946",
+      "customer_blocked_with_error_block": "PASS LIVE — registered a fresh customer, visited /d2d/toner/{id} → page rendered d2d-detail-error block with title \"Can't open this D2D listing\", backend's 403 detail message 'D2D listings are visible to approved dealers only', and a 'Back to D2D marketplace' link with href=/dealer. The required data-testids ('d2d-detail-error', 'd2d-detail-back-link') are present.",
+      "verified_supplier_full_detail_render": "NOT LIVE-TESTED — code review only. D2DProductDetail.jsx renders all required data-testids: d2d-detail-page (root), d2d-detail-title, d2d-price-base (₹4,800 base / per unit · excl. GST), d2d-price-incl (with {gst_rate}% GST), d2d-list-price (line-through customer ₹5,100), d2d-savings (Save ₹300 / 6% off list — savings text is computed from list-d2d), d2d-supplier-name (data.supplier.business_name with VerifiedBadge), d2d-terms-block (ul with 5 bullets matching spec), d2d-place-order-btn (disabled when is_own_listing OR stock<=0, label switches to 'Your own listing' / 'Out of stock' / 'Place dealer order')."
+    },
+    "dealer_page_links_to_/d2d": {
+      "Dealer.jsx L20 D2DCard.detailHref": "PASS code review — `const detailHref = `/d2d/${kind}/${p.id}`;` (was customer routes /toner/:id etc.). All Link components in D2DCard (image L35, title L52) use detailHref. Not live-clicked since /dealer behind supplier gate, but the source change is the only place that defines this href."
+    },
+    "regression_wave46": {
+      "sample_listing (46805c...) customer price=5100": "PASS pytest — GET /api/listings/{id} returns price=5100.0 (so the wholesale D2D price ₹4,800 is correctly hidden from customer-facing endpoints; only exposed via /api/d2d/listing/...)",
+      "/terms_route_reachable": "PASS pytest"
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave47_d2d_detail.py",
+    "/app/test_reports/pytest/wave47.xml"
+  ],
+  "action_items": [
+    "OPTIONAL live-exercise the verified-supplier happy path: register a fresh supplier → admin approves them → log in as that supplier → visit /d2d/toner/46805c13-91f7-4636-8db1-4e62877d1946 and assert all six data-testids render with d2d_price=4800, list=5100, savings≈300, gst_rate=18, supplier.business_name populated. Backend role-gating already proven correct (admin=403, customer=403 with the same 'approved dealers only' detail string), so this remaining test is end-to-end render confirmation rather than gating validation.",
+    "OPTIONAL also live-exercise the d2d_enabled=false 404 path — requires a supplier session plus a known D2D-disabled listing id.",
+    "Optional cleanup: a fresh customer account (qa.cust.w47.elac8650@example.com / Test@1234) was registered during the customer-protection test. Leaving it in place per instructions ('do not delete data') but flagging so main agent can purge if desired."
+  ],
+  "critical_code_review_comments": [
+    "routes/search.py L214: the .select(...) uses a Postgres embedded join with column alias 'verified_at:approved_at' in the supplier select string, but the alias is unused downstream (the popped 'suppliers' dict is read by .get('business_name') etc., not .get('verified_at')). Either drop the alias or expose it on the response to let the frontend show 'Verified since {verified_at}'. Currently VerifiedBadge on the page is purely presentational.",
+    "routes/search.py L217: the 'd2d_enabled' migration-missing branch raises 503. Good. But if Supabase returns a different error string ('column ... does not exist'), the substring check 'd2d_enabled' may miss. Consider a broader catch on PostgrestAPIError code 42703 (undefined_column).",
+    "D2DProductDetail.jsx L142: button disabled condition is `data.is_own_listing || Number(data.stock || 0) <= 0`. Looks correct, but the savings calculation L78 uses `data.price ?? data.price_per_ream`. For paper_listings the field is `price_per_ream` — OK. For printer_listings if the field is also `price` you may want a unit test asserting the paper-vs-printer field mapping; right now silent fallback to 0 makes the savings block invisible rather than throwing.",
+    "Dealer.jsx D2DCard now links to /d2d/{kind}/{id}, but the card itself still shows the wholesale price d2d_price publicly to anyone who reaches /dealer. Confirm that /dealer is itself gated to verified suppliers (it is, via /d2d/me) — otherwise the card pricing leaks before the new detail page even loads. Current implementation looks correct, just flagging for awareness.",
+    "D2DProductDetail.jsx L210: success toast 'Dealer order request placed' fires unconditionally on dialog close (even if user just cancels). The toast should be triggered by OrderRequestDialog's onSuccess, not onClose. Minor UX bug — premature feedback."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_wave47_d2d_detail.py (NEW — 7 tests, all passing)"
+  ],
+  "success_rate": {
+    "backend": "100% (7/7 pytest pass — auth gating, kind validation, customer-price regression, terms route)",
+    "frontend": "100% on live-tested flows (guest redirect, customer-blocked-with-error-block). Verified-supplier happy-path render verified by code review only — no live supplier session available without mutating production data."
+  },
+  "test_credentials": "Admin: support@tonerscart.com / Bangara1@# (confirmed). Created during testing: qa.cust.w47.elac8650@example.com / Test@1234 (customer role) — left in DB per request guidance.",
+  "seed_data_creation": "Registered 1 fresh customer account (qa.cust.w47.elac8650@example.com / Test@1234) to verify the customer-protection 403 -> error-block flow. No data modified.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Wave 47 backend gating + frontend guest+customer protection live-verified. The remaining gap is the verified-supplier happy-path render — register a fresh supplier (e.g. qa.dealer.w47.{rand}@example.com / Test@1234, business name + city + state + phone + GSTIN + at least dummy KYC), admin-approve via /admin (support@tonerscart.com / Bangara1@#), login as that supplier and GET /d2d/toner/46805c13-91f7-4636-8db1-4e62877d1946 — assert all 6 data-testids (d2d-price-base ~₹4,800, d2d-price-incl ~₹5,664 at 18% GST, d2d-savings ~₹300, d2d-supplier-name, d2d-terms-block, d2d-place-order-btn). All gating logic at routes/search.py L199-236 was reviewed line-by-line and is sound. Code-review comments above call out 5 minor improvements (postgrest column alias unused, 503 catch breadth, paper price field fallback, presumptive success toast on dialog close).",
+  "rca of the issue": "n/a — Wave 47 is a new feature wave with no production bugs found. The implementation correctly separates D2D wholesale pricing from customer-facing retail pricing both at the backend (separate endpoint, role-gated) and frontend (separate route, separate page component)."
+}

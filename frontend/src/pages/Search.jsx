@@ -4,6 +4,7 @@ import { MapPin, Boxes, Sparkles } from "lucide-react";
 import { Skeleton } from "../components/ui/skeleton";
 import { toast } from "sonner";
 import api from "../lib/api";
+import { searchCacheGet, searchCacheSet } from "../lib/searchCache";
 import { useAuth } from "../context/AuthContext";
 import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import { useCart } from "../context/CartContext";
@@ -76,20 +77,41 @@ export default function SearchPage() {
                 if (!cancelled) { setUniversal(null); setAiInfo(null); }
                 return;
             }
-            if (!cancelled) setAiInfo(null);
+            // Check cache first — repeated searches for the same query render
+            // instantly without re-hitting the network.
+            const cached = searchCacheGet("/search/universal", { q: qq, limit_per_type: 12 });
+            if (cached && !cancelled) setUniversal(cached);
+            const cachedAi = searchCacheGet("/search/ai", { q: qq, limit_per_type: 12 });
+            if (cachedAi && !cancelled) {
+                const c = cachedAi.counts || {};
+                const total = (c.toners || 0) + (c.printers || 0) + (c.papers || 0) + (c.consumables || 0) + (c.oem || 0);
+                if (total > 0) setUniversal(cachedAi);
+                setAiInfo({ answer: cachedAi.answer || null, params: cachedAi.params || null });
+                if (cached) return; // both endpoints cached → done
+            } else if (!cancelled) {
+                setAiInfo(null);
+            }
             let aiApplied = false;
-            // 1) Instant keyword results
-            const kwP = api.get("/search/universal", { params: { q: qq, limit_per_type: 12 } })
-                .then((r) => { if (!cancelled && !aiApplied) setUniversal(r.data || null); })
+            // 1) Instant keyword results — skip if already served from cache.
+            const kwP = cached ? Promise.resolve() : api.get("/search/universal", { params: { q: qq, limit_per_type: 12 } })
+                .then((r) => {
+                    if (cancelled || aiApplied) return;
+                    setUniversal(r.data || null);
+                    searchCacheSet("/search/universal", { q: qq, limit_per_type: 12 }, r.data || null);
+                })
                 .catch(() => { if (!cancelled && !aiApplied) setUniversal(null); });
-            // 2) AI-enhanced results in parallel — replace when ready
-            const aiP = api.get("/search/ai", { params: { q: qq, limit_per_type: 12 } })
+            // 2) AI-enhanced results in parallel — but only for queries that
+            // actually benefit from NLP parsing (≥ 3 chars). Short prefixes
+            // are noise — the keyword search alone is more precise and Gemini
+            // calls are the slowest dependency in the search hot path.
+            const aiP = (cachedAi || qq.length < 3) ? Promise.resolve() : api.get("/search/ai", { params: { q: qq, limit_per_type: 12 } })
                 .then((res) => {
                     if (cancelled || !res.data?.ai) return;
                     const c = res.data.counts || {};
                     const total = (c.toners || 0) + (c.printers || 0) + (c.papers || 0) + (c.consumables || 0) + (c.oem || 0);
                     if (total > 0) { aiApplied = true; setUniversal(res.data); }
                     setAiInfo({ answer: res.data.answer || null, params: res.data.params || null });
+                    searchCacheSet("/search/ai", { q: qq, limit_per_type: 12 }, res.data);
                 })
                 .catch(() => { /* keep keyword results */ });
             await Promise.allSettled([kwP, aiP]);
@@ -126,15 +148,29 @@ export default function SearchPage() {
         const fetch = async () => {
             setLoading(true);
             setPage(1);
+            const reqParams = { ...buildParams(), page: 1, limit: 24 };
+            // Cache hit — instantly populate while still refreshing in the
+            // background (stale-while-revalidate).
+            const cached = searchCacheGet("/listings/search/paginated", reqParams);
+            if (cached) {
+                const items = Array.isArray(cached.results) ? [...cached.results] : [];
+                items.sort(byCityThenPrice);
+                setProducts(items);
+                setTotalPages(cached.pages || 1);
+                setLoading(false);
+            }
             try {
-                const r = await api.get("/listings/search/paginated", { params: { ...buildParams(), page: 1, limit: 24 } });
+                const r = await api.get("/listings/search/paginated", { params: reqParams });
                 const items = Array.isArray(r.data?.results) ? [...r.data.results] : [];
                 items.sort(byCityThenPrice);
                 setProducts(items);
                 setTotalPages(r.data?.pages || 1);
+                searchCacheSet("/listings/search/paginated", reqParams, r.data);
             } catch {
-                setProducts([]);
-                setTotalPages(1);
+                if (!cached) {
+                    setProducts([]);
+                    setTotalPages(1);
+                }
             } finally { setLoading(false); }
         };
         fetch();
