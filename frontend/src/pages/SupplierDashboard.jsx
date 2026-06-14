@@ -40,31 +40,32 @@ const colorSwatchHex = (name) => {
 };
 
 const DEALER_TABS = [
-    { key: "toners", label: "Toners", bg: "#ECFBFD", bgHover: "#D6F5F9", bgActive: "#C2EFF5", accent: "#0891B2" },
-    { key: "printers", label: "Printers", bg: "#FDEDF7", bgHover: "#FAD9EE", bgActive: "#F6C6E4", accent: "#DB2777" },
-    { key: "papers", label: "Papers", bg: "#FEF6E7", bgHover: "#FCEBC6", bgActive: "#FAE0A6", accent: "#D97706" },
-    { key: "consumables", label: "Consumables", bg: "#EDFBEF", bgHover: "#D7F5DC", bgActive: "#C2EFCA", accent: "#16A34A" },
-    { key: "scanners", label: "Scanners", bg: "#EAF6FF", bgHover: "#D2EBFB", bgActive: "#BCE0F8", accent: "#0369A1" },
-    { key: "orders", label: "Orders", bg: "#EEF0FE", bgHover: "#DDE1FC", bgActive: "#CBD2FA", accent: "#4F46E5" },
-    { key: "earnings", label: "My Earnings", bg: "#FEF1E8", bgHover: "#FCDFCB", bgActive: "#FACDAE", accent: "#EA580C" },
-    { key: "insights", label: "Insights", bg: "#EEF1F5", bgHover: "#DDE3EC", bgActive: "#CBD5E1", accent: "#475569" },
-    { key: "bulk", label: "Bulk Orders", bg: "#EAFAF6", bgHover: "#CFF3EB", bgActive: "#B4ECDF", accent: "#0D9488" },
-    { key: "d2d", label: "Dealer to Dealer", bg: "#FDEEF0", bgHover: "#FBD9DE", bgActive: "#F8C3CB", accent: "#E11D48" },
-    { key: "oem", label: "OEM Marketplace", bg: "#F4EEFD", bgHover: "#E7DBFB", bgActive: "#D9C7F8", accent: "#7C3AED" },
+    { key: "toners", label: "Toners", accent: "#FF1F75", tint: "#FFE7EF" },
+    { key: "printers", label: "Printers", accent: "#00D4E5", tint: "#E6FAFD" },
+    { key: "consumables", label: "Inks & Consumables", accent: "#FFC107", tint: "#FFF8E0" },
+    { key: "scanners", label: "Scanners", accent: "#5468FF", tint: "#EBEEFF" },
+    { key: "papers", label: "Papers", accent: "#C58A6E", tint: "#F7EFE9" },
+    { key: "orders", label: "Orders", accent: "#4F46E5", tint: "#EEF0FE" },
+    { key: "earnings", label: "My Earnings", accent: "#EA580C", tint: "#FEF1E8" },
+    { key: "insights", label: "Insights", accent: "#475569", tint: "#EEF1F5" },
+    { key: "bulk", label: "Bulk Orders", accent: "#FF7A00", tint: "#FFF1E0" },
+    { key: "d2d", label: "Dealer to Dealer", accent: "#5E8CB5", tint: "#EBF2F9" },
+    { key: "oem", label: "OEM Marketplace", accent: "#B58A75", tint: "#F4EBE4" },
 ];
 
 // Category badge colours for the combined All Listings table.
+// Aligned with the navbar pill brand colours (Wave 52) for visual consistency.
 const CAT_BADGE = {
-    Toner: "bg-[#ECFBFD] text-[#0891B2] border-[#C2EFF5]",
-    Printer: "bg-[#FDEDF7] text-[#DB2777] border-[#F6C6E4]",
-    Paper: "bg-[#FEF6E7] text-[#D97706] border-[#FAE0A6]",
-    Consumable: "bg-[#EDFBEF] text-[#16A34A] border-[#C2EFCA]",
+    Toner: "bg-[#FFE7EF] text-[#C2185B] border-[#F5C8D8]",
+    Printer: "bg-[#E6FAFD] text-[#006B73] border-[#BFEEF3]",
+    Paper: "bg-[#F7EFE9] text-[#7A4F38] border-[#E5D2C2]",
+    Consumable: "bg-[#FFF8E0] text-[#7A5A00] border-[#F5E5A6]",
 };
 
-// Full-width dealer control bar — sleek horizontal tab bar with subtle
-// underline-based active state, accent dots reflecting each tab's category
-// colour, and generous spacing. Built to feel like a premium SaaS dashboard
-// (Linear / Stripe / Vercel-style) rather than a coloured admin panel.
+// Modern brand-pill tab bar — matches the public-site navbar style.
+// Active pill: solid brand color background + white text. Inactive: subtle
+// brand-tint bg + brand-text. Mobile scrollable. Used both here and (via
+// CategoryPills below) on the upload-form category selector.
 function DealerTabBar({ active, onSelect }) {
     return (
         <div
@@ -74,7 +75,7 @@ function DealerTabBar({ active, onSelect }) {
         >
             <div className="tc-container px-0 sm:px-2">
                 <div
-                    className="flex items-center gap-1 overflow-x-auto tc-cat-scroll px-3 sm:px-1"
+                    className="flex items-center gap-2 overflow-x-auto tc-cat-scroll px-3 sm:px-2 py-3"
                     role="tablist"
                     aria-label="Dealer dashboard sections"
                 >
@@ -88,35 +89,18 @@ function DealerTabBar({ active, onSelect }) {
                                 aria-current={isActive ? "page" : undefined}
                                 role="tab"
                                 aria-selected={isActive}
-                                className={`group relative inline-flex items-center gap-2 px-3.5 sm:px-4 py-3.5 text-[13px] whitespace-nowrap outline-none transition-colors duration-150 ${
-                                    isActive
-                                        ? "text-[#0A0A0B]"
-                                        : "text-[#6E6E73] hover:text-[#0A0A0B]"
-                                }`}
+                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] whitespace-nowrap outline-none transition-all duration-200 border focus-visible:ring-2 focus-visible:ring-offset-2"
                                 style={{
                                     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
                                     fontWeight: isActive ? 600 : 500,
                                     letterSpacing: "-0.005em",
+                                    background: isActive ? t.accent : t.tint,
+                                    color: isActive ? "#FFFFFF" : t.accent,
+                                    borderColor: isActive ? t.accent : "transparent",
+                                    boxShadow: isActive ? `0 4px 14px -4px ${t.accent}66` : "none",
                                 }}
                             >
-                                <span
-                                    aria-hidden
-                                    className="inline-block w-1.5 h-1.5 rounded-full transition-all duration-150"
-                                    style={{
-                                        background: t.accent,
-                                        opacity: isActive ? 1 : 0.35,
-                                        transform: isActive ? "scale(1)" : "scale(0.85)",
-                                    }}
-                                />
                                 {t.label}
-                                <span
-                                    aria-hidden
-                                    className="pointer-events-none absolute left-2.5 right-2.5 bottom-0 h-[2px] rounded-full transition-all duration-200"
-                                    style={{
-                                        background: isActive ? t.accent : "transparent",
-                                        opacity: isActive ? 1 : 0,
-                                    }}
-                                />
                             </button>
                         );
                     })}
@@ -794,7 +778,7 @@ export default function SupplierDashboard() {
                         <CenterAction title="Manage your consumables" subtitle="Add a single consumable SKU, edit your catalogue inline, or upload many at once.">
                             <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-consumable"))} data-testid="add-consumable-cta-btn"><Plus size={16} /> Add Consumable</Button>
                             <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-bulk-consumable"))} data-testid="bulk-upload-consumable-btn"><Upload size={15} /> Bulk upload</Button>
-                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-edit-consumable"))} data-testid="edit-consumables-btn"><Layers size={15} /> Edit Consumables</Button>
+                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-edit-consumable"))} data-testid="edit-consumables-btn"><Layers size={15} /> Edit Inks & Consumables</Button>
                         </CenterAction>
                         <D2DExplainer />
                         <ConsumableListings />
@@ -906,7 +890,7 @@ export default function SupplierDashboard() {
                                 { label: "Toners", onClick: () => openBulkFor("toner"), tid: "bulk-hub-toners" },
                                 { label: "Printers", onClick: () => openBulkFor("printer"), tid: "bulk-hub-printers" },
                                 { label: "Papers", onClick: () => openBulkFor("paper"), tid: "bulk-hub-papers" },
-                                { label: "Consumables", onClick: () => openBulkFor("consumable"), tid: "bulk-hub-consumables" },
+                                { label: "Inks & Consumables", onClick: () => openBulkFor("consumable"), tid: "bulk-hub-consumables" },
                                 { label: "Scanners", onClick: () => openBulkFor("scanner"), tid: "bulk-hub-scanners" },
                             ].map((b) => (
                                 <button key={b.label} onClick={b.onClick} className="tc-card-flat p-6 text-left hover:shadow-md hover:border-black/[0.12] transition group" data-testid={b.tid}>

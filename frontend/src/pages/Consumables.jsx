@@ -10,7 +10,7 @@ import ConsumableProductCard from "../components/cards/ConsumableProductCard";
 import ProductRequestForm from "../components/ProductRequestForm";
 import BrandChips from "../components/BrandChips";
 import ColorChips from "../components/ColorChips";
-import { CONSUMABLE_SUBCATEGORIES, CONSUMABLE_CONDITIONS } from "../lib/consumableConstants";
+import { CONSUMABLE_CONDITIONS } from "../lib/consumableConstants";
 
 const SORT_OPTIONS = [
     { value: "local", label: "Local suppliers first" },
@@ -28,12 +28,30 @@ export default function Consumables() {
         brands: [], colors: [], condition: "", city: "", minPrice: "", maxPrice: "", sort: "local",
     });
 
+    // The 5 subcategory tabs surfaced to buyers (Wave 52). "Accessories" is
+    // an umbrella over Staple Cartridges + Transfer Belts + Other so the bar
+    // stays scannable while still letting dealers pick the granular type.
+    const SUBCAT_TABS = [
+        { key: "all", label: "All", subcats: null },
+        { key: "ink", label: "Ink Cartridges", subcats: ["Ink Cartridges"] },
+        { key: "drums", label: "Drums", subcats: ["Drums"] },
+        { key: "fusers", label: "Fusers", subcats: ["Fusers"] },
+        { key: "maintenance", label: "Maintenance Kits", subcats: ["Maintenance Kits"] },
+        { key: "accessories", label: "Accessories", subcats: ["Staple Cartridges", "Transfer Belts", "Other"] },
+    ];
+    const activeTab = SUBCAT_TABS.find((t) => t.key === sub) || SUBCAT_TABS[0];
+
     const load = async () => {
         setLoading(true);
         try {
             const params = {};
-            if (sub && sub !== "all") params.subcategory = sub;
             if (appCity) params.near_city = appCity;
+            // Only narrow the API call when a single subcategory is selected.
+            // "Accessories" (multi-subcat) and "All" both fetch unfiltered;
+            // the umbrella filter is applied client-side in `visible`.
+            if (activeTab.subcats && activeTab.subcats.length === 1) {
+                params.subcategory = activeTab.subcats[0];
+            }
             const { data } = await api.get("/consumables", { params });
             setRows(Array.isArray(data) ? data : []);
         } catch (e) {
@@ -65,6 +83,8 @@ export default function Consumables() {
             return false;
         };
         let out = rows.filter((r) => {
+            // Umbrella subcategory filter (e.g. Accessories matches multiple)
+            if (activeTab.subcats && !activeTab.subcats.includes(r.subcategory)) return false;
             if (filters.brands.length > 0 && !filters.brands.includes(r.brand)) return false;
             if (!matchesColor(r)) return false;
             if (filters.condition && (r.condition || "New") !== filters.condition) return false;
@@ -87,12 +107,12 @@ export default function Consumables() {
             });
         }
         return out;
-    }, [rows, filters, appCity]);
+    }, [rows, filters, appCity, sub]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <div className="min-h-screen bg-[#F5F5F7]">
             <PageMeta
-                title="Buy Printer Consumables Online India — TonersCart"
+                title="Buy Printer Inks & Consumables Online India — TonersCart"
                 description="Buy ink cartridges, drums, fusers, maintenance kits, staple cartridges and transfer belts from verified dealers across India. Compare prices and real stock."
                 path="/consumables"
             />
@@ -102,24 +122,35 @@ export default function Consumables() {
                 </div>
                 <div className="flex items-center gap-3 mb-2">
                     <span className="tc-strip" />
-                    <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-[#6E6E73]">Buy Consumables</span>
+                    <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-[#6E6E73]">Buy Inks &amp; Consumables</span>
                 </div>
                 <h1 className="text-[28px] sm:text-[34px] text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 300, letterSpacing: "-0.025em", lineHeight: 1.1 }}>
                     Inks, drums, fusers &amp; kits from verified dealers
                 </h1>
 
-                {/* Subcategory tabs */}
-                <div className="mt-6 flex flex-wrap gap-2" data-testid="consumables-subcat-tabs">
-                    {[{ key: "all", label: "All" }, ...CONSUMABLE_SUBCATEGORIES.map((s) => ({ key: s, label: s }))].map((t) => (
-                        <button
-                            key={t.key}
-                            onClick={() => setSub(t.key)}
-                            className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-medium border transition ${sub === t.key ? "bg-[#0A0A0B] text-white border-[#0A0A0B]" : "bg-white text-[#0A0A0B] border-[#D2D2D7] hover:border-[#0A0A0B]"}`}
-                            data-testid={`consumables-tab-${t.key.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
-                        >
-                            {t.label}
-                        </button>
-                    ))}
+                {/* Subcategory tabs — amber-tinted pills matching the navbar
+                    "Inks & Consumables" colour (#FFC107). Mobile scrollable. */}
+                <div className="mt-6 -mx-3 sm:mx-0 px-3 sm:px-0 flex gap-2 overflow-x-auto tc-cat-scroll" data-testid="consumables-subcat-tabs">
+                    {SUBCAT_TABS.map((t) => {
+                        const isActive = sub === t.key;
+                        return (
+                            <button
+                                key={t.key}
+                                onClick={() => setSub(t.key)}
+                                className="px-4 py-2 rounded-full text-[13px] whitespace-nowrap font-medium border transition-all duration-200 focus-visible:ring-2 focus-visible:ring-offset-2"
+                                style={{
+                                    background: isActive ? "#FFC107" : "#FFF8E0",
+                                    color: isActive ? "#FFFFFF" : "#7A5A00",
+                                    borderColor: isActive ? "#FFC107" : "transparent",
+                                    boxShadow: isActive ? "0 4px 14px -4px rgba(255,193,7,0.45)" : "none",
+                                    fontWeight: isActive ? 600 : 500,
+                                }}
+                                data-testid={`consumables-tab-${t.key}`}
+                            >
+                                {t.label}
+                            </button>
+                        );
+                    })}
                 </div>
 
                 {/* Brand filter chips */}
