@@ -1,0 +1,70 @@
+{
+  "summary": "Wave 50 — Cartridge-type routing (toner vs consumable). Backend pytest 9/9 PASS after I fixed one P0 sitemap bug. Frontend Playwright: /toner/epson-001-black -> /consumable/epson-001-black redirect WORKS, H1 correct, featured-card layout renders identically to /toner/canon-303 (LOWEST PRICE badge, 80px placeholder, Buy now, ₹6,018 incl 18% GST). /consumable/brother-dr-2255 (drum) renders. /compatible/hp-laserjet-m1005 Q2612A chip -> /toner/hp-q2612a. /compatible/epson-l3210 003 chip -> /consumable/epson-003. ProductDetail Suitable-for chips link to /compatible/:slug. All 19 review items verified end-to-end except mandatory-field 400 responses on /api/supplier/* (require_role gates first, can only verify via UI which uses these data-testids confirmed in source).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verifications_performed": {
+    "GET /api/compat/toner-page/canon-303": "PASS — kind='toner', canonical_url='/toner/canon-303'",
+    "GET /api/compat/toner-page/epson-001-black": "PASS — kind='consumable', canonical_url='/consumable/epson-001-black' (frontend redirects via <Navigate>)",
+    "GET /api/compat/consumable-page/brother-dr-2255": "PASS — kind='consumable', canonical_url='/consumable/brother-dr-2255'",
+    "GET /api/sitemap.xml split": "PASS — >=100 /toner/ entries + >=100 /consumable/ entries, brother-dr-2255 under /consumable/, canon-303 under /toner/",
+    "GET /api/sitemap.xml no Epson ink under /toner/": "PASS — no epson-001/002/003/664 leak",
+    "POST /api/supplier/listings without auth": "PASS — returns 401/403 as expected (require_role guards before payload validation)",
+    "POST /api/supplier/printers/papers/consumables without auth": "PASS — protected",
+    "Frontend /toner/epson-001-black -> /consumable/epson-001-black redirect": "PASS — Navigate component fires, final URL = /consumable/epson-001-black, H1 = 'Epson 001 Black — Compatible Printers & Verified Dealers'",
+    "Frontend /consumable/epson-001-black featured-card layout": "PASS — price-featured-* x2 elements, LOWEST PRICE badge x1, price-buy-* x3, 80px placeholder image",
+    "Frontend /consumable/brother-dr-2255 (drum SEO page)": "PASS — H1 = 'Brother DR-2255 — Compatible Printers & Verified Dealers'",
+    "Frontend /toner/canon-303 (control)": "PASS — URL stays at /toner/canon-303, no redirect, featured card present",
+    "Frontend /compatible/hp-laserjet-m1005 chip Q2612A": "PASS — <a data-testid='compatible-cartridge-chip' href='/toner/hp-q2612a'>",
+    "Frontend /compatible/epson-l3210 chip 003": "PASS — <a data-testid='compatible-cartridge-chip' href='/consumable/epson-003'>",
+    "Frontend ProductDetail Suitable-for chips": "PASS — /toner/02f296c4-… 'Canon imageCLASS LBP2900' chip is <a data-testid='product-suitable-for-chip' href='/compatible/canon-lbp2900'>",
+    "Code review — backend validation order": "PASS — products.py L33-38 (toner: page_yield → warranty → cartridge_weight), L251 (printer warranty), L597 (paper warranty), L755-760 (consumable warranty → page_yield conditional on 'Ink Cartridges' → cartridge_weight). All Pydantic fields Optional[…] = None so the explicit HTTPException(400, 'X is required') fires instead of 422.",
+    "Code review — frontend data-testids": "PASS — listing-warranty + listing-weight + listing-warranty-error in SupplierDashboard.jsx; add-consumable-dialog + consumable-warranty-pills in ConsumableListings.jsx; paper-warranty-wrap in PaperListings.jsx; wizard-printer-warranty-wrap in PrinterListings.jsx; product-suitable-for-chip in ProductDetail.jsx; compatible-cartridge-chip in CompatiblePage.jsx"
+  },
+  "bug_fixed_by_testing_agent": {
+    "file": "/app/backend/server.py",
+    "function": "_build_sitemap_response",
+    "line": 1559,
+    "bug": "Variable shadowing: inner `base = '/toner/' if … else '/consumable/'` overwrote the outer `base = 'https://www.tonerscart.com'`. Every <loc> produced AFTER the first iteration of the toner loop (i.e. 604 of them) lost the https:// host and got the previous loop's prefix re-applied, producing broken URLs like `<loc>/consumable//consumable/brother-bt-5000c</loc>`. Google would have rejected the entire sitemap.",
+    "fix": "Renamed inner variable to `prefix` so the outer host `base` stays intact.",
+    "verified": "Re-ran test_sitemap_base_url_not_corrupted — all 604 broken locs now have https://www.tonerscart.com prefix."
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave50_cartridge_routing.py",
+    "/app/test_reports/pytest/wave50.xml"
+  ],
+  "action_items": [
+    "Main agent: run the static sitemap generator (/app/backend/generate_sitemap.py) once to refresh /app/frontend/public/sitemap.xml so the static fallback matches the dynamic one. (generate_sitemap.py uses BASE uppercase outer + base lowercase inner so it's NOT bugged, but the cached XML file in public/ may still contain old data.)",
+    "Optional: extract `displayGst = l.gst_rate ?? 18` constant to DRY across SupplierDashboard L995 & L1069 (pre-existing comment from iter 48 — still applies).",
+    "Optional: backend mandatory-field 400 responses on /api/supplier/* can be verified end-to-end only via UI (no shared supplier account exists per test_credentials.md). The validation logic is correct in source; UI testids confirmed present."
+  ],
+  "critical_code_review_comments": [
+    "FIXED — server.py L1559 variable shadowing was producing 604 broken sitemap URLs (P0 SEO regression).",
+    "compat.py L335-342 — _is_toner_type only matches lowercase 'toner'. If compatibility_db.py ever stores 'Toner' or 'TONER' the comparison would mis-route to /consumable/. The .lower().strip() guard handles that. ✓",
+    "compat.py L568-573 — /consumable-page/:slug just calls compat_toner_page(slug). Functionally fine, but if someone hits /api/compat/consumable-page/canon-303 they'll get kind='toner' + canonical_url='/toner/canon-303'. That's actually the correct behaviour (allows ConsumableRoute to redirect mis-typed URLs back to /toner/) but should be documented in the docstring.",
+    "TonerModelPage.jsx — when pageKind='consumable' but the backend returns kind='toner', the Navigate fires to /toner/:slug; and vice versa. Confirmed live by tested redirect epson-001-black.",
+    "products.py — order of validations now is: toner_type → page_yield → warranty → cartridge_weight. Frontend submits all 4 simultaneously; if user fills 1 + 3 + 4 but not 2, they'd get 'Page yield (sheets) is required' even though the form-level error pill says 'Warranty' is what's missing. Minor UX nit — consider validating fields in the same order the form displays them.",
+    "Sitemap fix should also be ported to any cached /app/frontend/public/sitemap.xml — left as action item.",
+    "ConsumableRoute.jsx + App.js /consumable/:id route: UUID -> ProductDetail, slug -> TonerModelPage(pageKind='consumable'). Verified live (epson-001-black slug renders TonerModelPage, but a UUID like 02f296c4-… renders ProductDetail). ✓"
+  ],
+  "updated_files": [
+    "/app/backend/server.py (FIXED P0 sitemap variable-shadow bug at L1559)",
+    "/app/backend/tests/test_wave50_cartridge_routing.py (NEW — 9 tests, 9/9 PASS)"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 after sitemap fix)",
+    "frontend": "100% on all 5 testable flows (redirect, featured-card, consumable SEO page, compatible-cartridge chip linking, Suitable-for chip linking). Form-validation toasts verified via source-level data-testid grep (no shared supplier account)."
+  },
+  "test_credentials": "Admin: support@tonerscart.com / Bangara1@# (not used — public endpoints only). No shared supplier account exists per /app/memory/test_credentials.md.",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Wave 50 is fully verified after a P0 sitemap fix I applied (server.py L1559 variable shadowing). To live-test the form mandatory-field validations (warranty + cartridge_weight + conditional page_yield) on the /supplier/* POST endpoints, main agent or next QA needs to register a fresh supplier via /api/auth/signup-customer + admin upgrade. The frontend testids are all in place (listing-warranty, listing-weight, listing-warranty-error, consumable-warranty-pills, paper-warranty-wrap, wizard-printer-warranty-wrap, add-consumable-dialog). Custom-model tables (supabase_schema_custom_models.sql) are still un-migrated and graceful 503 — per spec, NOT a bug.",
+  "rca of the issue": "P0 sitemap bug RCA: in _build_sitemap_response(), the outer `base = 'https://www.tonerscart.com'` was being reassigned inside the cartridge-type loop to `'/toner/'` or `'/consumable/'`. Because `add()` is a closure that captures `base` from the enclosing scope, every <url> emitted after the first iteration produced `<loc>/consumable/{slug}</loc>` instead of `<loc>https://www.tonerscart.com/consumable/{slug}</loc>`. Then on the SECOND iteration the new add() call concatenated `'/consumable/'` (current base) + path that already started with `/consumable/`, producing `<loc>/consumable//consumable/brother-bt-5000c</loc>`. Reproduction: GET /api/sitemap.xml and grep for `<loc>(?!https://)`. Fix: renamed loop-local variable to `prefix`. Verified via re-run of test_sitemap_base_url_not_corrupted (0 broken locs)."
+}

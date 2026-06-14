@@ -23,8 +23,11 @@ function emptyForm() {
     return {
         subcategory: "Ink Cartridges", subcategory_other: "", brand: "", model_number: "",
         compatible_models: "", condition: "New", price: "", gst_rate: 18, price_type: null, stock: "", description: "",
+        warranty: "", page_yield: "", cartridge_weight: "",
     };
 }
+
+const CONSUMABLE_WARRANTIES = ["No warranty", "3 months", "6 months", "1 year", "2 years"];
 
 export default function ConsumableListings() {
     const [rows, setRows] = useState([]);
@@ -55,6 +58,9 @@ export default function ConsumableListings() {
             price_type: "incl",
             stock: String(c.stock ?? ""),
             description: c.description || "",
+            warranty: c.warranty || "",
+            page_yield: c.page_yield != null ? String(c.page_yield) : "",
+            cartridge_weight: c.cartridge_weight != null ? String(c.cartridge_weight) : "",
         });
         setImageFiles([]); setImagePreviews([]);
         setOpen(true);
@@ -112,6 +118,14 @@ export default function ConsumableListings() {
         setPriceTypeError(false);
         if (!form.price || !form.stock) { toast.error("Price and stock are required"); return; }
         if (form.subcategory === "Other" && !form.subcategory_other.trim()) { toast.error("Please specify the consumable type"); return; }
+        if (!form.warranty) { toast.error("Warranty is required"); return; }
+        // Page yield is meaningful for ink cartridges (printable pages) but not
+        // for drums / fusers / maintenance kits where rotations matter instead,
+        // so it's only mandatory when the dealer selected "Ink Cartridges".
+        if (form.subcategory === "Ink Cartridges" && (!form.page_yield || parseInt(form.page_yield, 10) <= 0)) {
+            toast.error("Page yield (sheets) is required for ink cartridges"); return;
+        }
+        if (!form.cartridge_weight || parseInt(form.cartridge_weight, 10) <= 0) { toast.error("Cartridge weight (g) is required"); return; }
         setSaving(true);
         try {
             let uploadedUrls = [];
@@ -124,7 +138,7 @@ export default function ConsumableListings() {
                 }
             }
             const basePrice = getBasePrice(form.price, form.price_type, form.gst_rate);
-            const payload = {
+                            const payload = {
                 subcategory: form.subcategory,
                 subcategory_other: form.subcategory === "Other" ? form.subcategory_other.trim() : null,
                 brand: form.brand.trim(),
@@ -135,6 +149,9 @@ export default function ConsumableListings() {
                 gst_rate: Number(form.gst_rate || 18),
                 stock: Number(form.stock),
                 description: (form.description || "").trim() || null,
+                warranty: form.warranty,
+                page_yield: form.page_yield ? parseInt(form.page_yield, 10) : null,
+                cartridge_weight: parseInt(form.cartridge_weight, 10),
             };
             if (uploadedUrls.length > 0) {
                 payload.image_url = uploadedUrls[0];
@@ -262,6 +279,42 @@ export default function ConsumableListings() {
                                     error={priceTypeError && !form.price_type}
                                     testIdPrefix="consumable"
                                 />
+                            </div>
+                            <div>
+                                <Label>Page yield (sheets){form.subcategory === "Ink Cartridges" && <span className="text-red-500"> *</span>}</Label>
+                                <Input type="number" min="1" step="1" value={form.page_yield}
+                                    onChange={(e) => setForm({ ...form, page_yield: e.target.value })}
+                                    required={form.subcategory === "Ink Cartridges"} placeholder="e.g. 1500"
+                                    className="tc-input-lg" data-testid="consumable-page-yield" />
+                                {form.subcategory !== "Ink Cartridges" && (
+                                    <div className="text-[11px] text-[#86868B] mt-0.5">Optional for {form.subcategory.toLowerCase()}.</div>
+                                )}
+                            </div>
+                            <div>
+                                <Label>Cartridge weight (g) <span className="text-red-500">*</span></Label>
+                                <Input type="number" min="1" step="1" value={form.cartridge_weight}
+                                    onChange={(e) => setForm({ ...form, cartridge_weight: e.target.value })}
+                                    required placeholder="e.g. 120"
+                                    className="tc-input-lg" data-testid="consumable-cartridge-weight" />
+                            </div>
+                            <div className="col-span-2">
+                                <Label>Warranty <span className="text-red-500">*</span></Label>
+                                <div className="flex flex-wrap gap-2 mt-1" data-testid="consumable-warranty-pills">
+                                    {CONSUMABLE_WARRANTIES.map((w) => (
+                                        <button
+                                            type="button"
+                                            key={w}
+                                            onClick={() => setForm({ ...form, warranty: w })}
+                                            className={`px-3 py-1.5 rounded-full text-[12.5px] border transition ${form.warranty === w ? "bg-[#0A0A0B] text-white border-[#0A0A0B]" : "bg-white text-[#0A0A0B] border-[#E5E5EA] hover:border-[#00B7C7]"}`}
+                                            data-testid={`consumable-warranty-${w.toLowerCase().replace(/\s+/g, "-")}`}
+                                        >
+                                            {w}
+                                        </button>
+                                    ))}
+                                </div>
+                                {!form.warranty && (
+                                    <div className="text-[11.5px] text-red-600 mt-1" data-testid="consumable-warranty-error">Required — please select a warranty option.</div>
+                                )}
                             </div>
                         </div>
 

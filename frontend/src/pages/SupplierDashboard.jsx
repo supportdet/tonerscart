@@ -8,7 +8,7 @@ import { Label } from "../components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
 import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle, Camera, Loader2, Package, ShoppingCart, Clock, Printer, FileText, Pencil, X as XIcon } from "lucide-react";
-import { GST_RATES, formatINR, withGst, priceFromInclusive } from "../lib/listingConstants";
+import { GST_RATES, formatINR, withGst, priceFromInclusive, inclGstPrice } from "../lib/listingConstants";
 import { TONER_BRANDS } from "../lib/brands";
 import { supabase, PRODUCT_BUCKET } from "../lib/supabase";
 import RefilledWarningDialog from "../components/RefilledWarningDialog";
@@ -356,11 +356,11 @@ export default function SupplierDashboard() {
         ]);
         const arr = (r) => (r.status === "fulfilled" && Array.isArray(r.value.data) ? r.value.data : []);
         const j = (...parts) => parts.filter(Boolean).join(" ").trim();
-        const toners = arr(reqs[0]).map((l) => ({ id: l.id, kind: "toner", cat: "Toner", name: j(l.brand, l.compatible_models || l.model_number), price: l.price, stock: l.stock }));
-        const printers = arr(reqs[1]).map((l) => ({ id: l.id, kind: "printer", cat: "Printer", name: j(l.brand, l.model_number), price: l.price, stock: l.stock }));
-        const papers = arr(reqs[2]).map((l) => ({ id: l.id, kind: "paper", cat: "Paper", name: j(l.brand, l.size, l.gsm ? `${l.gsm}GSM` : ""), price: l.price_per_ream, stock: l.stock }));
-        const cons = arr(reqs[3]).map((l) => ({ id: l.id, kind: "consumable", cat: "Consumable", name: j(l.brand, l.model_number), price: l.price, stock: l.stock }));
-        const scanners = arr(reqs[4]).map((l) => ({ id: l.id, kind: "scanner", cat: "Scanner", name: j(l.brand, l.model_number), price: l.price, stock: l.stock }));
+        const toners = arr(reqs[0]).map((l) => ({ id: l.id, kind: "toner", cat: "Toner", name: j(l.brand, l.compatible_models || l.model_number), price: l.price, gst_rate: l.gst_rate, stock: l.stock }));
+        const printers = arr(reqs[1]).map((l) => ({ id: l.id, kind: "printer", cat: "Printer", name: j(l.brand, l.model_number), price: l.price, gst_rate: l.gst_rate, stock: l.stock }));
+        const papers = arr(reqs[2]).map((l) => ({ id: l.id, kind: "paper", cat: "Paper", name: j(l.brand, l.size, l.gsm ? `${l.gsm}GSM` : ""), price: l.price_per_ream, gst_rate: l.gst_rate, stock: l.stock }));
+        const cons = arr(reqs[3]).map((l) => ({ id: l.id, kind: "consumable", cat: "Consumable", name: j(l.brand, l.model_number), price: l.price, gst_rate: l.gst_rate, stock: l.stock }));
+        const scanners = arr(reqs[4]).map((l) => ({ id: l.id, kind: "scanner", cat: "Scanner", name: j(l.brand, l.model_number), price: l.price, gst_rate: l.gst_rate, stock: l.stock }));
         setAllProducts([...toners, ...printers, ...papers, ...cons, ...scanners]);
     };
 
@@ -554,6 +554,9 @@ export default function SupplierDashboard() {
         if (!brand) { toast.error("Please select a brand"); return; }
         if (!compatibleModels.trim()) { toast.error("Please enter the suitable printer models"); return; }
         if (!pageYield || parseInt(pageYield, 10) <= 0) { toast.error("Page yield (sheets) is required"); return; }
+        if (!warranty) { toast.error("Warranty is required"); return; }
+        if (warranty === "Other" && !warrantyOther.trim()) { toast.error("Enter the custom warranty period"); return; }
+        if (!cartridgeWeight || parseInt(cartridgeWeight, 10) <= 0) { toast.error("Cartridge weight (g) is required"); return; }
         if (!priceType) { setPriceTypeError(true); toast.error("Pick whether variant prices are Incl. or Excl. GST"); return; }
         setPriceTypeError(false);
         // Convert variant prices to base (GST-exclusive) before saving — the
@@ -990,7 +993,10 @@ export default function SupplierDashboard() {
                                         <div className="text-[12px] text-[#6E6E73]">{l.color}</div>
                                     )}
                                     <div className="mt-1 flex items-center justify-between">
-                                        <div className="font-mono text-[18px] font-semibold text-[#0A0A0B]">₹{Number(l.price).toLocaleString("en-IN")}</div>
+                                        <div className="leading-tight">
+                                            <div className="font-mono text-[18px] font-semibold text-[#0A0A0B]" data-testid={`listing-incl-price-${l.id}`}>{formatINR(inclGstPrice(l.price, l.gst_rate))}</div>
+                                            <div className="text-[10px] text-[#86868B] tracking-[0.06em]">incl. {l.gst_rate ?? 18}% GST · base {formatINR(l.price)}</div>
+                                        </div>
                                         <InlineStock stock={l.stock} onSave={(v) => patchStock(l.id, v)} testId={`stock-edit-${l.id}`} />
                                     </div>
                                     <div className="mt-2 flex items-center gap-3">
@@ -1046,7 +1052,7 @@ export default function SupplierDashboard() {
                                 <tr>
                                     <th className="text-left p-3">Product name</th>
                                     <th className="text-left p-3">Category</th>
-                                    <th className="text-left p-3">Price</th>
+                                    <th className="text-left p-3">Price (incl. GST)</th>
                                     <th className="text-left p-3">Stock</th>
                                     <th className="text-left p-3">Status</th>
                                     <th className="text-right p-3">Actions</th>
@@ -1059,7 +1065,14 @@ export default function SupplierDashboard() {
                                         <tr key={`${p.kind}-${p.id}`} className="border-t border-black/[0.06]" data-testid={`all-row-${p.id}`}>
                                             <td className="p-3 font-medium text-[#0A0A0B] max-w-[280px] truncate">{p.name || "—"}</td>
                                             <td className="p-3"><span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${CAT_BADGE[p.cat] || ""}`}>{p.cat}</span></td>
-                                            <td className="p-3">{p.price != null ? formatINR(p.price) : "—"}</td>
+                                            <td className="p-3" data-testid={`all-row-price-${p.id}`}>
+                                                {p.price != null ? (
+                                                    <>
+                                                        <div className="font-mono text-[#0A0A0B]">{formatINR(inclGstPrice(p.price, p.gst_rate))}</div>
+                                                        <div className="text-[10px] text-[#86868B] mt-0.5">incl. {p.gst_rate ?? 18}% GST</div>
+                                                    </>
+                                                ) : "—"}
+                                            </td>
                                             <td className="p-3">{p.stock ?? 0}</td>
                                             <td className="p-3">
                                                 <span className={`inline-flex items-center gap-1.5 text-[12px] font-semibold ${active ? "text-emerald-600" : "text-[#9A9AA0]"}`}>
@@ -1257,8 +1270,8 @@ export default function SupplierDashboard() {
                                 <Input value={oemPartNumber} onChange={(e) => setOemPartNumber(e.target.value)} placeholder="e.g. Q2612A" className="tc-input-lg" data-testid="listing-oem" />
                             </div>
                             <div>
-                                <Label>Cartridge weight (g)</Label>
-                                <Input type="number" min="0" step="1" value={cartridgeWeight} onChange={(e) => setCartridgeWeight(e.target.value)} placeholder="e.g. 450" className="tc-input-lg" data-testid="listing-weight" />
+                                <Label>Cartridge weight (g)<span className="text-red-500"> *</span></Label>
+                                <Input type="number" min="1" step="1" value={cartridgeWeight} onChange={(e) => setCartridgeWeight(e.target.value)} required placeholder="e.g. 450" className="tc-input-lg" data-testid="listing-weight" />
                             </div>
                             <div>
                                 <Label>Print technology</Label>
@@ -1270,16 +1283,21 @@ export default function SupplierDashboard() {
                                 </select>
                             </div>
                             <div className="col-span-2">
-                                <Label>Warranty</Label>
-                                <select value={warranty} onChange={(e) => { setWarranty(e.target.value); if (e.target.value !== "Other") setWarrantyOther(""); }} className="tc-input-lg w-full" data-testid="listing-warranty">
-                                    <option value="">No warranty</option>
+                                <Label>Warranty<span className="text-red-500"> *</span></Label>
+                                <select value={warranty} onChange={(e) => { setWarranty(e.target.value); if (e.target.value !== "Other") setWarrantyOther(""); }} required className="tc-input-lg w-full" data-testid="listing-warranty">
+                                    <option value="">Select warranty…</option>
+                                    <option value="No warranty">No warranty</option>
                                     <option value="3 months">3 months</option>
                                     <option value="6 months">6 months</option>
                                     <option value="1 year">1 year</option>
+                                    <option value="2 years">2 years</option>
                                     <option value="Other">Other</option>
                                 </select>
                                 {warranty === "Other" && (
                                     <Input value={warrantyOther} onChange={(e) => setWarrantyOther(e.target.value)} placeholder="Enter months (e.g. 18)" className="tc-input-lg mt-2" data-testid="listing-warranty-other" />
+                                )}
+                                {!warranty && (
+                                    <div className="text-[11.5px] text-red-600 mt-1" data-testid="listing-warranty-error">Required — please select a warranty option.</div>
                                 )}
                             </div>
                             <div className="col-span-2">

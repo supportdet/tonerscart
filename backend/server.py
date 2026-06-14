@@ -1205,6 +1205,8 @@ class PaperCreate(BaseModel):
     description: Optional[str] = None
     intercity_delivery_charge: Optional[float] = 0
     gst_rate: Optional[int] = 18
+    # Wave 49 — warranty now required for papers (reams batch QC)
+    warranty: Optional[str] = None
     # Wave 10 — D2D marketplace
     d2d_enabled: Optional[bool] = False
     d2d_price: Optional[float] = None
@@ -1245,6 +1247,12 @@ class ConsumableCreate(BaseModel):
     image_url: Optional[str] = None
     image_urls: List[str] = Field(default_factory=list)
     intercity_delivery_charge: Optional[float] = 0
+    # Wave 49 — warranty + page_yield + cartridge_weight are now required
+    # for ink cartridges + drums + fusers + maintenance kits so buyers see
+    # the same coverage info they get on toners.
+    warranty: Optional[str] = None
+    page_yield: Optional[int] = None
+    cartridge_weight: Optional[int] = None
     d2d_enabled: Optional[bool] = False
     d2d_price: Optional[float] = None
 
@@ -1542,10 +1550,14 @@ def _build_sitemap_response():
             add(f"/compatible/{p['slug']}", "0.6")
     except Exception as e:
         logger.debug("sitemap compatible pages skipped: %s", e)
-    # Programmatic SEO pages — one per toner/consumable model.
+    # Programmatic SEO pages — one per cartridge model. Laser-powder toners go
+    # at /toner/:slug; inks, drums, ribbons, fusers, maintenance kits go at
+    # /consumable/:slug so search engines index them under the right intent.
     try:
         for t in _cdb.all_toners():
-            add(f"/toner/{t['slug']}", "0.6")
+            ttype = (t.get("type") or "").lower().strip()
+            prefix = "/toner/" if ttype == "toner" else "/consumable/"
+            add(f"{prefix}{t['slug']}", "0.6")
     except Exception as e:
         logger.debug("sitemap toner pages skipped: %s", e)
     # Live product listing detail pages.

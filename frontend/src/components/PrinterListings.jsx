@@ -130,7 +130,17 @@ const EMPTY = {
     price: "",
     stock: "1",
     condition: "new",
+    printer_warranty: "",
 };
+
+const PRINTER_WARRANTIES = [
+    { id: "No warranty",   label: "No warranty" },
+    { id: "3 months",      label: "3 months" },
+    { id: "6 months",      label: "6 months" },
+    { id: "1 year",        label: "1 year" },
+    { id: "2 years",       label: "2 years" },
+    { id: "3 years",       label: "3 years" },
+];
 
 // ============================================================
 
@@ -310,6 +320,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                 price: editing.price != null ? String(withGst(Number(editing.price), editing.gst_rate != null ? Number(editing.gst_rate) : 18)) : "",
                 stock: editing.stock != null ? String(editing.stock) : "1",
                 condition: editing.condition || "new",
+                printer_warranty: editing.printer_warranty || "",
             });
             const imgs = Array.isArray(editing.image_urls) ? editing.image_urls.filter(Boolean) : (editing.image_url ? [editing.image_url] : []);
             setExistingImages(imgs);
@@ -429,6 +440,11 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
 
     const submit = async () => {
         if (saving) return;
+        if (!f.printer_warranty || !f.printer_warranty.trim()) {
+            toast.error("Warranty is required");
+            setStep(3);
+            return;
+        }
         setSaving(true);
         try {
             const payload = {
@@ -456,6 +472,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                 paper_sizes: f.paper_sizes || [],
                 mobile_printing: f.mobile_printing || [],
                 intercity_delivery_charge: parseFloat(f.intercity_delivery_charge || 0) || 0,
+                printer_warranty: f.printer_warranty,
                 price: getBasePrice(f.price, f.price_type, f.gst_rate),
                 stock: parseInt(f.stock || "1", 10),
             };
@@ -761,6 +778,18 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                                     onClick={(id) => setVal("condition", id)}
                                     testKey="condition"
                                 />
+                            </div>
+                            <div data-testid="wizard-printer-warranty-wrap">
+                                <Label>Warranty <span className="text-red-500">*</span></Label>
+                                <PillRow
+                                    options={PRINTER_WARRANTIES}
+                                    selected={[f.printer_warranty]}
+                                    onClick={(id) => setVal("printer_warranty", id)}
+                                    testKey="printer-warranty"
+                                />
+                                {!f.printer_warranty && (
+                                    <div className="text-[11.5px] text-red-600 mt-1" data-testid="wizard-printer-warranty-error">Required — dealers cannot publish without selecting a warranty option.</div>
+                                )}
                             </div>
                             <CompetitivePricingNote />
                             <div>

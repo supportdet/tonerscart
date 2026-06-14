@@ -32,6 +32,10 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
         raise HTTPException(400, "toner_type must be Original, Compatible or Refilled")
     if not payload.page_yield or int(payload.page_yield) <= 0:
         raise HTTPException(400, "Page yield (sheets) is required")
+    if not payload.warranty or not str(payload.warranty).strip():
+        raise HTTPException(400, "Warranty is required")
+    if not payload.cartridge_weight or int(payload.cartridge_weight) <= 0:
+        raise HTTPException(400, "Cartridge weight (g) is required")
 
     # Resolve toner_master row: use toner_id if given, else find/create by (brand, model)
     t = None
@@ -243,6 +247,8 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         raise HTTPException(400, "Invalid color")
     if payload.price < 0 or payload.stock < 0:
         raise HTTPException(400, "price and stock must be non-negative")
+    if not payload.printer_warranty or not str(payload.printer_warranty).strip():
+        raise HTTPException(400, "Warranty is required")
     # Wave 12 — printer image upload is now optional (animated fallback in UI)
     sid = _supplier_id_for(user)
     row = {
@@ -586,6 +592,9 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
     s = sb_admin.table("suppliers").select("id,city").eq("user_id", user["id"]).maybe_single().execute()
     if not s or not s.data:
         raise HTTPException(403, "Supplier not approved yet")
+    # Wave 49 — paper warranty (reams batch QC coverage) is now mandatory.
+    if not payload.warranty or not str(payload.warranty).strip():
+        raise HTTPException(400, "Warranty is required")
     row = {
         "supplier_id": s.data["id"],
         "brand": sanitize(payload.brand, 80),
@@ -606,6 +615,7 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
         "description": (payload.description or "").strip() or None,
         "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
+        "warranty": payload.warranty,
         "d2d_enabled": bool(payload.d2d_enabled) if payload.d2d_enabled is not None else None,
         "d2d_price": (float(payload.d2d_price) if payload.d2d_price else None),
     }
@@ -619,7 +629,7 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("image_urls", "brightness", "thickness_microns", "acid_free", "suitable_for", "description", "intercity_delivery_charge", "gst_rate", "d2d_enabled", "d2d_price"):
+            for k in ("image_urls", "brightness", "thickness_microns", "acid_free", "suitable_for", "description", "intercity_delivery_charge", "gst_rate", "warranty", "d2d_enabled", "d2d_price"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True
@@ -738,6 +748,16 @@ def create_consumable(payload: ConsumableCreate, user: dict = Depends(require_us
     sub = payload.subcategory if payload.subcategory in CONSUMABLE_SUBCATEGORIES else "Other"
     brand = sanitize(payload.brand, 80)
     model = sanitize(payload.model_number, 80)
+    # Wave 49 — warranty + cartridge-weight mandatory on every consumable.
+    # Page yield is only meaningful for ink cartridges, so it's enforced
+    # only when subcategory == "Ink Cartridges". Drums/fusers measure life
+    # in rotations or sheets-per-fuser instead.
+    if not payload.warranty or not str(payload.warranty).strip():
+        raise HTTPException(400, "Warranty is required")
+    if sub == "Ink Cartridges" and (not payload.page_yield or int(payload.page_yield) <= 0):
+        raise HTTPException(400, "Page yield (sheets) is required for ink cartridges")
+    if not payload.cartridge_weight or int(payload.cartridge_weight) <= 0:
+        raise HTTPException(400, "Cartridge weight (g) is required")
     row = {
         "supplier_id": s["id"],
         "subcategory": sub,
@@ -757,6 +777,9 @@ def create_consumable(payload: ConsumableCreate, user: dict = Depends(require_us
         "image_urls": payload.image_urls or None,
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
         "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
+        "warranty": payload.warranty,
+        "page_yield": payload.page_yield,
+        "cartridge_weight": payload.cartridge_weight,
         "d2d_enabled": bool(payload.d2d_enabled) if payload.d2d_enabled is not None else None,
         "d2d_price": (float(payload.d2d_price) if payload.d2d_price else None),
     }
@@ -774,7 +797,8 @@ def create_consumable(payload: ConsumableCreate, user: dict = Depends(require_us
             msg = str(e)
             dropped = False
             for k in ("subcategory_other", "compatible_models", "description", "image_urls",
-                      "gst_rate", "intercity_delivery_charge", "d2d_enabled", "d2d_price", "search_norm"):
+                      "gst_rate", "intercity_delivery_charge", "warranty", "page_yield",
+                      "cartridge_weight", "d2d_enabled", "d2d_price", "search_norm"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True

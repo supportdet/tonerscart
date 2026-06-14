@@ -113,17 +113,30 @@ export default function CompatiblePage() {
             </section>
 
             <div className="tc-container py-10 space-y-10">
-                {/* Known compatible cartridge models */}
+                {/* Known compatible cartridge models — each chip links to its
+                    SEO model page (/toner/:slug for laser toners,
+                    /consumable/:slug for inks, drums, ribbons, etc.) */}
                 {toners.length > 0 && (
                     <section data-testid="compatible-toner-models">
                         <h2 className="text-[18px] font-semibold text-[#0A0A0B] mb-3">Compatible cartridge models</h2>
                         <div className="flex flex-wrap gap-2">
-                            {toners.map((t) => (
-                                <span key={t.model} className="inline-flex items-center gap-1.5 bg-white border border-[#E5E5EA] rounded-full px-3 py-1.5 text-[13px] text-[#0A0A0B]" data-testid="compatible-cartridge-chip">
-                                    <span className="font-semibold">{t.model}</span>
-                                    <span className="text-[#86868B] text-[11.5px] uppercase">{t.type}</span>
-                                </span>
-                            ))}
+                            {toners.map((t) => {
+                                const tType = (t.type || "").toLowerCase().trim();
+                                const isToner = tType === "toner";
+                                const slug = t.slug || t.model;
+                                const to = isToner ? `/toner/${slug}` : `/consumable/${slug}`;
+                                return (
+                                    <Link
+                                        key={t.model}
+                                        to={to}
+                                        className="inline-flex items-center gap-1.5 bg-white border border-[#E5E5EA] rounded-full px-3 py-1.5 text-[13px] text-[#0A0A0B] hover:border-[#00B7C7]/60 hover:text-[#0A6E78] transition"
+                                        data-testid="compatible-cartridge-chip"
+                                    >
+                                        <span className="font-semibold">{t.model}</span>
+                                        <span className="text-[#86868B] text-[11.5px] uppercase">{t.type}</span>
+                                    </Link>
+                                );
+                            })}
                         </div>
                     </section>
                 )}
