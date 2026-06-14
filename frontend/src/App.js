@@ -50,6 +50,7 @@ import DealerStore from "./pages/DealerStore";
 import OEM from "./pages/OEM";
 import CompatiblePage from "./pages/CompatiblePage";
 import TonerRoute from "./pages/TonerRoute";
+import ConsumableRoute from "./pages/ConsumableRoute";
 import OemDashboard from "./pages/OemDashboard";
 import ErrorBoundary from "./components/ErrorBoundary";
 import VisitorTracker from "./components/VisitorTracker";
@@ -159,7 +160,7 @@ function App() {
                                     <Route path="/toner/:id" element={<TonerRoute />} />
                                     <Route path="/printer/:id" element={<ProductDetail kind="printer" />} />
                                     <Route path="/paper/:id" element={<ProductDetail kind="paper" />} />
-                                    <Route path="/consumable/:id" element={<ProductDetail kind="consumable" />} />
+                                    <Route path="/consumable/:id" element={<ConsumableRoute />} />
                                     <Route path="/scanner/:id" element={<ProductDetail kind="scanner" />} />
                                     <Route path="/order-confirmed/:id" element={<OrderConfirmed />} />
                                     <Route path="/order-confirmed" element={<OrderConfirmed />} />

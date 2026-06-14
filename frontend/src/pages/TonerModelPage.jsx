@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowRight, Bell, CheckCircle2, Package, ShoppingCart } from "lucide-react";
 import api from "../lib/api";
@@ -11,7 +11,14 @@ import TonerPriceTable from "../components/TonerPriceTable";
 
 const inr = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
 
-export default function TonerModelPage() {
+/**
+ * Shared SEO page renderer for both `/toner/:slug` (laser powder cartridges)
+ * and `/consumable/:slug` (ink/drum/ribbon/fuser/maintenance). Reads `kind`
+ * from the API and redirects to the canonical URL when the caller used the
+ * wrong route — that's our 301-style client fix for old /toner/:slug links
+ * that were actually inks.
+ */
+export default function TonerModelPage({ pageKind = "toner" }) {
     const params = useParams();
     const slug = params.slug || params.id;
     const [data, setData] = useState(null);
@@ -27,12 +34,13 @@ export default function TonerModelPage() {
         let active = true;
         setLoading(true);
         setNotFound(false);
-        api.get(`/compat/toner-page/${slug}`)
+        const endpoint = pageKind === "consumable" ? "consumable-page" : "toner-page";
+        api.get(`/compat/${endpoint}/${slug}`)
             .then((r) => { if (active) setData(r.data); })
             .catch((e) => { if (active && e?.response?.status === 404) setNotFound(true); })
             .finally(() => { if (active) setLoading(false); });
         return () => { active = false; };
-    }, [slug]);
+    }, [slug, pageKind]);
 
     // Show the sticky "lowest price" bar once the first dealer row scrolls above the viewport.
     useEffect(() => {
@@ -70,12 +78,21 @@ export default function TonerModelPage() {
     if (notFound || !data) {
         return (
             <div className="tc-container py-20 text-center" data-testid="toner-notfound">
-                <PageMeta title="Toner not found — TonersCart" description="This toner model was not found." path={`/toner/${slug}`} />
-                <h1 className="text-2xl font-semibold text-[#0A0A0B]">Toner model not found</h1>
-                <p className="mt-2 text-[#6E6E73]">We couldn't find this cartridge in our database.</p>
+                <PageMeta title="Cartridge not found — TonersCart" description="This cartridge model was not found." path={`/${pageKind}/${slug}`} />
+                <h1 className="text-2xl font-semibold text-[#0A0A0B]">Cartridge model not found</h1>
+                <p className="mt-2 text-[#6E6E73]">We couldn&rsquo;t find this cartridge in our database.</p>
                 <Link to="/search" className="inline-flex items-center gap-1 mt-5 text-[#00B7C7] font-semibold">Browse all products <ArrowRight size={16} /></Link>
             </div>
         );
+    }
+
+    // 301-style client redirect: ink/drum requested at /toner/:slug → push to
+    // /consumable/:slug (and vice versa). Search engines see a canonical link
+    // via PageMeta, users land on the right URL within milliseconds.
+    const correctKind = data.kind || (data.toner?.type === "toner" ? "toner" : "consumable");
+    if (correctKind !== pageKind) {
+        const canonical = data.canonical_url || `/${correctKind}/${data.toner?.slug || slug}`;
+        return <Navigate to={canonical} replace />;
     }
 
     const t = data.toner;
@@ -91,7 +108,7 @@ export default function TonerModelPage() {
         "name": `${t.brand} ${t.model}`,
         "brand": { "@type": "Brand", "name": t.brand },
         "category": t.type,
-        "url": `https://www.tonerscart.com/toner/${t.slug}`,
+        "url": `https://www.tonerscart.com/${pageKind}/${t.slug}`,
         ...(listings.length > 0 ? {
             "offers": {
                 "@type": "AggregateOffer",
@@ -106,7 +123,7 @@ export default function TonerModelPage() {
 
     return (
         <div className="bg-[#FBFBFC] min-h-screen" data-testid="toner-page">
-            <PageMeta title={title} description={description} path={`/toner/${t.slug}`} jsonLd={jsonLd} />
+            <PageMeta title={title} description={description} path={`/${pageKind}/${t.slug}`} jsonLd={jsonLd} />
 
             {/* Hero */}
             <section className="tc-hero tc-hero-home relative pt-10 pb-10">
@@ -179,7 +196,7 @@ export default function TonerModelPage() {
                             <p className="mt-1 text-[13.5px] text-[#6E6E73]">Be the first to know when a verified dealer lists {t.brand} {t.model}.</p>
                             {notified ? (
                                 <div className="mt-4 inline-flex items-center gap-2 text-[#0A6E78] font-semibold" data-testid="toner-notify-success">
-                                    <CheckCircle2 size={18} /> You're on the list!
+                                    <CheckCircle2 size={18} /> You&rsquo;re on the list!
                                 </div>
                             ) : (
                                 <form onSubmit={submitNotify} className="mt-4 flex flex-col sm:flex-row gap-2 max-w-md mx-auto">

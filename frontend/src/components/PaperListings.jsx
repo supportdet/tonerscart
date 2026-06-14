@@ -22,8 +22,10 @@ const GSMS = [70, 75, 80, 90, 100, 120, 150];
 const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
 
 function emptyForm() {
-    return { brand: "JK Paper", size: "A4", gsm: 75, reams_per_box: 10, price_per_ream: "", stock: "", description: "", brightness: "", thickness_microns: "", acid_free: false, suitable_for: [], gst_rate: 18, price_type: null };
+    return { brand: "JK Paper", size: "A4", gsm: 75, reams_per_box: 10, price_per_ream: "", stock: "", description: "", brightness: "", thickness_microns: "", acid_free: false, suitable_for: [], gst_rate: 18, price_type: null, warranty: "" };
 }
+
+const PAPER_WARRANTIES = ["No warranty", "Batch defect replacement", "30 days", "3 months", "6 months", "1 year"];
 
 export default function PaperListings() {
     const [rows, setRows] = useState([]);
@@ -59,6 +61,7 @@ export default function PaperListings() {
             suitable_for: Array.isArray(p.suitable_for) ? p.suitable_for : [],
             gst_rate: gstRate,
             price_type: "incl",
+            warranty: p.warranty || "",
         });
         setImageFiles([]); setImagePreviews([]);
         setOpen(true);
@@ -114,6 +117,7 @@ export default function PaperListings() {
         if (!form.price_type) { setPriceTypeError(true); toast.error("Pick whether the price is Incl. or Excl. GST"); return; }
         setPriceTypeError(false);
         if (!form.price_per_ream || !form.stock) { toast.error("Price and stock are required"); return; }
+        if (!form.warranty) { toast.error("Warranty is required"); return; }
         setSaving(true);
         try {
             // Upload any newly-picked images first (service-role proxy → public URL).
@@ -140,6 +144,7 @@ export default function PaperListings() {
                 acid_free: !!form.acid_free,
                 suitable_for: form.suitable_for || [],
                 gst_rate: Number(form.gst_rate || 18),
+                warranty: form.warranty,
             };
             if (uploadedUrls.length > 0) {
                 payload.image_url = uploadedUrls[0];
@@ -341,6 +346,27 @@ export default function PaperListings() {
                             <input type="checkbox" checked={!!form.acid_free} onChange={(e) => setForm({ ...form, acid_free: e.target.checked })} data-testid="paper-acid-free" />
                             Acid-free paper
                         </label>
+
+                        {/* Warranty / batch QC — Wave 49 required field */}
+                        <div data-testid="paper-warranty-wrap">
+                            <Label>Warranty <span className="text-red-500">*</span></Label>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                                {PAPER_WARRANTIES.map((w) => (
+                                    <button
+                                        type="button"
+                                        key={w}
+                                        onClick={() => setForm({ ...form, warranty: w })}
+                                        className={`px-3 py-1.5 rounded-full text-[12.5px] border transition ${form.warranty === w ? "bg-[#0A0A0B] text-white border-[#0A0A0B]" : "bg-white text-[#0A0A0B] border-[#E5E5EA] hover:border-[#00B7C7]"}`}
+                                        data-testid={`paper-warranty-${w.toLowerCase().replace(/\s+/g, "-")}`}
+                                    >
+                                        {w}
+                                    </button>
+                                ))}
+                            </div>
+                            {!form.warranty && (
+                                <div className="text-[11.5px] text-red-600 mt-1" data-testid="paper-warranty-error">Required — please select a warranty or batch-QC option.</div>
+                            )}
+                        </div>
                         <div>
                             <Label>Suitable for</Label>
                             <div className="flex flex-wrap gap-2" data-testid="paper-suitable-for">

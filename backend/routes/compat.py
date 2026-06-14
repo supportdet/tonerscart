@@ -332,6 +332,16 @@ def add_custom_toner(payload: CustomTonerPayload, user: dict = Depends(require_r
     }
 
 
+def _is_toner_type(ttype: str) -> bool:
+    """Only laser-powder toner cartridges live at /toner/:slug. Inks, drums,
+    ribbons, fusers, maintenance kits → /consumable/:slug."""
+    return (ttype or "").lower().strip() == "toner"
+
+
+def _cartridge_url(ttype: str, slug: str) -> str:
+    return f"/toner/{slug}" if _is_toner_type(ttype) else f"/consumable/{slug}"
+
+
 def _public_listing(L: dict, kind: str) -> dict:
     price = float(L.get("price") or 0)
     gst = int(L.get("gst_rate") if L.get("gst_rate") is not None else 18)
@@ -392,8 +402,9 @@ def _printer_card(p: dict) -> dict:
 
 
 def _toner_card(t: dict) -> dict:
+    url = _cartridge_url(t.get("type"), t["slug"])
     return {"model": t["model"], "brand": t["brand"], "type": t["type"],
-            "slug": t["slug"], "url": f"/toner/{t['slug']}",
+            "slug": t["slug"], "url": url,
             "printers_count": len(t.get("printers") or [])}
 
 
@@ -546,7 +557,20 @@ def compat_toner_page(slug: str):
         "listings": listings,
         "listings_count": len(listings),
         "related": _toner_related(t),
+        # `kind` tells the frontend whether this cartridge belongs at
+        # /toner/:slug (laser toner) or /consumable/:slug (ink, drum, ribbon,
+        # fuser, maintenance). Used for the 301-style client redirect.
+        "kind": "toner" if _is_toner_type(t.get("type")) else "consumable",
+        "canonical_url": _cartridge_url(t.get("type"), t["slug"]),
     }
+
+
+@router.get("/consumable-page/{slug}")
+def compat_consumable_page(slug: str):
+    """SEO model page for ink cartridges, drums, ribbons, fusers, maintenance
+    kits — anything that isn't a laser-powder toner. Same data shape as
+    `/toner-page/:slug` so the frontend can render the identical UI."""
+    return compat_toner_page(slug)
 
 
 @router.get("/toner/{model}")

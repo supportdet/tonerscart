@@ -62,13 +62,17 @@ def build_xml() -> str:
             seen.add(slug)
             add(f"/compatible/{slug}", "0.6")
 
-    # Programmatic SEO — toner model pages
+    # Programmatic SEO — cartridge model pages. Route by type:
+    #   • toner (laser powder) → /toner/:slug
+    #   • ink, drum, ribbon, fuser, maintenance → /consumable/:slug
     seen_t = set()
     for t in cdb.all_toners():
         slug = t.get("slug")
         if slug and slug not in seen_t:
             seen_t.add(slug)
-            add(f"/toner/{slug}", "0.6")
+            ttype = (t.get("type") or "").lower().strip()
+            base = "/toner/" if ttype == "toner" else "/consumable/"
+            add(f"{base}{slug}", "0.6")
 
     lines.append("</urlset>")
     return "\n".join(lines) + "\n"
