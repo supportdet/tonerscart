@@ -63,7 +63,7 @@ export default function CompatiblePage() {
     const listings = data.listings || [];
     const toners = data.compatible_toners || [];
     const related = data.related || {};
-    const title = `Compatible Toners & Consumables for ${p.full_name} — TonersCart`;
+    const title = `Compatible Toners & Inks for ${p.full_name} — TonersCart`;
     const description = `Find verified compatible toners, drums and consumables for ${p.full_name}. Compare prices from verified dealers. GST invoice on every order.`;
 
     const jsonLd = listings.length > 0 ? {

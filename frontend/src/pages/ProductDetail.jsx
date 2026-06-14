@@ -94,7 +94,7 @@ export default function ProductDetail({ kind = "toner" }) {
     const breadcrumb = useMemo(() => {
         if (kind === "printer") return [{ label: "Home", to: "/" }, { label: "Printers", to: "/printers" }, { label: productTitle }];
         if (kind === "paper")   return [{ label: "Home", to: "/" }, { label: "Papers", to: "/papers" }, { label: productTitle }];
-        if (kind === "consumable") return [{ label: "Home", to: "/" }, { label: "Consumables", to: "/consumables" }, { label: productTitle }];
+        if (kind === "consumable") return [{ label: "Home", to: "/" }, { label: "Inks & Consumables", to: "/consumables" }, { label: productTitle }];
         if (kind === "scanner") return [{ label: "Home", to: "/" }, { label: "Scanners", to: "/scanners" }, { label: productTitle }];
         return [{ label: "Home", to: "/" }, { label: "Toners", to: "/search" }, { label: productTitle }];
     }, [kind, productTitle]);

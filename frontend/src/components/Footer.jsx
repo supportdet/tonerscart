@@ -43,7 +43,7 @@ export default function Footer() {
                             <li><Link to="/search"       className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-toners">Toners</Link></li>
                             <li><Link to="/printers"     className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-printers">Printers</Link></li>
                             <li><Link to="/papers"       className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-papers">Papers</Link></li>
-                            <li><Link to="/consumables"  className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-consumables">Consumables</Link></li>
+                            <li><Link to="/consumables"  className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-consumables">Inks &amp; Consumables</Link></li>
                             <li><Link to="/scanners"     className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-scanners">Scanners</Link></li>
                             <li><Link to="/mps"          className="text-[#1D1D1F] hover:text-[#00B7C7] transition" data-testid="footer-link-mps">MPS / Rentals</Link></li>
                         </ul>

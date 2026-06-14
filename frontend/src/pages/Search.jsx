@@ -304,7 +304,7 @@ export default function SearchPage() {
                         { key: "toners", label: "Toners", n: universal.counts?.toners || 0 },
                         { key: "printers", label: "Printers", n: universal.counts?.printers || 0 },
                         { key: "papers", label: "Papers", n: universal.counts?.papers || 0 },
-                        { key: "consumables", label: "Consumables", n: universal.counts?.consumables || 0 },
+                        { key: "consumables", label: "Inks & Consumables", n: universal.counts?.consumables || 0 },
                         { key: "scanners", label: "Scanners", n: universal.counts?.scanners || 0 },
                         { key: "oem", label: "OEM", n: universal.counts?.oem || 0 },
                     ].map((t) => (
@@ -372,7 +372,7 @@ export default function SearchPage() {
                         <section data-testid="universal-section-consumables">
                             <div className="flex items-baseline justify-between mb-3">
                                 <h2 className="text-[18px] font-semibold tracking-tight text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-                                    Consumables <span className="text-[13px] font-normal text-[#86868B]">· {universal.counts.consumables} found</span>
+                                    Inks &amp; Consumables <span className="text-[13px] font-normal text-[#86868B]">· {universal.counts.consumables} found</span>
                                 </h2>
                                 <button onClick={() => navigate(`/consumables`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-consumables">Browse consumables →</button>
                             </div>
