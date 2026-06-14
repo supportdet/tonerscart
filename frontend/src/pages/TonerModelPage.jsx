@@ -190,6 +190,30 @@ export default function TonerModelPage({ pageKind = "toner" }) {
                 {/* Notify me — only when no dealer stock */}
                 {listings.length === 0 && (
                     <section data-testid="toner-notify-section">
+                        {/* Wave 51: on /consumable/:slug specifically, surface the
+                            compatible-printers chip rail right above Notify-Me so
+                            buyers who scrolled past the hero still see the full
+                            printer set — and Google sees the inbound link juice. */}
+                        {pageKind === "consumable" && printers.length > 0 && (
+                            <div className="mb-6 bg-white border border-[#E5E5EA] rounded-2xl p-5" data-testid="consumable-compatible-printers-rail">
+                                <div className="text-[11px] uppercase tracking-[0.16em] text-[#86868B] font-semibold mb-2">Compatible printers</div>
+                                <h3 className="text-[15.5px] font-semibold text-[#0A0A0B] mb-3">
+                                    {t.brand} {t.model} fits these printers
+                                </h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {printers.map((pr) => (
+                                        <Link
+                                            key={`rail-${pr.slug}`}
+                                            to={pr.url}
+                                            className="inline-flex items-center gap-1.5 bg-[#F2FBFC] border border-[#C2EFF5] rounded-full px-3 py-1.5 text-[13px] text-[#0A6E78] hover:bg-[#D6F5F9] hover:border-[#00B7C7] transition"
+                                            data-testid="consumable-compatible-printer-chip"
+                                        >
+                                            <span className="font-semibold">{pr.full_name}</span>
+                                        </Link>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         <div className="bg-white border border-[#E5E5EA] rounded-2xl p-8 text-center max-w-xl" data-testid="toner-notify-block">
                             <Bell size={26} className="mx-auto text-[#00B7C7]" />
                             <div className="mt-3 text-[16px] font-semibold text-[#0A0A0B]">Notify me when available</div>
