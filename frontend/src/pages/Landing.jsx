@@ -318,28 +318,31 @@ export default function Landing() {
             </section>
             )}
 
-            {/* "Get featured" CTA — always visible, public-facing */}
+            {/* "Sell on TonersCart" CTA — always visible, public-facing.
+                Wave 55: replaces the older "Get your brand featured" tile —
+                points dealers, suppliers and partners to the FREE seller
+                application at /sell. */}
             <section className="bg-[#0A0A0B] pb-12 sm:pb-16">
                 <div className="tc-container">
                     <div
                         className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl bg-gradient-to-r from-[#1A1B1F] via-[#23252B] to-[#1A1B1F] border border-white/10 p-5 sm:px-6 sm:py-5"
-                        data-testid="get-featured-banner"
+                        data-testid="sell-on-tonerscart-banner"
                     >
                         <div className="flex items-start sm:items-center gap-3">
-                            <Sparkles size={18} className="text-[#F5C400] shrink-0 mt-0.5 sm:mt-0" />
+                            <Sparkles size={18} className="text-[#3FD267] shrink-0 mt-0.5 sm:mt-0" />
                             <div>
                                 <div className="text-white text-[14.5px] sm:text-[15.5px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-                                    Get your brand featured here
+                                    Sell on TonersCart — <span className="text-[#3FD267]">free for suppliers, sellers &amp; partners</span>
                                 </div>
-                                <div className="text-white/65 text-[12.5px] mt-0.5">Reach thousands of buyers across India.</div>
+                                <div className="text-white/65 text-[12.5px] mt-0.5">List your toners, printers and consumables in minutes — no listing fee.</div>
                             </div>
                         </div>
                         <button
-                            onClick={() => navigate("/get-featured")}
-                            className="inline-flex items-center justify-center gap-1.5 h-11 px-5 rounded-full bg-[#F5C400] hover:bg-[#FFD119] text-[#0A0A0B] text-[13.5px] font-semibold transition shrink-0"
-                            data-testid="get-featured-apply-btn"
+                            onClick={() => navigate("/sell")}
+                            className="inline-flex items-center justify-center gap-1.5 h-11 px-5 rounded-full bg-[#3FD267] hover:bg-[#34BD58] text-[#0A0A0B] text-[13.5px] font-semibold transition shrink-0"
+                            data-testid="sell-on-tonerscart-apply-btn"
                         >
-                            Apply now <ArrowRight size={14} />
+                            Apply for FREE <ArrowRight size={14} />
                         </button>
                     </div>
                 </div>
