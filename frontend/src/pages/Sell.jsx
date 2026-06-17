@@ -29,13 +29,13 @@ export default function Sell() {
         return <div className="tc-container py-24 text-white/70" data-testid="sell-loading">Loading…</div>;
     }
 
-    // Guest: prompt sign-in
+    // Guest: prompt sign-in / register — Wave 55 messaging
     if (!user) {
         return (
-            <div className="tc-hero relative pb-16" data-testid="sell-guest">
+            <div className="tc-hero relative pb-16 overflow-x-hidden" data-testid="sell-guest">
                 <PageMeta
-                    title="Sell Toners & Printers Online — Become a TonersCart Supplier"
-                    description="List your printer toner cartridges and printers on TonersCart. Reach thousands of buyers across India. Free listing, easy setup, real orders."
+                    title="Sell on TonersCart — Free for Suppliers, Sellers & Partners"
+                    description="Suppliers, sellers and partners — apply here for FREE to upload and list your products on TonersCart. Reach verified buyers across India with zero listing fees."
                     path="/sell"
                 />
                 <div className="tc-hero-grid" />
@@ -44,18 +44,42 @@ export default function Sell() {
                         <span className="tc-strip" />
                         <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-white/60">Become a seller</span>
                     </div>
-                    <h1 className="text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(28px, 4vw, 52px)", fontWeight: 300, letterSpacing: "-0.025em", lineHeight: 1.12 }}>
-                        Sell printer toners on TonersCart
+                    <h1
+                        className="text-white"
+                        style={{
+                            fontFamily: "'Montserrat', sans-serif",
+                            fontSize: "clamp(26px, 4vw, 50px)",
+                            fontWeight: 300,
+                            letterSpacing: "-0.025em",
+                            lineHeight: 1.14,
+                            wordBreak: "break-word",
+                        }}
+                    >
+                        Suppliers, sellers &amp; partners — <span className="text-[#3FD267] font-medium">apply here for FREE</span> to upload and list your products on TonersCart
                     </h1>
                     <p className="text-white/65 mt-4 text-[14.5px] max-w-xl">
-                        Reach verified buyers across India. Sign in to your TonersCart account to start your seller application — it takes a few minutes.
+                        No listing fee. No subscription. Reach verified buyers across India and start receiving orders within 1–2 business days of approval.
                     </p>
-                    <div className="mt-7 flex items-center gap-3">
-                        <Button onClick={() => navigate("/login?next=/sell")} className="btn-cta inline-flex items-center gap-2" data-testid="sell-signin-btn">
-                            Sign in to continue <ArrowRight size={14} />
+                    <ul className="mt-5 space-y-1.5 text-white/70 text-[13.5px]">
+                        <li>• Upload toners, printers, inks, consumables, papers &amp; scanners.</li>
+                        <li>• Set your own price &mdash; we add GST &amp; delivery at checkout.</li>
+                        <li>• Get paid weekly to your bank account.</li>
+                    </ul>
+                    <div className="mt-7 flex flex-col sm:flex-row gap-3 sm:items-center w-full sm:w-auto">
+                        <Button
+                            onClick={() => navigate("/register?next=/sell")}
+                            className="btn-cta inline-flex items-center justify-center gap-2 w-full sm:w-auto"
+                            data-testid="sell-signup-btn"
+                        >
+                            Create account &amp; apply <ArrowRight size={14} />
                         </Button>
-                        <Button onClick={() => navigate("/register?next=/sell")} variant="outline" className="text-[#0A0A0B] bg-white" data-testid="sell-signup-btn">
-                            Create account
+                        <Button
+                            onClick={() => navigate("/login?next=/sell")}
+                            variant="outline"
+                            className="text-[#0A0A0B] bg-white w-full sm:w-auto"
+                            data-testid="sell-signin-btn"
+                        >
+                            Sign in
                         </Button>
                     </div>
                 </div>
@@ -66,7 +90,7 @@ export default function Sell() {
     // Pending application
     if (user.application_status === "pending") {
         return (
-            <div className="tc-hero relative pb-16" data-testid="sell-pending">
+            <div className="tc-hero relative pb-16 overflow-x-hidden" data-testid="sell-pending">
                 <div className="tc-hero-grid" />
                 <div className="tc-container relative pt-12 sm:pt-16 max-w-xl">
                     <div className="bg-white border border-black/[0.06] rounded-2xl p-8 text-center text-[#0A0A0B]">
@@ -92,7 +116,7 @@ export default function Sell() {
     // Rejected — show banner + Resubmit CTA, form reveals on click
     if (user.application_status === "rejected") {
         return (
-            <div className="tc-hero relative pb-16" data-testid="sell-rejected">
+            <div className="tc-hero relative pb-16 overflow-x-hidden" data-testid="sell-rejected">
                 <div className="tc-hero-grid" />
                 <div className="tc-container relative pt-12 sm:pt-16 max-w-3xl">
                     <div className="bg-white border border-red-200 rounded-2xl p-5 mb-5 text-[#0A0A0B]" data-testid="rejected-banner">
@@ -134,7 +158,7 @@ export default function Sell() {
 
     // Buyer with no application — show the form
     return (
-        <div className="tc-hero relative pb-16" data-testid="sell-apply">
+        <div className="tc-hero relative pb-16 overflow-x-hidden" data-testid="sell-apply">
             <div className="tc-hero-grid" />
             <div className="tc-container relative pt-10 sm:pt-14 max-w-3xl">
                 <div className="flex items-center gap-3 mb-3">
