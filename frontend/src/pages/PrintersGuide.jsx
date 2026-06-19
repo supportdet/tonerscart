@@ -183,6 +183,11 @@ export default function PrintersGuide({ embedded = false, onClose }) {
         if (currentCity) params.set("city", currentCity);
         // Note: paper_size, connectivity, feature, budget and quantity are
         // intentionally NOT sent — questionnaire-only signals for routing.
+        // Wave 56: when rendered inside the auto-open popup, close it first
+        // so the final-step click reveals the freshly-filtered marketplace
+        // underneath. Without this the overlay stayed mounted after the URL
+        // changed and the user saw the same quiz screen — felt frozen.
+        if (embedded && onClose) onClose();
         navigate(`/printers/results?${params.toString()}`);
     };
 
