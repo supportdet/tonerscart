@@ -267,6 +267,7 @@ export default function ConsumableListings() {
                                 <Input type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} required className="tc-input-lg" data-testid="consumable-stock-input" />
                             </div>
                             <div className="col-span-2">
+                                <CommissionBanner />
                                 <PriceWithGstToggle
                                     priceLabel="Price (₹)"
                                     required
@@ -344,7 +345,6 @@ export default function ConsumableListings() {
                         </div>
 
                         <DeliveryPolicyNote />
-                        <CommissionBanner />
                         <CompetitivePricingNote />
                         <DialogFooter className="mt-3">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>

@@ -757,6 +757,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                                 <Label>Stock quantity <span className="text-red-500">*</span></Label>
                                 <Input type="number" min="0" value={f.stock} onChange={upd("stock")} className="tc-input-lg" data-testid="wizard-stock" />
                             </div>
+                            <CommissionBanner />
                             <PriceWithGstToggle
                                 priceLabel="Price (₹)"
                                 required
@@ -769,7 +770,6 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                                 error={!f.price_type && Number(f.price) > 0}
                                 testIdPrefix="wizard"
                             />
-                            <CommissionBanner />
                             <div>
                                 <Label>Condition <span className="text-red-500">*</span></Label>
                                 <PillRow

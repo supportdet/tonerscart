@@ -7,7 +7,7 @@ export const AGREEMENTS = {
             "List only genuine products and maintain accurate stock and descriptions.",
             "Fulfil orders within your stated timeline and provide a GST invoice on every order.",
             "Do not solicit or complete off-platform deals to bypass commission.",
-            "You agree to TonersCart's tiered commission, charged on the order bill value (excluding GST) and deducted from your payout: 12% under ₹15,000 · 10% ₹15,000–₹30,000 · 8% ₹30,000–₹75,000 · 6% ₹75,000–₹1,00,000 · 5% ₹1,00,000 & above.",
+            "You agree to TonersCart's tiered commission, charged on the order bill value (excluding GST) and deducted from your payout: 10% under ₹15,000 · 8% ₹15,000–₹30,000 · 6% ₹30,000–₹75,000 · 5% ₹75,000–₹1,00,000 · 4% ₹1,00,000 & above.",
             "TonersCart may suspend or remove your listings for policy violations.",
             "Governed by the laws of India; jurisdiction: Bangalore courts, Karnataka.",
         ],

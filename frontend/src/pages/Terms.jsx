@@ -83,11 +83,11 @@ export default function Terms() {
                         TonersCart charges sellers a commission on successful orders, deducted from the seller&apos;s payout. The buyer-facing
                         price is unaffected. Commission is charged on the order <strong>bill value, excluding GST / taxes</strong>. Tiers by order value:
                         <List items={[
-                            "Under ₹15,000 → 12%",
-                            "₹15,000 to ₹30,000 → 10%",
-                            "₹30,000 to ₹75,000 → 8%",
-                            "₹75,000 to ₹1,00,000 → 6%",
-                            "₹1,00,000 and above → 5%",
+                            "Under ₹15,000 → 10%",
+                            "₹15,000 to ₹30,000 → 8%",
+                            "₹30,000 to ₹75,000 → 6%",
+                            "₹75,000 to ₹1,00,000 → 5%",
+                            "₹1,00,000 and above → 4%",
                         ]} />
                     </Section>
 
