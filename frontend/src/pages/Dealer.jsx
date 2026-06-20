@@ -96,16 +96,35 @@ function Section({ title, kind, items, onBuy }) {
     );
 }
 
-function VerificationGate({ status }) {
+function VerificationGate({ status, user }) {
     const reason = status?.reason;
-    let title = "Verify as a dealer to access this marketplace";
-    let body = "Only approved dealers on TonersCart can view and purchase at D2D rates. Apply once — get verified — buy from your peers at exclusive pricing.";
-    let cta = { to: "/sell", label: "Become a verified dealer" };
-    if (reason === "not_approved") {
+    // Default copy assumes the visitor is signed in but their account isn't
+    // approved-as-dealer yet (the most common case among logged-in viewers).
+    let title = "Apply to access dealer-to-dealer pricing";
+    let body = "Only verified dealers on TonersCart can view and purchase at D2D rates. Submit the dealer application — approval typically takes under 24 hours.";
+    let cta = { to: "/sell", label: "Apply to become a dealer" };
+    let showSignInHint = false;
+
+    if (reason === "guest" || !user) {
+        // Truly logged-out visitor.
+        title = "Sign in to view the dealer-to-dealer marketplace";
+        body = "Approved dealers see exclusive D2D pricing across India. Sign in with your dealer account, or apply for free to get verified.";
+        cta = { to: "/login?next=/dealer", label: "Sign in" };
+        showSignInHint = false; // CTA already says Sign in
+    } else if (reason === "not_approved") {
         title = "Your dealer application is pending review";
         body = "We're reviewing your dealer application. You'll receive an email once approved (typically within 24 hours).";
         cta = { to: "/supplier", label: "Open dealer dashboard" };
+    } else if (reason === "not_supplier" || reason === "no_supplier_record") {
+        title = "Your account isn't a verified dealer yet";
+        body = "You're signed in, but this account doesn't have a dealer profile. Apply once — get verified — buy from your peers at exclusive pricing.";
+        cta = { to: "/sell", label: "Apply to become a dealer" };
+    } else if (reason === "error") {
+        title = "Couldn't verify your dealer status";
+        body = "Something went wrong while checking your account. Please refresh in a moment — if this keeps happening contact support@tonerscart.com.";
+        cta = { to: "/dealer", label: "Refresh & retry" };
     }
+
     return (
         <div className="tc-container max-w-[640px] py-16 sm:py-24">
             <div
@@ -129,7 +148,12 @@ function VerificationGate({ status }) {
                 >
                     {cta.label}
                 </Link>
-                <div className="mt-6 text-[11.5px] text-[#86868B]">Already a dealer? <Link to="/login" className="underline font-medium">Sign in</Link></div>
+                {/* Wave 57: only suggest "Sign in" when the visitor is actually
+                    logged out. Showing this for already-signed-in dealers was
+                    confusing — they thought the page was kicking them out. */}
+                {showSignInHint && (
+                    <div className="mt-6 text-[11.5px] text-[#86868B]">Already a dealer? <Link to="/login?next=/dealer" className="underline font-medium">Sign in</Link></div>
+                )}
             </div>
         </div>
     );
@@ -190,7 +214,7 @@ export default function Dealer() {
                         <Loader2 size={18} className="animate-spin mr-2" /> Checking dealer status…
                     </div>
                 ) : !status.verified ? (
-                    <VerificationGate status={status} />
+                    <VerificationGate status={status} user={user} />
                 ) : (
                     <div className="tc-container">
                         <div className="mb-6 sm:mb-8">
