@@ -178,14 +178,22 @@ def d2d_listings(q: Optional[str] = None, limit_per_type: int = 60):
 
 @router.get("/d2d/me")
 def d2d_me(user: dict = Depends(require_user)):
-    """Returns whether the calling user is a verified (approved) dealer."""
-    if user.get("role") != "supplier":
-        return {"verified": False, "reason": "not_supplier"}
-    s = sb_admin.table("suppliers").select("id,business_name,approved_at").eq("user_id", user["id"]).maybe_single().execute()
-    if not s or not s.data:
+    """Returns whether the calling user is a verified (approved) dealer.
+    Wave 57: also approves any user who has an approved+un-suspended supplier
+    row even if `users.role` somehow drifted from "supplier" — that mismatch
+    was locking real dealers out and looked like a sign-in loop on /dealer."""
+    s = sb_admin.table("suppliers").select(
+        "id,business_name,approved_at,is_suspended"
+    ).eq("user_id", user["id"]).maybe_single().execute()
+    has_supplier = bool(s and s.data)
+    if not has_supplier:
+        if user.get("role") != "supplier":
+            return {"verified": False, "reason": "not_supplier"}
         return {"verified": False, "reason": "no_supplier_record"}
     if not s.data.get("approved_at"):
         return {"verified": False, "reason": "not_approved", "business_name": s.data.get("business_name")}
+    if s.data.get("is_suspended"):
+        return {"verified": False, "reason": "suspended", "business_name": s.data.get("business_name")}
     return {"verified": True, "business_name": s.data.get("business_name"), "supplier_id": s.data["id"]}
 
 
@@ -203,9 +211,9 @@ def d2d_listing_detail(kind: str, listing_id: str, user: dict = Depends(require_
     (approved) suppliers — customers must NEVER see D2D wholesale pricing."""
     if kind not in _D2D_TABLES:
         raise HTTPException(404, "unknown kind")
-    # Verify caller is a verified dealer (mirrors /d2d/me)
-    if user.get("role") != "supplier":
-        raise HTTPException(403, "D2D listings are visible to approved dealers only")
+    # Wave 57: drop strict role check — gate strictly on approved+un-suspended
+    # supplier row (mirrors /d2d/me). Locks no real dealer out due to a
+    # stale users.role drift.
     s = sb_admin.table("suppliers").select("id,approved_at,is_suspended").eq("user_id", user["id"]).maybe_single().execute()
     if not s or not s.data or not s.data.get("approved_at") or s.data.get("is_suspended"):
         raise HTTPException(403, "Your dealer account is not approved for D2D access yet")
