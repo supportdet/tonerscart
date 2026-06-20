@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { MapPin, Search as SearchIcon, Lock, ShoppingCart, ShieldCheck, Loader2 } from "lucide-react";
+import { MapPin, Search as SearchIcon, Lock, ShoppingCart, ShieldCheck, Loader2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -217,6 +217,15 @@ export default function Dealer() {
                     <VerificationGate status={status} user={user} />
                 ) : (
                     <div className="tc-container">
+                        {/* Wave 58: back-to-dashboard link so dealers don't get stranded in
+                            the D2D marketplace with no clear way home. */}
+                        <Link
+                            to="/supplier"
+                            className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-[#6E6E73] hover:text-[#0A0A0B] mb-5 transition"
+                            data-testid="dealer-back-to-dashboard"
+                        >
+                            <ArrowLeft size={14} /> Back to dealer dashboard
+                        </Link>
                         <div className="mb-6 sm:mb-8">
                             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] tracking-[0.18em] uppercase font-semibold mb-3" style={{ background: `${ACCENT}1A`, color: ACCENT }}>
                                 <ShieldCheck size={11} /> Verified dealer · {status.business_name || "you"}

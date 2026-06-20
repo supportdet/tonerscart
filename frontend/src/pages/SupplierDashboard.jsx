@@ -40,32 +40,31 @@ const colorSwatchHex = (name) => {
 };
 
 const DEALER_TABS = [
-    { key: "toners", label: "Toners", accent: "#FF1F75", tint: "#FFE7EF" },
-    { key: "printers", label: "Printers", accent: "#00D4E5", tint: "#E6FAFD" },
-    { key: "consumables", label: "Inks & Consumables", accent: "#FFC107", tint: "#FFF8E0" },
-    { key: "scanners", label: "Scanners", accent: "#5468FF", tint: "#EBEEFF" },
-    { key: "papers", label: "Papers", accent: "#C58A6E", tint: "#F7EFE9" },
-    { key: "orders", label: "Orders", accent: "#4F46E5", tint: "#EEF0FE" },
-    { key: "earnings", label: "My Earnings", accent: "#EA580C", tint: "#FEF1E8" },
-    { key: "insights", label: "Insights", accent: "#475569", tint: "#EEF1F5" },
-    { key: "bulk", label: "Bulk Orders", accent: "#FF7A00", tint: "#FFF1E0" },
-    { key: "d2d", label: "Dealer to Dealer", accent: "#5E8CB5", tint: "#EBF2F9" },
-    { key: "oem", label: "OEM Marketplace", accent: "#B58A75", tint: "#F4EBE4" },
+    { key: "toners", label: "Toners" },
+    { key: "printers", label: "Printers" },
+    { key: "consumables", label: "Inks & Consumables" },
+    { key: "scanners", label: "Scanners" },
+    { key: "papers", label: "Papers" },
+    { key: "orders", label: "Orders" },
+    { key: "earnings", label: "My Earnings" },
+    { key: "insights", label: "Insights" },
+    { key: "bulk", label: "Bulk Orders" },
+    { key: "d2d", label: "Dealer to Dealer" },
+    { key: "oem", label: "OEM Marketplace" },
 ];
 
-// Category badge colours for the combined All Listings table.
-// Aligned with the navbar pill brand colours (Wave 52) for visual consistency.
+// Category badge colours kept neutral for the seller dashboard (Wave 58 visual
+// cleanup) — colourful brand pills now live only on the public navbar.
 const CAT_BADGE = {
-    Toner: "bg-[#FFE7EF] text-[#C2185B] border-[#F5C8D8]",
-    Printer: "bg-[#E6FAFD] text-[#006B73] border-[#BFEEF3]",
-    Paper: "bg-[#F7EFE9] text-[#7A4F38] border-[#E5D2C2]",
-    Consumable: "bg-[#FFF8E0] text-[#7A5A00] border-[#F5E5A6]",
+    Toner: "bg-black/[0.04] text-[#0A0A0B] border-black/[0.08]",
+    Printer: "bg-black/[0.04] text-[#0A0A0B] border-black/[0.08]",
+    Paper: "bg-black/[0.04] text-[#0A0A0B] border-black/[0.08]",
+    Consumable: "bg-black/[0.04] text-[#0A0A0B] border-black/[0.08]",
 };
 
-// Modern brand-pill tab bar — matches the public-site navbar style.
-// Active pill: solid brand color background + white text. Inactive: subtle
-// brand-tint bg + brand-text. Mobile scrollable. Used both here and (via
-// CategoryPills below) on the upload-form category selector.
+// Wave 58 — neutral tab bar. Active tab = black text + 2px black underline,
+// inactive tabs = black at 50% opacity (no bg fills, no colored pills). Mobile
+// horizontally scrollable.
 function DealerTabBar({ active, onSelect }) {
     return (
         <div
@@ -75,7 +74,7 @@ function DealerTabBar({ active, onSelect }) {
         >
             <div className="tc-container px-0 sm:px-2">
                 <div
-                    className="flex items-center gap-2 overflow-x-auto tc-cat-scroll px-3 sm:px-2 py-3"
+                    className="flex items-center gap-6 sm:gap-7 overflow-x-auto tc-cat-scroll px-4 sm:px-2"
                     role="tablist"
                     aria-label="Dealer dashboard sections"
                 >
@@ -89,18 +88,22 @@ function DealerTabBar({ active, onSelect }) {
                                 aria-current={isActive ? "page" : undefined}
                                 role="tab"
                                 aria-selected={isActive}
-                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] whitespace-nowrap outline-none transition-all duration-200 border focus-visible:ring-2 focus-visible:ring-offset-2"
+                                className={`relative inline-flex items-center py-4 text-[13.5px] whitespace-nowrap outline-none transition-colors ${
+                                    isActive ? "text-[#0A0A0B]" : "text-[#0A0A0B]/50 hover:text-[#0A0A0B]/80"
+                                }`}
                                 style={{
                                     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
                                     fontWeight: isActive ? 600 : 500,
                                     letterSpacing: "-0.005em",
-                                    background: isActive ? t.accent : t.tint,
-                                    color: isActive ? "#FFFFFF" : t.accent,
-                                    borderColor: isActive ? t.accent : "transparent",
-                                    boxShadow: isActive ? `0 4px 14px -4px ${t.accent}66` : "none",
                                 }}
                             >
                                 {t.label}
+                                {isActive && (
+                                    <span
+                                        className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#0A0A0B]"
+                                        aria-hidden
+                                    />
+                                )}
                             </button>
                         );
                     })}
@@ -730,14 +733,14 @@ export default function SupplierDashboard() {
                                     key={k}
                                     type="button"
                                     onClick={() => goStat(key)}
-                                    className="group flex items-center gap-2 rounded-xl bg-white/[0.07] hover:bg-white/[0.14] border border-white/10 px-3 py-1.5 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-[#F5C400]/50"
+                                    className="group flex items-center gap-2 rounded-xl bg-[#F5F5F7] hover:bg-[#EBEBEF] border border-black/[0.06] px-3 py-1.5 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-black/20"
                                     data-testid={`supplier-stat-${k.toLowerCase()}`}
                                     aria-label={`Go to ${k}`}
                                 >
-                                    <Icon size={14} className="text-white/45 group-hover:text-[#F5C400] transition-colors" />
+                                    <Icon size={14} className="text-[#0A0A0B]/55" />
                                     <span className="text-left leading-none">
-                                        <span className="block text-[15px] font-semibold text-white">{v}</span>
-                                        <span className="block text-[9px] tracking-[0.12em] uppercase text-white/45 mt-0.5">{k}</span>
+                                        <span className="block text-[15px] font-semibold text-[#0A0A0B]">{v}</span>
+                                        <span className="block text-[9px] tracking-[0.12em] uppercase text-[#0A0A0B]/55 mt-0.5">{k}</span>
                                     </span>
                                 </button>
                             ))}
@@ -1180,6 +1183,11 @@ export default function SupplierDashboard() {
                             <div className="text-[11px] text-[#86868B] mt-1">Set the correct GST rate first — the toggle below uses it to convert prices.</div>
                         </div>
 
+                        {/* Wave 58 — plain-language base-price clarity box.
+                            Repositioned to render directly ABOVE the price input
+                            (was below) so dealers read it before they type a price. */}
+                        <CommissionBanner />
+
                         {/* Small inline incl/excl GST pill toggle — must be picked, no default */}
                         <div className="flex flex-wrap items-center gap-2 mb-2">
                             <span className="text-[11.5px] font-semibold text-[#3a3a40]">Variant prices:</span>
@@ -1241,7 +1249,6 @@ export default function SupplierDashboard() {
                                 <Plus size={13} /> Add colour
                             </button>
                         </div>
-                        <CommissionBanner />
 
                         <div className="tc-form-section">Specifications</div>
                         <div className="grid grid-cols-2 gap-3">

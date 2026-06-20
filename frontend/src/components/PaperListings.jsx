@@ -282,6 +282,7 @@ export default function PaperListings() {
                                 <Input type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} required className="tc-input-lg" data-testid="paper-stock-input" />
                             </div>
                             <div className="col-span-2">
+                                <CommissionBanner />
                                 <PriceWithGstToggle
                                     priceLabel="Price per ream (₹)"
                                     required
@@ -379,7 +380,6 @@ export default function PaperListings() {
                             </div>
                         </div>
                         <DeliveryPolicyNote />
-                        <CommissionBanner />
                         <CompetitivePricingNote />
                         <DialogFooter className="mt-3">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
