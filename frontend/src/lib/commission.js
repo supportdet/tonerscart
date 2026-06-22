@@ -1,7 +1,7 @@
 // Commission utility — shared by Add Toner, Add Printer, Calculator, Order Detail.
-// Tiers per TonersCart commercial policy (2026 v3, Wave 58), charged on the
-// order BILL VALUE EXCLUDING GST / taxes and EXCLUDING delivery, deducted from
-// the seller's payout:
+// Tiers per TonersCart commercial policy (2026 v3, Wave 58 — reaffirmed Wave 62),
+// charged on the order BILL VALUE EXCLUDING GST / taxes and EXCLUDING delivery,
+// deducted from the seller's payout:
 //   Under ₹15,000        → 10%
 //   ₹15,000 – ₹30,000    → 8%
 //   ₹30,000 – ₹75,000    → 6%

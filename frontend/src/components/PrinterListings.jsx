@@ -10,7 +10,6 @@ import D2DRow from "./D2DRow";
 import { withGst, PRINTER_SPECIAL_FEATURES } from "../lib/listingConstants";
 import PriceWithGstToggle, { getBasePrice } from "./PriceWithGstToggle";
 import api, { formatApiError } from "../lib/api";
-import CommissionBanner from "./CommissionBanner";
 import CompetitivePricingNote from "./CompetitivePricingNote";
 import DeliveryPolicyNote from "./DeliveryPolicyNote";
 import BulkUploadGeneric from "./BulkUploadGeneric";
@@ -757,7 +756,6 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                                 <Label>Stock quantity <span className="text-red-500">*</span></Label>
                                 <Input type="number" min="0" value={f.stock} onChange={upd("stock")} className="tc-input-lg" data-testid="wizard-stock" />
                             </div>
-                            <CommissionBanner />
                             <PriceWithGstToggle
                                 priceLabel="Price (₹)"
                                 required

@@ -237,6 +237,29 @@ async def apply_seller(payload: SellerApplication, user: dict = Depends(require_
     if not payload.agreed_to_terms:
         raise HTTPException(400, "You must accept the TonersCart Seller Terms to apply")
 
+    # Wave 59 — enforce phone uniqueness across dealer applications + active
+    # suppliers (mirrors the existing email-uniqueness check at signup). Blocks
+    # any other user from re-submitting with the same number; the same user
+    # editing their own draft is allowed (user_id match).
+    norm_phone = (payload.phone or "").strip()
+    if norm_phone:
+        for tbl in ("suppliers", "suppliers_pending"):
+            try:
+                dup = (
+                    sb_admin.table(tbl)
+                    .select("user_id,business_name")
+                    .eq("phone", norm_phone)
+                    .neq("user_id", user["id"])
+                    .limit(1)
+                    .execute().data
+                )
+                if dup:
+                    raise HTTPException(409, "This phone number is already used by another dealer. Try a different one or contact support@tonerscart.com.")
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.debug("phone uniqueness check on %s skipped: %s", tbl, e)
+
     application = {
         "user_id": user["id"],
         "business_name": payload.business_name,
@@ -526,14 +549,43 @@ class PasswordResetRequest(BaseModel):
 
 
 @router.post("/auth/password-reset")
-def password_reset(payload: PasswordResetRequest):
-    """Trigger Supabase Auth password-reset email."""
+async def password_reset(payload: PasswordResetRequest):
+    """Wave 59 — TonersCart-branded password-reset email. Uses Supabase's admin
+    `generate_link` endpoint via raw httpx (the Python SDK wrapper currently
+    swallows the email and returns 404 for valid users — known issue). Sends
+    the recovery link through our Resend pipeline so the From header reads
+    'TonersCart <{SENDER_EMAIL}>' and the body carries our brand. Falls back
+    to Supabase's built-in mailer if anything in this chain fails."""
+    email_addr = str(payload.email)
     try:
+        from email_service import email_password_reset
+        import os, httpx
+        sk = os.environ.get("SUPABASE_SERVICE_KEY")
+        sb_url = os.environ.get("SUPABASE_URL")
+        if sk and sb_url:
+            r = httpx.post(
+                f"{sb_url}/auth/v1/admin/generate_link",
+                headers={"apikey": sk, "Authorization": f"Bearer {sk}", "Content-Type": "application/json"},
+                json={
+                    "type": "recovery",
+                    "email": email_addr,
+                    "options": {"redirect_to": "https://www.tonerscart.com/reset-password"},
+                },
+                timeout=15,
+            )
+            link = None
+            if r.status_code == 200:
+                data = r.json() or {}
+                link = (data.get("action_link") or
+                        (data.get("properties") or {}).get("action_link"))
+            if link:
+                await email_password_reset(email_addr, link)
+                return {"ok": True}
+        # Fallback — Supabase's own template (last resort)
         sb_admin.auth.reset_password_for_email(
-            str(payload.email),
+            email_addr,
             {"redirect_to": "https://www.tonerscart.com/reset-password"},
         )
     except Exception as e:
         logger.warning("password reset failed: %s", e)
-        # Always return success-shaped response to avoid enumeration
     return {"ok": True}

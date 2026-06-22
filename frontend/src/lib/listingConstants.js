@@ -14,10 +14,9 @@ export const INDIAN_STATES = [
 ];
 
 export const GST_RATES = [
-    { value: 0,  label: "0% — Exempt" },
     { value: 5,  label: "5%" },
     { value: 12, label: "12%" },
-    { value: 18, label: "18% (default for printers & toners)" },
+    { value: 18, label: "18%" },
     { value: 28, label: "28%" },
 ];
 

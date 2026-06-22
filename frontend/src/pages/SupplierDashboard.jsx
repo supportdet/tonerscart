@@ -20,11 +20,10 @@ import ScannerListings from "../components/ScannerListings";
 import DeliveryPolicyNote from "../components/DeliveryPolicyNote";
 import SupplierEarnings from "../components/SupplierEarnings";
 import SupplierInsights from "../components/SupplierInsights";
-import CommissionBanner from "../components/CommissionBanner";
 import CompetitivePricingNote from "../components/CompetitivePricingNote";
 import TonerModelSearchSelect from "../components/TonerModelSearchSelect";
 import CommissionCalculator from "../components/CommissionCalculator";
-import { commissionFor } from "../lib/commission";
+import { commissionFor, payoutBreakdown } from "../lib/commission";
 import { Copy, Check, ChevronLeft, Upload, ArrowRight, Store, Building2, Layers } from "lucide-react";
 import { colorSwatch as _colorSwatch } from "../lib/colors";
 import BulkUploadGeneric from "../components/BulkUploadGeneric";
@@ -32,7 +31,6 @@ import { tonerBulkConfig } from "../lib/bulkConfigs";
 import D2DRow, { D2DExplainer } from "../components/D2DRow";
 import CompatibleModelsSelect from "../components/CompatibleModelsSelect";
 import MissingModelLink from "../components/MissingModelLink";
-import SupplierAgreementDialog, { hasAcceptedSupplierAgreement } from "../components/SupplierAgreementDialog";
 
 const colorSwatchHex = (name) => {
     const v = _colorSwatch(name);
@@ -254,9 +252,9 @@ export default function SupplierDashboard() {
     const [nameDialogOpen, setNameDialogOpen] = useState(false);
     const [nameInput, setNameInput] = useState("");
     const [savingName, setSavingName] = useState(false);
-    // Wave 14 — one-time supplier agreement gate
-    const [agreementOpen, setAgreementOpen] = useState(false);
-    const [pendingAddAction, setPendingAddAction] = useState(null); // 'single' | 'bulk' | null
+    // Wave 61 — the SupplierAgreementDialog second-popup was removed. The
+    // platform-wide <AgreementGate> in App.js handles the one-time seller
+    // agreement at first login (DB-tracked, versioned via user_agreements).
 
     // Sync catalog tab from URL hash so the header "My stock" vs "Orders" pills route correctly.
     React.useEffect(() => {
@@ -393,23 +391,11 @@ export default function SupplierDashboard() {
     };
     const openDialog = () => { reset(); setOpen(true); };
 
-    // Wave 14 — Gate the first listing attempt (single OR bulk) behind a
-    // one-time supplier agreement modal. Stored in localStorage.
+    // Wave 61 — direct open. AgreementGate (app-level) ensures the seller
+    // agreement is already accepted before the dealer ever reaches this UI.
     const requestAddAction = (kind /* 'single' | 'bulk' */) => {
-        if (hasAcceptedSupplierAgreement()) {
-            if (kind === "bulk") setBulkOpen(true);
-            else openDialog();
-            return;
-        }
-        setPendingAddAction(kind);
-        setAgreementOpen(true);
-    };
-    const onAgreementAccepted = () => {
-        const kind = pendingAddAction;
-        setAgreementOpen(false);
-        setPendingAddAction(null);
         if (kind === "bulk") setBulkOpen(true);
-        else if (kind === "single") openDialog();
+        else openDialog();
     };
 
     const openEditBulk = () => setEditBulkOpen(true);
@@ -1186,7 +1172,6 @@ export default function SupplierDashboard() {
                         {/* Wave 58 — plain-language base-price clarity box.
                             Repositioned to render directly ABOVE the price input
                             (was below) so dealers read it before they type a price. */}
-                        <CommissionBanner />
 
                         {/* Small inline incl/excl GST pill toggle — must be picked, no default */}
                         <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -1237,11 +1222,33 @@ export default function SupplierDashboard() {
                                             <Trash2 size={14} />
                                         </button>
                                     </div>
-                                    {typed > 0 && priceType && (
-                                        <div className="text-[11.5px] text-[#0A0A0B] mt-1.5 pl-1" data-testid={`variant-buyer-sees-${i}`}>
-                                            Buyer will see: <strong>{formatINR(buyerSees)} (incl. GST)</strong>
-                                        </div>
-                                    )}
+                                    {typed > 0 && priceType && (() => {
+                                        const pb = payoutBreakdown(typed, priceType, gstRate);
+                                        if (!pb) return null;
+                                        return (
+                                            <div className="mt-2 ml-0.5 rounded-md border border-black/[0.08] bg-white px-3 py-2 text-[11.5px] text-[#0A0A0B] leading-relaxed" data-testid={`variant-payout-breakdown-${i}`}>
+                                                <div className="flex justify-between" data-testid={`variant-buyer-sees-${i}`}>
+                                                    <span className="text-[#3a3a40]">Buyer pays (incl. GST):</span>
+                                                    <span className="font-mono">{formatINR(buyerSees)}</span>
+                                                </div>
+                                                <div className="flex justify-between mt-0.5">
+                                                    <span className="text-[#3a3a40]">Your base price (excl. GST):</span>
+                                                    <span className="font-mono">{formatINR(pb.basePrice)}</span>
+                                                </div>
+                                                <div className="flex justify-between text-[#B91C1C] mt-0.5">
+                                                    <span>TonersCart commission ({pb.rateLabel} of base):</span>
+                                                    <span className="font-mono">− {formatINR(pb.commission)}</span>
+                                                </div>
+                                                <div className="flex justify-between font-bold text-[#065F46] mt-1 pt-1 border-t border-black/[0.08]">
+                                                    <span>You&rsquo;ll receive (per unit):</span>
+                                                    <span className="font-mono">{formatINR(pb.basePrice - pb.commission)}</span>
+                                                </div>
+                                                <div className="text-[10.5px] text-[#6E6E73] mt-1 leading-snug">
+                                                    GST {formatINR(pb.gstAmount)} ({gstRate}%) and delivery pass through to you in full.
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                                 );
                             })}
@@ -1350,11 +1357,6 @@ export default function SupplierDashboard() {
                     </div>
                 </DialogContent>
             </Dialog>
-            <SupplierAgreementDialog
-                open={agreementOpen}
-                onAccept={onAgreementAccepted}
-                onClose={() => { setAgreementOpen(false); setPendingAddAction(null); }}
-            />
             </div>
         </div>
     );

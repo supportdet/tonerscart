@@ -3,6 +3,8 @@ import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { X, Plus, Trash2, Upload, Download, FileSpreadsheet, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import api from "../lib/api";
+import { commissionFor } from "../lib/commission";
+import { formatINR } from "../lib/listingConstants";
 
 /**
  * Generic spreadsheet-style bulk upload dialog.
@@ -131,11 +133,16 @@ function parseCSV(text) {
 
 export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode = false, initialRows = null }) {
     const COLUMNS = config.columns;
+    const PRICE_KEY = config.priceColumnKey || "price";
     const [rows, setRows] = useState(() =>
         (initialRows && initialRows.length)
             ? [...initialRows, config.emptyRow()]
             : Array.from({ length: 10 }, config.emptyRow)
     );
+    // Wave 61 — single top-of-modal Incl/Excl GST toggle. Applies to every row.
+    // Per-row `price_type` column was removed from each config; we copy this
+    // value onto each row at submit time so basePriceFromRow keeps working.
+    const [priceType, setPriceType] = useState("incl");
     const [submitting, setSubmitting] = useState(false);
     const [progress, setProgress] = useState({ done: 0, total: 0 });
     const [result, setResult] = useState(null); // { succeeded, failed, errors }
@@ -225,7 +232,12 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
     };
 
     const submit = async () => {
-        const nonEmpty = rows.filter((r) => !config.isRowEmpty(r));
+        // Wave 61 — stamp the modal-level Incl/Excl choice onto every row
+        // before validation + payload generation so basePriceFromRow has the
+        // correct conversion direction.
+        const nonEmpty = rows
+            .filter((r) => !config.isRowEmpty(r))
+            .map((r) => ({ ...r, price_type: priceType }));
         if (nonEmpty.length === 0) { toast.error("Add at least one row"); return; }
 
         // Partition by client-side validation. Valid rows are submitted; invalid
@@ -347,6 +359,33 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
                         <FileSpreadsheet size={14} /> Upload CSV / Excel
                         <input ref={fileRef} type="file" accept=".csv,.tsv,.xls,.xlsx,text/csv" onChange={onFile} className="hidden" data-testid="bulk-upload-csv-input" />
                     </label>
+
+                    {/* Wave 61 — single Incl/Excl GST toggle for the whole table. */}
+                    <div className="inline-flex items-center gap-2 ml-1 pl-3 border-l border-black/[0.08]" data-testid="bulk-price-type-toggle">
+                        <span className="text-[11px] font-semibold text-[#3a3a40] uppercase tracking-wide">Prices are:</span>
+                        <div className="inline-flex items-center gap-1.5" role="radiogroup" aria-label="Price type">
+                            {[
+                                { id: "incl", label: "Incl. GST" },
+                                { id: "excl", label: "Excl. GST" },
+                            ].map((opt) => {
+                                const sel = priceType === opt.id;
+                                return (
+                                    <button
+                                        type="button"
+                                        key={opt.id}
+                                        role="radio"
+                                        aria-checked={sel}
+                                        onClick={() => setPriceType(opt.id)}
+                                        className={`h-7 px-3 text-[11.5px] font-semibold rounded-full transition ${sel ? "bg-[#0A0A0B] text-white shadow-sm" : "bg-white text-[#6E6E73] border border-black/[0.12] hover:bg-black/[0.04]"}`}
+                                        data-testid={`bulk-price-type-${opt.id}`}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                     <div className="flex-1" />
                     <button onClick={addRow} className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold px-3 h-9 rounded-lg border border-[#D2D2D7] bg-white hover:bg-black/[0.04]" data-testid="bulk-add-row">
                         <Plus size={14} /> Add row
@@ -407,7 +446,7 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
                                                 );
                                             }
                                             return (
-                                                <td key={c.key} className="px-1 py-1 border-b border-black/[0.04]">
+                                                <td key={c.key} className="px-1 py-1 border-b border-black/[0.04] align-top">
                                                     <input
                                                         type={c.type === "number" ? "number" : "text"}
                                                         value={val}
@@ -416,6 +455,34 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
                                                         className={base + (c.type === "number" ? " font-mono" : "")}
                                                         data-testid={`bulk-cell-${idx}-${c.key}`}
                                                     />
+                                                    {c.key === PRICE_KEY && Number(val) > 0 && (() => {
+                                                        // Wave 61 — live per-row payout breakdown.
+                                                        const typed = Number(val);
+                                                        const gst = r.gst_rate !== "" && r.gst_rate != null ? Number(r.gst_rate) : 18;
+                                                        const basePrice = priceType === "incl"
+                                                            ? Math.round((typed / (1 + gst / 100)) * 100) / 100
+                                                            : typed;
+                                                        const c2 = commissionFor(basePrice);
+                                                        if (!c2) return null;
+                                                        const gstAmt = Math.round(basePrice * gst / 100);
+                                                        const payout = Math.max(0, Math.round(basePrice - c2.commission));
+                                                        return (
+                                                            <div className="mt-1.5 text-[10.5px] leading-[1.45] space-y-[1px] font-mono" data-testid={`bulk-breakdown-${idx}`}>
+                                                                <div className="flex justify-between text-emerald-700 font-semibold">
+                                                                    <span>You&rsquo;ll receive:</span>
+                                                                    <span>{formatINR(payout)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between text-red-600">
+                                                                    <span>Commission ({c2.rateLabel}):</span>
+                                                                    <span>− {formatINR(c2.commission)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between text-[#6E6E73]">
+                                                                    <span>GST ({gst}%):</span>
+                                                                    <span>{formatINR(gstAmt)}</span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </td>
                                             );
                                         })}

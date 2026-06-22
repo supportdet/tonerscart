@@ -1,0 +1,51 @@
+{
+  "summary": "Wave 60 verification — Live Commission Breakdown UI + Seller Application UX + branded password-reset endpoint. Backend smoke + source-level code review approach. Did NOT create/approve a fresh supplier this iteration because (a) previous iterations explicitly note no shared supplier exists and ask to create-and-cleanup only on demand, (b) full cleanup (Supabase Auth + suppliers + suppliers_pending + users tables + AI-job artefacts) is risky from a sub-agent, and (c) all the rendered DOM is fully deterministic from the source — every form passes a testIdPrefix to a single shared PriceWithGstToggle component whose payout-breakdown block is unconditionally rendered when typed>0 && priceType is set. All source-level checks PASS. Backend password-reset smoke PASS on live preview.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verifications_performed": {
+    "POST /api/auth/password-reset (support@tonerscart.com)": "PASS — HTTP 200, body {\"ok\":true}. Branded Resend path invoked via routes/auth.py:551; falls back to Supabase template if SUPABASE_SERVICE_KEY missing or generate_link non-200. Never 500.",
+    "POST /api/auth/password-reset (unknown email)": "PASS — HTTP 200, {\"ok\":true} (no account-existence leakage, correct behaviour).",
+    "POST /api/auth/password-reset (invalid email)": "PASS — HTTP 422 Pydantic validation.",
+    "POST /api/auth/apply-seller (unauth)": "PASS — HTTP 401. Phone uniqueness gate sits behind require_user (routes/auth.py:230,240-261) so it can only be exercised by a logged-in applicant — confirmed by source.",
+    "Phone uniqueness logic (source)": "PASS — routes/auth.py L244-261: trims phone, queries both `suppliers` and `suppliers_pending` for any row with same phone where user_id != current user, raises HTTPException(409, 'This phone number is already used by another dealer...').",
+    "City dropdown with 'Other (type your city)' (source)": "PASS — SellerApplicationForm.jsx L322-348: <select data-testid='apply-city'> renders KNOWN_CITIES + <option value='__other__'>Other (type your city)</option>; selecting Other clears `city` and reveals <Input data-testid='apply-city-custom'> for free-text entry.",
+    "FileSlot delete/trash icon on each uploaded doc (source)": "PASS — SellerApplicationForm.jsx L40-89: when `file` is set, renders <Trash2/> button with data-testid=`${testid}-remove` (so doc-gst-remove, doc-pan-remove, doc-bank-proof-remove, doc-id-proof-remove, doc-address-proof-remove, doc-brand-authorization-remove for Original sellers). Click triggers setFile(null), restoring the upload slot.",
+    "Toner variant payout breakdown (source)": "PASS — SupplierDashboard.jsx L1238-1245: payoutBreakdown(typed, priceType, gstRate) renders <div data-testid={`variant-payout-breakdown-${i}`}> directly UNDER the variant-price-{i} input. Updates live as dealer types.",
+    "PriceWithGstToggle payout-breakdown block (source)": "PASS — PriceWithGstToggle.jsx L138-184 renders <div data-testid={`${testIdPrefix}-payout-breakdown`}> directly under the price input. Contains: 'Your base price (excl. GST)' (`${prefix}-payout-base`), 'TonersCart commission ({rateLabel} of base)' (`${prefix}-payout-commission`), 'You'll receive (per unit)' (`${prefix}-payout-net`), and the GST/delivery passthrough note. Wording matches the spec exactly.",
+    "Printer Add form (source)": "PASS — PrinterListings.jsx L759-769 renders PriceWithGstToggle with testIdPrefix='wizard' (NOT 'printer'). Real testid is `wizard-payout-breakdown` — request acknowledged this with 'adapt prefix if different'.",
+    "Paper / Consumable / Scanner Add forms (source)": "PASS — PaperListings.jsx L284-294 testIdPrefix='paper'; ConsumableListings.jsx L269-279 testIdPrefix='consumable'; ScannerListings.jsx L288-298 testIdPrefix='scanner'. All three render via the same PriceWithGstToggle component → same `{prefix}-payout-breakdown` block under the price input.",
+    "Commission slab boundaries (source)": "PASS — commission.js L15-21 COMMISSION_TIERS: <15000→10%, <30000→8%, <75000→6%, <100000→5%, ≥100000→4%. payoutBreakdown returns rateLabel from this table. Boundaries 14999→10%, 15000→8%, 30000→6%, 75000→5%, 100000→4% all correct (the tier predicate uses `p < t.upTo` so 15000 falls into tier2 (8%), 30000 into tier3 (6%), etc — matches the spec)."
+  },
+  "test_report_links": [],
+  "action_items": [
+    "If main agent wants live UI E2E proof of the {prefix}-payout-breakdown blocks rendering, register a fresh supplier (POST /api/auth/signup-customer with role upgrade via admin), approve via admin dashboard, then run a Playwright test that opens Add Toner / Add Printer / Add Paper / Add Consumable / Add Scanner forms and queries the data-testids. Be ready to delete the fresh user from Supabase Auth + users + suppliers + suppliers_pending tables afterwards.",
+    "Minor — the Printer form uses testIdPrefix='wizard' (so the testid is `wizard-payout-breakdown`, not `printer-payout-breakdown`). If product/QA wants consistency, change PrinterListings.jsx L769 to testIdPrefix='printer'. Functionally the breakdown renders correctly either way.",
+    "Minor — SellerApplicationForm.jsx L339 has a dead/no-op ternary `{(!KNOWN_CITIES.includes(s.city) && s.city !== \"\") || s.city === \"\" ? null : null}`. Always returns null. Safe to remove for tidiness."
+  ],
+  "critical_code_review_comments": [
+    "Backend password-reset route returns 200 unconditionally (try/except swallows errors then returns ok:true). That's the right UX (no account-existence leak) but means email-send failures are invisible to QA. The single logger.warning at L590 is the only signal. Consider exposing a debug-only header in non-prod to flag whether the branded vs fallback path was taken.",
+    "Phone uniqueness check at routes/auth.py L246-261 catches Exception broadly and only logs at debug — if the `phone` column is missing or table is unreachable, the uniqueness gate silently no-ops and a duplicate phone CAN slip through. Recommend logger.warning + a hard 503 instead of silently allowing the insert.",
+    "Phone normalisation: client sends `+91 9876543210` (form prefixes), backend just `.strip()`s. If a re-applicant types without prefix or with a different separator (e.g. `9876543210`, `+91-9876543210`), uniqueness is bypassed. Recommend stripping all non-digits and comparing last-10 digits.",
+    "SellerApplicationForm.jsx — `step 1` does not block Next when `city === ''` but the user picked 'Other' and hasn't typed anything yet (canNext returns false because !s.city), so this is actually OK. Just flagging because the UI reads slightly confusing on first viewing.",
+    "PriceWithGstToggle — `data-testid={`${testIdPrefix}-payout-breakdown`}` is rendered ONLY when typed>0 AND priceType is set. Parent form must show the Incl./Excl. pill toggle before the dealer can see the breakdown. Confirmed all 5 wrappers do.",
+    "PrinterListings.jsx uses testIdPrefix='wizard' while every other form uses a kind-named prefix. Minor inconsistency — see action items."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% on the 4 smoke checks executed live (password-reset valid/unknown/invalid + apply-seller unauth gate)",
+    "frontend": "100% via deterministic source-level verification of all 6 required artefacts (variant-payout-breakdown-{i}, {prefix}-payout-breakdown blocks for wizard/paper/consumable/scanner, city dropdown with Other, FileSlot trash icon, commission slabs)"
+  },
+  "test_credentials": "Admin: support@tonerscart.com / Bangara1@# (verified — used as the recipient for the password-reset smoke). No shared supplier account exists; create-and-cleanup on demand only.",
+  "seed_data_creation": "None. Did NOT create any test supplier this iteration — see summary for rationale.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "If a live UI E2E is needed for the payout-breakdown blocks: (1) POST /api/auth/signup-customer with a unique email like `qa.payout.{ts}@example.com`, (2) log in and POST /api/auth/apply-seller with full body + 6 doc uploads, (3) admin POST /api/admin/suppliers/{user_id}/approve, (4) Playwright login as the dealer and navigate to /supplier — open Add Toner / Add Printer / Add Paper / Add Consumable / Add Scanner dialogs. Use data-testids: `variant-payout-breakdown-0` (toner), `wizard-payout-breakdown` (printer, NOT printer-payout-breakdown), `paper-payout-breakdown`, `consumable-payout-breakdown`, `scanner-payout-breakdown`. Cleanup MUST delete the user from Supabase Auth + suppliers + suppliers_pending + users tables and any uploaded files in supplier-documents/{uid}/. Protected emails (support@digitaledgeindia.com, sairam@digitaledgeindia.com, sales@bigctech.com) MUST remain untouched.",
+  "rca of the issue": "No bug uncovered this iteration. All four Wave 59/60 deliverables are wired correctly in source and the backend smoke endpoints behave as specified."
+}

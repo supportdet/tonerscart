@@ -2,6 +2,21 @@ import React, { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
 import { AGREEMENTS } from "../lib/agreements";
 
+// Render an intro paragraph with "Terms of Service" and "Privacy Policy"
+// turned into real <a> tags. Used by the seller agreement intro.
+function IntroWithLinks({ text }) {
+    const parts = text
+        .split(/(Terms of Service|Privacy Policy)/g)
+        .map((seg, i) => {
+            if (seg === "Terms of Service")
+                return <a key={i} href="/terms" target="_blank" rel="noopener noreferrer" className="text-[#00B7C7] font-semibold hover:underline">Terms of Service</a>;
+            if (seg === "Privacy Policy")
+                return <a key={i} href="/privacy" target="_blank" rel="noopener noreferrer" className="text-[#00B7C7] font-semibold hover:underline">Privacy Policy</a>;
+            return <React.Fragment key={i}>{seg}</React.Fragment>;
+        });
+    return <p className="text-[13.5px] text-[#3a3a40] mt-2 leading-relaxed">{parts}</p>;
+}
+
 /**
  * Blocking, one-time (versioned) agreement acceptance modal.
  *
@@ -55,7 +70,11 @@ export default function AgreementGate({ ready, statusFn, acceptFn }) {
                 <div className="p-6 sm:p-8">
                     <div className="flex items-center gap-2 text-[#00B7C7] mb-3"><ShieldCheck size={18} /><span className="text-[11px] tracking-[0.18em] uppercase font-semibold">Required agreement</span></div>
                     <h2 className="text-[22px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }} data-testid="agreement-title">{cfg.title}</h2>
-                    <p className="text-[13.5px] text-[#6E6E73] mt-2">{cfg.intro}</p>
+                    {cfg.introHasLinks ? (
+                        <IntroWithLinks text={cfg.intro} />
+                    ) : (
+                        <p className="text-[13.5px] text-[#6E6E73] mt-2">{cfg.intro}</p>
+                    )}
 
                     {cfg.simple ? (
                         <p className="text-[13.5px] text-[#3a3a40] mt-4">
@@ -86,7 +105,7 @@ export default function AgreementGate({ ready, statusFn, acceptFn }) {
                         data-testid="agreement-accept-btn"
                     >
                         {accepting ? <Loader2 size={16} className="animate-spin" /> : null}
-                        {accepting ? "Saving…" : "Accept & continue"}
+                        {accepting ? "Saving…" : (cfg.buttonText || "Accept & continue")}
                     </button>
                 </div>
             </div>
