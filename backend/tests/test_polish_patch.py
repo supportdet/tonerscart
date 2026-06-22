@@ -206,7 +206,7 @@ class TestCommissionTiers:
         import sys, importlib, pathlib
         sys.path.insert(0, str(pathlib.Path("/app/backend")))
         es = importlib.import_module("email_service")
-        assert es._COMMISSION_TIERS == [(15000, 0.12), (30000, 0.10), (75000, 0.08), (100000, 0.06)], \
+        assert es._COMMISSION_TIERS == [(15000, 0.10), (30000, 0.08), (75000, 0.06), (100000, 0.05)], \
             f"unexpected tiers: {es._COMMISSION_TIERS}"
 
 

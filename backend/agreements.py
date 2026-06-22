@@ -23,7 +23,7 @@ agreements_router = APIRouter(prefix="/api/agreements", tags=["agreements"])
 agreements_admin_router = APIRouter(prefix="/api/admin/agreements", tags=["agreements-admin"])
 
 # Bump a version to force existing users to re-accept that agreement.
-AGREEMENT_VERSIONS = {"seller": "2.0", "oem": "1.0", "customer": "1.0", "procurement": "1.0"}
+AGREEMENT_VERSIONS = {"seller": "2.1", "oem": "1.0", "customer": "1.0", "procurement": "1.0"}
 ROLE_TO_TYPE = {"supplier": "seller", "oem": "oem", "customer": "customer"}
 
 

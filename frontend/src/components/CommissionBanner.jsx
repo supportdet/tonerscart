@@ -28,7 +28,7 @@ export default function CommissionBanner({ className = "" }) {
                 Put a price that leaves you a good profit after commission is deducted.
             </p>
             <p className="text-[12px] leading-relaxed text-[#0A0A0B]/65 mt-3" data-testid="commission-slabs-line">
-                Commission: under ₹15K = 12% &middot; ₹15K&ndash;₹30K = 10% &middot; ₹30K&ndash;₹75K = 8% &middot; ₹75K&ndash;₹1L = 6% &middot; ₹1L+ = 5%
+                Commission: under ₹15K = 10% &middot; ₹15K&ndash;₹30K = 8% &middot; ₹30K&ndash;₹75K = 6% &middot; ₹75K&ndash;₹1L = 5% &middot; ₹1L+ = 4%
             </p>
         </div>
     );
