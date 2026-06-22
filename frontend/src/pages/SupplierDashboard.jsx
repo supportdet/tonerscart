@@ -31,7 +31,6 @@ import { tonerBulkConfig } from "../lib/bulkConfigs";
 import D2DRow, { D2DExplainer } from "../components/D2DRow";
 import CompatibleModelsSelect from "../components/CompatibleModelsSelect";
 import MissingModelLink from "../components/MissingModelLink";
-import SupplierAgreementDialog, { hasAcceptedSupplierAgreement } from "../components/SupplierAgreementDialog";
 
 const colorSwatchHex = (name) => {
     const v = _colorSwatch(name);
@@ -253,9 +252,9 @@ export default function SupplierDashboard() {
     const [nameDialogOpen, setNameDialogOpen] = useState(false);
     const [nameInput, setNameInput] = useState("");
     const [savingName, setSavingName] = useState(false);
-    // Wave 14 — one-time supplier agreement gate
-    const [agreementOpen, setAgreementOpen] = useState(false);
-    const [pendingAddAction, setPendingAddAction] = useState(null); // 'single' | 'bulk' | null
+    // Wave 61 — the SupplierAgreementDialog second-popup was removed. The
+    // platform-wide <AgreementGate> in App.js handles the one-time seller
+    // agreement at first login (DB-tracked, versioned via user_agreements).
 
     // Sync catalog tab from URL hash so the header "My stock" vs "Orders" pills route correctly.
     React.useEffect(() => {
@@ -392,23 +391,11 @@ export default function SupplierDashboard() {
     };
     const openDialog = () => { reset(); setOpen(true); };
 
-    // Wave 14 — Gate the first listing attempt (single OR bulk) behind a
-    // one-time supplier agreement modal. Stored in localStorage.
+    // Wave 61 — direct open. AgreementGate (app-level) ensures the seller
+    // agreement is already accepted before the dealer ever reaches this UI.
     const requestAddAction = (kind /* 'single' | 'bulk' */) => {
-        if (hasAcceptedSupplierAgreement()) {
-            if (kind === "bulk") setBulkOpen(true);
-            else openDialog();
-            return;
-        }
-        setPendingAddAction(kind);
-        setAgreementOpen(true);
-    };
-    const onAgreementAccepted = () => {
-        const kind = pendingAddAction;
-        setAgreementOpen(false);
-        setPendingAddAction(null);
         if (kind === "bulk") setBulkOpen(true);
-        else if (kind === "single") openDialog();
+        else openDialog();
     };
 
     const openEditBulk = () => setEditBulkOpen(true);
@@ -1370,11 +1357,6 @@ export default function SupplierDashboard() {
                     </div>
                 </DialogContent>
             </Dialog>
-            <SupplierAgreementDialog
-                open={agreementOpen}
-                onAccept={onAgreementAccepted}
-                onClose={() => { setAgreementOpen(false); setPendingAddAction(null); }}
-            />
             </div>
         </div>
     );

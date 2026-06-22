@@ -2,7 +2,7 @@
 // One config per product type — columns map 1:1 to the backend create models.
 
 import { TONER_BRANDS } from "./brands";
-import { PAPER_BRANDS, priceFromInclusive } from "./listingConstants";
+import { PAPER_BRANDS } from "./listingConstants";
 
 const num = (v) => (v === "" || v == null ? null : Number(v));
 const splitList = (v) =>
@@ -11,19 +11,23 @@ const splitList = (v) =>
         .map((x) => x.trim())
         .filter(Boolean);
 
-// Convert a row's typed price into the stored base price using the row's
-// price_type ("incl" | "excl"). The dealer must pick one — there's no
-// silent default in the single forms. For bulk uploads, an empty cell
-// triggers a validation error in the BulkUploadGeneric grid; we only
-// reach this helper with a valid price_type.
+// Convert a row's typed price into the stored base price. price_type is set
+// at the modal level (Incl./Excl. GST toggle) and copied onto each row before
+// submit by BulkUploadGeneric. We default to "incl" to match the toggle.
 const PRICE_TYPES = [
     { value: "incl", label: "Incl GST" },
     { value: "excl", label: "Excl GST" },
 ];
+const GST_RATE_OPTIONS = [
+    { value: "5", label: "5%" },
+    { value: "12", label: "12%" },
+    { value: "18", label: "18%" },
+    { value: "28", label: "28%" },
+];
 const basePriceFromRow = (typed, row) => {
     const t = Number(typed || 0);
     if (t <= 0) return 0;
-    const pt = (row.price_type || "").toLowerCase();
+    const pt = (row.price_type || "incl").toLowerCase();
     const rate = row.gst_rate !== "" && row.gst_rate != null ? Number(row.gst_rate) : 18;
     return pt === "excl" ? Math.round(t) : Math.round(t / (1 + rate / 100));
 };
@@ -37,8 +41,7 @@ const TONER_COLUMNS = [
     { key: "model_number", label: "Toner Model Number", required: false, w: 170 },
     { key: "compatible_models", label: "Suitable For", required: true, type: "models", w: 240 },
     { key: "color", label: "Color", required: false, w: 110 },
-    { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
-    { key: "price_type", label: "Price Type", required: false, type: "select", w: 100 },
+    { key: "gst_rate", label: "GST", required: true, type: "select", w: 90 },
     { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "stock", label: "Stock", required: true, type: "number", w: 90 },
     { key: "page_yield", label: "Page Yield", required: true, type: "number", w: 110 },
@@ -97,6 +100,7 @@ const tonerScalarPayload = (r) => ({
 
 export const tonerBulkConfig = {
     title: "Bulk upload toners",
+    priceColumnKey: "price",
     editTitle: "Edit toners",
     editSubtitle: "Edit your existing toners inline, then save. Add new rows to publish more. Required: Brand, Suitable For, Price, Stock, Toner Type, Page Yield.",
     subtitle: "Fill the table or upload a CSV / Excel. Required: Brand, Suitable For, Price, Stock, Toner Type, Page Yield. Toner Model Number is optional — when supplied, buyers can find your listing by cartridge code (e.g. Q2612A).",
@@ -107,7 +111,7 @@ export const tonerBulkConfig = {
     endpoint: "/supplier/listings/bulk",
     itemPath: "/supplier/listings",
     columns: TONER_COLUMNS,
-    selectOptions: { toner_type: TONER_TYPES, brand: TONER_BRANDS, price_type: PRICE_TYPES },
+    selectOptions: { toner_type: TONER_TYPES, brand: TONER_BRANDS, gst_rate: GST_RATE_OPTIONS },
     emptyRow: tonerEmptyRow,
     templateExample: {
         brand: "HP", model_number: "CC388A", compatible_models: "P1007, P1008, P1106, P1108", color: "Black", price: "2183",
@@ -186,8 +190,7 @@ const PRINTER_COLUMNS = [
     { key: "condition", label: "Condition", required: false, type: "select", w: 130 },
     { key: "usage_type", label: "Usage", required: true, type: "select", w: 130 },
     { key: "color", label: "Color", required: false, type: "select", w: 120 },
-    { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
-    { key: "price_type", label: "Price Type", required: false, type: "select", w: 100 },
+    { key: "gst_rate", label: "GST", required: true, type: "select", w: 90 },
     { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "stock", label: "Stock", required: true, type: "number", w: 90 },
     { key: "print_speed_ppm", label: "Speed (ppm)", required: false, type: "number", w: 110 },
@@ -225,6 +228,7 @@ const printerRowErrors = (r) => {
 
 export const printerBulkConfig = {
     title: "Bulk upload printers",
+    priceColumnKey: "price",
     subtitle: "Fill the table or upload a CSV / Excel. Required: Brand, Model, Type, Usage, Price, Stock.",
     sheetName: "Printers",
     templateFilename: "tonerscart_bulk_printers_template.xlsx",
@@ -238,7 +242,7 @@ export const printerBulkConfig = {
         condition: PRINTER_CONDITIONS,
         usage_type: PRINTER_USAGES,
         color: PRINTER_COLORS,
-        price_type: PRICE_TYPES,
+        gst_rate: GST_RATE_OPTIONS,
     },
     emptyRow: printerEmptyRow,
     templateExample: {
@@ -331,8 +335,7 @@ const CONSUMABLE_COLUMNS = [
     { key: "model_number", label: "Model Number", required: true, w: 160 },
     { key: "compatible_models", label: "Suitable For", required: false, type: "models", w: 220 },
     { key: "condition", label: "Condition", required: false, type: "select", w: 130 },
-    { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
-    { key: "price_type", label: "Price Type", required: false, type: "select", w: 100 },
+    { key: "gst_rate", label: "GST", required: true, type: "select", w: 90 },
     { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "stock", label: "Stock", required: true, type: "number", w: 90 },
     { key: "description", label: "Description", required: false, w: 220 },
@@ -363,6 +366,7 @@ const consumableRowErrors = (r) => {
 
 export const consumableBulkConfig = {
     title: "Bulk upload consumables",
+    priceColumnKey: "price",
     subtitle: "Fill the table or upload a CSV / Excel. Required: Subcategory, Brand, Model, Price, Stock.",
     sheetName: "Consumables",
     templateFilename: "tonerscart_bulk_consumables_template.xlsx",
@@ -370,7 +374,7 @@ export const consumableBulkConfig = {
     unitLabel: "consumable",
     endpoint: "/supplier/consumables/bulk",
     columns: CONSUMABLE_COLUMNS,
-    selectOptions: { subcategory: CONSUMABLE_SUBS, condition: CONSUMABLE_CONDITIONS, brand: TONER_BRANDS, price_type: PRICE_TYPES },
+    selectOptions: { subcategory: CONSUMABLE_SUBS, condition: CONSUMABLE_CONDITIONS, brand: TONER_BRANDS, gst_rate: GST_RATE_OPTIONS },
     emptyRow: consumableEmptyRow,
     templateExample: {
         subcategory: "Drums", subcategory_other: "", brand: "Brother", model_number: "DR-2305",
@@ -450,8 +454,7 @@ const SCANNER_COLUMNS = [
     { key: "scan_speed_ppm", label: "Speed (ppm)", required: false, type: "number", w: 110 },
     { key: "color_mode", label: "Color/Mono", required: false, type: "select", w: 120 },
     { key: "warranty", label: "Warranty", required: false, type: "select", w: 130 },
-    { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
-    { key: "price_type", label: "Price Type", required: false, type: "select", w: 100 },
+    { key: "gst_rate", label: "GST", required: true, type: "select", w: 90 },
     { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "stock", label: "Stock", required: true, type: "number", w: 90 },
     { key: "description", label: "Description", required: false, w: 220 },
@@ -499,6 +502,7 @@ const scannerScalarPayload = (r) => ({
 
 export const scannerBulkConfig = {
     title: "Bulk upload scanners",
+    priceColumnKey: "price",
     subtitle: "Fill the table or upload a CSV / Excel. Required: Brand, Model, Scanner Type, Price, Stock.",
     sheetName: "Scanners",
     templateFilename: "tonerscart_bulk_scanners_template.xlsx",
@@ -512,7 +516,7 @@ export const scannerBulkConfig = {
         scan_resolution: SCANNER_RESOLUTIONS,
         color_mode: SCANNER_COLOR_MODES,
         warranty: SCANNER_WARRANTIES,
-        price_type: PRICE_TYPES,
+        gst_rate: GST_RATE_OPTIONS,
     },
     emptyRow: scannerEmptyRow,
     templateExample: {
@@ -563,8 +567,7 @@ const PAPER_COLUMNS = [
     { key: "size", label: "Size", required: true, type: "select", w: 110 },
     { key: "gsm", label: "GSM", required: true, type: "number", w: 90 },
     { key: "reams_per_box", label: "Reams / Box", required: false, type: "number", w: 110 },
-    { key: "gst_rate", label: "GST (%)", required: false, type: "number", w: 90 },
-    { key: "price_type", label: "Price Type", required: false, type: "select", w: 100 },
+    { key: "gst_rate", label: "GST", required: true, type: "select", w: 90 },
     { key: "price_per_ream", label: "Price/Ream (₹)", required: true, type: "number", w: 130 },
     { key: "stock", label: "Stock (boxes)", required: true, type: "number", w: 110 },
     { key: "brightness", label: "Brightness", required: false, type: "number", w: 100 },
@@ -601,6 +604,7 @@ const paperRowErrors = (r) => {
 
 export const paperBulkConfig = {
     title: "Bulk upload papers",
+    priceColumnKey: "price_per_ream",
     subtitle: "Fill the table or upload a CSV / Excel. Required: Brand, Size, GSM, Price/Ream, Stock.",
     sheetName: "Papers",
     templateFilename: "tonerscart_bulk_papers_template.xlsx",
@@ -608,7 +612,7 @@ export const paperBulkConfig = {
     unitLabel: "paper",
     endpoint: "/supplier/papers/bulk",
     columns: PAPER_COLUMNS,
-    selectOptions: { size: PAPER_SIZES, brand: PAPER_BRANDS, price_type: PRICE_TYPES },
+    selectOptions: { size: PAPER_SIZES, brand: PAPER_BRANDS, gst_rate: GST_RATE_OPTIONS },
     emptyRow: paperEmptyRow,
     templateExample: {
         brand: "JK Paper", size: "A4", gsm: "75", reams_per_box: "10",

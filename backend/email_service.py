@@ -731,26 +731,26 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
 
 # ===== Order notifications =====================================================
 
-# Wave 58 — commission slabs (TonersCart commercial policy 2026 v3).
+# Wave 61 — commission slabs (TonersCart commercial policy 2026 v4).
 # Single source of truth for orders, admin finance, quotation + order emails.
 _COMMISSION_TIERS = [
-    (15000,  0.10),
-    (30000,  0.08),
-    (75000,  0.06),
-    (100000, 0.05),
+    (15000,  0.12),
+    (30000,  0.10),
+    (75000,  0.08),
+    (100000, 0.06),
 ]
 
 
 def _commission_breakdown(total: float) -> tuple[float, float, str]:
     """Return (commission ₹, payout ₹, rateLabel) — matches frontend rules.
-    Charged on bill value excluding GST; ₹1,00,000 and above is a flat 4%."""
+    Charged on bill value excluding GST; ₹1,00,000 and above is a flat 5%."""
     t = float(total or 0)
     for cap, rate in _COMMISSION_TIERS:
         if t < cap:
             c = round(t * rate)
             return c, t - c, f"{int(rate * 100)}%"
-    c = round(t * 0.04)
-    return c, t - c, "4%"
+    c = round(t * 0.05)
+    return c, t - c, "5%"
 
 
 def _money(n) -> str:

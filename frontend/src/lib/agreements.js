@@ -2,16 +2,18 @@
 export const AGREEMENTS = {
     seller: {
         title: "Marketplace Seller Agreement",
-        intro: "Before you start selling on TonersCart, please review and accept the Seller Agreement.",
+        intro: "By listing on TonersCart you confirm that you have read and agree to our Terms of Service and Privacy Policy, and specifically that:",
+        introHasLinks: true,
         points: [
-            "List only genuine products and maintain accurate stock and descriptions.",
-            "Fulfil orders within your stated timeline and provide a GST invoice on every order.",
-            "Do not solicit or complete off-platform deals to bypass commission.",
-            "You agree to TonersCart's tiered commission, charged on the order bill value (excluding GST) and deducted from your payout: 10% under ₹15,000 · 8% ₹15,000–₹30,000 · 6% ₹30,000–₹75,000 · 5% ₹75,000–₹1,00,000 · 4% ₹1,00,000 & above.",
-            "TonersCart may suspend or remove your listings for policy violations.",
-            "Governed by the laws of India; jurisdiction: Bangalore courts, Karnataka.",
+            "You will list only genuine, legally sellable products with accurate stock and pricing",
+            "You will dispatch within 2 business days of order confirmation",
+            "You will issue a GST-compliant tax invoice to every buyer under your own GSTIN",
+            "TonersCart will deduct platform commission from your payout: under ₹15K = 12% · ₹15K–₹30K = 10% · ₹30K–₹75K = 8% · ₹75K–₹1L = 6% · ₹1L+ = 5%",
+            "Your bank account details are shared with Razorpay solely for payout processing",
+            "You consent to TonersCart handling your data as described in the Privacy Policy",
         ],
-        checkbox: "I have read and agree to the TonersCart Marketplace Seller Agreement",
+        checkbox: "I agree",
+        buttonText: "Start listing",
     },
     oem: {
         title: "OEM Brand Showcase Agreement",
