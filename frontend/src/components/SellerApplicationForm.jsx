@@ -163,8 +163,9 @@ export default function SellerApplicationForm() {
             if (!s.business_address.trim()) return false;
             if (!GSTIN_RE.test(s.gst_number.trim().toUpperCase())) return false;
             if (!PAN_RE.test(s.pan_number.trim().toUpperCase())) return false;
-            if (!s.annual_turnover) return false;
-            if (!s.years_in_business || parseInt(s.years_in_business, 10) < 0) return false;
+            // Wave 63 — annual turnover and years in business are OPTIONAL.
+            // We still validate the typed years value if the dealer chose to fill it.
+            if (s.years_in_business && parseInt(s.years_in_business, 10) < 0) return false;
             if (!s.account_holder_name.trim()) return false;
             if (!/^\d{6,18}$/.test(s.account_number.trim())) return false;
             if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(s.ifsc_code.trim().toUpperCase())) return false;
@@ -393,13 +394,13 @@ export default function SellerApplicationForm() {
                         )}
                     </div>
                     <div>
-                        <Label>Annual turnover<span className="text-red-500"> *</span></Label>
-                        <select value={s.annual_turnover} onChange={updS("annual_turnover")} required className="w-full h-10 px-3 rounded-md border border-[#D2D2D7] bg-white text-[14px]" data-testid="apply-turnover">
+                        <Label>Annual turnover <span className="text-[#86868B] font-normal">(optional)</span></Label>
+                        <select value={s.annual_turnover} onChange={updS("annual_turnover")} className="w-full h-10 px-3 rounded-md border border-[#D2D2D7] bg-white text-[14px]" data-testid="apply-turnover">
                             <option value="">Select…</option>
                             {TURNOVER.map((v) => <option key={v} value={v}>{v}</option>)}
                         </select>
                     </div>
-                    <div><Label>Years in business<span className="text-red-500"> *</span></Label><Input type="number" min="0" max="100" value={s.years_in_business} onChange={updS("years_in_business")} required data-testid="apply-years" /></div>
+                    <div><Label>Years in business <span className="text-[#86868B] font-normal">(optional)</span></Label><Input type="number" min="0" max="100" value={s.years_in_business} onChange={updS("years_in_business")} data-testid="apply-years" /></div>
                     <div className="sm:col-span-2"><Label>Business address<span className="text-red-500"> *</span></Label><Textarea rows={2} value={s.business_address} onChange={updS("business_address")} required data-testid="apply-address" /></div>
 
                     <div className="sm:col-span-2 mt-2 pt-4 border-t border-black/[0.06]">
@@ -494,16 +495,12 @@ export default function SellerApplicationForm() {
                             <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>PAN Card</strong> <span className="text-white/55">(required)</span></span></li>
                             <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>ID Proof — Aadhaar / Passport</strong> <span className="text-white/55">(required)</span></span></li>
                             <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>Cancelled Cheque</strong> <span className="text-white/55">(proof of your payout bank account)</span></span></li>
-                            <li className="flex items-start gap-2"><CircleDashed size={14} className="text-amber-400 mt-0.5 shrink-0" /><span><strong>Brand Authorization Letter</strong> <span className="text-white/55">(required only for Original OEM sellers)</span></span></li>
                             <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>Address Proof</strong> <span className="text-white/55">(utility bill / rent agreement)</span></span></li>
+                            <li className="flex items-start gap-2"><CircleDashed size={14} className="text-amber-400 mt-0.5 shrink-0" /><span><strong>Brand Authorization Letter</strong> <span className="text-white/55">{s.seller_types.includes("Original") ? "(required — you sell Original OEM cartridges)" : "(optional — required only if you sell original OEM cartridges)"}</span></span></li>
                         </ul>
                     </div>
 
-                    <div className="text-[12.5px] text-[#6E6E73] mb-1">All documents are mandatory and stored privately. Only TonersCart admins can view them via short-lived signed links.</div>
-                    {s.seller_types.includes("Original") && (
-                        <FileSlot label="Brand Authorization Letter *" hint="Required for Original (OEM) sellers" file={docs.brand_authorization}
-                            setFile={(f) => setDocs({ ...docs, brand_authorization: f })} testid="doc-brand-authorization" />
-                    )}
+                    <div className="text-[12.5px] text-[#6E6E73] mb-1">All required documents are stored privately. Only TonersCart admins can view them via short-lived signed links.</div>
                     <FileSlot label="GST certificate *" hint="Required" file={docs.gst}
                         setFile={(f) => setDocs({ ...docs, gst: f })} testid="doc-gst" />
                     <FileSlot label="PAN card *" hint="Required" file={docs.pan}
@@ -514,6 +511,23 @@ export default function SellerApplicationForm() {
                         setFile={(f) => setDocs({ ...docs, bank_proof: f })} testid="doc-bank-proof" />
                     <FileSlot label="Address proof *" hint="Utility bill / rent agreement" file={docs.address_proof}
                         setFile={(f) => setDocs({ ...docs, address_proof: f })} testid="doc-address-proof" />
+                    {/* Wave 63 — Brand Authorization Letter is always rendered at the bottom.
+                        Required only when the dealer chose "Original" (Genuine OEM cartridges).
+                        For everyone else it stays optional with a clarifying helper line. */}
+                    {(() => {
+                        const isOriginal = s.seller_types.includes("Original");
+                        return (
+                            <FileSlot
+                                label={isOriginal ? "Brand Authorization Letter *" : "Brand Authorization Letter (optional)"}
+                                hint={isOriginal
+                                    ? "Required for Original (OEM) sellers"
+                                    : "Required only if you sell original OEM cartridges."}
+                                file={docs.brand_authorization}
+                                setFile={(f) => setDocs({ ...docs, brand_authorization: f })}
+                                testid="doc-brand-authorization"
+                            />
+                        );
+                    })()}
                     <div className="flex items-start gap-2 mt-4 p-3 rounded-lg bg-[#FFF8DD] border border-[#F5C400]/40 text-[#5C4A00] text-[12.5px]">
                         <FileText size={14} className="mt-0.5 shrink-0" />
                         <div>Once you submit, our AI quickly checks each document is clear and legible. Any unclear file is flagged for the admin team.</div>
