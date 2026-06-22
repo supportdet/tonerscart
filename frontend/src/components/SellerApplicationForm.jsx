@@ -336,7 +336,6 @@ export default function SellerApplicationForm() {
                             {KNOWN_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
                             <option value="__other__">Other (type your city)</option>
                         </select>
-                        {(!KNOWN_CITIES.includes(s.city) && s.city !== "") || s.city === "" ? null : null}
                         {!KNOWN_CITIES.includes(s.city) && (
                             <Input
                                 value={s.city}
