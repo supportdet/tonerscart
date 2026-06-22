@@ -74,6 +74,29 @@ async def _send(to: str, subject: str, body_html: str, reply_to: str | None = No
         return False
 
 
+async def email_password_reset(to: str, reset_link: str) -> bool:
+    """Wave 59 — TonersCart-branded password-reset email. Replaces the generic
+    "Supabase Auth" template with our envelope + copy. Sent via Resend (same
+    pipeline as every other transactional email) so the From header reads
+    'TonersCart <{SENDER_EMAIL}>' and the body carries our brand."""
+    if not to or not reset_link:
+        return False
+    body = f"""
+      <h2 style="margin:0 0 12px 0;font-size:18px;color:#0A0A0B;">Reset your TonersCart password</h2>
+      <p style="margin:0 0 14px 0;color:#0A0A0B;">We received a request to reset the password for the TonersCart account associated with <strong>{to}</strong>.</p>
+      <p style="margin:0 0 18px 0;color:#0A0A0B;">Click the button below to choose a new password. This link is single-use and expires in 1 hour.</p>
+      <p style="margin:0 0 22px 0;">
+        <a href="{reset_link}" style="display:inline-block;background:#00B7C7;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;font-size:14px;">Reset password</a>
+      </p>
+      <p style="margin:0 0 8px 0;font-size:12.5px;color:#6E6E73;">If the button doesn&rsquo;t work, copy and paste this URL into your browser:</p>
+      <p style="margin:0 0 18px 0;font-size:12px;word-break:break-all;color:#0A6E78;">{reset_link}</p>
+      <hr style="border:none;border-top:1px solid #E5E5EA;margin:18px 0;" />
+      <p style="margin:0 0 6px 0;font-size:12.5px;color:#6E6E73;">Didn&rsquo;t request this? You can safely ignore this email — your password won&rsquo;t change. If you keep getting these, write to <a href="mailto:{SUPPORT_INBOX}" style="color:#0A6E78;">{SUPPORT_INBOX}</a>.</p>
+    """
+    return await _send(to, "Reset your TonersCart password", body)
+
+
+
 async def email_notify_available(to: str, printer_name: str, product_name: str, product_url: str):
     """Tell a buyer who asked to be notified that a compatible product is now in stock."""
     if not to:

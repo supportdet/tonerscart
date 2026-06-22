@@ -20,11 +20,10 @@ import ScannerListings from "../components/ScannerListings";
 import DeliveryPolicyNote from "../components/DeliveryPolicyNote";
 import SupplierEarnings from "../components/SupplierEarnings";
 import SupplierInsights from "../components/SupplierInsights";
-import CommissionBanner from "../components/CommissionBanner";
 import CompetitivePricingNote from "../components/CompetitivePricingNote";
 import TonerModelSearchSelect from "../components/TonerModelSearchSelect";
 import CommissionCalculator from "../components/CommissionCalculator";
-import { commissionFor } from "../lib/commission";
+import { commissionFor, payoutBreakdown } from "../lib/commission";
 import { Copy, Check, ChevronLeft, Upload, ArrowRight, Store, Building2, Layers } from "lucide-react";
 import { colorSwatch as _colorSwatch } from "../lib/colors";
 import BulkUploadGeneric from "../components/BulkUploadGeneric";
@@ -1186,7 +1185,6 @@ export default function SupplierDashboard() {
                         {/* Wave 58 — plain-language base-price clarity box.
                             Repositioned to render directly ABOVE the price input
                             (was below) so dealers read it before they type a price. */}
-                        <CommissionBanner />
 
                         {/* Small inline incl/excl GST pill toggle — must be picked, no default */}
                         <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -1237,11 +1235,33 @@ export default function SupplierDashboard() {
                                             <Trash2 size={14} />
                                         </button>
                                     </div>
-                                    {typed > 0 && priceType && (
-                                        <div className="text-[11.5px] text-[#0A0A0B] mt-1.5 pl-1" data-testid={`variant-buyer-sees-${i}`}>
-                                            Buyer will see: <strong>{formatINR(buyerSees)} (incl. GST)</strong>
-                                        </div>
-                                    )}
+                                    {typed > 0 && priceType && (() => {
+                                        const pb = payoutBreakdown(typed, priceType, gstRate);
+                                        if (!pb) return null;
+                                        return (
+                                            <div className="mt-2 ml-0.5 rounded-md border border-black/[0.08] bg-white px-3 py-2 text-[11.5px] text-[#0A0A0B] leading-relaxed" data-testid={`variant-payout-breakdown-${i}`}>
+                                                <div className="flex justify-between" data-testid={`variant-buyer-sees-${i}`}>
+                                                    <span className="text-[#3a3a40]">Buyer pays (incl. GST):</span>
+                                                    <span className="font-mono">{formatINR(buyerSees)}</span>
+                                                </div>
+                                                <div className="flex justify-between mt-0.5">
+                                                    <span className="text-[#3a3a40]">Your base price (excl. GST):</span>
+                                                    <span className="font-mono">{formatINR(pb.basePrice)}</span>
+                                                </div>
+                                                <div className="flex justify-between text-[#B91C1C] mt-0.5">
+                                                    <span>TonersCart commission ({pb.rateLabel} of base):</span>
+                                                    <span className="font-mono">− {formatINR(pb.commission)}</span>
+                                                </div>
+                                                <div className="flex justify-between font-bold text-[#065F46] mt-1 pt-1 border-t border-black/[0.08]">
+                                                    <span>You&rsquo;ll receive (per unit):</span>
+                                                    <span className="font-mono">{formatINR(pb.basePrice - pb.commission)}</span>
+                                                </div>
+                                                <div className="text-[10.5px] text-[#6E6E73] mt-1 leading-snug">
+                                                    GST {formatINR(pb.gstAmount)} ({gstRate}%) and delivery pass through to you in full.
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                                 );
                             })}

@@ -9,7 +9,6 @@ import D2DRow from "./D2DRow";
 import { withGst } from "../lib/listingConstants";
 import PriceWithGstToggle, { getBasePrice } from "./PriceWithGstToggle";
 import api, { formatApiError } from "../lib/api";
-import CommissionBanner from "./CommissionBanner";
 import CompetitivePricingNote from "./CompetitivePricingNote";
 import DeliveryPolicyNote from "./DeliveryPolicyNote";
 import BulkUploadGeneric from "./BulkUploadGeneric";
@@ -282,7 +281,6 @@ export default function PaperListings() {
                                 <Input type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} required className="tc-input-lg" data-testid="paper-stock-input" />
                             </div>
                             <div className="col-span-2">
-                                <CommissionBanner />
                                 <PriceWithGstToggle
                                     priceLabel="Price per ream (₹)"
                                     required

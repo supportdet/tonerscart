@@ -7,7 +7,7 @@ import { Textarea } from "../components/ui/textarea";
 import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
-import { Upload, CheckCircle2, ChevronLeft, ChevronRight, FileText, ShieldCheck, CircleDashed, Loader2 } from "lucide-react";
+import { Upload, CheckCircle2, ChevronLeft, ChevronRight, FileText, ShieldCheck, CircleDashed, Loader2, Trash2 } from "lucide-react";
 import PhonePrefixInput from "./PhonePrefixInput";
 
 const KNOWN_CITIES = ["Bangalore","Mumbai","Delhi","Chennai","Hyderabad","Pune","Kolkata","Ahmedabad","Jaipur","Lucknow","Chandigarh","Surat","Indore","Nagpur","Coimbatore","Kochi","Bhopal","Noida","Gurgaon"];
@@ -44,18 +44,47 @@ function FileSlot({ label, hint, file, setFile, testid, accept = "image/*,applic
         if (f.size > 5 * 1024 * 1024) { toast.error("Max 5 MB"); return; }
         setFile(f);
     };
+    const onRemove = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setFile(null);
+    };
     return (
-        <label className="block cursor-pointer">
+        <div>
             <div className="text-[12px] font-semibold text-[#0A0A0B] mb-1">{label}</div>
             {hint && <div className="text-[11px] text-[#6E6E73] mb-1.5">{hint}</div>}
-            <input type="file" accept={accept} className="hidden" onChange={onPick} data-testid={testid} />
-            <div className={`flex items-center gap-3 p-3 rounded-lg border-2 border-dashed transition ${file ? "bg-emerald-50 border-emerald-200" : "bg-white border-[#D2D2D7] hover:border-[#86868B]"}`}>
-                {file ? <CheckCircle2 size={18} className="text-emerald-600 shrink-0" /> : <Upload size={16} className="text-[#86868B] shrink-0" />}
-                <div className="text-[12.5px] truncate">
-                    {file ? <span className="text-emerald-700 font-medium">{file.name}</span> : <span className="text-[#86868B]">Click to upload (PDF or image, max 5 MB)</span>}
+            {file ? (
+                <div
+                    className="flex items-center gap-3 p-3 rounded-lg border-2 border-dashed bg-emerald-50 border-emerald-200"
+                    data-testid={`${testid}-preview`}
+                >
+                    <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+                    <div className="text-[12.5px] truncate flex-1">
+                        <span className="text-emerald-700 font-medium">{file.name}</span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onRemove}
+                        className="shrink-0 w-7 h-7 grid place-items-center rounded-full text-[#6E6E73] hover:bg-red-50 hover:text-red-600 transition"
+                        aria-label={`Remove ${label}`}
+                        title="Remove this file"
+                        data-testid={`${testid}-remove`}
+                    >
+                        <Trash2 size={14} />
+                    </button>
                 </div>
-            </div>
-        </label>
+            ) : (
+                <label className="block cursor-pointer">
+                    <input type="file" accept={accept} className="hidden" onChange={onPick} data-testid={testid} />
+                    <div className="flex items-center gap-3 p-3 rounded-lg border-2 border-dashed bg-white border-[#D2D2D7] hover:border-[#86868B] transition">
+                        <Upload size={16} className="text-[#86868B] shrink-0" />
+                        <div className="text-[12.5px] truncate">
+                            <span className="text-[#86868B]">Click to upload (PDF or image, max 5 MB)</span>
+                        </div>
+                    </div>
+                </label>
+            )}
+        </div>
     );
 }
 
@@ -291,10 +320,33 @@ export default function SellerApplicationForm() {
                     </div>
                     <div>
                         <Label>Primary city<span className="text-red-500"> *</span></Label>
-                        <select value={s.city} onChange={updS("city")} required className="w-full h-10 px-3 rounded-md border border-[#D2D2D7] bg-white text-[14px]" data-testid="apply-city">
+                        {/* Wave 59 — dropdown of supported cities; "Other" reveals a
+                            free-text field so dealers in un-listed cities can still sign up. */}
+                        <select
+                            value={KNOWN_CITIES.includes(s.city) || !s.city ? s.city : "__other__"}
+                            onChange={(e) => {
+                                const v = e.target.value;
+                                setS({ ...s, city: v === "__other__" ? "" : v });
+                            }}
+                            required
+                            className="w-full h-10 px-3 rounded-md border border-[#D2D2D7] bg-white text-[14px]"
+                            data-testid="apply-city"
+                        >
                             <option value="">Select city…</option>
                             {KNOWN_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                            <option value="__other__">Other (type your city)</option>
                         </select>
+                        {(!KNOWN_CITIES.includes(s.city) && s.city !== "") || s.city === "" ? null : null}
+                        {!KNOWN_CITIES.includes(s.city) && (
+                            <Input
+                                value={s.city}
+                                onChange={updS("city")}
+                                placeholder="Type your city"
+                                required
+                                className="mt-2"
+                                data-testid="apply-city-custom"
+                            />
+                        )}
                     </div>
                     <div>
                         <Label>State<span className="text-red-500"> *</span></Label>

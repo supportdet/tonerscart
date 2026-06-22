@@ -7,6 +7,7 @@ import {
     withGst,
     GST_RATES,
 } from "../lib/listingConstants";
+import { payoutBreakdown } from "../lib/commission";
 
 /**
  * Reusable price input with a small inline incl/excl GST pill toggle.
@@ -135,18 +136,53 @@ export default function PriceWithGstToggle({
                     </div>
                 )}
                 {typed > 0 && priceType ? (
-                    <div
-                        className="text-[12px] text-[#0A0A0B] bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 mt-2 flex flex-wrap items-center gap-x-3 gap-y-1"
-                        data-testid={`${testIdPrefix}-price-preview`}
-                    >
-                        <span>
-                            Buyer will see: <strong data-testid={`${testIdPrefix}-buyer-sees`}>{formatINR(buyerSees)} (incl. GST)</strong>
-                        </span>
-                        <span className="text-[#6E6E73]">·</span>
-                        <span className="text-[#6E6E73]">
-                            Base: {formatINR(base)} + GST {gstRate}%: {formatINR(buyerSees - base)}
-                        </span>
-                    </div>
+                    <>
+                        <div
+                            className="text-[12px] text-[#0A0A0B] bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 mt-2 flex flex-wrap items-center gap-x-3 gap-y-1"
+                            data-testid={`${testIdPrefix}-price-preview`}
+                        >
+                            <span>
+                                Buyer will see: <strong data-testid={`${testIdPrefix}-buyer-sees`}>{formatINR(buyerSees)} (incl. GST)</strong>
+                            </span>
+                            <span className="text-[#6E6E73]">·</span>
+                            <span className="text-[#6E6E73]">
+                                Base: {formatINR(base)} + GST {gstRate}%: {formatINR(buyerSees - base)}
+                            </span>
+                        </div>
+                        {(() => {
+                            // Wave 60 — live, plain-language payout breakdown rendered
+                            // directly under the price input. Updates as dealer types.
+                            // Wording chosen so a first-time dealer understands at a glance
+                            // what TonersCart takes and what lands in their bank.
+                            const pb = payoutBreakdown(typed, priceType, gstRate);
+                            if (!pb) return null;
+                            return (
+                                <div
+                                    className="mt-2 rounded-lg border border-black/[0.08] bg-white px-3.5 py-3 text-[12.5px] text-[#0A0A0B] leading-relaxed shadow-[0_1px_2px_rgba(0,0,0,0.03)]"
+                                    data-testid={`${testIdPrefix}-payout-breakdown`}
+                                >
+                                    <div className="text-[11px] font-semibold tracking-wide text-[#6E6E73] uppercase mb-2">
+                                        What you&rsquo;ll earn on this listing
+                                    </div>
+                                    <div className="flex justify-between" data-testid={`${testIdPrefix}-payout-base`}>
+                                        <span className="text-[#3a3a40]">Your base price <span className="text-[#86868B]">(excl. GST)</span>:</span>
+                                        <span className="font-mono">{formatINR(pb.basePrice)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-[#B91C1C] mt-0.5" data-testid={`${testIdPrefix}-payout-commission`}>
+                                        <span>TonersCart commission ({pb.rateLabel} of base):</span>
+                                        <span className="font-mono">− {formatINR(pb.commission)}</span>
+                                    </div>
+                                    <div className="flex justify-between font-bold text-[#065F46] mt-1.5 pt-1.5 border-t border-black/[0.08]" data-testid={`${testIdPrefix}-payout-net`}>
+                                        <span>You&rsquo;ll receive (per unit):</span>
+                                        <span className="font-mono">{formatINR(pb.basePrice - pb.commission)}</span>
+                                    </div>
+                                    <div className="text-[11px] text-[#6E6E73] mt-2 leading-snug">
+                                        GST of {formatINR(pb.gstAmount)} ({gstRate}%) and delivery charges pass through to you in full — TonersCart never takes a cut on those.
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                    </>
                 ) : typed > 0 && !priceType && !error ? (
                     <div className="text-[11.5px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mt-2" data-testid={`${testIdPrefix}-price-type-hint`}>
                         Now pick <strong>Incl. GST</strong> or <strong>Excl. GST</strong> above so we know whether the figure you typed is the final price or the base price.
