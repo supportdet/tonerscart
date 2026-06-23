@@ -18,21 +18,31 @@ export default function BuyerTypeGate() {
     const [busy, setBusy] = useState(false);
     const [view, setView] = useState("menu"); // menu | corporate | govt
     const [gst, setGst] = useState("");
+    // Wave 67 — optimistic dismiss flag. Once the user picks a persona, hide
+    // the gate immediately and never re-render it for this session, even if
+    // /auth/me lags (or returns a stale user_type). Prevents the loop where
+    // the popup pops up again after picking Dealer + accepting the agreement.
+    const [dismissed, setDismissed] = useState(false);
 
-    const eligible = !loading && user && user.role === "customer" && !user.user_type;
+    const eligible = !loading && user && user.role === "customer" && !user.user_type && !dismissed;
     if (!eligible) return null;
 
     const save = async (userType, extra) => {
         setBusy(true);
+        // Optimistically dismiss — guarantees the gate never re-renders even
+        // if the network round-trip races with a parallel /auth/me refresh.
+        setDismissed(true);
         try {
             if (extra?.gst) {
                 try { await api.patch("/auth/me", { gst_number: extra.gst }); }
-                catch (e) { toast.error(formatApiError(e)); setBusy(false); return; }
+                catch (e) { toast.error(formatApiError(e)); setDismissed(false); setBusy(false); return; }
             }
             await api.post("/auth/user-type", { user_type: userType });
             await refresh();
             if (extra?.redirect) navigate(extra.redirect);
         } catch (e) {
+            // Re-show only if the persona actually failed to persist.
+            setDismissed(false);
             toast.error(formatApiError(e));
         } finally {
             setBusy(false);
@@ -40,7 +50,7 @@ export default function BuyerTypeGate() {
     };
 
     return (
-        <div className="fixed inset-0 z-[900] bg-[#0A0A0B]/75 backdrop-blur-sm flex items-center justify-center p-4" data-testid="buyer-type-gate">
+        <div className="fixed inset-0 z-[1100] bg-[#0A0A0B]/80 backdrop-blur-sm flex items-center justify-center p-4" data-testid="buyer-type-gate">
             <div className="bg-white rounded-2xl w-full max-w-[560px] max-h-[92vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <div className="p-6 sm:p-8">
                     <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-[#00B7C7] mb-2">Welcome to TonersCart</div>
