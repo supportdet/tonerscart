@@ -243,6 +243,20 @@ export default function SupplierDashboard() {
     const { user, refresh } = useAuth();
     const navigate = useNavigate();
     const isApproved = user?.supplier_status === "approved";
+    const applicationStatus = user?.application_status; // 'pending' | 'rejected' | null
+    // Wave 65 — pending dealers see the dashboard layout with a yellow banner
+    // and all add/bulk/edit CTAs disabled (selling features locked) until an
+    // admin approves them. Rejected applicants still see the hard-block
+    // PendingScreen (final state, not "under review").
+    const isPending = !isApproved && applicationStatus === "pending";
+    const lockReason = "Available after admin approval — usually within 1–2 business days.";
+    const guardedClick = (fn) => () => {
+        if (!isApproved) {
+            toast.info(lockReason);
+            return;
+        }
+        fn();
+    };
     const [catalog, setCatalog] = useState("toners"); // 'toners' | 'printers' | 'papers' | 'consumables' | 'orders' | 'earnings' | 'insights' | 'bulk' | 'd2d' | 'oem'
     const [listingFilter, setListingFilter] = useState("all"); // 'all' | 'active' — toner listings
     const [orderFilter, setOrderFilter] = useState("all"); // 'all' | 'pending' — orders
@@ -652,7 +666,8 @@ export default function SupplierDashboard() {
         [allProducts, listingFilter]
     );
 
-    if (!isApproved) {
+    if (!isApproved && !isPending) {
+        // Rejected (or otherwise non-pending) — keep the hard-block screen.
         return <PendingScreen application={user?.application} />;
     }
 
@@ -735,6 +750,25 @@ export default function SupplierDashboard() {
                 </div>
             </div>
 
+            {/* Wave 65 — Pending approval banner. Shown while role is still
+                customer + suppliers_pending.status==='pending'. Listings and
+                selling features are locked (CTAs disabled) until approval. */}
+            {isPending && (
+                <div className="bg-[#FFFBEB] border-b border-[#F5C400]/40" data-testid="supplier-pending-banner">
+                    <div className="tc-container py-3 flex items-start gap-3">
+                        <Hourglass size={18} className="text-amber-600 mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <div className="text-[14px] font-semibold text-[#5C4A00]" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                                Your account is under review.
+                            </div>
+                            <div className="text-[12.5px] text-[#5C4A00]/85 mt-0.5">
+                                We&rsquo;ll notify you by email once approved — usually within 1&ndash;2 business days. You can browse your dashboard now; listings and selling tools will unlock automatically after approval.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Sticky full-width pastel control bar — stays pinned below the navbar */}
             <DealerTabBar active={catalog} onSelect={selectTab} />
 
@@ -743,9 +777,9 @@ export default function SupplierDashboard() {
                     <>
                         <h2 id="printers" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your printers</h2>
                         <CenterAction title="Manage your printers" subtitle="Add a single printer with full specs, edit your catalogue inline, or upload many at once.">
-                            <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-printer"))} data-testid="add-printer-cta-btn"><Plus size={16} /> Add Printer</Button>
-                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-bulk-printer"))} data-testid="bulk-upload-printer-btn"><Upload size={15} /> Bulk upload</Button>
-                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-edit-printer"))} data-testid="edit-printers-btn"><Layers size={15} /> Edit Printers</Button>
+                            <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-add-printer")))} data-testid="add-printer-cta-btn"><Plus size={16} /> Add Printer</Button>
+                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-bulk-printer")))} data-testid="bulk-upload-printer-btn"><Upload size={15} /> Bulk upload</Button>
+                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-edit-printer")))} data-testid="edit-printers-btn"><Layers size={15} /> Edit Printers</Button>
                         </CenterAction>
                         <D2DExplainer />
                         <PrinterListings />
@@ -754,9 +788,9 @@ export default function SupplierDashboard() {
                     <>
                         <h2 id="papers" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your papers</h2>
                         <CenterAction title="Manage your papers" subtitle="Add a single paper SKU, edit your catalogue inline, or upload many at once.">
-                            <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-paper"))} data-testid="add-paper-cta-btn"><Plus size={16} /> Add Paper</Button>
-                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-bulk-paper"))} data-testid="bulk-upload-paper-btn"><Upload size={15} /> Bulk upload</Button>
-                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-edit-paper"))} data-testid="edit-papers-btn"><Layers size={15} /> Edit Papers</Button>
+                            <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-add-paper")))} data-testid="add-paper-cta-btn"><Plus size={16} /> Add Paper</Button>
+                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-bulk-paper")))} data-testid="bulk-upload-paper-btn"><Upload size={15} /> Bulk upload</Button>
+                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-edit-paper")))} data-testid="edit-papers-btn"><Layers size={15} /> Edit Papers</Button>
                         </CenterAction>
                         <D2DExplainer />
                         <PaperListings />
@@ -765,9 +799,9 @@ export default function SupplierDashboard() {
                     <>
                         <h2 id="consumables" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your consumables</h2>
                         <CenterAction title="Manage your consumables" subtitle="Add a single consumable SKU, edit your catalogue inline, or upload many at once.">
-                            <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-consumable"))} data-testid="add-consumable-cta-btn"><Plus size={16} /> Add Consumable</Button>
-                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-bulk-consumable"))} data-testid="bulk-upload-consumable-btn"><Upload size={15} /> Bulk upload</Button>
-                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-edit-consumable"))} data-testid="edit-consumables-btn"><Layers size={15} /> Edit Inks & Consumables</Button>
+                            <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-add-consumable")))} data-testid="add-consumable-cta-btn"><Plus size={16} /> Add Consumable</Button>
+                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-bulk-consumable")))} data-testid="bulk-upload-consumable-btn"><Upload size={15} /> Bulk upload</Button>
+                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-edit-consumable")))} data-testid="edit-consumables-btn"><Layers size={15} /> Edit Inks & Consumables</Button>
                         </CenterAction>
                         <D2DExplainer />
                         <ConsumableListings />
@@ -776,9 +810,9 @@ export default function SupplierDashboard() {
                     <>
                         <h2 id="scanners" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your scanners</h2>
                         <CenterAction title="Manage your scanners" subtitle="Add a single scanner SKU, edit your catalogue inline, or upload many at once.">
-                            <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-add-scanner"))} data-testid="add-scanner-cta-btn"><Plus size={16} /> Add Scanner</Button>
-                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-bulk-scanner"))} data-testid="bulk-upload-scanner-btn"><Upload size={15} /> Bulk upload</Button>
-                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => window.dispatchEvent(new CustomEvent("tc-open-edit-scanner"))} data-testid="edit-scanners-btn"><Layers size={15} /> Edit Scanners</Button>
+                            <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-add-scanner")))} data-testid="add-scanner-cta-btn"><Plus size={16} /> Add Scanner</Button>
+                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-bulk-scanner")))} data-testid="bulk-upload-scanner-btn"><Upload size={15} /> Bulk upload</Button>
+                            <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-edit-scanner")))} data-testid="edit-scanners-btn"><Layers size={15} /> Edit Scanners</Button>
                         </CenterAction>
                         <ScannerListings />
                     </>
@@ -917,10 +951,10 @@ export default function SupplierDashboard() {
                 {/* Listings */}
                 <h2 id="listings" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your toners</h2>
                 <CenterAction title="Manage your toners" subtitle="Add a single toner, edit your whole catalogue inline, or upload many at once.">
-                    <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => requestAddAction("single")} data-testid="add-listing-btn"><Plus size={16} /> Add Toner</Button>
-                    <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={() => requestAddAction("bulk")} data-testid="bulk-upload-btn"><Upload size={15} /> Bulk upload</Button>
+                    <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => requestAddAction("single"))} data-testid="add-listing-btn"><Plus size={16} /> Add Toner</Button>
+                    <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => requestAddAction("bulk"))} data-testid="bulk-upload-btn"><Upload size={15} /> Bulk upload</Button>
                     {listings.length > 0 && (
-                        <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" onClick={openEditBulk} data-testid="edit-toners-btn"><Layers size={15} /> Edit toners</Button>
+                        <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(openEditBulk)} data-testid="edit-toners-btn"><Layers size={15} /> Edit toners</Button>
                     )}
                 </CenterAction>
                 <D2DExplainer />

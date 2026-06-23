@@ -25,7 +25,41 @@ def admin_pending(user: dict = Depends(require_role("admin"))):
 
 @router.get("/admin/suppliers")
 def admin_suppliers(user: dict = Depends(require_role("admin"))):
-    return sb_admin.table("suppliers").select("*").order("approved_at", desc=True).execute().data or []
+    rows = sb_admin.table("suppliers").select("*").order("approved_at", desc=True).execute().data or []
+    # Wave 64 — surface `pending_docs` per dealer so the list can show a
+    # "Pending documents" badge at a glance. We merge any doc paths from the
+    # original `suppliers_pending` row (where the full KYC set lives) before
+    # deciding what's missing — same merge the detail endpoint does.
+    if not rows:
+        return rows
+    user_ids = [r.get("user_id") for r in rows if r.get("user_id")]
+    pending_docs_by_uid: Dict[str, dict] = {}
+    if user_ids:
+        try:
+            pend = sb_admin.table("suppliers_pending").select(
+                "user_id," + ",".join(DOC_FIELDS)
+            ).in_("user_id", user_ids).execute().data or []
+            for p in pend:
+                pending_docs_by_uid[p["user_id"]] = p
+        except Exception:
+            pass
+    # Mandatory at-a-glance set per product spec (cancelled cheque required
+    # only before first payout — still surfaced separately).
+    mandatory = ("doc_gst", "doc_pan", "doc_id_proof")
+    for r in rows:
+        merged = {f: r.get(f) for f in DOC_FIELDS}
+        prow = pending_docs_by_uid.get(r.get("user_id")) or {}
+        for f in DOC_FIELDS:
+            if not merged.get(f) and prow.get(f):
+                merged[f] = prow[f]
+        r["pending_docs"] = [f for f in mandatory if not merged.get(f)]
+        r["cheque_uploaded"] = bool(
+            r.get("cheque_uploaded") if r.get("cheque_uploaded") is not None
+            else merged.get("doc_bank_proof")
+        )
+        if not r["cheque_uploaded"]:
+            r["pending_docs"].append("doc_bank_proof")
+    return rows
 
 
 @router.post("/admin/suppliers/{pending_id}/approve")
@@ -593,6 +627,72 @@ def admin_supplier_document(supplier_id: str, field: str, download: bool = False
     if not url:
         raise HTTPException(502, "Could not generate document link")
     return {"url": url, "filename": filename, "field": field}
+
+
+@router.post("/admin/suppliers/{supplier_id}/document")
+async def admin_upload_supplier_document(
+    supplier_id: str,
+    field: str = Query(..., description="One of the doc_* fields"),
+    file: UploadFile = File(...),
+    user: dict = Depends(require_role("admin")),
+):
+    """Wave 64 — admin uploads a KYC document on a dealer's behalf when the
+    dealer forgot or hasn't submitted it yet (typical case: cancelled cheque
+    submitted later, after onboarding). Stores in the same private
+    supplier-documents bucket, writes the path back to `suppliers.{field}`,
+    and — when the field is `doc_bank_proof` — also flips `cheque_uploaded`
+    so the admin list badge clears."""
+    if field not in DOC_FIELDS:
+        raise HTTPException(400, "Invalid document field")
+    if not file.content_type or not (file.content_type.startswith("image/") or file.content_type == "application/pdf"):
+        raise HTTPException(400, "Only images and PDF are allowed")
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Max 5 MB")
+
+    try:
+        s = sb_admin.table("suppliers").select("user_id,business_name").eq("id", supplier_id).maybe_single().execute()
+    except Exception as e:
+        # Malformed UUID or other DB-level error → clean 400 instead of 500.
+        raise HTTPException(400, f"Invalid supplier id: {e}") from e
+    if not s or not s.data:
+        raise HTTPException(404, "Supplier not found")
+    sup_user_id = s.data.get("user_id") or supplier_id
+    business_name = s.data.get("business_name") or "dealer"
+
+    ext = (file.filename.split(".")[-1] if file.filename and "." in file.filename else "bin").lower()
+    path = f"{sup_user_id}/{field}-{uuid.uuid4().hex}.{ext}"
+    try:
+        sb_admin.storage.from_("supplier-documents").upload(
+            path, content, {"content-type": file.content_type, "upsert": "false"}
+        )
+    except Exception as e:
+        logger.exception("admin doc upload failed for %s/%s", supplier_id, field)
+        raise HTTPException(500, f"Upload failed: {e}") from e
+
+    # Persist the new path on the suppliers row. If `field` isn't a column on
+    # `suppliers` yet (older deployments still keep some doc fields only on
+    # suppliers_pending), drop it down to the pending row too.
+    update_payload = {field: path}
+    if field == "doc_bank_proof":
+        update_payload["cheque_uploaded"] = True
+    optional_cols = (field, "cheque_uploaded") if field == "doc_bank_proof" else (field,)
+    try:
+        _exec_dropping_cols(
+            lambda p: sb_admin.table("suppliers").update(p).eq("id", supplier_id).execute(),
+            update_payload,
+            optional_cols=optional_cols,
+        )
+    except Exception as e:
+        logger.warning("supplier doc column update failed for %s/%s: %s", supplier_id, field, e)
+    try:
+        sb_admin.table("suppliers_pending").update({field: path}).eq("user_id", sup_user_id).execute()
+    except Exception:
+        pass
+
+    _log_admin_action(user["id"], "supplier.doc_upload", supplier_id, {"field": field, "by_admin": True})
+    logger.info("admin %s uploaded %s for supplier %s (%s)", user.get("email"), field, supplier_id, business_name)
+    return {"ok": True, "field": field, "path": path}
 
 
 

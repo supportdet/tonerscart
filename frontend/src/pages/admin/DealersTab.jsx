@@ -127,11 +127,22 @@ export default function DealersTab() {
                                         <td className="p-3 text-right">{agg.orderCount}</td>
                                         <td className="p-3 text-right font-mono">{fmtMoney(agg.gmv)}</td>
                                         <td className="p-3">
-                                            {d.is_suspended ? (
-                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 text-[11px] font-semibold">Suspended</span>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">Active</span>
-                                            )}
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                {d.is_suspended ? (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 text-[11px] font-semibold">Suspended</span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">Active</span>
+                                                )}
+                                                {Array.isArray(d.pending_docs) && d.pending_docs.length > 0 && (
+                                                    <span
+                                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-semibold"
+                                                        title={`Missing: ${d.pending_docs.map((f) => f.replace("doc_", "").replace(/_/g, " ")).join(", ")}`}
+                                                        data-testid={`dealer-pending-docs-${d.id}`}
+                                                    >
+                                                        <AlertTriangle size={10} /> {d.pending_docs.length} doc{d.pending_docs.length === 1 ? "" : "s"} pending
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="p-3">
                                             <div className="flex items-center gap-3">

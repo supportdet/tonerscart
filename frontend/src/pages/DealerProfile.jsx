@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { inclGstPrice, formatINR } from "../lib/listingConstants";
 import {
     ArrowLeft, Loader2, FileText, Download, ExternalLink, Save, ShieldCheck,
-    Package, Edit3, Image as ImageIcon,
+    Package, Edit3, Image as ImageIcon, CheckCircle2, AlertCircle, Upload,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
@@ -22,13 +22,24 @@ const fmtDateTime = (d) => (d ? new Date(d).toLocaleString("en-IN", { day: "nume
 
 const DOC_LABELS = {
     doc_id_proof: "ID proof (Aadhaar/Passport)",
-    doc_bank_proof: "Cancelled cheque / bank proof",
+    doc_bank_proof: "Cancelled cheque",
     doc_gst: "GST certificate",
     doc_pan: "PAN card",
-    doc_brand_authorization: "Brand authorization",
+    doc_brand_authorization: "Brand authorization letter",
     doc_shop_photo: "Shop photo",
     doc_address_proof: "Address proof",
 };
+
+// Wave 64 — render order + which docs are "mandatory at-a-glance" (badge driver).
+const DOC_ORDER = [
+    "doc_gst",
+    "doc_pan",
+    "doc_bank_proof",
+    "doc_id_proof",
+    "doc_address_proof",
+    "doc_brand_authorization",
+];
+const MANDATORY_DOCS = new Set(["doc_gst", "doc_pan", "doc_bank_proof", "doc_id_proof"]);
 
 // Maps each kind's listing rows into a normalised row used by the Listings tab.
 function flattenListings(data) {
@@ -154,6 +165,27 @@ export default function DealerProfile() {
         } catch (e) { toast.error(formatApiError(e) || "Couldn't open document"); }
     };
 
+    // Wave 64 — admin uploads a missing KYC document on the dealer's behalf.
+    const [uploadingField, setUploadingField] = useState(null);
+    const uploadDocForDealer = async (field, file) => {
+        if (!file) return;
+        setUploadingField(field);
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            await api.post(`/admin/suppliers/${id}/document`, fd, {
+                params: { field },
+                headers: { "Content-Type": "multipart/form-data" },
+            });
+            toast.success(`${DOC_LABELS[field] || field} uploaded`);
+            await load();
+        } catch (e) {
+            toast.error(formatApiError(e) || "Upload failed");
+        } finally {
+            setUploadingField(null);
+        }
+    };
+
     const downloadFullProfile = async () => {
         setDownloading(true);
         try {
@@ -186,7 +218,6 @@ export default function DealerProfile() {
     const docs = data.documents || {};
     const agreements = data.agreements || [];
     const orders = data.orders || [];
-    const docEntries = Object.entries(docs);
 
     return (
         <div className="tc-container py-8 max-w-5xl" data-testid="dealer-profile-page">
@@ -282,25 +313,76 @@ export default function DealerProfile() {
                             <Field label="Branch" value={s.bank_branch} />
                         </Section>
 
-                        <Section title="Uploaded documents" testid="section-documents">
-                            {docEntries.length === 0 ? (
-                                <div className="text-[13px] text-[#86868B]">No documents uploaded (or storage links unavailable).</div>
-                            ) : (
-                                <div className="space-y-2">
-                                    {docEntries.map(([key]) => (
-                                        <div key={key} className="flex items-center justify-between gap-2 border border-black/[0.06] rounded-lg px-3 py-2" data-testid={`doc-${key}`}>
-                                            <span className="inline-flex items-center gap-2 text-[13px] text-[#0A0A0B] font-medium min-w-0">
-                                                <FileText size={15} className="text-[#00838f] shrink-0" />
-                                                <span className="truncate">{DOC_LABELS[key] || key}</span>
-                                            </span>
-                                            <span className="flex items-center gap-2 shrink-0">
-                                                <button type="button" onClick={() => openDoc(key, false)} className="text-[12px] font-semibold text-[#00838f] hover:underline inline-flex items-center gap-1" data-testid={`doc-view-${key}`}><ExternalLink size={12} /> View</button>
-                                                <button type="button" onClick={() => openDoc(key, true)} className="text-[12px] font-semibold text-[#6E6E73] hover:text-[#0A0A0B] inline-flex items-center gap-1" data-testid={`doc-download-${key}`}><Download size={12} /> Download</button>
-                                            </span>
+                        <Section title="Documents" testid="section-documents">
+                            {(() => {
+                                const status = s.doc_status || {};
+                                const pendingMandatory = DOC_ORDER.filter(
+                                    (f) => MANDATORY_DOCS.has(f) && !(status[f] || docs[f])
+                                );
+                                return (
+                                    <>
+                                        {pendingMandatory.length > 0 && (
+                                            <div className="mb-3 text-[12px] text-[#92400E] bg-[#FFFBEB] border border-[#F5C400]/40 rounded-lg px-3 py-2 flex items-start gap-2" data-testid="docs-pending-banner">
+                                                <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                                                <span><strong>{pendingMandatory.length} mandatory document{pendingMandatory.length === 1 ? "" : "s"} missing.</strong> Upload on the dealer&rsquo;s behalf using the buttons below.</span>
+                                            </div>
+                                        )}
+                                        <div className="space-y-2">
+                                            {DOC_ORDER.map((field) => {
+                                                const uploaded = !!(status[field] || docs[field]);
+                                                const mandatory = MANDATORY_DOCS.has(field);
+                                                const busy = uploadingField === field;
+                                                return (
+                                                    <div key={field} className="flex items-center justify-between gap-2 border border-black/[0.06] rounded-lg px-3 py-2" data-testid={`doc-row-${field}`}>
+                                                        <span className="inline-flex items-center gap-2 text-[13px] text-[#0A0A0B] font-medium min-w-0 flex-1">
+                                                            <FileText size={15} className="text-[#00838f] shrink-0" />
+                                                            <span className="truncate">
+                                                                {DOC_LABELS[field] || field}
+                                                                {!mandatory && (
+                                                                    <span className="ml-1.5 text-[10.5px] uppercase tracking-wider text-[#86868B] font-semibold">Optional</span>
+                                                                )}
+                                                            </span>
+                                                        </span>
+                                                        <span className="flex items-center gap-2 shrink-0">
+                                                            {uploaded ? (
+                                                                <>
+                                                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5" data-testid={`doc-status-${field}`}>
+                                                                        <CheckCircle2 size={11} /> Uploaded
+                                                                    </span>
+                                                                    <button type="button" onClick={() => openDoc(field, false)} className="text-[12px] font-semibold text-[#00838f] hover:underline inline-flex items-center gap-1" data-testid={`doc-view-${field}`}><ExternalLink size={12} /> View</button>
+                                                                    <button type="button" onClick={() => openDoc(field, true)} className="text-[12px] font-semibold text-[#6E6E73] hover:text-[#0A0A0B] inline-flex items-center gap-1" data-testid={`doc-download-${field}`}><Download size={12} /> Download</button>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <span className={`inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 ${mandatory ? "text-red-700 bg-red-50 border border-red-200" : "text-amber-700 bg-amber-50 border border-amber-200"}`} data-testid={`doc-status-${field}`}>
+                                                                        <AlertCircle size={11} /> Missing
+                                                                    </span>
+                                                                    <label className={`text-[12px] font-semibold inline-flex items-center gap-1 cursor-pointer rounded-md px-2 py-1 ${busy ? "opacity-50 cursor-not-allowed bg-black/[0.04]" : "text-white bg-[#0A0A0B] hover:bg-black/80"}`} data-testid={`doc-upload-${field}`}>
+                                                                        {busy ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                                                                        {busy ? "Uploading…" : "Upload"}
+                                                                        <input
+                                                                            type="file"
+                                                                            accept="image/*,application/pdf"
+                                                                            className="hidden"
+                                                                            disabled={busy}
+                                                                            onChange={(e) => {
+                                                                                const f = e.target.files?.[0];
+                                                                                e.target.value = "";
+                                                                                uploadDocForDealer(field, f);
+                                                                            }}
+                                                                            data-testid={`doc-upload-input-${field}`}
+                                                                        />
+                                                                    </label>
+                                                                </>
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
-                                    ))}
-                                </div>
-                            )}
+                                    </>
+                                );
+                            })()}
                         </Section>
                     </div>
 
