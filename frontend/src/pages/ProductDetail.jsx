@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
-import { ArrowLeft, ChevronRight, ShoppingCart, Zap, Shield, CheckCircle2, MapPin, Loader2, Quote } from "lucide-react";
+import { ArrowLeft, ChevronRight, ShoppingCart, Zap, CheckCircle2, MapPin, Loader2, Quote } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { Skeleton } from "../components/ui/skeleton";
@@ -12,7 +12,6 @@ import ProductPlaceholder from "../components/ProductPlaceholder";
 import RelatedProducts from "../components/RelatedProducts";
 import DealEnquiryDialog from "../components/DealEnquiryDialog";
 import AuthRequiredDialog from "../components/AuthRequiredDialog";
-import VerifiedBadge from "../components/VerifiedBadge";
 import { inclGstPrice } from "../lib/listingConstants";
 import { colorSwatch, isLightSwatch } from "../lib/colors";
 import { printerSlug, splitCompatibleModels } from "../lib/printerSlug";
@@ -370,16 +369,28 @@ export default function ProductDetail({ kind = "toner" }) {
                             Price incl. GST{(data.gst_rate ?? 18) > 0 ? ` (${data.gst_rate ?? 18}%)` : ""}
                         </div>
 
+                        {/* Wave 66 — small muted "Sold by" line, directly below the
+                            price section and above the Add to cart / Buy now CTAs. */}
+                        <div className="mt-3 text-[12px] text-[#86868B] flex items-center flex-wrap gap-x-1.5 gap-y-1" data-testid="product-sold-by">
+                            <span>
+                                Sold by: <span className="text-[#3a3a40] font-medium">{data.supplier_name || "Verified supplier"}</span>
+                            </span>
+                            <span className="text-[#C7C7CC]">·</span>
+                            <span className="inline-flex items-center gap-1 text-emerald-700">
+                                <CheckCircle2 size={12} /> Verified Dealer
+                            </span>
+                            {data.supplier_city && (
+                                <>
+                                    <span className="text-[#C7C7CC]">·</span>
+                                    <span className="inline-flex items-center gap-1">
+                                        <MapPin size={11} /> {data.supplier_city}
+                                    </span>
+                                </>
+                            )}
+                        </div>
+
                         {/* Delivery info */}
                         <DeliveryInfo data={data} kind={kind} />
-
-                        {/* Supplier */}
-                        <div className="mt-4 flex items-center gap-2 text-[13px] text-[#3a3a40]" data-testid="product-supplier">
-                            <Shield size={14} className="text-emerald-600" />
-                            <span>Sold by <strong className="text-[#0A0A0B]">{data.supplier_name || "Verified supplier"}</strong></span>
-                            <VerifiedBadge />
-                            {data.supplier_city && (<><MapPin size={12} className="ml-1 text-[#86868B]" /><span>{data.supplier_city}</span></>)}
-                        </div>
 
                         {/* Qty stepper — left aligned */}
                         <div className="mt-6 flex items-center justify-start gap-3">

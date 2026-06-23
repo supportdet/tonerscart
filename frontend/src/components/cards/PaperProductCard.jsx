@@ -81,15 +81,14 @@ export default function PaperProductCard({ p }) {
                 <div className="text-[9.5px] font-medium tracking-[0.05em] text-[#86868B] mt-1 uppercase">Price incl. GST</div>
                 <div className="mt-3 flex items-center justify-between text-[11.5px] text-[#6E6E73] gap-2">
                     <span className="inline-flex items-center gap-1 min-w-0">
-                        <span className="truncate max-w-[120px]">{p.supplier_name}</span>
+                        <MapPin size={11} />
+                        <span className="truncate">{p.supplier_city || p.city || "—"}</span>
                         <VerifiedBadge compact />
                     </span>
-                    {loc.text ? (
+                    {loc.text && (
                         <span className={`inline-flex items-center gap-1 text-[10.5px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${loc.local ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-[#F4F4F6] text-[#6E6E73] border-[#E5E5EA]"}`} data-testid={`paper-delivery-${p.id}`}>
                             {loc.local ? "Local · Free delivery" : loc.text}
                         </span>
-                    ) : (
-                        <span className="inline-flex items-center gap-1"><MapPin size={11} /> {p.supplier_city || p.city || "—"}</span>
                     )}
                 </div>
             </Link>

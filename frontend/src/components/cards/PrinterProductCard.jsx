@@ -63,7 +63,7 @@ export default function PrinterProductCard({ p }) {
                     {p.connectivity?.length > 0 && <span>· {p.connectivity.slice(0, 2).join(" / ")}</span>}
                 </div>
                 <div className="text-[11px] text-[#86868B] flex items-center gap-1.5 min-w-0">
-                    <span className="truncate">{p.supplier_name}{p.city ? ` · ${p.city}` : ""}</span>
+                    {p.city && <span className="truncate">{p.city}</span>}
                     <VerifiedBadge compact />
                 </div>
                 {loc.text && (
