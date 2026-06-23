@@ -17,6 +17,47 @@ const INDIAN_STATES = [
     "Rajasthan","Sikkim","Tamil Nadu","Telangana","Tripura","Uttar Pradesh","Uttarakhand","West Bengal",
     "Andaman and Nicobar Islands","Chandigarh","Dadra and Nagar Haveli and Daman and Diu","Delhi","Jammu and Kashmir","Ladakh","Lakshadweep","Puducherry"
 ];
+
+// Wave 67 — popular cities per state. NOT exhaustive — the picker also lets
+// dealers free-type any city (e.g. towns / tier-3 cities not in this list).
+const STATE_CITIES = {
+    "Andhra Pradesh": ["Visakhapatnam","Vijayawada","Guntur","Tirupati","Nellore","Kakinada","Rajahmundry","Anantapur","Kurnool","Kadapa"],
+    "Arunachal Pradesh": ["Itanagar","Naharlagun","Pasighat","Tezu","Bomdila"],
+    "Assam": ["Guwahati","Silchar","Dibrugarh","Jorhat","Tezpur","Tinsukia","Nagaon","Bongaigaon"],
+    "Bihar": ["Patna","Gaya","Bhagalpur","Muzaffarpur","Darbhanga","Bihar Sharif","Purnia","Arrah","Begusarai","Katihar"],
+    "Chhattisgarh": ["Raipur","Bhilai","Bilaspur","Korba","Durg","Rajnandgaon","Jagdalpur","Ambikapur"],
+    "Goa": ["Panaji","Margao","Vasco da Gama","Mapusa","Ponda"],
+    "Gujarat": ["Ahmedabad","Surat","Vadodara","Rajkot","Bhavnagar","Jamnagar","Gandhinagar","Junagadh","Anand","Nadiad","Bharuch"],
+    "Haryana": ["Gurgaon","Faridabad","Panipat","Ambala","Yamunanagar","Rohtak","Hisar","Karnal","Sonipat","Panchkula"],
+    "Himachal Pradesh": ["Shimla","Mandi","Solan","Dharamshala","Kullu","Manali","Hamirpur","Una"],
+    "Jharkhand": ["Ranchi","Jamshedpur","Dhanbad","Bokaro","Hazaribagh","Deoghar","Giridih"],
+    "Karnataka": ["Bangalore","Mysore","Hubli","Mangalore","Belgaum","Davangere","Tumkur","Shimoga","Bellary","Bijapur","Gulbarga","Udupi"],
+    "Kerala": ["Kochi","Thiruvananthapuram","Kozhikode","Thrissur","Kollam","Kottayam","Palakkad","Kannur","Alappuzha","Malappuram"],
+    "Madhya Pradesh": ["Bhopal","Indore","Jabalpur","Gwalior","Ujjain","Sagar","Dewas","Satna","Ratlam","Rewa"],
+    "Maharashtra": ["Mumbai","Pune","Nagpur","Nashik","Thane","Aurangabad","Solapur","Kolhapur","Amravati","Akola","Sangli","Navi Mumbai","Vasai-Virar","Latur","Nanded","Jalgaon"],
+    "Manipur": ["Imphal","Thoubal","Bishnupur","Churachandpur"],
+    "Meghalaya": ["Shillong","Tura","Jowai","Nongstoin"],
+    "Mizoram": ["Aizawl","Lunglei","Champhai","Serchhip"],
+    "Nagaland": ["Kohima","Dimapur","Mokokchung","Tuensang"],
+    "Odisha": ["Bhubaneswar","Cuttack","Rourkela","Berhampur","Sambalpur","Puri","Balasore"],
+    "Punjab": ["Ludhiana","Amritsar","Jalandhar","Patiala","Bathinda","Mohali","Pathankot","Hoshiarpur"],
+    "Rajasthan": ["Jaipur","Jodhpur","Udaipur","Kota","Ajmer","Bikaner","Alwar","Bharatpur","Pali","Sikar"],
+    "Sikkim": ["Gangtok","Namchi","Mangan","Geyzing"],
+    "Tamil Nadu": ["Chennai","Coimbatore","Madurai","Tiruchirappalli","Salem","Tirunelveli","Erode","Vellore","Thoothukudi","Dindigul","Tiruppur"],
+    "Telangana": ["Hyderabad","Warangal","Nizamabad","Karimnagar","Khammam","Mahbubnagar","Adilabad"],
+    "Tripura": ["Agartala","Udaipur","Dharmanagar","Kailashahar"],
+    "Uttar Pradesh": ["Lucknow","Kanpur","Agra","Varanasi","Meerut","Prayagraj","Ghaziabad","Noida","Aligarh","Bareilly","Moradabad","Saharanpur","Gorakhpur","Faizabad","Jhansi","Mathura"],
+    "Uttarakhand": ["Dehradun","Haridwar","Roorkee","Haldwani","Rudrapur","Kashipur","Rishikesh"],
+    "West Bengal": ["Kolkata","Howrah","Durgapur","Asansol","Siliguri","Bardhaman","Malda","Kharagpur"],
+    "Andaman and Nicobar Islands": ["Port Blair"],
+    "Chandigarh": ["Chandigarh"],
+    "Dadra and Nagar Haveli and Daman and Diu": ["Silvassa","Daman","Diu"],
+    "Delhi": ["New Delhi","Delhi","Dwarka","Rohini","Saket","Pitampura","Karol Bagh","Connaught Place"],
+    "Jammu and Kashmir": ["Srinagar","Jammu","Anantnag","Baramulla","Sopore"],
+    "Ladakh": ["Leh","Kargil"],
+    "Lakshadweep": ["Kavaratti"],
+    "Puducherry": ["Puducherry","Karaikal","Mahe","Yanam"],
+};
 const TURNOVER = ["< ₹10 Lakh", "₹10 – 50 Lakh", "₹50 Lakh – 2 Cr", "₹2 – 10 Cr", "₹10 Cr+"];
 const SELLER_TYPES = ["Original", "Compatible"];
 const COMMON_BRANDS = ["HP", "Canon", "Brother", "Samsung", "Ricoh", "Epson", "Xerox", "Kyocera"];
@@ -26,6 +67,101 @@ const PHONE_RE = /^(?:\+?91[-\s]?)?[6-9]\d{9}$/;
 const PINCODE_RE = /^[1-9]\d{5}$/;
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+
+function CitiesServedPicker({ value, onChange }) {
+    // Wave 67 — searchable city + state picker that lets the dealer add ANY
+    // city in India. We keep the wire format unchanged (string[]) and store
+    // each entry as `"City, State"` so the existing array column doesn't
+    // need a migration. Free-text city entry is allowed.
+    const [stateSel, setStateSel] = useState("");
+    const [cityQuery, setCityQuery] = useState("");
+    const [open, setOpen] = useState(false);
+
+    const suggestions = (() => {
+        if (!stateSel) return [];
+        const pool = STATE_CITIES[stateSel] || [];
+        const q = cityQuery.trim().toLowerCase();
+        const filtered = q ? pool.filter((c) => c.toLowerCase().includes(q)) : pool;
+        return filtered.slice(0, 8);
+    })();
+
+    const addEntry = (cityName) => {
+        const c = (cityName || cityQuery).trim();
+        if (!c || !stateSel) return;
+        const entry = `${c}, ${stateSel}`;
+        if (value.includes(entry)) return;
+        onChange([...value, entry]);
+        setCityQuery("");
+        setOpen(false);
+    };
+    const removeEntry = (entry) => onChange(value.filter((e) => e !== entry));
+
+    return (
+        <div data-testid="cities-served-picker">
+            <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr_auto] gap-2 items-start">
+                <select
+                    value={stateSel}
+                    onChange={(e) => { setStateSel(e.target.value); setCityQuery(""); }}
+                    className="h-10 px-3 rounded-md border border-[#D2D2D7] bg-white text-[14px]"
+                    data-testid="cities-served-state"
+                >
+                    <option value="">Select state…</option>
+                    {INDIAN_STATES.map((st) => <option key={st} value={st}>{st}</option>)}
+                </select>
+                <div className="relative">
+                    <Input
+                        type="text"
+                        placeholder={stateSel ? "Search or type a city…" : "Pick a state first"}
+                        value={cityQuery}
+                        disabled={!stateSel}
+                        onChange={(e) => { setCityQuery(e.target.value); setOpen(true); }}
+                        onFocus={() => setOpen(true)}
+                        onBlur={() => setTimeout(() => setOpen(false), 150)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); addEntry(); }
+                        }}
+                        data-testid="cities-served-search"
+                    />
+                    {open && stateSel && suggestions.length > 0 && (
+                        <div className="absolute z-20 mt-1 left-0 right-0 bg-white border border-[#D2D2D7] rounded-md shadow-lg max-h-56 overflow-y-auto" data-testid="cities-served-suggestions">
+                            {suggestions.map((c) => (
+                                <button
+                                    type="button"
+                                    key={c}
+                                    onMouseDown={(e) => { e.preventDefault(); addEntry(c); }}
+                                    className="block w-full text-left px-3 py-2 text-[13px] hover:bg-black/[0.04]"
+                                    data-testid={`cities-served-suggestion-${c}`}
+                                >
+                                    {c}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                <button
+                    type="button"
+                    onClick={() => addEntry()}
+                    disabled={!stateSel || !cityQuery.trim()}
+                    className="h-10 px-4 rounded-md bg-[#0A0A0B] text-white text-[13px] font-semibold disabled:opacity-40"
+                    data-testid="cities-served-add"
+                >
+                    Add city
+                </button>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-3" data-testid="cities-served-chips">
+                {value.length === 0 && (
+                    <span className="text-[12px] text-[#86868B]">No cities added yet — pick a state, then search/type a city and click Add.</span>
+                )}
+                {value.map((entry) => (
+                    <span key={entry} className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full bg-[#0A0A0B] text-white text-[12.5px]" data-testid={`cities-served-chip-${entry}`}>
+                        {entry}
+                        <button type="button" onClick={() => removeEntry(entry)} className="w-5 h-5 rounded-full bg-white/15 hover:bg-white/25 inline-flex items-center justify-center" aria-label={`Remove ${entry}`}>×</button>
+                    </span>
+                ))}
+            </div>
+        </div>
+    );
+}
 
 function StepDots({ step, total }) {
     return (
@@ -141,10 +277,6 @@ export default function SellerApplicationForm() {
 
     const toggleCompatBrand = (b) => {
         setS((prev) => ({ ...prev, compatible_brands: prev.compatible_brands.includes(b) ? prev.compatible_brands.filter((x) => x !== b) : [...prev.compatible_brands, b] }));
-    };
-
-    const toggleCityServed = (c) => {
-        setS((prev) => ({ ...prev, cities_served: prev.cities_served.includes(c) ? prev.cities_served.filter((x) => x !== c) : [...prev.cities_served, c] }));
     };
 
     const canNext = () => {
@@ -364,13 +496,12 @@ export default function SellerApplicationForm() {
                         )}
                     </div>
                     <div className="sm:col-span-2 mt-2">
-                        <Label>Cities you serve<span className="text-red-500"> *</span> <span className="text-[#86868B] font-normal">(select at least one)</span></Label>
-                        <div className="flex flex-wrap gap-2 mt-2" data-testid="cities-served">
-                            {KNOWN_CITIES.map((c) => (
-                                <button key={c} type="button" onClick={() => toggleCityServed(c)}
-                                    className={`px-3 py-1.5 rounded-full border text-[12.5px] transition ${s.cities_served.includes(c) ? "bg-[#0A0A0B] text-white border-[#0A0A0B]" : "bg-white text-[#1D1D1F] border-[#D2D2D7]"}`}
-                                    data-testid={`city-served-${c}`}>{c}</button>
-                            ))}
+                        <Label>Cities you serve<span className="text-red-500"> *</span> <span className="text-[#86868B] font-normal">(pick a state, then search or type a city)</span></Label>
+                        <div className="mt-2">
+                            <CitiesServedPicker
+                                value={s.cities_served}
+                                onChange={(next) => setS((p) => ({ ...p, cities_served: next }))}
+                            />
                         </div>
                     </div>
                 </div>
