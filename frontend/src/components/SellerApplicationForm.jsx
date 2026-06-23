@@ -184,8 +184,9 @@ export default function SellerApplicationForm() {
     };
 
     const allDocsValid = () => {
-        // Always-required documents
-        if (!docs.gst || !docs.pan || !docs.bank_proof || !docs.id_proof || !docs.address_proof) return false;
+        // Wave 64 — cancelled cheque is optional at application time
+        // (dealer can submit it later, before their first payout).
+        if (!docs.gst || !docs.pan || !docs.id_proof || !docs.address_proof) return false;
         // Conditional documents based on seller types
         if (s.seller_types.includes("Original") && !docs.brand_authorization) return false;
         return true;
@@ -494,7 +495,7 @@ export default function SellerApplicationForm() {
                             <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>GST Certificate</strong> <span className="text-white/55">(required)</span></span></li>
                             <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>PAN Card</strong> <span className="text-white/55">(required)</span></span></li>
                             <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>ID Proof — Aadhaar / Passport</strong> <span className="text-white/55">(required)</span></span></li>
-                            <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>Cancelled Cheque</strong> <span className="text-white/55">(proof of your payout bank account)</span></span></li>
+                            <li className="flex items-start gap-2"><CircleDashed size={14} className="text-amber-400 mt-0.5 shrink-0" /><span><strong>Cancelled Cheque</strong> <span className="text-white/55">(optional — required before your first payout)</span></span></li>
                             <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>Address Proof</strong> <span className="text-white/55">(utility bill / rent agreement)</span></span></li>
                             <li className="flex items-start gap-2"><CircleDashed size={14} className="text-amber-400 mt-0.5 shrink-0" /><span><strong>Brand Authorization Letter</strong> <span className="text-white/55">{s.seller_types.includes("Original") ? "(required — you sell Original OEM cartridges)" : "(optional — required only if you sell original OEM cartridges)"}</span></span></li>
                         </ul>
@@ -507,7 +508,7 @@ export default function SellerApplicationForm() {
                         setFile={(f) => setDocs({ ...docs, pan: f })} testid="doc-pan" />
                     <FileSlot label="ID proof — Aadhaar / Passport *" hint="Government photo ID of the owner" file={docs.id_proof}
                         setFile={(f) => setDocs({ ...docs, id_proof: f })} testid="doc-id-proof" />
-                    <FileSlot label="Cancelled cheque *" hint="Proof of the payout bank account — name must match account holder" file={docs.bank_proof}
+                    <FileSlot label="Cancelled cheque (optional)" hint="Required before your first payout. You can submit this later." file={docs.bank_proof}
                         setFile={(f) => setDocs({ ...docs, bank_proof: f })} testid="doc-bank-proof" />
                     <FileSlot label="Address proof *" hint="Utility bill / rent agreement" file={docs.address_proof}
                         setFile={(f) => setDocs({ ...docs, address_proof: f })} testid="doc-address-proof" />

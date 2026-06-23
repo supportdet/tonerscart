@@ -167,7 +167,7 @@ function App() {
                                     <Route path="/procurement/login" element={<ProcurementLogin />} />
                                     <Route path="/procurement" element={<ProcProtectedRoute><ProcurementDashboard /></ProcProtectedRoute>} />
                                     <Route path="/customer" element={<ProtectedRoute roles={["customer"]}><CustomerDashboard /></ProtectedRoute>} />
-                                    <Route path="/supplier" element={<ProtectedRoute roles={["supplier"]}><SupplierDashboard /></ProtectedRoute>} />
+                                    <Route path="/supplier" element={<ProtectedRoute roles={["supplier"]} allowApplicationStatus={["pending"]}><SupplierDashboard /></ProtectedRoute>} />
                                     <Route path="/oem-dashboard" element={<ProtectedRoute roles={["oem"]}><OemDashboard /></ProtectedRoute>} />
                                     <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
                                     <Route path="/admin/dealers/:id" element={<ProtectedRoute roles={["admin"]}><DealerProfile /></ProtectedRoute>} />
