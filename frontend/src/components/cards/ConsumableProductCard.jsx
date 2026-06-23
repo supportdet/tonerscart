@@ -83,15 +83,14 @@ export default function ConsumableProductCard({ c }) {
                 </div>
                 <div className="mt-3 flex items-center justify-between text-[11.5px] text-[#6E6E73] gap-2">
                     <span className="inline-flex items-center gap-1 min-w-0">
-                        <span className="truncate max-w-[120px]">{c.supplier_name}</span>
+                        <MapPin size={11} />
+                        <span className="truncate">{c.supplier_city || c.city || "—"}</span>
                         <VerifiedBadge compact />
                     </span>
-                    {loc.text ? (
+                    {loc.text && (
                         <span className={`inline-flex items-center gap-1 text-[10.5px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${loc.local ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-[#F4F4F6] text-[#6E6E73] border-[#E5E5EA]"}`} data-testid={`consumable-delivery-${c.id}`}>
                             {loc.local ? "Local · Free delivery" : loc.text}
                         </span>
-                    ) : (
-                        <span className="inline-flex items-center gap-1"><MapPin size={11} /> {c.supplier_city || c.city || "—"}</span>
                     )}
                 </div>
             </Link>

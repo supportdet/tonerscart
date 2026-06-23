@@ -50,9 +50,6 @@ export default function TonerProductCard({ p, qty, setQty, onBuy, onCart, userCi
                     </div>
                 )}
                 <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-[13px] text-[#1D1D1F] truncate" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
-                        {p.supplier_name || "—"}
-                    </span>
                     <VerifiedBadge compact />
                 </div>
                 <div className="flex items-center justify-between gap-2">
