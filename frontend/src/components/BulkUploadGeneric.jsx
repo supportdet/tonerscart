@@ -57,18 +57,27 @@ const HEADER_SYNONYMS = {
     subcategory:            ["subcategory", "subtype", "consumabletype"],
     subcategory_other:      ["ifothersspecify", "otherspecify", "subcategoryother"],
     warranty:               ["warranty", "warrantyperiod"],
+    printer_warranty:       ["printerwarranty", "warranty", "warrantyperiod", "printerwarrantyperiod"],
     scanner_type:           ["scannertype"],
     scan_resolution:        ["scanresolution", "resolution", "dpi"],
     color_mode:             ["colormode", "colourmode"],
     intercity_delivery_charge: ["intercitydeliverycharge", "deliverycharge", "intercitycharge", "shippingcharge"],
 };
-// Build a fast lookup table: normalized header → canonical key.
+// Build a fast lookup table: normalized header → list of canonical keys
+// (multiple keys can share an alias — e.g. "Warranty" → both `warranty` on
+// toner/consumable sheets and `printer_warranty` on the printer sheet —
+// `_matchHeader` picks the first one that's valid for the active sheet).
 const HEADER_LOOKUP = (() => {
     const out = {};
+    const add = (norm, k) => {
+        if (!norm) return;
+        if (!out[norm]) out[norm] = [];
+        if (!out[norm].includes(k)) out[norm].push(k);
+    };
     for (const [k, list] of Object.entries(HEADER_SYNONYMS)) {
-        out[_normHeader(k)] = k;
-        out[_normHeader(k.replace(/_/g, " "))] = k;
-        for (const alias of list) out[_normHeader(alias)] = k;
+        add(_normHeader(k), k);
+        add(_normHeader(k.replace(/_/g, " ")), k);
+        for (const alias of list) add(_normHeader(alias), k);
     }
     return out;
 })();
@@ -97,6 +106,7 @@ const CONTAINS_FALLBACK = [
     [["gst", "tax"],                                     "gst_rate"],
     [["description", "desc", "details", "notes"],        "description"],
     [["warranty"],                                       "warranty"],
+    [["warranty"],                                       "printer_warranty"],
     [["resolution", "dpi"],                              "scan_resolution"],
 ];
 
@@ -104,10 +114,14 @@ const _matchHeader = (rawHeader, validKeysForSheet) => {
     const h = _normHeader(rawHeader);
     if (!h) return null;
     const tryKey = (k) => (k && validKeysForSheet.has(k) ? k : null);
-    // 1) Exact synonym match
+    // 1) Exact synonym match — HEADER_LOOKUP values are arrays so an alias
+    //    like "warranty" can resolve to either `warranty` (toner sheet) or
+    //    `printer_warranty` (printer sheet), whichever is valid here.
     if (HEADER_LOOKUP[h]) {
-        const k = tryKey(HEADER_LOOKUP[h]);
-        if (k) return k;
+        for (const candidate of HEADER_LOOKUP[h]) {
+            const k = tryKey(candidate);
+            if (k) return k;
+        }
     }
     // 2) Contains-matching fallback
     for (const [needles, canonical] of CONTAINS_FALLBACK) {
@@ -181,6 +195,17 @@ const COLOR_VALUES = {
 };
 const TONER_TYPE_VALUES = { original: "Original", oem: "Original", compatible: "Compatible", refilled: "Refilled" };
 
+// Wave 73 — canonical map for warranty so "1 year" / "1 Yr" / "12 months" /
+// "no warranty" / "none" / "carry in" / "onsite" all resolve to the
+// dropdown option labels.
+const WARRANTY_VALUES = {
+    "1year": "1 Year", "1yr": "1 Year", "12months": "1 Year", "oneyear": "1 Year", "1": "1 Year",
+    "2years": "2 Years", "2yr": "2 Years", "24months": "2 Years", "twoyears": "2 Years", "2": "2 Years",
+    "3years": "3 Years", "3yr": "3 Years", "36months": "3 Years", "threeyears": "3 Years", "3": "3 Years",
+    "onsite": "On-site", "onsitesupport": "On-site", "onsitewarranty": "On-site",
+    "carryin": "Carry-in", "carryinsupport": "Carry-in",
+    "nowarranty": "No Warranty", "no": "No Warranty", "none": "No Warranty", "na": "No Warranty",
+};
 // Wave 72 — case-insensitive canonical map for paper_sizes so "a4" / "A4" /
 // " a4 " all resolve to the dropdown option value "A4". Synonyms include
 // common dealer phrasings like "letter size" → "Letter".
@@ -236,6 +261,14 @@ const _coerceCell = (key, value) => {
         case "color":        return _mapValue(raw, COLOR_VALUES);
         case "color_mode":   return _mapValue(raw, COLOR_VALUES);
         case "toner_type":   return _mapValue(raw, TONER_TYPE_VALUES);
+        case "warranty":
+        case "printer_warranty": {
+            // Wave 73 — canonicalise to the dropdown labels. Unknown values
+            // fall through unchanged so a custom dealer-supplied warranty
+            // string is preserved verbatim.
+            const v = _mapValue(raw, WARRANTY_VALUES);
+            return v || raw;
+        }
         case "usage_type": {
             // Up to 2 selected. Comma/slash/& separated input.
             const parts = _splitMulti(raw).map((p) => _mapValue(p, USAGE_VALUES)).filter(Boolean);

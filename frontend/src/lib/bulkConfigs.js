@@ -32,6 +32,18 @@ const basePriceFromRow = (typed, row) => {
     return pt === "excl" ? Math.round(t) : Math.round(t / (1 + rate / 100));
 };
 
+// Wave 73 — single source of truth for the printer/toner/consumable
+// Warranty dropdown. Default is "1 Year" so bulk uploads never fail on a
+// missing Warranty column.
+const WARRANTY_OPTIONS = [
+    { value: "1 Year", label: "1 Year" },
+    { value: "2 Years", label: "2 Years" },
+    { value: "3 Years", label: "3 Years" },
+    { value: "On-site", label: "On-site" },
+    { value: "Carry-in", label: "Carry-in" },
+    { value: "No Warranty", label: "No Warranty" },
+];
+
 // ============================ TONERS ============================
 
 const TONER_TYPES = ["Original", "Compatible"];
@@ -47,12 +59,13 @@ const TONER_COLUMNS = [
     { key: "page_yield", label: "Page Yield", required: true, type: "number", w: 110 },
     { key: "oem_part_number", label: "OEM Part Number", required: false, w: 150 },
     { key: "toner_type", label: "Toner Type", required: true, type: "select", w: 130 },
+    { key: "warranty", label: "Warranty", required: false, type: "select", w: 130 },
 ];
 
 const tonerEmptyRow = () => ({
     brand: "", model_number: "", compatible_models: "", color: "", price: "", gst_rate: "", price_type: "incl",
     stock: "", page_yield: "", oem_part_number: "",
-    toner_type: "", intercity_delivery_charge: "0",
+    toner_type: "", warranty: "1 Year", intercity_delivery_charge: "0",
 });
 
 const tonerIsRowEmpty = (r) =>
@@ -95,6 +108,7 @@ const tonerScalarPayload = (r) => ({
     compatible_models: splitList(r.compatible_models).join(", ") || null,
     page_yield: r.page_yield !== "" ? Number(r.page_yield) : null,
     oem_part_number: r.oem_part_number?.trim() || null,
+    warranty: r.warranty || "1 Year",
     intercity_delivery_charge: r.intercity_delivery_charge !== "" ? Number(r.intercity_delivery_charge) : 0,
 });
 
@@ -111,12 +125,13 @@ export const tonerBulkConfig = {
     endpoint: "/supplier/listings/bulk",
     itemPath: "/supplier/listings",
     columns: TONER_COLUMNS,
-    selectOptions: { toner_type: TONER_TYPES, brand: TONER_BRANDS, gst_rate: GST_RATE_OPTIONS },
+    selectOptions: { toner_type: TONER_TYPES, brand: TONER_BRANDS, gst_rate: GST_RATE_OPTIONS, warranty: WARRANTY_OPTIONS },
     emptyRow: tonerEmptyRow,
     templateExample: {
         brand: "HP", model_number: "CC388A", compatible_models: "P1007, P1008, P1106, P1108", color: "Black", price: "2183",
         gst_rate: "18", price_type: "incl", stock: "10",
         page_yield: "1500", oem_part_number: "CC388A", toner_type: "Original",
+        warranty: "1 Year",
         intercity_delivery_charge: "150",
     },
     requiredKeys: ["brand", "compatible_models", "price", "stock", "toner_type", "page_yield"],
@@ -139,6 +154,7 @@ export const tonerBulkConfig = {
             page_yield: l.page_yield ? String(l.page_yield) : "",
             oem_part_number: l.oem_part_number || "",
             toner_type: l.toner_type || "Original",
+            warranty: l.warranty || "1 Year",
             intercity_delivery_charge: String(l.intercity_delivery_charge ?? 0),
         };
     },
@@ -213,6 +229,7 @@ const PRINTER_COLUMNS = [
     { key: "monthly_volume_max", label: "Vol. Max", required: false, type: "number", w: 100 },
     { key: "connectivity", label: "Connectivity", required: false, type: "select", multi: true, w: 240 },
     { key: "paper_sizes", label: "Paper Sizes", required: true, type: "select", multi: true, w: 200 },
+    { key: "printer_warranty", label: "Warranty", required: false, type: "select", w: 130 },
     { key: "description", label: "Description", required: false, w: 220 },
 ];
 
@@ -220,7 +237,7 @@ const printerEmptyRow = () => ({
     brand: "", model_number: "", category: "", condition: "new",
     usage_type: "", color: "", price: "", gst_rate: "", price_type: "incl", stock: "",
     print_speed_ppm: "", monthly_volume_min: "", monthly_volume_max: "",
-    connectivity: "", paper_sizes: "", description: "",
+    connectivity: "", paper_sizes: "", printer_warranty: "1 Year", description: "",
 });
 
 const printerIsRowEmpty = (r) =>
@@ -266,6 +283,7 @@ export const printerBulkConfig = {
         color: PRINTER_COLORS,
         connectivity: PRINTER_CONNECTIVITY,
         paper_sizes: PRINTER_PAPER_SIZES,
+        printer_warranty: WARRANTY_OPTIONS,
         gst_rate: GST_RATE_OPTIONS,
     },
     emptyRow: printerEmptyRow,
@@ -274,6 +292,7 @@ export const printerBulkConfig = {
         usage_type: "corporate", color: "bw", price: "33040", gst_rate: "18", price_type: "incl", stock: "5",
         print_speed_ppm: "38", monthly_volume_min: "750", monthly_volume_max: "4000",
         connectivity: "Wi-Fi, Ethernet, USB", paper_sizes: "A4, A5, Legal",
+        printer_warranty: "1 Year",
         description: "Compact mono laser printer with auto-duplex.",
     },
     requiredKeys: ["brand", "model_number", "category", "usage_type", "color", "price", "print_speed_ppm", "paper_sizes"],
@@ -295,6 +314,7 @@ export const printerBulkConfig = {
         monthly_volume_max: r.monthly_volume_max !== "" ? Number(r.monthly_volume_max) : 0,
         connectivity: splitList(r.connectivity),
         paper_sizes: splitList(r.paper_sizes),
+        printer_warranty: r.printer_warranty || "1 Year",
         description: (r.description || "").trim(),
         image_url: "",
         image_urls: [],
@@ -321,6 +341,7 @@ export const printerBulkConfig = {
             monthly_volume_max: l.monthly_volume_max ? String(l.monthly_volume_max) : "",
             connectivity: joinList(l.connectivity),
             paper_sizes: joinList(l.paper_sizes),
+            printer_warranty: l.printer_warranty || "1 Year",
             description: l.description || "",
         };
     },
@@ -340,6 +361,7 @@ export const printerBulkConfig = {
         monthly_volume_max: r.monthly_volume_max !== "" ? Number(r.monthly_volume_max) : 0,
         connectivity: splitList(r.connectivity),
         paper_sizes: splitList(r.paper_sizes),
+        printer_warranty: r.printer_warranty || "1 Year",
         description: (r.description || "").trim(),
     }),
 };
@@ -362,13 +384,14 @@ const CONSUMABLE_COLUMNS = [
     { key: "gst_rate", label: "GST", required: true, type: "select", w: 90 },
     { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
     { key: "stock", label: "Stock", required: true, type: "number", w: 90 },
+    { key: "warranty", label: "Warranty", required: false, type: "select", w: 130 },
     { key: "description", label: "Description", required: false, w: 220 },
 ];
 
 const consumableEmptyRow = () => ({
     subcategory: "", subcategory_other: "", brand: "", model_number: "",
     compatible_models: "", condition: "", price: "", gst_rate: "", price_type: "incl", stock: "",
-    intercity_delivery_charge: "0", description: "",
+    warranty: "1 Year", intercity_delivery_charge: "0", description: "",
 });
 
 const consumableIsRowEmpty = (r) =>
@@ -398,12 +421,13 @@ export const consumableBulkConfig = {
     unitLabel: "consumable",
     endpoint: "/supplier/consumables/bulk",
     columns: CONSUMABLE_COLUMNS,
-    selectOptions: { subcategory: CONSUMABLE_SUBS, condition: CONSUMABLE_CONDITIONS, brand: TONER_BRANDS, gst_rate: GST_RATE_OPTIONS },
+    selectOptions: { subcategory: CONSUMABLE_SUBS, condition: CONSUMABLE_CONDITIONS, brand: TONER_BRANDS, gst_rate: GST_RATE_OPTIONS, warranty: WARRANTY_OPTIONS },
     emptyRow: consumableEmptyRow,
     templateExample: {
         subcategory: "Drums", subcategory_other: "", brand: "Brother", model_number: "DR-2305",
         compatible_models: "HL-L2321D, DCP-L2541DW", condition: "New", price: "2596",
-        gst_rate: "18", price_type: "incl", stock: "12", intercity_delivery_charge: "150",
+        gst_rate: "18", price_type: "incl", stock: "12",
+        warranty: "1 Year", intercity_delivery_charge: "150",
         description: "Genuine drum unit, 12000-page yield.",
     },
     requiredKeys: ["subcategory", "brand", "model_number", "price", "stock"],
@@ -419,6 +443,7 @@ export const consumableBulkConfig = {
         price: basePriceFromRow(r.price, r),
         stock: Number(r.stock),
         gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
+        warranty: r.warranty || "1 Year",
         intercity_delivery_charge: r.intercity_delivery_charge !== "" ? Number(r.intercity_delivery_charge) : 0,
         description: (r.description || "").trim() || null,
         image_url: "",
@@ -441,6 +466,7 @@ export const consumableBulkConfig = {
             gst_rate: String(gst),
             price_type: "incl",
             stock: String(l.stock ?? ""),
+            warranty: l.warranty || "1 Year",
             intercity_delivery_charge: String(l.intercity_delivery_charge ?? 0),
             description: l.description || "",
         };
@@ -455,6 +481,7 @@ export const consumableBulkConfig = {
         price: basePriceFromRow(r.price, r),
         stock: Number(r.stock),
         gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
+        warranty: r.warranty || "1 Year",
         intercity_delivery_charge: r.intercity_delivery_charge !== "" ? Number(r.intercity_delivery_charge) : 0,
         description: (r.description || "").trim() || null,
     }),

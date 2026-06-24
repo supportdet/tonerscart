@@ -32,10 +32,11 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
         raise HTTPException(400, "toner_type must be Original, Compatible or Refilled")
     if not payload.page_yield or int(payload.page_yield) <= 0:
         raise HTTPException(400, "Page yield (sheets) is required")
-    if not payload.warranty or not str(payload.warranty).strip():
-        raise HTTPException(400, "Warranty is required")
-    if not payload.cartridge_weight or int(payload.cartridge_weight) <= 0:
-        raise HTTPException(400, "Cartridge weight (g) is required")
+    # Wave 73 — warranty + cartridge_weight no longer block creation. The bulk
+    # table does not expose these fields; fill in sensible defaults so the
+    # backend never rejects an otherwise-valid dealer upload.
+    warranty_value = (payload.warranty or "").strip() or "1 Year"
+    cartridge_weight_value = payload.cartridge_weight if (payload.cartridge_weight and int(payload.cartridge_weight) > 0) else None
 
     # Resolve toner_master row: use toner_id if given, else find/create by (brand, model)
     t = None
@@ -82,9 +83,9 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
         "image_urls": payload.image_urls or None,
         "compatible_models": payload.compatible_models,
         "oem_part_number": payload.oem_part_number,
-        "cartridge_weight": payload.cartridge_weight,
+        "cartridge_weight": cartridge_weight_value,
         "pack_size": payload.pack_size,
-        "warranty": payload.warranty,
+        "warranty": warranty_value,
         "print_technology": payload.print_technology,
         "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
@@ -247,8 +248,10 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         raise HTTPException(400, "Invalid color")
     if payload.price < 0 or payload.stock < 0:
         raise HTTPException(400, "price and stock must be non-negative")
-    if not payload.printer_warranty or not str(payload.printer_warranty).strip():
-        raise HTTPException(400, "Warranty is required")
+    # Wave 73 — warranty defaults to "1 Year" if not supplied. The bulk
+    # upload table now exposes a Warranty column, but legacy single-form
+    # rows that omit it still create successfully.
+    printer_warranty_value = (payload.printer_warranty or "").strip() or "1 Year"
     # Wave 12 — printer image upload is now optional (animated fallback in UI)
     sid = _supplier_id_for(user)
     row = {
@@ -278,7 +281,7 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         "display_type": payload.display_type,
         "dimensions": payload.dimensions,
         "weight_kg": payload.weight_kg,
-        "printer_warranty": payload.printer_warranty,
+        "printer_warranty": printer_warranty_value,
         "max_resolution": payload.max_resolution,
         "mobile_printing": payload.mobile_printing or None,
         "monthly_volume_recommended": payload.monthly_volume_recommended,
@@ -758,16 +761,12 @@ def create_consumable(payload: ConsumableCreate, user: dict = Depends(require_us
     sub = payload.subcategory if payload.subcategory in CONSUMABLE_SUBCATEGORIES else "Other"
     brand = sanitize(payload.brand, 80)
     model = sanitize(payload.model_number, 80)
-    # Wave 49 — warranty + cartridge-weight mandatory on every consumable.
-    # Page yield is only meaningful for ink cartridges, so it's enforced
-    # only when subcategory == "Ink Cartridges". Drums/fusers measure life
-    # in rotations or sheets-per-fuser instead.
-    if not payload.warranty or not str(payload.warranty).strip():
-        raise HTTPException(400, "Warranty is required")
-    if sub == "Ink Cartridges" and (not payload.page_yield or int(payload.page_yield) <= 0):
-        raise HTTPException(400, "Page yield (sheets) is required for ink cartridges")
-    if not payload.cartridge_weight or int(payload.cartridge_weight) <= 0:
-        raise HTTPException(400, "Cartridge weight (g) is required")
+    # Wave 73 — relax mandatory warranty / page-yield / cartridge-weight on
+    # consumables. The bulk-upload table doesn't expose any of these fields;
+    # the backend now applies sensible defaults instead of rejecting the row.
+    consumable_warranty = (payload.warranty or "").strip() or "1 Year"
+    cartridge_weight_value = payload.cartridge_weight if (payload.cartridge_weight and int(payload.cartridge_weight) > 0) else None
+    page_yield_value = payload.page_yield if (payload.page_yield and int(payload.page_yield) > 0) else None
     row = {
         "supplier_id": s["id"],
         "subcategory": sub,
@@ -787,9 +786,9 @@ def create_consumable(payload: ConsumableCreate, user: dict = Depends(require_us
         "image_urls": payload.image_urls or None,
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
         "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
-        "warranty": payload.warranty,
-        "page_yield": payload.page_yield,
-        "cartridge_weight": payload.cartridge_weight,
+        "warranty": consumable_warranty,
+        "page_yield": page_yield_value,
+        "cartridge_weight": cartridge_weight_value,
         "d2d_enabled": bool(payload.d2d_enabled) if payload.d2d_enabled is not None else None,
         "d2d_price": (float(payload.d2d_price) if payload.d2d_price else None),
     }

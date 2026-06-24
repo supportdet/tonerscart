@@ -313,7 +313,7 @@ export default function SupplierDashboard() {
     const [tonerModel, setTonerModel] = useState("");
     const [oemPartNumber, setOemPartNumber] = useState("");
     const [cartridgeWeight, setCartridgeWeight] = useState("");
-    const [warranty, setWarranty] = useState("");
+    const [warranty, setWarranty] = useState("1 Year");
     const [warrantyOther, setWarrantyOther] = useState("");
     const [printTechnology, setPrintTechnology] = useState("Laser");
     const [intercityCharge, setIntercityCharge] = useState("0");
@@ -540,9 +540,9 @@ export default function SupplierDashboard() {
         if (!brand) { toast.error("Please select a brand"); return; }
         if (!compatibleModels.trim()) { toast.error("Please enter the suitable printer models"); return; }
         if (!pageYield || parseInt(pageYield, 10) <= 0) { toast.error("Page yield (sheets) is required"); return; }
-        if (!warranty) { toast.error("Warranty is required"); return; }
+        // Wave 73 — warranty + cartridge_weight no longer block submission.
+        // Defaults are filled in below if the dealer left them blank.
         if (warranty === "Other" && !warrantyOther.trim()) { toast.error("Enter the custom warranty period"); return; }
-        if (!cartridgeWeight || parseInt(cartridgeWeight, 10) <= 0) { toast.error("Cartridge weight (g) is required"); return; }
         if (!priceType) { setPriceTypeError(true); toast.error("Pick whether variant prices are Incl. or Excl. GST"); return; }
         setPriceTypeError(false);
         // Convert variant prices to base (GST-exclusive) before saving — the
@@ -568,7 +568,7 @@ export default function SupplierDashboard() {
             // Top-level price/stock derived from cheapest variant for backward compatibility
             const cheapest = cleanedVariants.reduce((a, b) => (a.price <= b.price ? a : b));
             const totalStock = cleanedVariants.reduce((s, v) => s + v.stock, 0);
-            const warrantyValue = warranty === "Other" ? (warrantyOther.trim() ? `${warrantyOther.trim()} months` : null) : (warranty || null);
+            const warrantyValue = warranty === "Other" ? (warrantyOther.trim() ? `${warrantyOther.trim()} months` : "1 Year") : (warranty || "1 Year");
 
             // Model number — prefer the dealer-selected cartridge model from the
             // compatibility-DB dropdown; otherwise fall back to the first
@@ -1293,8 +1293,8 @@ export default function SupplierDashboard() {
                                 <Input value={oemPartNumber} onChange={(e) => setOemPartNumber(e.target.value)} placeholder="e.g. Q2612A" className="tc-input-lg" data-testid="listing-oem" />
                             </div>
                             <div>
-                                <Label>Cartridge weight (g)<span className="text-red-500"> *</span></Label>
-                                <Input type="number" min="1" step="1" value={cartridgeWeight} onChange={(e) => setCartridgeWeight(e.target.value)} required placeholder="e.g. 450" className="tc-input-lg" data-testid="listing-weight" />
+                                <Label>Cartridge weight (g) <span className="text-[#86868B] font-normal">(optional)</span></Label>
+                                <Input type="number" min="1" step="1" value={cartridgeWeight} onChange={(e) => setCartridgeWeight(e.target.value)} placeholder="e.g. 450" className="tc-input-lg" data-testid="listing-weight" />
                             </div>
                             <div>
                                 <Label>Print technology</Label>
@@ -1306,21 +1306,18 @@ export default function SupplierDashboard() {
                                 </select>
                             </div>
                             <div className="col-span-2">
-                                <Label>Warranty<span className="text-red-500"> *</span></Label>
-                                <select value={warranty} onChange={(e) => { setWarranty(e.target.value); if (e.target.value !== "Other") setWarrantyOther(""); }} required className="tc-input-lg w-full" data-testid="listing-warranty">
-                                    <option value="">Select warranty…</option>
-                                    <option value="No warranty">No warranty</option>
-                                    <option value="3 months">3 months</option>
-                                    <option value="6 months">6 months</option>
-                                    <option value="1 year">1 year</option>
-                                    <option value="2 years">2 years</option>
+                                <Label>Warranty</Label>
+                                <select value={warranty} onChange={(e) => { setWarranty(e.target.value); if (e.target.value !== "Other") setWarrantyOther(""); }} className="tc-input-lg w-full" data-testid="listing-warranty">
+                                    <option value="1 Year">1 Year</option>
+                                    <option value="2 Years">2 Years</option>
+                                    <option value="3 Years">3 Years</option>
+                                    <option value="On-site">On-site</option>
+                                    <option value="Carry-in">Carry-in</option>
+                                    <option value="No Warranty">No Warranty</option>
                                     <option value="Other">Other</option>
                                 </select>
                                 {warranty === "Other" && (
                                     <Input value={warrantyOther} onChange={(e) => setWarrantyOther(e.target.value)} placeholder="Enter months (e.g. 18)" className="tc-input-lg mt-2" data-testid="listing-warranty-other" />
-                                )}
-                                {!warranty && (
-                                    <div className="text-[11.5px] text-red-600 mt-1" data-testid="listing-warranty-error">Required — please select a warranty option.</div>
                                 )}
                             </div>
                             <div className="col-span-2">
