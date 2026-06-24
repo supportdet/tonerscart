@@ -16,6 +16,58 @@ from server import (_approved_supplier, _consumable_supplier, _scanner_supplier,
 router = APIRouter(prefix="/api")
 
 
+# Wave 76 — single source of truth for usage-type normalisation. Dealers
+# routinely type "office", "Corporate / Office", "commercial industrial",
+# "print shop" etc.; map all of these to the canonical backend tokens
+# (home, corporate, commercial, print_shop) so the upload doesn't reject
+# perfectly-good rows on a casing/slash technicality.
+_USAGE_ALIASES = {
+    "home": "home",
+    "personal": "home",
+    "household": "home",
+    "soho": "home",
+    "office": "corporate",
+    "corporate": "corporate",
+    "corporateoffice": "corporate",
+    "officecorporate": "corporate",
+    "office corporate": "corporate",
+    "sme": "corporate",
+    "business": "corporate",
+    "enterprise": "corporate",
+    "commercial": "commercial",
+    "industrial": "commercial",
+    "commercialindustrial": "commercial",
+    "industrialcommercial": "commercial",
+    "heavyduty": "commercial",
+    "printshop": "print_shop",
+    "copycenter": "print_shop",
+    "copycentre": "print_shop",
+    "printshopcopycenter": "print_shop",
+    "printshopcopycentre": "print_shop",
+    "shop": "print_shop",
+}
+
+
+def _normalise_usage(value: str) -> Optional[str]:
+    """Return the canonical PRINTER_USAGES token for any dealer-typed variant,
+    or None if it doesn't resolve."""
+    if not value or not isinstance(value, str):
+        return None
+    # collapse to alphanumerics for forgiving matching
+    canon = "".join(c.lower() for c in value if c.isalnum())
+    if not canon:
+        return None
+    if canon in _USAGE_ALIASES:
+        return _USAGE_ALIASES[canon]
+    # Already canonical?
+    if canon in PRINTER_USAGES:
+        return canon
+    # underscore form: "print_shop"
+    if value.lower().strip().replace("-", "_") in PRINTER_USAGES:
+        return value.lower().strip().replace("-", "_")
+    return None
+
+
 @router.get("/supplier/listings")
 def supplier_listings(user: dict = Depends(require_role("supplier"))):
     s = _approved_supplier(user)
@@ -233,14 +285,19 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         raise HTTPException(400, "Invalid condition")
     # Wave 9 — usage_type is now optional/backward-compat; usage_types[] is canonical.
     # Accept either, derive the other.
+    # Wave 76 — accept all reasonable dealer-typed variants (case-insensitive,
+    # slash/space variants) and map them to the canonical backend tokens.
     usage_types = list(payload.usage_types or [])
     if not usage_types and payload.usage_type:
         usage_types = [payload.usage_type]
     if not usage_types:
         raise HTTPException(400, "At least one usage type is required")
-    usage_types = [u for u in usage_types if u in PRINTER_USAGES]
+    usage_types = [u for u in (_normalise_usage(u) for u in usage_types) if u]
     if not usage_types:
         raise HTTPException(400, "Invalid usage_types")
+    # Deduplicate while preserving order
+    seen = set()
+    usage_types = [u for u in usage_types if not (u in seen or seen.add(u))]
     primary_usage = usage_types[0]
     if payload.category not in PRINTER_CATEGORIES:
         raise HTTPException(400, "Invalid category")
@@ -1333,9 +1390,14 @@ def supplier_patch_printer(printer_id: str, payload: ListingPatch, user: dict = 
     if payload.gst_rate is not None:
         upd["gst_rate"] = int(payload.gst_rate)
     if payload.usage_types is not None:
-        upd["usage_types"] = payload.usage_types
-        if payload.usage_types:
-            upd["usage_type"] = payload.usage_types[0]
+        # Wave 76 — same alias normalisation applies on update so dealer edits
+        # via the bulk-edit / supplier UI never reject lowercase "office" etc.
+        normalised = [u for u in (_normalise_usage(u) for u in payload.usage_types) if u]
+        seen = set()
+        normalised = [u for u in normalised if not (u in seen or seen.add(u))]
+        upd["usage_types"] = normalised
+        if normalised:
+            upd["usage_type"] = normalised[0]
     if payload.special_features is not None:
         upd["special_features"] = payload.special_features
     if payload.d2d_enabled is not None:

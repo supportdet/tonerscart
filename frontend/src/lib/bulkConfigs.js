@@ -181,12 +181,16 @@ const PRINTER_CATEGORIES = [
     { value: "led", label: "LED" },
     { value: "other", label: "Other" },
 ];
+// Wave 76 — canonical usage values match backend tokens; labels are the
+// dealer-facing strings: Home / Corporate · Office / Commercial · Industrial
+// / Print Shop · Copy Center. `usage_type` cells store the backend tokens
+// (home, corporate, commercial, print_shop) so the bulk submit payload
+// passes the backend validator without further transformation.
 const PRINTER_USAGES = [
     { value: "home", label: "Home" },
-    { value: "office", label: "Office" },
-    { value: "corporate", label: "Corporate" },
-    { value: "commercial", label: "Commercial" },
-    { value: "print_shop", label: "Print Shop" },
+    { value: "corporate", label: "Corporate / Office" },
+    { value: "commercial", label: "Commercial / Industrial" },
+    { value: "print_shop", label: "Print Shop / Copy Center" },
 ];
 const PRINTER_CONNECTIVITY = [
     { value: "USB", label: "USB" },

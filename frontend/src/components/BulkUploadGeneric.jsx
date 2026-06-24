@@ -181,13 +181,6 @@ const CONDITION_VALUES = {
     refurb: "refurbished",
     openbox: "open-box",
 };
-const USAGE_VALUES = {
-    home: "home",
-    office: "office",
-    corporate: "corporate",
-    commercial: "commercial",
-    printshop: "print_shop",
-};
 const COLOR_VALUES = {
     color: "color",
     colour: "color",
@@ -200,7 +193,22 @@ const COLOR_VALUES = {
 };
 const TONER_TYPE_VALUES = { original: "Original", oem: "Original", compatible: "Compatible", refilled: "Refilled" };
 
-// Wave 73 — canonical map for warranty so "1 year" / "1 Yr" / "12 months" /
+// Wave 76 — canonical map for printer usage values. Excel inputs from
+// dealer catalogues vary wildly ("office", "corporate / office", "Print
+// Shop / Copy Center", "commercial industrial"); all resolve to the four
+// backend tokens: home / corporate / commercial / print_shop.
+const USAGE_VALUES = {
+    home: "home", personal: "home", household: "home", soho: "home",
+    office: "corporate", corporate: "corporate", corporateoffice: "corporate",
+    officecorporate: "corporate", sme: "corporate", business: "corporate",
+    enterprise: "corporate",
+    commercial: "commercial", industrial: "commercial",
+    commercialindustrial: "commercial", industrialcommercial: "commercial",
+    heavyduty: "commercial",
+    printshop: "print_shop", copycenter: "print_shop", copycentre: "print_shop",
+    printshopcopycenter: "print_shop", printshopcopycentre: "print_shop",
+    shop: "print_shop",
+};
 // "no warranty" / "none" / "carry in" / "onsite" all resolve to the
 // dropdown option labels.
 const WARRANTY_VALUES = {
@@ -567,7 +575,12 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
         // Wave 71 — DO NOT flip `showErrors` off here. Red cells + yellow banner
         // must re-derive per-row via config.rowErrors so partially-fixed tables
         // keep guiding the dealer to the remaining bad cells.
+        // Wave 76 — but DO clear any stale "X uploaded / X failed" result
+        // panel: the dealer is editing to fix the errors, so the old summary
+        // is now misleading.
         setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
+        if (result) setResult(null);
+        if (failedRows) setFailedRows(null);
     };
     const addRow = () => setRows((prev) => [...prev, config.emptyRow()]);
     const removeRow = (idx) => setRows((prev) => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx));
@@ -705,8 +718,10 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
             .map((r) => ({ ...r, price_type: priceType }));
         if (nonEmpty.length === 0) { toast.error("Add at least one row"); return; }
 
-        // Partition by client-side validation. Valid rows are submitted; invalid
-        // rows are reported (and downloadable) so the dealer can fix only those.
+        // Wave 76 — ALL-OR-NOTHING. If even a single row fails client-side
+        // validation, abort the entire batch. Dealers were getting half-uploaded
+        // catalogues (some models present, others silently dropped) which is
+        // dangerous; we now refuse to send anything until every row is valid.
         const clientValid = [];
         const clientFailed = []; // { data, message }
         nonEmpty.forEach((r) => {
@@ -716,12 +731,11 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
         });
         setShowErrors(clientFailed.length > 0);
 
-        // Nothing valid to send — just surface the failures.
-        if (clientValid.length === 0) {
+        if (clientFailed.length > 0) {
             const failed = clientFailed.map((c) => ({ ...c.data, _error: c.message }));
             setResult({ succeeded: 0, failed: failed.length, errors: failed.map((f, i) => ({ row: i, message: f._error })) });
             setFailedRows(failed);
-            toast.error(`${failed.length} row${failed.length === 1 ? "" : "s"} need fixing`);
+            toast.error(`Upload blocked — ${failed.length} row${failed.length === 1 ? "" : "s"} still need fixing. Nothing was uploaded.`);
             return;
         }
 
@@ -883,9 +897,22 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
                         <tbody>
                             {rows.map((r, idx) => {
                                 const errs = showErrors ? config.rowErrors(r) : new Set();
+                                // Wave 76 — turn the cell-error keys into a
+                                // human-readable list using the column labels
+                                // so the dealer sees "Missing: Brand, Price"
+                                // not "Missing: brand, price" on hover.
+                                const errorLabel = errs.size > 0
+                                    ? `Fix: ${[...errs].map((k) => (COLUMNS.find((c) => c.key === k)?.label) || k).join(", ")}`
+                                    : "";
                                 return (
-                                    <tr key={idx} data-testid={`bulk-row-${idx}`}>
-                                        <td className="px-2 py-1 border-b border-black/[0.04] text-[11px] text-[#86868B] tabular-nums">{idx + 1}</td>
+                                    <tr key={idx} data-testid={`bulk-row-${idx}`} title={errorLabel || undefined}>
+                                        <td className="px-2 py-1 border-b border-black/[0.04] text-[11px] tabular-nums" title={errorLabel || undefined}>
+                                            {errs.size > 0 ? (
+                                                <span className="text-red-600 font-semibold" data-testid={`bulk-row-${idx}-err`}>{idx + 1}<span className="ml-0.5">!</span></span>
+                                            ) : (
+                                                <span className="text-[#86868B]">{idx + 1}</span>
+                                            )}
+                                        </td>
                                         {COLUMNS.map((c) => {
                                             const val = r[c.key] ?? "";
                                             const hasErr = errs.has(c.key);
@@ -1014,26 +1041,26 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
                     </table>
                 </div>
 
+                {/* Wave 76 — clean, single-banner error panel BELOW the table.
+                    No per-row list (those errors render inline as red cell
+                    tooltips on the table itself). Hidden while the dealer is
+                    editing — `result` is cleared on every cell edit. */}
                 {result && (
                     <div className="px-6 py-3 border-t border-black/[0.06] text-[12.5px]" data-testid="bulk-result">
-                        {result.succeeded > 0 && (
+                        {result.succeeded > 0 && result.failed === 0 && (
                             <div className="text-emerald-700 inline-flex items-center gap-2 font-semibold" data-testid="bulk-result-success">
-                                <CheckCircle2 size={14} /> {result.succeeded} {config.unitLabel}{result.succeeded === 1 ? "" : "s"} uploaded successfully{result.failed > 0 ? `, ${result.failed} failed` : ""}
-                            </div>
-                        )}
-                        {result.succeeded === 0 && result.failed > 0 && (
-                            <div className="text-red-600 inline-flex items-center gap-2 font-semibold" data-testid="bulk-result-allfailed">
-                                <AlertTriangle size={14} /> 0 uploaded, {result.failed} failed
+                                <CheckCircle2 size={14} /> {result.succeeded} {config.unitLabel}{result.succeeded === 1 ? "" : "s"} uploaded successfully
                             </div>
                         )}
                         {result.failed > 0 && (
-                            <div className="mt-2 space-y-1.5" data-testid="bulk-failed-list">
-                                {result.errors?.slice(0, 5).map((e, i) => (
-                                    <div key={i} className="text-red-600">Row {e.row + 1}: {e.message}</div>
-                                ))}
-                                {result.errors?.length > 5 && <div className="text-[#86868B]">+{result.errors.length - 5} more…</div>}
-                                <button onClick={downloadFailed} className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold px-3 h-9 mt-1 rounded-lg border border-red-300 text-red-700 bg-red-50 hover:bg-red-100" data-testid="bulk-download-failed">
-                                    <Download size={14} /> Download failed rows
+                            <div className="flex items-center justify-between gap-3" data-testid="bulk-result-failed">
+                                <div className="inline-flex items-center gap-2 text-red-600 font-semibold">
+                                    <AlertTriangle size={14} />
+                                    {result.failed} row{result.failed === 1 ? "" : "s"} failed — fix the highlighted row{result.failed === 1 ? "" : "s"} before uploading.
+                                    {result.succeeded > 0 && <span className="text-[#6E6E73] font-normal ml-2">({result.succeeded} also uploaded successfully)</span>}
+                                </div>
+                                <button onClick={downloadFailed} className="inline-flex items-center gap-1.5 text-[12px] font-medium px-3 h-9 rounded-lg border border-[#D2D2D7] text-[#0A0A0B] bg-white hover:bg-black/[0.04]" data-testid="bulk-download-failed">
+                                    <Download size={13} /> Download failed rows
                                 </button>
                             </div>
                         )}
