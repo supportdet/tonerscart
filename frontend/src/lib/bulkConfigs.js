@@ -271,7 +271,7 @@ export const printerBulkConfig = {
         connectivity: "Wi-Fi, Ethernet, USB", paper_sizes: "A4, A5, Legal",
         description: "Compact mono laser printer with auto-duplex.",
     },
-    requiredKeys: ["brand", "model_number", "category", "usage_type", "price", "stock"],
+    requiredKeys: ["brand", "model_number", "category", "price", "stock"],
     isRowEmpty: printerIsRowEmpty,
     rowErrors: printerRowErrors,
     toPayload: (r) => ({
