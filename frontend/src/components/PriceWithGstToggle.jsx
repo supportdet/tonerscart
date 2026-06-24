@@ -164,20 +164,12 @@ export default function PriceWithGstToggle({
                                     <div className="text-[11px] font-semibold tracking-wide text-[#6E6E73] uppercase mb-2">
                                         What you&rsquo;ll earn on this listing
                                     </div>
-                                    <div className="flex justify-between" data-testid={`${testIdPrefix}-payout-base`}>
-                                        <span className="text-[#3a3a40]">Your base price <span className="text-[#86868B]">(excl. GST)</span>:</span>
-                                        <span className="font-mono">{formatINR(pb.basePrice)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-[#B91C1C] mt-0.5" data-testid={`${testIdPrefix}-payout-commission`}>
-                                        <span>TonersCart commission ({pb.rateLabel} of base):</span>
-                                        <span className="font-mono">− {formatINR(pb.commission)}</span>
-                                    </div>
-                                    <div className="flex justify-between font-bold text-[#065F46] mt-1.5 pt-1.5 border-t border-black/[0.08]" data-testid={`${testIdPrefix}-payout-net`}>
+                                    <div className="flex justify-between font-bold text-[#065F46]" data-testid={`${testIdPrefix}-payout-net`}>
                                         <span>You&rsquo;ll receive (per unit):</span>
                                         <span className="font-mono">{formatINR(pb.basePrice - pb.commission)}</span>
                                     </div>
                                     <div className="text-[11px] text-[#6E6E73] mt-2 leading-snug">
-                                        GST of {formatINR(pb.gstAmount)} ({gstRate}%) and delivery charges pass through to you in full — TonersCart never takes a cut on those.
+                                        GST of {formatINR(pb.gstAmount)} ({gstRate}%) and delivery charges pass through to you in full.
                                     </div>
                                 </div>
                             );

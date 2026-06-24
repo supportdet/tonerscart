@@ -320,7 +320,7 @@ def delete_printer(printer_id: str, user: dict = Depends(require_user)):
 
 
 @router.post("/supplier/printers/bulk")
-def create_printers_bulk(payload: List[dict], user: dict = Depends(require_role("supplier"))):
+async def create_printers_bulk(payload: List[dict], user: dict = Depends(require_role("supplier"))):
     """Create many printer listings at once. Validates EACH row independently
     (Pydantic + business rules) so one bad row never fails the whole batch.
     Returns per-row failures so the dealer can fix only the bad rows."""
@@ -340,6 +340,16 @@ def create_printers_bulk(payload: List[dict], user: dict = Depends(require_role(
             errors.append({"row": idx, "message": he.detail if isinstance(he.detail, str) else str(he.detail)})
         except Exception as e:
             errors.append({"row": idx, "message": str(e)[:240]})
+    # Wave 68 — notify dealer once per bulk batch about any listings that
+    # ended up without an image (listings WITH images get significantly more
+    # buyer attention so this is high-value friction worth surfacing).
+    try:
+        missing = [c for c in created if not (c.get("image_url") or "").strip()]
+        if missing:
+            from email_service import email_printer_images_missing
+            await email_printer_images_missing(user, missing)
+    except Exception as e:
+        logger.warning("printer-images-missing notification failed: %s", e)
     return {"created": created, "errors": errors, "total": len(payload), "succeeded": len(created), "failed": len(errors)}
 
 

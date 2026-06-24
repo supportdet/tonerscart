@@ -1719,14 +1719,16 @@ async def _start_scheduler():
     global _scheduler
     if _scheduler is not None:
         return
+    # Wave 68 — auto-confirm-after-5-days job retired. Dealer payouts now fire
+    # at dispatch + 2 business days regardless of buyer confirmation status,
+    # so the scheduler no longer has a critical job. Keeping the infra in
+    # place (commented out) so we can re-add jobs without re-wiring lifecycle.
     _scheduler = AsyncIOScheduler(timezone="UTC")
-    _scheduler.add_job(
-        _auto_confirm_delivered_orders, "interval", minutes=30,
-        id="auto_confirm_delivered", replace_existing=True,
-        next_run_time=datetime.now(timezone.utc) + _td(seconds=60),
-    )
+    # _scheduler.add_job(_auto_confirm_delivered_orders, "interval", minutes=30,
+    #                    id="auto_confirm_delivered", replace_existing=True,
+    #                    next_run_time=datetime.now(timezone.utc) + _td(seconds=60))
     _scheduler.start()
-    logger.info("APScheduler started — auto-confirm delivered orders every 30 min")
+    logger.info("APScheduler started (no jobs scheduled; Wave 68 retired 5-day auto-confirm)")
 
 
 app.include_router(api)

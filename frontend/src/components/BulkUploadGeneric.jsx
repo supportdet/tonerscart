@@ -6,6 +6,154 @@ import api from "../lib/api";
 import { commissionFor } from "../lib/commission";
 import { formatINR } from "../lib/listingConstants";
 
+// ---------------------------------------------------------------------------
+// Wave 68 — smart Excel/CSV parsing helpers
+// ---------------------------------------------------------------------------
+// Header matching is intentionally lenient: case-insensitive, ignores spaces,
+// underscores, slashes and parens, so "Toner Type", "toner_type", "TONER/TYPE"
+// and "Toner Type (Original/Compatible)" all collapse to the same key.
+const _normHeader = (s) => String(s || "")
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, "")           // strip parens content (units, hints)
+    .replace(/[\s_\-/\\.]+/g, "")        // collapse separators
+    .trim();
+
+// Synonym map: canonical column key → list of accepted header strings the
+// dealer might use in their Excel. Each value is run through _normHeader too.
+const HEADER_SYNONYMS = {
+    brand:                  ["brand", "make"],
+    model_number:           ["model", "modelnumber", "modelno", "tonermodel", "tonermodelnumber"],
+    compatible_models:      ["suitablefor", "compatiblemodels", "compatibility", "fitsprinters", "compatibleprinters", "compatible"],
+    category:               ["type", "printertype", "category"],
+    condition:              ["condition"],
+    usage_type:             ["usage", "usagetype", "intendedusage"],
+    color:                  ["color", "colour", "colormode", "colourmode"],
+    toner_type:             ["tonertype"],
+    gst_rate:               ["gst", "gstrate", "gst%", "gstpercent"],
+    price:                  ["price", "price₹", "priceinr", "sellingprice", "mrp", "unitprice"],
+    price_per_ream:         ["priceperream", "reamprice", "price"],
+    stock:                  ["stock", "quantity", "qty", "qtyavailable", "stockavailable", "stockboxes", "stockunits"],
+    page_yield:             ["pageyield", "yield", "pages"],
+    oem_part_number:        ["oempartnumber", "partnumber", "partno"],
+    print_speed_ppm:        ["printspeed", "speed", "ppm", "speedppm"],
+    monthly_volume_min:     ["monthlyvolmin", "monthlyvolumemin", "minmonthlyvolume", "volmin"],
+    monthly_volume_max:     ["monthlyvolmax", "monthlyvolumemax", "maxmonthlyvolume", "volmax"],
+    connectivity:           ["connectivity", "interface", "ports", "connections"],
+    paper_sizes:            ["papersize", "papersizes", "supportedpapersizes"],
+    paper_size:             ["papersize"],
+    description:            ["description", "notes", "remarks"],
+    size:                   ["size", "papersize"],
+    gsm:                    ["gsm", "weight"],
+    reams_per_box:          ["reamsperbox", "reams"],
+    brightness:             ["brightness"],
+    suitable_for:           ["suitablefor", "use", "applications"],
+    subcategory:            ["subcategory", "subtype", "consumabletype"],
+    subcategory_other:      ["ifothersspecify", "otherspecify", "subcategoryother"],
+    warranty:               ["warranty"],
+    scanner_type:           ["scannertype", "type"],
+    scan_resolution:        ["scanresolution", "resolution", "dpi"],
+    color_mode:             ["colormode", "colourmode"],
+    intercity_delivery_charge: ["intercitydeliverycharge", "deliverycharge", "intercitycharge"],
+};
+// Build a fast lookup table: normalized header → canonical key.
+const HEADER_LOOKUP = (() => {
+    const out = {};
+    for (const [k, list] of Object.entries(HEADER_SYNONYMS)) {
+        out[_normHeader(k)] = k;
+        out[_normHeader(k.replace(/_/g, " "))] = k;
+        for (const alias of list) out[_normHeader(alias)] = k;
+    }
+    return out;
+})();
+
+// Value mappers — case-insensitive, accept multiple synonyms for each canonical
+// value, and preserve multi-word values like "Ink Tank" as a single token.
+const _strip = (s) => String(s || "").trim();
+const _canon = (s) => _strip(s).toLowerCase().replace(/[\s_\-/]+/g, "");
+
+const CATEGORY_VALUES = {
+    laser: "laser",
+    inkjet: "inkjet",
+    inktank: "ink-tank",           // Wave 68 — "Ink Tank" preserved as one token
+    thermal: "thermal",
+    dotmatrix: "dot-matrix",
+    led: "led",
+};
+const CONDITION_VALUES = {
+    new: "new",
+    brandnew: "new",
+    refurbished: "refurbished",
+    refurb: "refurbished",
+    openbox: "open-box",
+};
+const USAGE_VALUES = {
+    home: "home",
+    office: "office",
+    corporate: "corporate",
+    commercial: "commercial",
+    printshop: "print_shop",
+};
+const COLOR_VALUES = {
+    color: "color",
+    colour: "color",
+    bw: "bw",
+    blackandwhite: "bw",
+    blackwhite: "bw",
+    mono: "bw",
+    monochrome: "bw",
+    both: "both",
+};
+const TONER_TYPE_VALUES = { original: "Original", oem: "Original", compatible: "Compatible", refilled: "Refilled" };
+
+// Split a cell value on /, comma, &, pipe, semicolon. Used for multi-value
+// columns (usage_type, connectivity, paper_sizes, compatible_models).
+const _splitMulti = (v) => _strip(v).split(/\s*[\/,&|;]\s*/).map(_strip).filter(Boolean);
+
+// Map a free-form cell value to a canonical select option using one of the
+// value tables above. Returns "" when nothing matches → leaves the cell blank
+// so the user explicitly picks instead of getting a wrong default.
+const _mapValue = (raw, table) => {
+    const c = _canon(raw);
+    if (!c) return "";
+    return table[c] ?? "";
+};
+
+// Coerce an uploaded cell value to the right shape for the table column.
+// `key` is the canonical column key; `value` is the raw string from the file.
+const _coerceCell = (key, value) => {
+    const raw = _strip(value);
+    if (raw === "") return "";
+    switch (key) {
+        case "category":     return _mapValue(raw, CATEGORY_VALUES);
+        case "condition":    return _mapValue(raw, CONDITION_VALUES);
+        case "color":        return _mapValue(raw, COLOR_VALUES);
+        case "color_mode":   return _mapValue(raw, COLOR_VALUES);
+        case "toner_type":   return _mapValue(raw, TONER_TYPE_VALUES);
+        case "usage_type": {
+            // Up to 2 selected. Comma/slash/& separated input.
+            const parts = _splitMulti(raw).map((p) => _mapValue(p, USAGE_VALUES)).filter(Boolean);
+            return Array.from(new Set(parts)).slice(0, 2).join(",");
+        }
+        case "connectivity":
+        case "paper_sizes":
+        case "compatible_models":
+        case "suitable_for":
+            // Multi-value, comma-joined for the cell; downstream payload may
+            // split again before submit.
+            return _splitMulti(raw).join(", ");
+        case "gst_rate": {
+            const n = parseFloat(raw.replace("%", ""));
+            if (!isFinite(n)) return "";
+            // Snap to nearest allowed rate so a stray "18.0" or "18%" still works.
+            const allowed = [5, 12, 18, 28];
+            const snapped = allowed.find((a) => Math.abs(a - n) < 0.5);
+            return snapped != null ? String(snapped) : "";
+        }
+        default:
+            return raw;
+    }
+};
+
 /**
  * Generic spreadsheet-style bulk upload dialog.
  * Driven entirely by a `config` object so it can power printers, papers, etc.
@@ -38,6 +186,7 @@ const normOpts = (opts) =>
 function ModelSearchCell({ value, brand, single, hasErr, onChange, onPick, testid }) {
     const [open, setOpen] = useState(false);
     const [results, setResults] = useState([]);
+    const [adding, setAdding] = useState(false);
     const boxRef = useRef(null);
     const term = (single ? String(value || "") : (String(value || "").split(",").pop() || "")).trim();
 
@@ -73,6 +222,28 @@ function ModelSearchCell({ value, brand, single, hasErr, onChange, onPick, testi
         setOpen(false);
     };
 
+    // Wave 69 — when the dealer types a model that doesn't match any existing
+    // result, offer an inline "Add '<term>'" action that seeds the shared
+    // custom_printer_models table via POST /compat/custom-printer. The model
+    // becomes searchable for every dealer the next time it's looked up.
+    const addCustomModel = async () => {
+        if (!term || term.length < 2 || adding) return;
+        setAdding(true);
+        try {
+            const resp = await api.post("/compat/custom-printer", { brand: brand || "", model: term });
+            const m = resp?.data?.model || term;
+            const b = resp?.data?.brand || brand || "";
+            const fullName = b ? `${b} ${m}`.trim() : m;
+            pickModel({ brand: b, model: m, full_name: fullName, slug: `custom-${Date.now()}` });
+            toast.success(`Added "${fullName}" — now searchable for all dealers`);
+        } catch (e) {
+            const msg = e?.response?.data?.detail || e?.message || "Could not add model";
+            toast.error(typeof msg === "string" ? msg : "Could not add model");
+        } finally {
+            setAdding(false);
+        }
+    };
+
     const sameBrand = brand ? results.filter((p) => p.brand.toLowerCase() === brand.toLowerCase()) : results;
     const otherBrand = brand ? results.filter((p) => p.brand.toLowerCase() !== brand.toLowerCase()) : [];
     const optBtn = (p) => (
@@ -94,7 +265,7 @@ function ModelSearchCell({ value, brand, single, hasErr, onChange, onPick, testi
                 data-testid={testid}
                 autoComplete="off"
             />
-            {open && results.length > 0 && (
+            {open && (results.length > 0 || term.length >= 2) && (
                 <div className="absolute z-50 mt-1 w-[320px] bg-white border border-[#E5E5EA] rounded-lg shadow-xl max-h-52 overflow-y-auto" data-testid={`${testid}-dropdown`}>
                     {brand && sameBrand.length > 0 && (
                         <div className="px-2.5 pt-1.5 pb-0.5 text-[10px] tracking-[0.12em] uppercase font-bold text-[#86868B]">{brand} models</div>
@@ -104,6 +275,18 @@ function ModelSearchCell({ value, brand, single, hasErr, onChange, onPick, testi
                         <div className="px-2.5 pt-1.5 pb-0.5 text-[10px] tracking-[0.12em] uppercase font-bold text-[#86868B] border-t border-black/[0.05]">Other brands</div>
                     )}
                     {otherBrand.map(optBtn)}
+                    {results.length === 0 && term.length >= 2 && (
+                        <div className="px-2.5 py-1.5 text-[11.5px] text-[#86868B]">No matches found.</div>
+                    )}
+                    {term.length >= 2 && (
+                        <button type="button"
+                            onClick={addCustomModel}
+                            disabled={adding}
+                            className="w-full text-left px-2.5 py-2 text-[12.5px] font-semibold text-[#00838f] hover:bg-[#F2FBFC] border-t border-black/[0.05] disabled:opacity-60"
+                            data-testid={`${testid}-add-custom`}>
+                            {adding ? "Adding…" : `+ Add "${brand ? `${brand} ` : ""}${term}"`}
+                        </button>
+                    )}
                 </div>
             )}
         </div>
@@ -199,20 +382,34 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
                 parsed = parseCSV(text);
             }
             if (parsed.length < 2) { toast.error("File is empty or has no data rows"); return; }
-            const norm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
-            const header = parsed[0].map(norm);
-            const keyByIdx = header.map((h) => {
-                const col = COLUMNS.find((c) => norm(c.label) === h || c.key.toLowerCase() === h);
+            const headerCells = (parsed[0] || []).map((s) => _normHeader(s));
+            // Map every header cell to a canonical column key (preferring our
+            // synonym table; falling back to direct label / key match).
+            const keyByIdx = headerCells.map((h) => {
+                if (!h) return null;
+                if (HEADER_LOOKUP[h]) {
+                    // Only accept the mapped key if THIS sheet actually has that column.
+                    const k = HEADER_LOOKUP[h];
+                    return COLUMNS.some((c) => c.key === k) ? k : null;
+                }
+                const col = COLUMNS.find((c) => _normHeader(c.label) === h || _normHeader(c.key) === h);
                 return col?.key || null;
             });
             const recognised = keyByIdx.filter(Boolean).length;
             if (recognised === 0) { toast.error("No recognised columns found. Download the template for the correct headers."); return; }
+            // Wave 68 — required-headers presence check (only error path the spec allows).
+            const presentKeys = new Set(keyByIdx.filter(Boolean));
+            const missingRequired = (config.requiredKeys || []).filter((k) => !presentKeys.has(k));
+            if (missingRequired.length > 0) {
+                toast.error(`Missing required column${missingRequired.length === 1 ? "" : "s"}: ${missingRequired.join(", ")}`);
+                return;
+            }
             const dataRows = parsed.slice(1).map((cells) => {
                 const r = config.emptyRow();
                 keyByIdx.forEach((k, i) => {
                     if (!k) return;
-                    const v = (cells[i] ?? "").trim();
-                    if (v !== "") r[k] = v;
+                    const coerced = _coerceCell(k, cells[i]);
+                    if (coerced !== "") r[k] = coerced;
                 });
                 return r;
             }).filter((r) => !config.isRowEmpty(r));
@@ -222,7 +419,7 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
             padded.push(config.emptyRow());
             setRows(padded);
             setShowErrors(false);
-            const skipped = header.length - recognised;
+            const skipped = headerCells.filter(Boolean).length - recognised;
             toast.success(`Loaded ${dataRows.length} row${dataRows.length === 1 ? "" : "s"}${skipped > 0 ? ` · ${skipped} extra column${skipped === 1 ? "" : "s"} ignored` : ""}`);
         } catch {
             toast.error("Could not parse file. Use the template format (CSV or Excel).");
@@ -416,12 +613,57 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
                                             const hasErr = errs.has(c.key);
                                             // Visible border on every cell so empty inputs don't look like blank space.
                                             const base = `w-full h-8 px-2 text-[12.5px] rounded border ${hasErr ? "border-red-400 bg-red-50" : "border-[#D2D2D7] hover:border-[#86868B] focus:border-[#0A0A0B]"} bg-white focus:outline-none`;
+                                            if (c.type === "select" && c.multi) {
+                                                const opts = normOpts(config.selectOptions?.[c.key]);
+                                                const arr = String(val || "").split(",").map((s) => s.trim()).filter(Boolean);
+                                                const remaining = opts.filter((o) => !arr.includes(o.value));
+                                                const max = c.maxSelect || Infinity;
+                                                const atCap = arr.length >= max;
+                                                return (
+                                                    <td key={c.key} className="px-1 py-1 border-b border-black/[0.04] align-top">
+                                                        <div className={`min-h-[32px] px-1.5 py-1 rounded border ${hasErr ? "border-red-400 bg-red-50" : "border-[#D2D2D7] focus-within:border-[#0A0A0B]"} bg-white flex items-center flex-wrap gap-1`} data-testid={`bulk-cell-${idx}-${c.key}`}>
+                                                            {arr.map((v) => {
+                                                                const lbl = (opts.find((o) => o.value === v)?.label) || v;
+                                                                return (
+                                                                    <span key={v} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-[#0A0A0B] text-white text-[11px] font-medium" data-testid={`bulk-chip-${idx}-${c.key}-${v}`}>
+                                                                        {lbl}
+                                                                        <button type="button"
+                                                                            onClick={() => updateCell(idx, c.key, arr.filter((x) => x !== v).join(", "))}
+                                                                            className="w-4 h-4 rounded-full bg-white/15 hover:bg-white/30 grid place-items-center"
+                                                                            aria-label={`Remove ${lbl}`}>×</button>
+                                                                    </span>
+                                                                );
+                                                            })}
+                                                            {!atCap && remaining.length > 0 && (
+                                                                <select
+                                                                    value=""
+                                                                    onChange={(e) => {
+                                                                        const v = e.target.value;
+                                                                        if (!v) return;
+                                                                        updateCell(idx, c.key, [...arr, v].join(", "));
+                                                                    }}
+                                                                    className="text-[11px] h-6 px-1 bg-transparent text-[#6E6E73] focus:outline-none"
+                                                                    data-testid={`bulk-cell-${idx}-${c.key}-add`}
+                                                                >
+                                                                    <option value="">{arr.length === 0 ? "Select…" : "+ Add"}</option>
+                                                                    {remaining.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                                                </select>
+                                                            )}
+                                                            {atCap && (
+                                                                <span className="text-[10px] text-[#86868B]">max {max}</span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                );
+                                            }
                                             if (c.type === "select") {
                                                 const opts = normOpts(config.selectOptions?.[c.key]);
                                                 return (
                                                     <td key={c.key} className="px-1 py-1 border-b border-black/[0.04]">
                                                         <select value={val} onChange={(e) => updateCell(idx, c.key, e.target.value)} className={base} data-testid={`bulk-cell-${idx}-${c.key}`}>
-                                                            {c.placeholder !== undefined && <option value="">{c.placeholder}</option>}
+                                                            {/* Wave 69 — always render an unselected placeholder so dropdowns
+                                                                don't visually look "pre-filled" with the first option. */}
+                                                            <option value="">{c.placeholder || "Select…"}</option>
                                                             {opts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                                                         </select>
                                                     </td>
@@ -471,10 +713,6 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
                                                                 <div className="flex justify-between text-emerald-700 font-semibold">
                                                                     <span>You&rsquo;ll receive:</span>
                                                                     <span>{formatINR(payout)}</span>
-                                                                </div>
-                                                                <div className="flex justify-between text-red-600">
-                                                                    <span>Commission ({c2.rateLabel}):</span>
-                                                                    <span>− {formatINR(c2.commission)}</span>
                                                                 </div>
                                                                 <div className="flex justify-between text-[#6E6E73]">
                                                                     <span>GST ({gst}%):</span>
