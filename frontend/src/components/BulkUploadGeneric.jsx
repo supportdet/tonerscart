@@ -277,9 +277,47 @@ const _coerceCell = (key, value) => {
         case "paper_sizes": {
             // Wave 72 — canonicalise each token against PAPER_SIZE_VALUES so
             // case-variants ("a4", "A4", "letter") map to dropdown values
-            // ("A4", "A4", "Letter"). Unknown sizes are kept as-typed.
-            const parts = _splitMulti(raw).map((p) => _mapValue(p, PAPER_SIZE_VALUES) || p);
-            return Array.from(new Set(parts)).join(", ");
+            // ("A4", "A4", "Letter"). Wave 74 — also split on whitespace and
+            // dashes so dealer-entered values like "A4 A3", "A4-A3-Letter",
+            // "A3A4" (no separator), and curly-quote / Unicode-dash variants
+            // all break into individual tokens. Unknown sizes are kept as-typed.
+            const tokens = _strip(raw)
+                .replace(/[‒–—−]/g, "-")                     // unify Unicode dashes
+                .split(/\s*[\/,&|;\-]\s*|\s+/)               // /, comma, &, |, ;, -, whitespace
+                .map(_strip)
+                .filter(Boolean);
+            // Also try to split "A4A3" / "A3A4Letter" (no separator at all) by
+            // scanning the canon form for known sizes back-to-back.
+            const expanded = [];
+            for (const t of tokens) {
+                const c = _canon(t);
+                if (!PAPER_SIZE_VALUES[c] && c.length >= 4) {
+                    // attempt greedy split using all known size codes, longest
+                    // first so "letter" wins over "le-" prefix attempts.
+                    const knownCodes = Object.keys(PAPER_SIZE_VALUES)
+                        .sort((a, b) => b.length - a.length);
+                    let rem = c;
+                    let progress = false;
+                    const chunks = [];
+                    while (rem.length > 0) {
+                        const found = knownCodes.find((k) => rem.startsWith(k));
+                        if (!found) break;
+                        chunks.push(PAPER_SIZE_VALUES[found]);
+                        rem = rem.slice(found.length);
+                        progress = true;
+                    }
+                    if (progress && rem.length === 0) {
+                        expanded.push(...chunks);
+                        continue;
+                    }
+                }
+                expanded.push(_mapValue(t, PAPER_SIZE_VALUES) || t);
+            }
+            const coerced = Array.from(new Set(expanded)).join(", ");
+            if (typeof window !== "undefined" && window.__bulkDebug) {
+                console.log(`[bulk:_coerceCell paper_sizes] "${value}" → tokens=${JSON.stringify(tokens)} → "${coerced}"`);
+            }
+            return coerced;
         }
         case "connectivity": {
             // Wave 72 — canonicalise connectivity tokens the same way so
@@ -542,6 +580,18 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
             // printer sheet.
             const validKeys = new Set(COLUMNS.map((c) => c.key));
             const rawHeaders = parsed[0] || [];
+            // Wave 74 — diagnostic logging for header → canonical-key binding.
+            // Always print a compact table to the console so dealers can see
+            // exactly what the parser saw without having to flip any debug
+            // flag. Especially helpful when fields like "Paper Sizes" appear
+            // to silently drop.
+            const headerBindings = rawHeaders.map((h) => {
+                const norm = _normHeader(h);
+                const matched = _matchHeader(h, validKeys);
+                return { raw: String(h || ""), normalised: norm, matched: matched || "(no match)" };
+            });
+            console.log(`[bulk upload] Sheet "${config.sheetName}" — header bindings:`);
+            console.table(headerBindings);
             const keyByIdx = rawHeaders.map((h) => _matchHeader(h, validKeys));
             const unmatchedHeaders = rawHeaders
                 .map((h, i) => (keyByIdx[i] ? null : String(h || "").trim()))
@@ -562,11 +612,20 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
             // file. We always parse what we can, load the table, then surface
             // a non-blocking yellow banner + red-highlight the missing cells.
             const missingRequired = (config.requiredKeys || []).filter((k) => !presentKeys.has(k));
-            const dataRows = parsed.slice(1).map((cells) => {
+            const dataRows = parsed.slice(1).map((cells, rowIdx) => {
                 const r = config.emptyRow();
                 keyByIdx.forEach((k, i) => {
                     if (!k) return;
-                    const coerced = _coerceCell(k, cells[i]);
+                    const rawCell = cells[i];
+                    const coerced = _coerceCell(k, rawCell);
+                    // Wave 74 — verbose log for the paper_sizes column on
+                    // EVERY row so we can see exactly what came in and what
+                    // came out, even when other rows on the same sheet work
+                    // correctly. Logged unconditionally — easy to remove if
+                    // it ever becomes noisy.
+                    if (k === "paper_sizes") {
+                        console.log(`[bulk upload] row ${rowIdx + 2} paper_sizes: raw="${String(rawCell ?? "")}" → coerced="${coerced}"`);
+                    }
                     if (coerced !== "") r[k] = coerced;
                 });
                 return r;
