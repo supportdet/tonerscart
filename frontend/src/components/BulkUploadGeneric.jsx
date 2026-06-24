@@ -86,6 +86,11 @@ const HEADER_LOOKUP = (() => {
 // lookup, we try to identify the column by looking for tell-tale substrings.
 // The order matters: more specific patterns first so "selling price" picks
 // `price` and not `stock` etc. Only the most ambiguous fields are wired up.
+// Wave 75 — paper_sizes MUST be checked before connectivity (and BEFORE any
+// other "paper"-containing key) so a header like "Supported Paper Sizes"
+// can never accidentally match `connectivity` via a stray needle. Removed
+// the bare "port" needle from connectivity — it was catching unrelated
+// columns like "Reporting" / "Support" / "Output Port Count".
 const CONTAINS_FALLBACK = [
     [["pricepermon", "priceperream"], "price_per_ream"],
     [["price", "amount", "rate", "mrp"],                "price"],
@@ -94,8 +99,8 @@ const CONTAINS_FALLBACK = [
     [["ppm", "pagesperminute", "speed"],                "print_speed_ppm"],
     [["dutycycle", "maxpages", "maxvolume", "monthlymax", "volmax"],  "monthly_volume_max"],
     [["minpages", "minvolume", "monthlymin", "volmin"],               "monthly_volume_min"],
-    [["connectivity", "interface", "network", "port"],   "connectivity"],
-    [["papersize", "paper", "pagesize", "pagesizes", "papersizes"],                            "paper_sizes"],
+    [["papersize", "papersizes", "pagesize", "pagesizes", "paper", "sheetsize"],   "paper_sizes"],
+    [["connectivity", "interface", "interfaces", "network", "ports"], "connectivity"],
     [["condition", "refurbish", "brandnew", "openbox"],  "condition"],
     [["usage", "usecase", "intendeduse"],                "usage_type"],
     [["category", "type", "technology"],                 "category"],
@@ -281,11 +286,30 @@ const _coerceCell = (key, value) => {
             // dashes so dealer-entered values like "A4 A3", "A4-A3-Letter",
             // "A3A4" (no separator), and curly-quote / Unicode-dash variants
             // all break into individual tokens. Unknown sizes are kept as-typed.
+            // Wave 75 — field-aware safety: if the WHOLE raw value or EVERY
+            // split token canonicalises to a connectivity value (USB / Wi-Fi
+            // / Ethernet / …) we know this cell was mis-bound from the
+            // connectivity column and return "" so the bad data never lands
+            // in the paper-sizes field. Whole-string check first so "Wi-Fi"
+            // (which splits to ["Wi","Fi"] under the dash-aware splitter)
+            // still gets caught.
+            if (_mapValue(raw, CONNECTIVITY_VALUES)) {
+                if (typeof window !== "undefined" && window.__bulkDebug) {
+                    console.log(`[bulk:_coerceCell paper_sizes] DROP (whole-string is connectivity): "${raw}"`);
+                }
+                return "";
+            }
             const tokens = _strip(raw)
                 .replace(/[‒–—−]/g, "-")                     // unify Unicode dashes
                 .split(/\s*[\/,&|;\-]\s*|\s+/)               // /, comma, &, |, ;, -, whitespace
                 .map(_strip)
                 .filter(Boolean);
+            if (tokens.length > 0 && tokens.every((t) => _mapValue(t, CONNECTIVITY_VALUES))) {
+                if (typeof window !== "undefined" && window.__bulkDebug) {
+                    console.log(`[bulk:_coerceCell paper_sizes] DROP — every token looks like connectivity: "${raw}"`);
+                }
+                return "";
+            }
             // Also try to split "A4A3" / "A3A4Letter" (no separator at all) by
             // scanning the canon form for known sizes back-to-back.
             const expanded = [];
@@ -323,7 +347,23 @@ const _coerceCell = (key, value) => {
             // Wave 72 — canonicalise connectivity tokens the same way so
             // "wifi" / "Wi-Fi" / "WIFI" all coerce to "Wi-Fi" (matches the
             // dropdown option). Unknown values pass through.
-            const parts = _splitMulti(raw).map((p) => _mapValue(p, CONNECTIVITY_VALUES) || p);
+            // Wave 75 — field-aware safety: drop if the whole value OR every
+            // split token canonicalises to a paper size, so a mis-bound
+            // paper-sizes column can't pollute connectivity with "A4, A3".
+            if (_mapValue(raw, PAPER_SIZE_VALUES)) {
+                if (typeof window !== "undefined" && window.__bulkDebug) {
+                    console.log(`[bulk:_coerceCell connectivity] DROP (whole-string is paper size): "${raw}"`);
+                }
+                return "";
+            }
+            const tokens = _splitMulti(raw);
+            if (tokens.length > 0 && tokens.every((t) => _mapValue(t, PAPER_SIZE_VALUES))) {
+                if (typeof window !== "undefined" && window.__bulkDebug) {
+                    console.log(`[bulk:_coerceCell connectivity] DROP — every token looks like paper size: "${raw}"`);
+                }
+                return "";
+            }
+            const parts = tokens.map((p) => _mapValue(p, CONNECTIVITY_VALUES) || p);
             return Array.from(new Set(parts)).join(", ");
         }
         case "compatible_models":
@@ -581,14 +621,18 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
             const validKeys = new Set(COLUMNS.map((c) => c.key));
             const rawHeaders = parsed[0] || [];
             // Wave 74 — diagnostic logging for header → canonical-key binding.
-            // Always print a compact table to the console so dealers can see
-            // exactly what the parser saw without having to flip any debug
-            // flag. Especially helpful when fields like "Paper Sizes" appear
-            // to silently drop.
-            const headerBindings = rawHeaders.map((h) => {
+            // Wave 75 — added explicit column index + dropped status so dealers
+            // can spot adjacent columns binding to the wrong canonical key.
+            const headerBindings = rawHeaders.map((h, i) => {
                 const norm = _normHeader(h);
                 const matched = _matchHeader(h, validKeys);
-                return { raw: String(h || ""), normalised: norm, matched: matched || "(no match)" };
+                return {
+                    col: i,
+                    excel_col: String.fromCharCode(65 + (i % 26)) + (i >= 26 ? Math.floor(i / 26) : ""),
+                    raw: String(h || ""),
+                    normalised: norm,
+                    matched: matched || "(IGNORED — no match)",
+                };
             });
             console.log(`[bulk upload] Sheet "${config.sheetName}" — header bindings:`);
             console.table(headerBindings);
@@ -623,8 +667,8 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
                     // came out, even when other rows on the same sheet work
                     // correctly. Logged unconditionally — easy to remove if
                     // it ever becomes noisy.
-                    if (k === "paper_sizes") {
-                        console.log(`[bulk upload] row ${rowIdx + 2} paper_sizes: raw="${String(rawCell ?? "")}" → coerced="${coerced}"`);
+                    if (k === "paper_sizes" || k === "connectivity") {
+                        console.log(`[bulk upload] row ${rowIdx + 2} ${k}: raw="${String(rawCell ?? "")}" → coerced="${coerced}"`);
                     }
                     if (coerced !== "") r[k] = coerced;
                 });
