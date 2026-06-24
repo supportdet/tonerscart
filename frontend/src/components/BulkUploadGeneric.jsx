@@ -12,48 +12,55 @@ import { formatINR } from "../lib/listingConstants";
 // Header matching is intentionally lenient: case-insensitive, ignores spaces,
 // underscores, slashes and parens, so "Toner Type", "toner_type", "TONER/TYPE"
 // and "Toner Type (Original/Compatible)" all collapse to the same key.
+// Wave 70 — header normalisation strips ALL special characters (currency
+// symbols ₹$, asterisks, parens with their content, brackets, percent signs,
+// quotes, etc.) so that "Our Selling Price ₹*", "Price (INR)", "PRICE%" all
+// collapse to "price". This is the canonical form used for both exact and
+// contains-matching against the synonym table below.
 const _normHeader = (s) => String(s || "")
     .toLowerCase()
     .replace(/\([^)]*\)/g, "")           // strip parens content (units, hints)
-    .replace(/[\s_\-/\\.]+/g, "")        // collapse separators
+    .replace(/\[[^\]]*\]/g, "")          // strip bracket content
+    .replace(/[^a-z0-9]+/g, "")          // strip all non-alphanumerics
     .trim();
 
 // Synonym map: canonical column key → list of accepted header strings the
 // dealer might use in their Excel. Each value is run through _normHeader too.
+// Wave 70 — expanded heavily so dealer-friendly headers like "Our Selling
+// Price", "Printer Technology", "Duty Cycle", "Stock Quantity" all match.
 const HEADER_SYNONYMS = {
-    brand:                  ["brand", "make"],
-    model_number:           ["model", "modelnumber", "modelno", "tonermodel", "tonermodelnumber"],
-    compatible_models:      ["suitablefor", "compatiblemodels", "compatibility", "fitsprinters", "compatibleprinters", "compatible"],
-    category:               ["type", "printertype", "category"],
-    condition:              ["condition"],
-    usage_type:             ["usage", "usagetype", "intendedusage"],
-    color:                  ["color", "colour", "colormode", "colourmode"],
-    toner_type:             ["tonertype"],
-    gst_rate:               ["gst", "gstrate", "gst%", "gstpercent"],
-    price:                  ["price", "price₹", "priceinr", "sellingprice", "mrp", "unitprice"],
-    price_per_ream:         ["priceperream", "reamprice", "price"],
-    stock:                  ["stock", "quantity", "qty", "qtyavailable", "stockavailable", "stockboxes", "stockunits"],
-    page_yield:             ["pageyield", "yield", "pages"],
-    oem_part_number:        ["oempartnumber", "partnumber", "partno"],
-    print_speed_ppm:        ["printspeed", "speed", "ppm", "speedppm"],
-    monthly_volume_min:     ["monthlyvolmin", "monthlyvolumemin", "minmonthlyvolume", "volmin"],
-    monthly_volume_max:     ["monthlyvolmax", "monthlyvolumemax", "maxmonthlyvolume", "volmax"],
-    connectivity:           ["connectivity", "interface", "ports", "connections"],
-    paper_sizes:            ["papersize", "papersizes", "supportedpapersizes"],
-    paper_size:             ["papersize"],
-    description:            ["description", "notes", "remarks"],
+    brand:                  ["brand", "make", "manufacturer", "brandname", "company"],
+    model_number:           ["model", "modelnumber", "modelno", "modelname", "printermodel", "productmodel", "tonermodel", "tonermodelnumber"],
+    compatible_models:      ["suitablefor", "compatiblemodels", "compatibility", "fitsprinters", "compatibleprinters", "compatible", "worksWith", "usedfor"],
+    category:               ["type", "category", "printertype", "typeofprinter", "printertechnology", "technology", "printtechnology", "producttype"],
+    condition:              ["condition", "printercondition", "productcondition", "itemcondition", "newOrRefurbished", "state"],
+    usage_type:             ["usage", "usagetype", "intendedusage", "use", "usecase", "suitableforuse", "intendeduse", "usertype", "targetuser", "targetuse"],
+    color:                  ["color", "colour", "colormode", "colourmode", "printcolour", "printcolor", "colortype", "bwOrColor", "monoOrColor"],
+    toner_type:             ["tonertype", "originalOrCompatible"],
+    gst_rate:               ["gst", "gstrate", "gstpercent", "gstpct", "tax", "taxrate"],
+    price:                  ["price", "priceinr", "sellingprice", "mrp", "unitprice", "ourprice", "oursellingprice", "netamount", "rate", "amount", "salesprice"],
+    price_per_ream:         ["priceperream", "reamprice"],
+    stock:                  ["stock", "quantity", "qty", "qtyavailable", "stockavailable", "stockboxes", "stockunits", "stockquantity", "stockcount", "inventory", "units", "availablestock", "stockonhand"],
+    page_yield:             ["pageyield", "yield", "pages", "pagecount"],
+    oem_part_number:        ["oempartnumber", "partnumber", "partno", "oempart"],
+    print_speed_ppm:        ["printspeed", "speed", "ppm", "speedppm", "pagesperminute", "ppmbw", "ppmcolor"],
+    monthly_volume_min:     ["monthlyvolmin", "monthlyvolumemin", "minmonthlyvolume", "volmin", "minpages", "minpagespermonth", "minimumvolume", "monthlymin"],
+    monthly_volume_max:     ["monthlyvolmax", "monthlyvolumemax", "maxmonthlyvolume", "volmax", "maxpages", "maxpagespermonth", "maximumvolume", "monthlymax", "dutycycle"],
+    connectivity:           ["connectivity", "interface", "interfaces", "ports", "connections", "connection", "network", "networking"],
+    paper_sizes:            ["papersizes", "supportedpapersizes", "papersize", "paper", "supportedpaper", "supportedsizes", "pagesize"],
+    description:            ["description", "desc", "productdescription", "details", "about", "notes", "remarks"],
     size:                   ["size", "papersize"],
-    gsm:                    ["gsm", "weight"],
+    gsm:                    ["gsm", "weight", "gsmweight"],
     reams_per_box:          ["reamsperbox", "reams"],
     brightness:             ["brightness"],
     suitable_for:           ["suitablefor", "use", "applications"],
     subcategory:            ["subcategory", "subtype", "consumabletype"],
     subcategory_other:      ["ifothersspecify", "otherspecify", "subcategoryother"],
-    warranty:               ["warranty"],
-    scanner_type:           ["scannertype", "type"],
+    warranty:               ["warranty", "warrantyperiod"],
+    scanner_type:           ["scannertype"],
     scan_resolution:        ["scanresolution", "resolution", "dpi"],
     color_mode:             ["colormode", "colourmode"],
-    intercity_delivery_charge: ["intercitydeliverycharge", "deliverycharge", "intercitycharge"],
+    intercity_delivery_charge: ["intercitydeliverycharge", "deliverycharge", "intercitycharge", "shippingcharge"],
 };
 // Build a fast lookup table: normalized header → canonical key.
 const HEADER_LOOKUP = (() => {
@@ -65,6 +72,54 @@ const HEADER_LOOKUP = (() => {
     }
     return out;
 })();
+
+// Wave 70 — contains-matching fallback. When an exact header isn't in the
+// lookup, we try to identify the column by looking for tell-tale substrings.
+// The order matters: more specific patterns first so "selling price" picks
+// `price` and not `stock` etc. Only the most ambiguous fields are wired up.
+const CONTAINS_FALLBACK = [
+    [["pricepermon", "priceperream"], "price_per_ream"],
+    [["price", "amount", "rate", "mrp"],                "price"],
+    [["stock", "qty", "quantity", "inventory", "units"], "stock"],
+    [["pageyield", "yield"],                            "page_yield"],
+    [["ppm", "pagesperminute", "speed"],                "print_speed_ppm"],
+    [["dutycycle", "maxpages", "maxvolume", "monthlymax", "volmax"],  "monthly_volume_max"],
+    [["minpages", "minvolume", "monthlymin", "volmin"],               "monthly_volume_min"],
+    [["connectivity", "interface", "network", "port"],   "connectivity"],
+    [["papersize", "paper"],                            "paper_sizes"],
+    [["condition", "refurbish", "brandnew", "openbox"],  "condition"],
+    [["usage", "usecase", "intendeduse"],                "usage_type"],
+    [["category", "type", "technology"],                 "category"],
+    [["brand", "manufacturer", "make"],                  "brand"],
+    [["model"],                                          "model_number"],
+    [["suitable", "compatibility", "compatible"],        "compatible_models"],
+    [["colour", "color"],                                "color"],
+    [["gst", "tax"],                                     "gst_rate"],
+    [["description", "desc", "details", "notes"],        "description"],
+    [["warranty"],                                       "warranty"],
+    [["resolution", "dpi"],                              "scan_resolution"],
+];
+
+const _matchHeader = (rawHeader, validKeysForSheet) => {
+    const h = _normHeader(rawHeader);
+    if (!h) return null;
+    const tryKey = (k) => (k && validKeysForSheet.has(k) ? k : null);
+    // 1) Exact synonym match
+    if (HEADER_LOOKUP[h]) {
+        const k = tryKey(HEADER_LOOKUP[h]);
+        if (k) return k;
+    }
+    // 2) Contains-matching fallback
+    for (const [needles, canonical] of CONTAINS_FALLBACK) {
+        for (const needle of needles) {
+            if (h.includes(needle)) {
+                const k = tryKey(canonical);
+                if (k) return k;
+            }
+        }
+    }
+    return null;
+};
 
 // Value mappers — case-insensitive, accept multiple synonyms for each canonical
 // value, and preserve multi-word values like "Ink Tank" as a single token.
@@ -382,26 +437,32 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
                 parsed = parseCSV(text);
             }
             if (parsed.length < 2) { toast.error("File is empty or has no data rows"); return; }
-            const headerCells = (parsed[0] || []).map((s) => _normHeader(s));
-            // Map every header cell to a canonical column key (preferring our
-            // synonym table; falling back to direct label / key match).
-            const keyByIdx = headerCells.map((h) => {
-                if (!h) return null;
-                if (HEADER_LOOKUP[h]) {
-                    // Only accept the mapped key if THIS sheet actually has that column.
-                    const k = HEADER_LOOKUP[h];
-                    return COLUMNS.some((c) => c.key === k) ? k : null;
-                }
-                const col = COLUMNS.find((c) => _normHeader(c.label) === h || _normHeader(c.key) === h);
-                return col?.key || null;
-            });
+            // Wave 70 — fuzzy header matching with column-key restriction.
+            // Build the set of canonical keys this sheet accepts so an alias
+            // like "type" doesn't accidentally bind to `scanner_type` on a
+            // printer sheet.
+            const validKeys = new Set(COLUMNS.map((c) => c.key));
+            const rawHeaders = parsed[0] || [];
+            const keyByIdx = rawHeaders.map((h) => _matchHeader(h, validKeys));
+            const unmatchedHeaders = rawHeaders
+                .map((h, i) => (keyByIdx[i] ? null : String(h || "").trim()))
+                .filter(Boolean);
+            if (unmatchedHeaders.length > 0) {
+                // Wave 70 — log unrecognised columns to the browser console
+                // for the dealer's debugging convenience, but never raise it
+                // as a toast — silent skip is the spec.
+                console.warn("[bulk upload] Ignored unrecognised columns:", unmatchedHeaders);
+            }
             const recognised = keyByIdx.filter(Boolean).length;
             if (recognised === 0) { toast.error("No recognised columns found. Download the template for the correct headers."); return; }
-            // Wave 68 — required-headers presence check (only error path the spec allows).
+            // Wave 70 — required-headers presence check uses DEALER-FACING
+            // display labels (not internal field names) in the toast.
             const presentKeys = new Set(keyByIdx.filter(Boolean));
+            const labelByKey = Object.fromEntries(COLUMNS.map((c) => [c.key, c.label.replace(/\s*\(.*?\)\s*$/, "").trim()]));
             const missingRequired = (config.requiredKeys || []).filter((k) => !presentKeys.has(k));
             if (missingRequired.length > 0) {
-                toast.error(`Missing required column${missingRequired.length === 1 ? "" : "s"}: ${missingRequired.join(", ")}`);
+                const labels = missingRequired.map((k) => labelByKey[k] || k);
+                toast.error(`Missing required column${labels.length === 1 ? "" : "s"}: ${labels.join(", ")}`);
                 return;
             }
             const dataRows = parsed.slice(1).map((cells) => {
@@ -419,7 +480,7 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
             padded.push(config.emptyRow());
             setRows(padded);
             setShowErrors(false);
-            const skipped = headerCells.filter(Boolean).length - recognised;
+            const skipped = unmatchedHeaders.length;
             toast.success(`Loaded ${dataRows.length} row${dataRows.length === 1 ? "" : "s"}${skipped > 0 ? ` · ${skipped} extra column${skipped === 1 ? "" : "s"} ignored` : ""}`);
         } catch {
             toast.error("Could not parse file. Use the template format (CSV or Excel).");
