@@ -159,12 +159,10 @@ const joinList = (a) => (Array.isArray(a) ? a.filter(Boolean).join(", ") : (a ||
 const PRINTER_CATEGORIES = [
     { value: "laser", label: "Laser" },
     { value: "inkjet", label: "Inkjet" },
-    { value: "tank", label: "Tank" },
+    { value: "ink-tank", label: "Ink Tank" },
     { value: "thermal", label: "Thermal" },
-    { value: "production", label: "Production" },
-    { value: "digital_press", label: "Digital Press" },
-    { value: "label_barcode", label: "Label / Barcode" },
-    { value: "ink", label: "Ink" },
+    { value: "dot-matrix", label: "Dot Matrix" },
+    { value: "led", label: "LED" },
     { value: "other", label: "Other" },
 ];
 const PRINTER_USAGES = [
@@ -219,7 +217,7 @@ const PRINTER_COLUMNS = [
 ];
 
 const printerEmptyRow = () => ({
-    brand: "", model_number: "", category: "", condition: "",
+    brand: "", model_number: "", category: "", condition: "new",
     usage_type: "", color: "", price: "", gst_rate: "", price_type: "incl", stock: "",
     print_speed_ppm: "", monthly_volume_min: "", monthly_volume_max: "",
     connectivity: "", paper_sizes: "", description: "",
@@ -285,7 +283,7 @@ export const printerBulkConfig = {
         brand: r.brand.trim(),
         model_number: r.model_number.trim(),
         category: r.category || "",
-        condition: r.condition || "",
+        condition: r.condition || "new",
         usage_type: (r.usage_type || "").split(",")[0] || "",
         usage_types: (r.usage_type || "").split(",").filter(Boolean),
         color: r.color || "",

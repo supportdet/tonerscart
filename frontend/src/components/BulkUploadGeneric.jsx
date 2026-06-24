@@ -47,7 +47,7 @@ const HEADER_SYNONYMS = {
     monthly_volume_min:     ["monthlyvolmin", "monthlyvolumemin", "minmonthlyvolume", "volmin", "minpages", "minpagespermonth", "minimumvolume", "monthlymin"],
     monthly_volume_max:     ["monthlyvolmax", "monthlyvolumemax", "maxmonthlyvolume", "volmax", "maxpages", "maxpagespermonth", "maximumvolume", "monthlymax", "dutycycle"],
     connectivity:           ["connectivity", "interface", "interfaces", "ports", "connections", "connection", "network", "networking"],
-    paper_sizes:            ["papersizes", "supportedpapersizes", "papersize", "paper", "supportedpaper", "supportedsizes", "pagesize"],
+    paper_sizes:            ["papersizes", "supportedpapersizes", "papersize", "paper", "supportedpaper", "supportedsizes", "pagesize", "pagesizes", "papersizessupported", "papertype", "papertypes", "papersizecompatibility", "supportedpapertypes", "sizessupported", "papersizessupport"],
     description:            ["description", "desc", "productdescription", "details", "about", "notes", "remarks"],
     size:                   ["size", "papersize"],
     gsm:                    ["gsm", "weight", "gsmweight"],
@@ -86,7 +86,7 @@ const CONTAINS_FALLBACK = [
     [["dutycycle", "maxpages", "maxvolume", "monthlymax", "volmax"],  "monthly_volume_max"],
     [["minpages", "minvolume", "monthlymin", "volmin"],               "monthly_volume_min"],
     [["connectivity", "interface", "network", "port"],   "connectivity"],
-    [["papersize", "paper"],                            "paper_sizes"],
+    [["papersize", "paper", "pagesize", "pagesizes", "papersizes"],                            "paper_sizes"],
     [["condition", "refurbish", "brandnew", "openbox"],  "condition"],
     [["usage", "usecase", "intendeduse"],                "usage_type"],
     [["category", "type", "technology"],                 "category"],
@@ -129,11 +129,32 @@ const _canon = (s) => _strip(s).toLowerCase().replace(/[\s_\-/]+/g, "");
 const CATEGORY_VALUES = {
     laser: "laser",
     inkjet: "inkjet",
+    inkjetprinter: "inkjet",
     inktank: "ink-tank",           // Wave 68 — "Ink Tank" preserved as one token
+    inktankprinter: "ink-tank",
+    ecotank: "ink-tank",
+    ink: "ink-tank",                // Wave 72 — collapse legacy split values
+    tank: "ink-tank",               // Wave 72 — collapse legacy split values
     thermal: "thermal",
     dotmatrix: "dot-matrix",
+    dotmatrixprinter: "dot-matrix",
     led: "led",
+    ledprinter: "led",
+    other: "other",
 };
+// Wave 72 — contains-based fallback for messy real-world Excel values like
+// "Color Laser Printer", "Mono LaserJet", "Wireless Inkjet", "Brother
+// Monochrome Laser MFP". The order matters: more specific first so
+// "Inkjet Tank" → ink-tank (not inkjet).
+const CATEGORY_CONTAINS = [
+    ["inktank", "ink-tank"],
+    ["ecotank", "ink-tank"],
+    ["dotmatrix", "dot-matrix"],
+    ["laser", "laser"],
+    ["inkjet", "inkjet"],
+    ["thermal", "thermal"],
+    ["led", "led"],
+];
 const CONDITION_VALUES = {
     new: "new",
     brandnew: "new",
@@ -160,6 +181,26 @@ const COLOR_VALUES = {
 };
 const TONER_TYPE_VALUES = { original: "Original", oem: "Original", compatible: "Compatible", refilled: "Refilled" };
 
+// Wave 72 — case-insensitive canonical map for paper_sizes so "a4" / "A4" /
+// " a4 " all resolve to the dropdown option value "A4". Synonyms include
+// common dealer phrasings like "letter size" → "Letter".
+const PAPER_SIZE_VALUES = {
+    a4: "A4", a3: "A3", a5: "A5", a6: "A6", a7: "A7",
+    letter: "Letter", legal: "Legal", executive: "Executive",
+    b5: "B5", b4: "B4",
+    foolscap: "Legal", fc: "Legal",
+};
+// Wave 72 — canonical map for connectivity so "wifi" / "Wi-Fi" / "WIFI" all
+// resolve to the dropdown option "Wi-Fi".
+const CONNECTIVITY_VALUES = {
+    usb: "USB", usb20: "USB", usb30: "USB",
+    wifi: "Wi-Fi", wifidirect: "Wi-Fi", wireless: "Wi-Fi",
+    ethernet: "Ethernet", lan: "Ethernet", rj45: "Ethernet", network: "Ethernet",
+    bluetooth: "Bluetooth", bt: "Bluetooth",
+    nfc: "NFC",
+    airprint: "AirPrint",
+};
+
 // Split a cell value on /, comma, &, pipe, semicolon. Used for multi-value
 // columns (usage_type, connectivity, paper_sizes, compatible_models).
 const _splitMulti = (v) => _strip(v).split(/\s*[\/,&|;]\s*/).map(_strip).filter(Boolean);
@@ -179,7 +220,18 @@ const _coerceCell = (key, value) => {
     const raw = _strip(value);
     if (raw === "") return "";
     switch (key) {
-        case "category":     return _mapValue(raw, CATEGORY_VALUES);
+        case "category": {
+            // Wave 72 — whole-string match first against the full allowed set,
+            // then contains-fallback for messy values like "Color Laser
+            // Printer". Never split the value; "Ink Tank" stays atomic.
+            const whole = _mapValue(raw, CATEGORY_VALUES);
+            if (whole) return whole;
+            const c = _canon(raw);
+            for (const [needle, val] of CATEGORY_CONTAINS) {
+                if (c.includes(needle)) return val;
+            }
+            return "";
+        }
         case "condition":    return _mapValue(raw, CONDITION_VALUES);
         case "color":        return _mapValue(raw, COLOR_VALUES);
         case "color_mode":   return _mapValue(raw, COLOR_VALUES);
@@ -189,8 +241,20 @@ const _coerceCell = (key, value) => {
             const parts = _splitMulti(raw).map((p) => _mapValue(p, USAGE_VALUES)).filter(Boolean);
             return Array.from(new Set(parts)).slice(0, 2).join(",");
         }
-        case "connectivity":
-        case "paper_sizes":
+        case "paper_sizes": {
+            // Wave 72 — canonicalise each token against PAPER_SIZE_VALUES so
+            // case-variants ("a4", "A4", "letter") map to dropdown values
+            // ("A4", "A4", "Letter"). Unknown sizes are kept as-typed.
+            const parts = _splitMulti(raw).map((p) => _mapValue(p, PAPER_SIZE_VALUES) || p);
+            return Array.from(new Set(parts)).join(", ");
+        }
+        case "connectivity": {
+            // Wave 72 — canonicalise connectivity tokens the same way so
+            // "wifi" / "Wi-Fi" / "WIFI" all coerce to "Wi-Fi" (matches the
+            // dropdown option). Unknown values pass through.
+            const parts = _splitMulti(raw).map((p) => _mapValue(p, CONNECTIVITY_VALUES) || p);
+            return Array.from(new Set(parts)).join(", ");
+        }
         case "compatible_models":
         case "suitable_for":
             // Multi-value, comma-joined for the cell; downstream payload may
@@ -684,7 +748,7 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
                             {rows.map((r, idx) => {
                                 const errs = showErrors ? config.rowErrors(r) : new Set();
                                 return (
-                                    <tr key={idx} className={errs.size ? "bg-red-50" : ""} data-testid={`bulk-row-${idx}`}>
+                                    <tr key={idx} data-testid={`bulk-row-${idx}`}>
                                         <td className="px-2 py-1 border-b border-black/[0.04] text-[11px] text-[#86868B] tabular-nums">{idx + 1}</td>
                                         {COLUMNS.map((c) => {
                                             const val = r[c.key] ?? "";

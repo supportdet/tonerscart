@@ -717,7 +717,7 @@ def _safe_order_update(order_id: str, upd: dict) -> dict:
 # ===== Printers + MPS =========================================================
 
 PRINTER_USAGES = {"home", "corporate", "commercial", "print_shop"}
-PRINTER_CATEGORIES = {"inkjet", "laser", "tank", "thermal", "production", "digital_press", "label_barcode", "ink", "other"}
+PRINTER_CATEGORIES = {"inkjet", "laser", "tank", "thermal", "production", "digital_press", "label_barcode", "ink", "other", "ink-tank", "dot-matrix", "led"}
 PRINTER_CONDITIONS = {"new", "refurbished"}
 PRINTER_COLORS = {"color", "bw", "both"}
 
