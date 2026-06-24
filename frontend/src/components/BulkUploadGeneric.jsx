@@ -389,8 +389,10 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
     const fileRef = useRef(null);
 
     const updateCell = (idx, key, value) => {
+        // Wave 71 — DO NOT flip `showErrors` off here. Red cells + yellow banner
+        // must re-derive per-row via config.rowErrors so partially-fixed tables
+        // keep guiding the dealer to the remaining bad cells.
         setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
-        if (showErrors) setShowErrors(false);
     };
     const addRow = () => setRows((prev) => [...prev, config.emptyRow()]);
     const removeRow = (idx) => setRows((prev) => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx));
