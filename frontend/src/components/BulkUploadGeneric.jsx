@@ -459,12 +459,10 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
             // display labels (not internal field names) in the toast.
             const presentKeys = new Set(keyByIdx.filter(Boolean));
             const labelByKey = Object.fromEntries(COLUMNS.map((c) => [c.key, c.label.replace(/\s*\(.*?\)\s*$/, "").trim()]));
+            // Wave 71 — no hard error if required columns are missing from the
+            // file. We always parse what we can, load the table, then surface
+            // a non-blocking yellow banner + red-highlight the missing cells.
             const missingRequired = (config.requiredKeys || []).filter((k) => !presentKeys.has(k));
-            if (missingRequired.length > 0) {
-                const labels = missingRequired.map((k) => labelByKey[k] || k);
-                toast.error(`Missing required column${labels.length === 1 ? "" : "s"}: ${labels.join(", ")}`);
-                return;
-            }
             const dataRows = parsed.slice(1).map((cells) => {
                 const r = config.emptyRow();
                 keyByIdx.forEach((k, i) => {
@@ -479,9 +477,16 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
             while (padded.length < 10) padded.push(config.emptyRow());
             padded.push(config.emptyRow());
             setRows(padded);
-            setShowErrors(false);
+            // Auto-show error highlighting if required columns are missing
+            // from the file — that's the entire point of the red cells.
+            setShowErrors(missingRequired.length > 0);
             const skipped = unmatchedHeaders.length;
-            toast.success(`Loaded ${dataRows.length} row${dataRows.length === 1 ? "" : "s"}${skipped > 0 ? ` · ${skipped} extra column${skipped === 1 ? "" : "s"} ignored` : ""}`);
+            if (missingRequired.length > 0) {
+                const labels = missingRequired.map((k) => labelByKey[k] || k);
+                toast.warning(`Loaded ${dataRows.length} row${dataRows.length === 1 ? "" : "s"} · fill in: ${labels.join(", ")}`);
+            } else {
+                toast.success(`Loaded ${dataRows.length} row${dataRows.length === 1 ? "" : "s"}${skipped > 0 ? ` · ${skipped} extra column${skipped === 1 ? "" : "s"} ignored` : ""}`);
+            }
         } catch {
             toast.error("Could not parse file. Use the template format (CSV or Excel).");
         } finally {
@@ -651,6 +656,16 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
                 </div>
 
                 <div className="flex-1 overflow-auto">
+                    {/* Wave 71 — non-blocking yellow banner when any row has
+                        unfilled required cells. Shown only after the dealer
+                        has triggered validation (showErrors), e.g. after a
+                        CSV/Excel upload that was missing required columns. */}
+                    {showErrors && rows.some((r) => config.rowErrors(r).size > 0) && (
+                        <div className="mx-4 mt-3 mb-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-800 flex items-start gap-2" data-testid="bulk-missing-required-banner">
+                            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                            <span>Some required fields are empty — fill them in before uploading. Highlighted cells in red need attention.</span>
+                        </div>
+                    )}
                     <table className="w-full text-[12.5px] border-separate border-spacing-0" data-testid="bulk-table">
                         <thead className="sticky top-0 bg-white z-10">
                             <tr>
@@ -833,10 +848,17 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
                     </div>
                     <div className="flex items-center gap-2">
                         <button onClick={onClose} disabled={submitting} className="h-10 px-4 rounded-lg border border-[#D2D2D7] text-[13px] font-semibold hover:bg-black/[0.04] disabled:opacity-50" data-testid="bulk-cancel-btn">Cancel</button>
-                        <button onClick={submit} disabled={submitting} className="h-10 px-5 rounded-lg text-[13px] font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60" style={{ background: "#0A0A0B" }} data-testid="bulk-submit-btn">
-                            {submitting ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                            {submitting ? (editMode ? "Saving…" : "Uploading…") : (editMode ? "Save changes" : "Upload all")}
-                        </button>
+                        {(() => {
+                            // Wave 71 — Upload All is held disabled until every
+                            // non-empty row clears its required-field validation.
+                            const blocked = rows.some((r) => !config.isRowEmpty(r) && config.rowErrors(r).size > 0);
+                            return (
+                                <button onClick={submit} disabled={submitting || blocked} title={blocked ? "Fill all required fields highlighted in red" : undefined} className="h-10 px-5 rounded-lg text-[13px] font-semibold text-white inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed" style={{ background: "#0A0A0B" }} data-testid="bulk-submit-btn">
+                                    {submitting ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                                    {submitting ? (editMode ? "Saving…" : "Uploading…") : (editMode ? "Save changes" : "Upload all")}
+                                </button>
+                            );
+                        })()}
                     </div>
                 </div>
             </div>

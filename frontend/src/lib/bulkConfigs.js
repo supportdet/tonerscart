@@ -206,15 +206,15 @@ const PRINTER_COLUMNS = [
     { key: "category", label: "Type", required: true, type: "select", w: 130 },
     { key: "condition", label: "Condition", required: false, type: "select", w: 130 },
     { key: "usage_type", label: "Usage", required: true, type: "select", multi: true, maxSelect: 2, w: 200 },
-    { key: "color", label: "Color", required: false, type: "select", w: 120 },
-    { key: "gst_rate", label: "GST", required: true, type: "select", w: 90 },
+    { key: "color", label: "Color", required: true, type: "select", w: 120 },
+    { key: "gst_rate", label: "GST", required: false, type: "select", w: 90 },
     { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
-    { key: "stock", label: "Stock", required: true, type: "number", w: 90 },
-    { key: "print_speed_ppm", label: "Speed (ppm)", required: false, type: "number", w: 110 },
+    { key: "stock", label: "Stock", required: false, type: "number", w: 90 },
+    { key: "print_speed_ppm", label: "Speed (ppm)", required: true, type: "number", w: 110 },
     { key: "monthly_volume_min", label: "Vol. Min", required: false, type: "number", w: 100 },
     { key: "monthly_volume_max", label: "Vol. Max", required: false, type: "number", w: 100 },
     { key: "connectivity", label: "Connectivity", required: false, type: "select", multi: true, w: 240 },
-    { key: "paper_sizes", label: "Paper Sizes", required: false, type: "select", multi: true, w: 200 },
+    { key: "paper_sizes", label: "Paper Sizes", required: true, type: "select", multi: true, w: 200 },
     { key: "description", label: "Description", required: false, w: 220 },
 ];
 
@@ -233,20 +233,27 @@ const printerIsRowEmpty = (r) =>
 const printerRowErrors = (r) => {
     const errs = new Set();
     if (printerIsRowEmpty(r)) return errs;
-    for (const k of ["brand", "model_number", "category", "usage_type", "price", "stock"]) {
+    // Wave 71 — required per-row fields: Brand, Model, Type, Usage, Color,
+    // Price, PPM, Paper Sizes. Condition / GST / Stock / Vol Min/Max /
+    // Connectivity / Description are optional.
+    for (const k of ["brand", "model_number", "category", "usage_type", "color", "price", "print_speed_ppm", "paper_sizes"]) {
         if (String(r[k] ?? "").trim() === "") errs.add(k);
     }
     if (r.price !== "" && Number(r.price) <= 0) errs.add("price");
-    if (r.stock !== "" && Number(r.stock) < 0) errs.add("stock");
+    if (r.stock !== "" && r.stock !== null && Number(r.stock) < 0) errs.add("stock");
     if (r.category && !PRINTER_CATEGORIES.some((c) => c.value === r.category)) errs.add("category");
-    if (r.usage_type && !PRINTER_USAGES.some((u) => u.value === r.usage_type)) errs.add("usage_type");
+    // usage_type can be a comma-joined multi-value cell; validate each token.
+    if (r.usage_type) {
+        const tokens = String(r.usage_type).split(",").map((s) => s.trim()).filter(Boolean);
+        if (tokens.some((t) => !PRINTER_USAGES.some((u) => u.value === t))) errs.add("usage_type");
+    }
     return errs;
 };
 
 export const printerBulkConfig = {
     title: "Bulk upload printers",
     priceColumnKey: "price",
-    subtitle: "Fill the table or upload a CSV / Excel. Required: Brand, Model, Type, Usage, Price, Stock.",
+    subtitle: "Fill the table or upload a CSV / Excel. Required: Brand, Model, Type, Usage, Color, Price, PPM, Paper Sizes.",
     sheetName: "Printers",
     templateFilename: "tonerscart_bulk_printers_template.xlsx",
     currentFilename: "tonerscart_bulk_printers.xlsx",
@@ -271,7 +278,7 @@ export const printerBulkConfig = {
         connectivity: "Wi-Fi, Ethernet, USB", paper_sizes: "A4, A5, Legal",
         description: "Compact mono laser printer with auto-duplex.",
     },
-    requiredKeys: ["brand", "model_number", "category", "price", "stock"],
+    requiredKeys: ["brand", "model_number", "category", "usage_type", "color", "price", "print_speed_ppm", "paper_sizes"],
     isRowEmpty: printerIsRowEmpty,
     rowErrors: printerRowErrors,
     toPayload: (r) => ({
