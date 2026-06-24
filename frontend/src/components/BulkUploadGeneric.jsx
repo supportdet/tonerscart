@@ -91,7 +91,7 @@ const USAGE_VALUES = {
     office: "office",
     corporate: "corporate",
     commercial: "commercial",
-    printshop: "printshop",
+    printshop: "print_shop",
 };
 const COLOR_VALUES = {
     color: "color",
@@ -186,6 +186,7 @@ const normOpts = (opts) =>
 function ModelSearchCell({ value, brand, single, hasErr, onChange, onPick, testid }) {
     const [open, setOpen] = useState(false);
     const [results, setResults] = useState([]);
+    const [adding, setAdding] = useState(false);
     const boxRef = useRef(null);
     const term = (single ? String(value || "") : (String(value || "").split(",").pop() || "")).trim();
 
@@ -221,6 +222,28 @@ function ModelSearchCell({ value, brand, single, hasErr, onChange, onPick, testi
         setOpen(false);
     };
 
+    // Wave 69 — when the dealer types a model that doesn't match any existing
+    // result, offer an inline "Add '<term>'" action that seeds the shared
+    // custom_printer_models table via POST /compat/custom-printer. The model
+    // becomes searchable for every dealer the next time it's looked up.
+    const addCustomModel = async () => {
+        if (!term || term.length < 2 || adding) return;
+        setAdding(true);
+        try {
+            const resp = await api.post("/compat/custom-printer", { brand: brand || "", model: term });
+            const m = resp?.data?.model || term;
+            const b = resp?.data?.brand || brand || "";
+            const fullName = b ? `${b} ${m}`.trim() : m;
+            pickModel({ brand: b, model: m, full_name: fullName, slug: `custom-${Date.now()}` });
+            toast.success(`Added "${fullName}" — now searchable for all dealers`);
+        } catch (e) {
+            const msg = e?.response?.data?.detail || e?.message || "Could not add model";
+            toast.error(typeof msg === "string" ? msg : "Could not add model");
+        } finally {
+            setAdding(false);
+        }
+    };
+
     const sameBrand = brand ? results.filter((p) => p.brand.toLowerCase() === brand.toLowerCase()) : results;
     const otherBrand = brand ? results.filter((p) => p.brand.toLowerCase() !== brand.toLowerCase()) : [];
     const optBtn = (p) => (
@@ -242,7 +265,7 @@ function ModelSearchCell({ value, brand, single, hasErr, onChange, onPick, testi
                 data-testid={testid}
                 autoComplete="off"
             />
-            {open && results.length > 0 && (
+            {open && (results.length > 0 || term.length >= 2) && (
                 <div className="absolute z-50 mt-1 w-[320px] bg-white border border-[#E5E5EA] rounded-lg shadow-xl max-h-52 overflow-y-auto" data-testid={`${testid}-dropdown`}>
                     {brand && sameBrand.length > 0 && (
                         <div className="px-2.5 pt-1.5 pb-0.5 text-[10px] tracking-[0.12em] uppercase font-bold text-[#86868B]">{brand} models</div>
@@ -252,6 +275,18 @@ function ModelSearchCell({ value, brand, single, hasErr, onChange, onPick, testi
                         <div className="px-2.5 pt-1.5 pb-0.5 text-[10px] tracking-[0.12em] uppercase font-bold text-[#86868B] border-t border-black/[0.05]">Other brands</div>
                     )}
                     {otherBrand.map(optBtn)}
+                    {results.length === 0 && term.length >= 2 && (
+                        <div className="px-2.5 py-1.5 text-[11.5px] text-[#86868B]">No matches found.</div>
+                    )}
+                    {term.length >= 2 && (
+                        <button type="button"
+                            onClick={addCustomModel}
+                            disabled={adding}
+                            className="w-full text-left px-2.5 py-2 text-[12.5px] font-semibold text-[#00838f] hover:bg-[#F2FBFC] border-t border-black/[0.05] disabled:opacity-60"
+                            data-testid={`${testid}-add-custom`}>
+                            {adding ? "Adding…" : `+ Add "${brand ? `${brand} ` : ""}${term}"`}
+                        </button>
+                    )}
                 </div>
             )}
         </div>
@@ -578,12 +613,57 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
                                             const hasErr = errs.has(c.key);
                                             // Visible border on every cell so empty inputs don't look like blank space.
                                             const base = `w-full h-8 px-2 text-[12.5px] rounded border ${hasErr ? "border-red-400 bg-red-50" : "border-[#D2D2D7] hover:border-[#86868B] focus:border-[#0A0A0B]"} bg-white focus:outline-none`;
+                                            if (c.type === "select" && c.multi) {
+                                                const opts = normOpts(config.selectOptions?.[c.key]);
+                                                const arr = String(val || "").split(",").map((s) => s.trim()).filter(Boolean);
+                                                const remaining = opts.filter((o) => !arr.includes(o.value));
+                                                const max = c.maxSelect || Infinity;
+                                                const atCap = arr.length >= max;
+                                                return (
+                                                    <td key={c.key} className="px-1 py-1 border-b border-black/[0.04] align-top">
+                                                        <div className={`min-h-[32px] px-1.5 py-1 rounded border ${hasErr ? "border-red-400 bg-red-50" : "border-[#D2D2D7] focus-within:border-[#0A0A0B]"} bg-white flex items-center flex-wrap gap-1`} data-testid={`bulk-cell-${idx}-${c.key}`}>
+                                                            {arr.map((v) => {
+                                                                const lbl = (opts.find((o) => o.value === v)?.label) || v;
+                                                                return (
+                                                                    <span key={v} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-[#0A0A0B] text-white text-[11px] font-medium" data-testid={`bulk-chip-${idx}-${c.key}-${v}`}>
+                                                                        {lbl}
+                                                                        <button type="button"
+                                                                            onClick={() => updateCell(idx, c.key, arr.filter((x) => x !== v).join(", "))}
+                                                                            className="w-4 h-4 rounded-full bg-white/15 hover:bg-white/30 grid place-items-center"
+                                                                            aria-label={`Remove ${lbl}`}>×</button>
+                                                                    </span>
+                                                                );
+                                                            })}
+                                                            {!atCap && remaining.length > 0 && (
+                                                                <select
+                                                                    value=""
+                                                                    onChange={(e) => {
+                                                                        const v = e.target.value;
+                                                                        if (!v) return;
+                                                                        updateCell(idx, c.key, [...arr, v].join(", "));
+                                                                    }}
+                                                                    className="text-[11px] h-6 px-1 bg-transparent text-[#6E6E73] focus:outline-none"
+                                                                    data-testid={`bulk-cell-${idx}-${c.key}-add`}
+                                                                >
+                                                                    <option value="">{arr.length === 0 ? "Select…" : "+ Add"}</option>
+                                                                    {remaining.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                                                </select>
+                                                            )}
+                                                            {atCap && (
+                                                                <span className="text-[10px] text-[#86868B]">max {max}</span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                );
+                                            }
                                             if (c.type === "select") {
                                                 const opts = normOpts(config.selectOptions?.[c.key]);
                                                 return (
                                                     <td key={c.key} className="px-1 py-1 border-b border-black/[0.04]">
                                                         <select value={val} onChange={(e) => updateCell(idx, c.key, e.target.value)} className={base} data-testid={`bulk-cell-${idx}-${c.key}`}>
-                                                            {c.placeholder !== undefined && <option value="">{c.placeholder}</option>}
+                                                            {/* Wave 69 — always render an unselected placeholder so dropdowns
+                                                                don't visually look "pre-filled" with the first option. */}
+                                                            <option value="">{c.placeholder || "Select…"}</option>
                                                             {opts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                                                         </select>
                                                     </td>

@@ -169,9 +169,26 @@ const PRINTER_CATEGORIES = [
 ];
 const PRINTER_USAGES = [
     { value: "home", label: "Home" },
+    { value: "office", label: "Office" },
     { value: "corporate", label: "Corporate" },
     { value: "commercial", label: "Commercial" },
     { value: "print_shop", label: "Print Shop" },
+];
+const PRINTER_CONNECTIVITY = [
+    { value: "USB", label: "USB" },
+    { value: "Wi-Fi", label: "Wi-Fi" },
+    { value: "Ethernet", label: "Ethernet" },
+    { value: "Bluetooth", label: "Bluetooth" },
+    { value: "NFC", label: "NFC" },
+    { value: "AirPrint", label: "AirPrint" },
+];
+const PRINTER_PAPER_SIZES = [
+    { value: "A4", label: "A4" },
+    { value: "A3", label: "A3" },
+    { value: "A5", label: "A5" },
+    { value: "Letter", label: "Letter" },
+    { value: "Legal", label: "Legal" },
+    { value: "Executive", label: "Executive" },
 ];
 const PRINTER_CONDITIONS = [
     { value: "new", label: "Brand New" },
@@ -188,7 +205,7 @@ const PRINTER_COLUMNS = [
     { key: "model_number", label: "Model", required: true, type: "models", single: true, autofillBrand: true, w: 180 },
     { key: "category", label: "Type", required: true, type: "select", w: 130 },
     { key: "condition", label: "Condition", required: false, type: "select", w: 130 },
-    { key: "usage_type", label: "Usage", required: true, type: "select", w: 130 },
+    { key: "usage_type", label: "Usage", required: true, type: "select", multi: true, maxSelect: 2, w: 200 },
     { key: "color", label: "Color", required: false, type: "select", w: 120 },
     { key: "gst_rate", label: "GST", required: true, type: "select", w: 90 },
     { key: "price", label: "Price (₹)", required: true, type: "number", w: 110 },
@@ -196,8 +213,8 @@ const PRINTER_COLUMNS = [
     { key: "print_speed_ppm", label: "Speed (ppm)", required: false, type: "number", w: 110 },
     { key: "monthly_volume_min", label: "Vol. Min", required: false, type: "number", w: 100 },
     { key: "monthly_volume_max", label: "Vol. Max", required: false, type: "number", w: 100 },
-    { key: "connectivity", label: "Connectivity", required: false, w: 170 },
-    { key: "paper_sizes", label: "Paper Sizes", required: false, w: 150 },
+    { key: "connectivity", label: "Connectivity", required: false, type: "select", multi: true, w: 240 },
+    { key: "paper_sizes", label: "Paper Sizes", required: false, type: "select", multi: true, w: 200 },
     { key: "description", label: "Description", required: false, w: 220 },
 ];
 
@@ -242,6 +259,8 @@ export const printerBulkConfig = {
         condition: PRINTER_CONDITIONS,
         usage_type: PRINTER_USAGES,
         color: PRINTER_COLORS,
+        connectivity: PRINTER_CONNECTIVITY,
+        paper_sizes: PRINTER_PAPER_SIZES,
         gst_rate: GST_RATE_OPTIONS,
     },
     emptyRow: printerEmptyRow,
