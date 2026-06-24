@@ -1130,3 +1130,39 @@ async def email_proc_order_placed(u: dict, order: dict):
     {"Please upload your official PO document from the My Orders section." if (u.get('type') == 'govt') else ""}</p>
     """
     return await _send(email_to, f"TonersCart Order {ref} confirmed", html)
+
+
+# ---------------------------------------------------------------------------
+# Wave 68 — one digest email to the dealer after a bulk printer upload that
+# included rows without an image. We aggregate ALL the missing-image listings
+# into a single message so dealers don't get spammed per row.
+# ---------------------------------------------------------------------------
+async def email_printer_images_missing(user: dict, missing_listings: list) -> dict:
+    if not missing_listings:
+        return {"ok": True, "skipped": True, "reason": "no missing images"}
+    email_to = (user or {}).get("email")
+    if not email_to:
+        return {"ok": False, "reason": "no recipient"}
+    items_html = "".join(
+        f"<li style=\"margin:4px 0;\"><strong>{(l.get('brand') or '').strip()} "
+        f"{(l.get('model_number') or '').strip()}</strong></li>"
+        for l in missing_listings[:20]
+    )
+    more = ""
+    if len(missing_listings) > 20:
+        more = f"<p style=\"font-size:12.5px;color:#86868B;\">…and {len(missing_listings) - 20} more.</p>"
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
+        <h2 style="font-family:'Montserrat',Arial,sans-serif;font-size:22px;margin:0 0 8px;color:#0A0A0B;">Add product photos to your new listings</h2>
+        <p style="color:#3a3a40;font-size:14px;">You just bulk-uploaded
+        <strong>{len(missing_listings)} printer listing{"s" if len(missing_listings) != 1 else ""}</strong>
+        without an image. Listings with photos get significantly more buyer attention.</p>
+        <ul style="color:#3a3a40;font-size:13.5px;padding-left:18px;margin:8px 0;">{items_html}</ul>
+        {more}
+        <p style="color:#3a3a40;font-size:13.5px;margin-top:14px;">Add one from your
+        <strong>Dashboard → Printers → Edit</strong>. Even a single product photo improves
+        click-through and conversion meaningfully.</p>
+        <p style="color:#86868B;font-size:11px;margin-top:24px;">Listings with images perform better — add yours from your dealer dashboard.</p>
+    </div>
+    """
+    return await _send(email_to, "TonersCart — add photos to your new printer listings", html)

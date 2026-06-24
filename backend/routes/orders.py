@@ -224,11 +224,16 @@ async def update_order_status(order_id: str, payload: OrderStatusUpdate, user: d
             upd["tracking_number"] = payload.tracking_number.strip()
         if payload.courier_name:
             upd["courier_name"] = payload.courier_name.strip()
+        # Wave 68 — payout is queued the moment the dealer dispatches with a
+        # tracking number. Released within 2 business days. No more 5-day
+        # buyer-confirmation gate. Buyer can still confirm delivery for their
+        # own records, but it no longer drives payout eligibility.
+        upd["dispatched_at"] = now_iso
+        upd["payout_eligible_at"] = (now + _td(days=2)).isoformat()
     elif payload.status == "delivered":
         upd["delivered_at"] = now_iso
     elif payload.status == "completed":
         upd["completed_at"] = now_iso
-        upd["payout_eligible_at"] = (now + _td(days=5)).isoformat()
         upd["auto_confirmed"] = False
     _safe_order_update(order_id, upd)
     if role == "admin":

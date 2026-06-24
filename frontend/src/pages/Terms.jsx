@@ -92,18 +92,25 @@ export default function Terms() {
                     </Section>
 
                     <Section title="10. Returns & Refunds">
-                        Buyers may request a return for <strong>unopened toner cartridges within 7 days</strong> of delivery, and for
-                        <strong> dead-on-arrival (DOA) printers within 3 days</strong> of delivery. Returns are subject to seller verification
-                        in coordination with TonersCart support. Approved refunds are processed to the original payment method.
+                        Returns are accepted <strong>only</strong> if:
+                        <List items={[
+                            "the wrong model was delivered, or",
+                            "the product arrived damaged or dead on arrival (DOA).",
+                        ]} />
+                        <strong>No returns are accepted for change of mind, compatibility issues, or any other reason.</strong> Buyers must
+                        raise a return request <strong>within 48 hours of delivery</strong> with photo evidence (clear pictures of the product,
+                        packaging and any visible damage). Approved refunds are processed to the original payment method after seller
+                        verification in coordination with TonersCart support.
                     </Section>
 
                     <Section title="11. Seller Payouts">
-                        Seller payouts are processed after order completion. An order is marked complete when the buyer confirms delivery,
-                        or <strong>automatically after 5 days</strong> of buyer silence following the seller marking the order as delivered.
-                        Payouts are released <strong>within 2 business days</strong> of order completion, after deducting TonersCart&apos;s
-                        platform commission. Seller bank account details provided during registration are shared with
-                        <strong> Razorpay</strong>, TonersCart&apos;s payment partner, <strong>solely for the purpose of processing
-                        payouts</strong>. Sellers consent to this sharing by registering on the platform.
+                        Seller payouts are queued for release as soon as the seller <strong>marks the order as dispatched and enters a valid
+                        tracking number</strong>. Payouts are credited to the seller&apos;s registered bank account <strong>within 2 business
+                        days</strong> of dispatch, after deducting TonersCart&apos;s platform commission. Payouts are no longer gated on buyer
+                        confirmation or any post-dispatch waiting period; the buyer may still confirm delivery in their order history for
+                        their own records. Seller bank account details provided during registration are shared with <strong>Razorpay</strong>,
+                        TonersCart&apos;s payment partner, <strong>solely for the purpose of processing payouts</strong>. Sellers consent to
+                        this sharing by registering on the platform.
                     </Section>
 
                     <Section title="12. Dispute Resolution">

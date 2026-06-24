@@ -50,9 +50,9 @@ const TONER_COLUMNS = [
 ];
 
 const tonerEmptyRow = () => ({
-    brand: "", model_number: "", compatible_models: "", color: "Black", price: "", gst_rate: "18", price_type: "incl",
+    brand: "", model_number: "", compatible_models: "", color: "", price: "", gst_rate: "", price_type: "incl",
     stock: "", page_yield: "", oem_part_number: "",
-    toner_type: "Original", intercity_delivery_charge: "0",
+    toner_type: "", intercity_delivery_charge: "0",
 });
 
 const tonerIsRowEmpty = (r) =>
@@ -202,8 +202,8 @@ const PRINTER_COLUMNS = [
 ];
 
 const printerEmptyRow = () => ({
-    brand: "", model_number: "", category: "laser", condition: "new",
-    usage_type: "corporate", color: "color", price: "", gst_rate: "18", price_type: "incl", stock: "",
+    brand: "", model_number: "", category: "", condition: "",
+    usage_type: "", color: "", price: "", gst_rate: "", price_type: "incl", stock: "",
     print_speed_ppm: "", monthly_volume_min: "", monthly_volume_max: "",
     connectivity: "", paper_sizes: "", description: "",
 });
@@ -258,11 +258,11 @@ export const printerBulkConfig = {
     toPayload: (r) => ({
         brand: r.brand.trim(),
         model_number: r.model_number.trim(),
-        category: r.category || "laser",
-        condition: r.condition || "new",
-        usage_type: r.usage_type || "corporate",
-        usage_types: [r.usage_type || "corporate"],
-        color: r.color || "color",
+        category: r.category || "",
+        condition: r.condition || "",
+        usage_type: (r.usage_type || "").split(",")[0] || "",
+        usage_types: (r.usage_type || "").split(",").filter(Boolean),
+        color: r.color || "",
         price: basePriceFromRow(r.price, r),
         stock: Number(r.stock),
         gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
@@ -342,8 +342,8 @@ const CONSUMABLE_COLUMNS = [
 ];
 
 const consumableEmptyRow = () => ({
-    subcategory: "Ink Cartridges", subcategory_other: "", brand: "", model_number: "",
-    compatible_models: "", condition: "New", price: "", gst_rate: "18", price_type: "incl", stock: "",
+    subcategory: "", subcategory_other: "", brand: "", model_number: "",
+    compatible_models: "", condition: "", price: "", gst_rate: "", price_type: "incl", stock: "",
     intercity_delivery_charge: "0", description: "",
 });
 

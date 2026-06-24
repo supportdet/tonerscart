@@ -520,7 +520,6 @@ export default function SupplierDashboard() {
         setImageFiles(next);
         setImagePreviews(next.map((f) => URL.createObjectURL(f)));
     };
-    void removeImage; void onPickFile;
 
     const addVariant = () => {
         if (variants.length >= 15) { toast.error("Up to 15 colour variants are allowed"); return; }
@@ -1265,15 +1264,7 @@ export default function SupplierDashboard() {
                                                     <span className="text-[#3a3a40]">Buyer pays (incl. GST):</span>
                                                     <span className="font-mono">{formatINR(buyerSees)}</span>
                                                 </div>
-                                                <div className="flex justify-between mt-0.5">
-                                                    <span className="text-[#3a3a40]">Your base price (excl. GST):</span>
-                                                    <span className="font-mono">{formatINR(pb.basePrice)}</span>
-                                                </div>
-                                                <div className="flex justify-between text-[#B91C1C] mt-0.5">
-                                                    <span>TonersCart commission ({pb.rateLabel} of base):</span>
-                                                    <span className="font-mono">− {formatINR(pb.commission)}</span>
-                                                </div>
-                                                <div className="flex justify-between font-bold text-[#065F46] mt-1 pt-1 border-t border-black/[0.08]">
+                                                <div className="flex justify-between font-bold text-[#065F46] mt-1">
                                                     <span>You&rsquo;ll receive (per unit):</span>
                                                     <span className="font-mono">{formatINR(pb.basePrice - pb.commission)}</span>
                                                 </div>
@@ -1337,8 +1328,29 @@ export default function SupplierDashboard() {
                             </div>
                         </div>
 
-                        {/* Wave 12 — image upload removed for toners. Animated cartridge
-                            graphic is shown automatically on every listing card. */}
+                        {/* Wave 68 — Product image upload on the toner single form
+                            (animated cartridge graphic still shows on cards when
+                            no image is uploaded). */}
+                        <div className="mt-4">
+                            <Label>Product images <span className="text-[#86868B] font-normal">(optional, up to 3 — 5&nbsp;MB each)</span></Label>
+                            <div className="flex flex-wrap items-center gap-3 mt-1" data-testid="toner-images">
+                                {imagePreviews.map((src, i) => (
+                                    <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-[#E5E5EA]">
+                                        <img src={src} alt={`preview ${i + 1}`} className="w-full h-full object-cover" />
+                                        <button type="button" onClick={() => removeImage(i)} className="absolute top-0.5 right-0.5 w-5 h-5 grid place-items-center rounded-full bg-black/60 text-white" aria-label="Remove image" data-testid={`toner-image-remove-${i}`}>
+                                            <XIcon size={11} />
+                                        </button>
+                                    </div>
+                                ))}
+                                {imageFiles.filter(Boolean).length < 3 && (
+                                    <label className="w-20 h-20 rounded-lg border-2 border-dashed border-[#00B7C7]/50 grid place-items-center cursor-pointer hover:border-[#00B7C7] text-[#00B7C7]" data-testid="toner-image-add">
+                                        <ImageIcon size={20} />
+                                        <input type="file" accept="image/*" multiple onChange={onPickFile} className="hidden" />
+                                    </label>
+                                )}
+                            </div>
+                            <div className="text-[11px] text-[#86868B] mt-1.5">Listings with photos get significantly more buyer attention. If left blank, we show an animated cartridge graphic on the card.</div>
+                        </div>
 
                         <CompetitivePricingNote />
 
