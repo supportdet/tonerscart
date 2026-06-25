@@ -710,6 +710,44 @@ def admin_supplier_notes(supplier_id: str, payload: SupplierNotes,
     return {"ok": True}
 
 
+@router.post("/admin/suppliers/{supplier_id}/impersonate")
+def admin_impersonate_supplier(supplier_id: str, user: dict = Depends(require_role("admin"))):
+    """Wave 77 — admin-only impersonation. Returns the dealer's user_id +
+    business name so the frontend can flip into impersonation mode (the
+    admin keeps their own bearer token; subsequent requests are sent with
+    an `X-Impersonate-User-Id` header which `require_user` honours)."""
+    s = sb_admin.table("suppliers").select(
+        "id,user_id,business_name,city"
+    ).eq("id", supplier_id).maybe_single().execute()
+    if not s or not s.data:
+        raise HTTPException(404, "Supplier not found")
+    sd = s.data
+    if not sd.get("user_id"):
+        raise HTTPException(400, "Supplier has no user account — impersonation unavailable")
+    u = sb_admin.table("users").select("id,email,name").eq("id", sd["user_id"]).maybe_single().execute()
+    if not u or not u.data:
+        raise HTTPException(404, "Dealer user account not found")
+    try:
+        sb_admin.table("audit_log").insert({
+            "actor_id": user["id"],
+            "actor_email": user.get("email"),
+            "action": "impersonate_start",
+            "target_id": sd["user_id"],
+            "target_email": u.data.get("email"),
+            "metadata": {"supplier_id": supplier_id, "business_name": sd.get("business_name")},
+        }).execute()
+    except Exception:
+        pass  # audit_log table optional — see migrations/2026_06_24_wave77_audit_log.sql
+    return {
+        "ok": True,
+        "user_id": sd["user_id"],
+        "supplier_id": supplier_id,
+        "email": u.data.get("email"),
+        "business_name": sd.get("business_name"),
+        "city": sd.get("city"),
+    }
+
+
 @router.put("/admin/suppliers/{supplier_id}")
 def admin_edit_supplier(supplier_id: str, payload: SupplierEdit,
                         user: dict = Depends(require_role("admin"))):

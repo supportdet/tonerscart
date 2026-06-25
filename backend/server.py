@@ -68,11 +68,39 @@ def get_token(request: Request) -> Optional[str]:
 
 
 def require_user(request: Request) -> dict:
-    """Returns {"id", "email", "role", ...} from public.users for authenticated requests."""
+    """Returns {"id", "email", "role", ...} from public.users for authenticated requests.
+
+    Wave 77 — admin impersonation: if the authenticated user is an admin AND
+    the request carries an `X-Impersonate-User-Id` header, the returned
+    profile is the impersonated user's profile (not the admin's). The audit
+    log records every impersonated request via the kept `impersonator` field.
+    """
     token = get_token(request)
     uid, profile = get_user_from_token(token) if token else (None, None)
     if not uid or not profile:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    impersonate_id = request.headers.get("X-Impersonate-User-Id") or request.headers.get("x-impersonate-user-id")
+    if impersonate_id and profile.get("role") == "admin":
+        try:
+            u = sb_admin.table("users").select("id,email,role,name").eq("id", impersonate_id).maybe_single().execute()
+            if u and u.data:
+                target = dict(u.data)
+                target["impersonator"] = {"id": profile["id"], "email": profile.get("email")}
+                try:
+                    sb_admin.table("audit_log").insert({
+                        "actor_id": profile["id"],
+                        "actor_email": profile.get("email"),
+                        "action": "impersonate_request",
+                        "target_id": impersonate_id,
+                        "target_email": target.get("email"),
+                        "path": str(request.url.path),
+                        "method": request.method,
+                    }).execute()
+                except Exception:
+                    pass  # audit_log table may not exist yet — best-effort only
+                return target
+        except Exception:
+            pass
     return profile
 
 
@@ -732,6 +760,7 @@ class PrinterListingCreate(BaseModel):
     usage_type: Optional[str] = None
     category: str
     color: str = "color"
+    secondary_category: Optional[str] = None  # Wave 78 — dealers can pick up to 2 printer types
     paper_sizes: List[str] = Field(default_factory=list)
     functions: List[str] = Field(default_factory=list)
     connectivity: List[str] = Field(default_factory=list)
@@ -997,14 +1026,79 @@ def sanitize(s: Optional[str], max_len: int = 2000) -> str:
     return s[:max_len]
 
 
-# ---------- Pillow image compression ----------
-def compress_image(content: bytes, *, max_side: int = 1200, quality: int = 85) -> bytes:
-    """Resize an image so the longest side ≤ max_side and re-encode as JPEG 85%.
-    Returns original bytes if Pillow can't handle the format (svg, etc.)."""
+# ---------- Pillow image compression + watermarking ----------
+# Wave 77 — watermark cached once at process start. /app/frontend/public/TONERSCART-bg.png
+# is the brand mark; falls back to None silently if not present (no error).
+_WATERMARK_PATH = "/app/frontend/public/TONERSCART-bg.png"
+_WATERMARK_IMG = None
+
+
+def _load_watermark():
+    """Lazy-load the watermark PNG; return Pillow Image or None on failure."""
+    global _WATERMARK_IMG
+    if _WATERMARK_IMG is not None:
+        return _WATERMARK_IMG if _WATERMARK_IMG is not False else None
+    try:
+        from PIL import Image  # noqa: WPS433
+        _WATERMARK_IMG = Image.open(_WATERMARK_PATH).convert("RGBA")
+    except Exception as e:
+        logger.debug("Watermark not loaded (%s) — uploads will be saved un-watermarked", e)
+        _WATERMARK_IMG = False
+        return None
+    return _WATERMARK_IMG
+
+
+def apply_watermark(im, *, opacity: float = 0.35, width_ratio: float = 0.18):
+    """Composite the TonersCart logo onto the bottom-right corner of `im`.
+    Logo width ≈ width_ratio * image width, opacity ~35%."""
+    try:
+        from PIL import Image  # noqa: WPS433
+        wm_src = _load_watermark()
+        if wm_src is None:
+            return im
+        wm = wm_src.copy()
+        target_w = max(64, int(im.width * width_ratio))
+        scale = target_w / wm.width
+        target_h = max(1, int(wm.height * scale))
+        wm = wm.resize((target_w, target_h), Image.LANCZOS)
+        # Apply opacity by scaling the alpha channel
+        if wm.mode != "RGBA":
+            wm = wm.convert("RGBA")
+        alpha = wm.split()[-1].point(lambda px: int(px * opacity))
+        wm.putalpha(alpha)
+        # Composite onto a working RGBA copy then flatten back to RGB
+        base = im.convert("RGBA")
+        margin = max(8, int(im.width * 0.02))
+        pos = (base.width - wm.width - margin, base.height - wm.height - margin)
+        base.alpha_composite(wm, dest=pos)
+        return base.convert("RGB")
+    except Exception as e:
+        logger.debug("apply_watermark failed (%s) — returning un-watermarked", e)
+        return im
+
+
+def compress_image(
+    content: bytes,
+    *,
+    max_side: int = 1200,
+    quality: int = 85,
+    max_bytes: int = 500 * 1024,
+    watermark: bool = True,
+) -> bytes:
+    """Wave 77 — pipeline:
+      1) If the original is already under both `max_side` and `max_bytes` AND
+         no watermark is requested, return it unchanged (fast path).
+      2) Otherwise: decode → resize so longest side ≤ max_side → apply
+         watermark (semi-transparent TonersCart logo, bottom-right) → encode
+         JPEG at `quality`. If output still exceeds `max_bytes`, drop quality
+         in 5-point steps down to 60 to hit the budget.
+      3) Returns original bytes if Pillow can't decode the format.
+    """
     try:
         from PIL import Image  # noqa: WPS433
         im = Image.open(BytesIO(content))
         im.load()
+        # Flatten transparency to white background
         if im.mode in ("RGBA", "P", "LA"):
             bg = Image.new("RGB", im.size, (255, 255, 255))
             bg.paste(im, mask=im.split()[-1] if im.mode in ("RGBA", "LA") else None)
@@ -1012,12 +1106,27 @@ def compress_image(content: bytes, *, max_side: int = 1200, quality: int = 85) -
         else:
             im = im.convert("RGB")
         w, h = im.size
+        already_small_dims = max(w, h) <= max_side
+        already_small_bytes = len(content) <= max_bytes
+        # Fast path: original is small AND no watermark requested → keep as-is.
+        if already_small_dims and already_small_bytes and not watermark:
+            return content
+        # Resize so longest side ≤ max_side
         scale = max(w, h) / max_side
         if scale > 1:
             im = im.resize((int(w / scale), int(h / scale)), Image.LANCZOS)
-        out = BytesIO()
-        im.save(out, format="JPEG", quality=quality, optimize=True)
-        return out.getvalue()
+        # Watermark
+        if watermark:
+            im = apply_watermark(im)
+        # Encode + iteratively trim quality until under budget
+        q = quality
+        while True:
+            out = BytesIO()
+            im.save(out, format="JPEG", quality=q, optimize=True)
+            data = out.getvalue()
+            if len(data) <= max_bytes or q <= 60:
+                return data
+            q -= 5
     except Exception as e:
         logger.debug("compress_image fallback (returning original): %s", e)
         return content

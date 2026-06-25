@@ -331,7 +331,7 @@ export default function SearchPage() {
                                 </h2>
                                 <button onClick={() => setCat("toners")} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-toners">View all →</button>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
                                 {universal.toners.map((t) => (
                                     <TonerProductCard key={t.id} p={t} qty={getQty(t.id)} setQty={(n) => setQty(t.id, n)} onBuy={onBuy} onCart={onCart} userCity={city} />
                                 ))}
@@ -346,7 +346,7 @@ export default function SearchPage() {
                                 </h2>
                                 <button onClick={() => navigate(`/printers/results?q=${encodeURIComponent(universal.q)}`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-printers">Browse printers →</button>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
                                 {universal.printers.map((p) => (
                                     <PrinterProductCard key={p.id} p={p} />
                                 ))}
@@ -361,7 +361,7 @@ export default function SearchPage() {
                                 </h2>
                                 <button onClick={() => navigate(`/papers?q=${encodeURIComponent(universal.q)}`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-papers">Browse papers →</button>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                                 {universal.papers.map((p) => (
                                     <PaperProductCard key={p.id} p={p} />
                                 ))}
@@ -376,7 +376,7 @@ export default function SearchPage() {
                                 </h2>
                                 <button onClick={() => navigate(`/consumables`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-consumables">Browse consumables →</button>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                                 {universal.consumables.map((c) => (
                                     <ConsumableProductCard key={c.id} c={c} />
                                 ))}
@@ -391,7 +391,7 @@ export default function SearchPage() {
                                 </h2>
                                 <button onClick={() => navigate(`/scanners`)} className="text-[12.5px] font-semibold text-[#00B7C7] hover:underline" data-testid="universal-view-all-scanners">Browse scanners →</button>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                                 {(universal.scanners || []).map((sc) => (
                                     <ScannerProductCard key={sc.id} s={sc} />
                                 ))}
@@ -459,7 +459,7 @@ export default function SearchPage() {
                     </div>
 
                     {loading && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 mt-4">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5 mt-4">
                             {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-72 rounded-2xl" />)}
                         </div>
                     )}
@@ -480,7 +480,7 @@ export default function SearchPage() {
                         </div>
                     )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 mt-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5 mt-4">
                         {visibleProducts.map((p, idx) => (
                             <div key={p.id} className="tc-reveal" style={{ transitionDelay: `${Math.min(idx * 35, 280)}ms` }}>
                                 <TonerProductCard p={p} qty={getQty(p.id)} setQty={(n) => setQty(p.id, n)} onBuy={onBuy} onCart={onCart} userCity={city} />

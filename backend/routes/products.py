@@ -301,6 +301,12 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
     primary_usage = usage_types[0]
     if payload.category not in PRINTER_CATEGORIES:
         raise HTTPException(400, "Invalid category")
+    # Wave 78 — secondary_category is optional; same allow-list as primary.
+    secondary_cat = payload.secondary_category
+    if secondary_cat and secondary_cat not in PRINTER_CATEGORIES:
+        secondary_cat = None  # silently drop invalid extras rather than reject the row
+    if secondary_cat == payload.category:
+        secondary_cat = None  # dedupe
     if payload.color not in PRINTER_COLORS:
         raise HTTPException(400, "Invalid color")
     if payload.price < 0 or payload.stock < 0:
@@ -349,6 +355,7 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         "compatible_models": payload.compatible_models or None,
         "d2d_enabled": bool(payload.d2d_enabled) if payload.d2d_enabled is not None else None,
         "d2d_price": (float(payload.d2d_price) if payload.d2d_price else None),
+        "secondary_category": secondary_cat,
     }
     for k, v in optional_cols.items():
         if v is not None:
@@ -360,7 +367,7 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("spec_pdf_url", "image_urls", "print_speed_ppm", "duty_cycle", "display_type", "dimensions", "weight_kg", "printer_warranty", "max_resolution", "mobile_printing", "monthly_volume_recommended", "intercity_delivery_charge", "gst_rate", "usage_types", "special_features", "compatible_models", "d2d_enabled", "d2d_price"):
+            for k in ("spec_pdf_url", "image_urls", "print_speed_ppm", "duty_cycle", "display_type", "dimensions", "weight_kg", "printer_warranty", "max_resolution", "mobile_printing", "monthly_volume_recommended", "intercity_delivery_charge", "gst_rate", "usage_types", "special_features", "compatible_models", "d2d_enabled", "d2d_price", "secondary_category"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True

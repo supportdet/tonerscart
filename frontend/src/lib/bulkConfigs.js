@@ -172,6 +172,8 @@ const joinList = (a) => (Array.isArray(a) ? a.filter(Boolean).join(", ") : (a ||
 
 // ============================ PRINTERS ============================
 
+// Wave 78 — canonical printer types. "Ink Tank" is ONE atomic option (never
+// split into "Ink" + "Tank"). Dealers can select up to 2 types per printer.
 const PRINTER_CATEGORIES = [
     { value: "laser", label: "Laser" },
     { value: "inkjet", label: "Inkjet" },
@@ -179,6 +181,7 @@ const PRINTER_CATEGORIES = [
     { value: "thermal", label: "Thermal" },
     { value: "dot-matrix", label: "Dot Matrix" },
     { value: "led", label: "LED" },
+    { value: "production", label: "Production" },
     { value: "other", label: "Other" },
 ];
 // Wave 76 — canonical usage values match backend tokens; labels are the
@@ -197,6 +200,7 @@ const PRINTER_CONNECTIVITY = [
     { value: "Wi-Fi", label: "Wi-Fi" },
     { value: "Ethernet", label: "Ethernet" },
     { value: "Bluetooth", label: "Bluetooth" },
+    { value: "Wi-Fi Direct", label: "Wi-Fi Direct" },
     { value: "NFC", label: "NFC" },
     { value: "AirPrint", label: "AirPrint" },
 ];
@@ -206,7 +210,37 @@ const PRINTER_PAPER_SIZES = [
     { value: "A5", label: "A5" },
     { value: "Letter", label: "Letter" },
     { value: "Legal", label: "Legal" },
-    { value: "Executive", label: "Executive" },
+    { value: "Custom", label: "Custom" },
+];
+// Wave 77 — three new optional spec columns surfaced on the printer bulk
+// upload table (already exist on the single-add form / product detail page).
+const PRINTER_RESOLUTIONS = [
+    { value: "600x600", label: "600x600 dpi" },
+    { value: "1200x600", label: "1200x600 dpi" },
+    { value: "1200x1200", label: "1200x1200 dpi" },
+    { value: "2400x600", label: "2400x600 dpi" },
+    { value: "1200x2400", label: "1200x2400 dpi" },
+    { value: "4800x1200", label: "4800x1200 dpi" },
+    { value: "4800x2400", label: "4800x2400 dpi" },
+    { value: "9600x2400", label: "9600x2400 dpi" },
+];
+const PRINTER_MOBILE = [
+    { value: "AirPrint", label: "AirPrint" },
+    { value: "Mopria", label: "Mopria" },
+    { value: "Wi-Fi Direct", label: "Wi-Fi Direct" },
+    { value: "None", label: "None" },
+];
+const PRINTER_SPECIAL_FEATURES = [
+    { value: "Duplex Printing", label: "Duplex Printing" },
+    { value: "Auto Document Feeder", label: "Auto Document Feeder" },
+    { value: "Touchscreen", label: "Touchscreen" },
+    { value: "Cloud Printing", label: "Cloud Printing" },
+    { value: "Mobile Printing", label: "Mobile Printing" },
+    { value: "Secure Print", label: "Secure Print" },
+    { value: "High Capacity Tray", label: "High Capacity Tray" },
+    { value: "Fax", label: "Fax" },
+    { value: "Scanner", label: "Scanner" },
+    { value: "Wireless", label: "Wireless" },
 ];
 const PRINTER_CONDITIONS = [
     { value: "new", label: "Brand New" },
@@ -221,7 +255,7 @@ const PRINTER_COLORS = [
 const PRINTER_COLUMNS = [
     { key: "brand", label: "Brand", required: true, type: "select", placeholder: "Select brand…", w: 140 },
     { key: "model_number", label: "Model", required: true, type: "models", single: true, autofillBrand: true, w: 180 },
-    { key: "category", label: "Type", required: true, type: "select", w: 130 },
+    { key: "category", label: "Type", required: true, type: "select", multi: true, maxSelect: 2, w: 180 },
     { key: "condition", label: "Condition", required: false, type: "select", w: 130 },
     { key: "usage_type", label: "Usage", required: true, type: "select", multi: true, maxSelect: 2, w: 200 },
     { key: "color", label: "Color", required: true, type: "select", w: 120 },
@@ -233,6 +267,9 @@ const PRINTER_COLUMNS = [
     { key: "monthly_volume_max", label: "Vol. Max", required: false, type: "number", w: 100 },
     { key: "connectivity", label: "Connectivity", required: false, type: "select", multi: true, w: 240 },
     { key: "paper_sizes", label: "Paper Sizes", required: true, type: "select", multi: true, w: 200 },
+    { key: "max_resolution", label: "Max Resolution", required: false, type: "select", multi: true, w: 200 },
+    { key: "mobile_printing", label: "Mobile Printing", required: false, type: "select", multi: true, w: 200 },
+    { key: "special_features", label: "Special Features", required: false, type: "select", multi: true, w: 240 },
     { key: "printer_warranty", label: "Warranty", required: false, type: "select", w: 130 },
     { key: "description", label: "Description", required: false, w: 220 },
 ];
@@ -241,7 +278,9 @@ const printerEmptyRow = () => ({
     brand: "", model_number: "", category: "", condition: "new",
     usage_type: "", color: "", price: "", gst_rate: "", price_type: "incl", stock: "",
     print_speed_ppm: "", monthly_volume_min: "", monthly_volume_max: "",
-    connectivity: "", paper_sizes: "", printer_warranty: "1 Year", description: "",
+    connectivity: "", paper_sizes: "",
+    max_resolution: "", mobile_printing: "", special_features: "",
+    printer_warranty: "1 Year", description: "",
 });
 
 const printerIsRowEmpty = (r) =>
@@ -260,7 +299,12 @@ const printerRowErrors = (r) => {
     }
     if (r.price !== "" && Number(r.price) <= 0) errs.add("price");
     if (r.stock !== "" && r.stock !== null && Number(r.stock) < 0) errs.add("stock");
-    if (r.category && !PRINTER_CATEGORIES.some((c) => c.value === r.category)) errs.add("category");
+    // Wave 78 — category is now multi-select (max 2). Validate every token
+    // against the allowed canonical set so a typo doesn't slip past.
+    if (r.category) {
+        const ctoks = String(r.category).split(",").map((s) => s.trim()).filter(Boolean);
+        if (ctoks.length === 0 || ctoks.some((t) => !PRINTER_CATEGORIES.some((c) => c.value === t))) errs.add("category");
+    }
     // usage_type can be a comma-joined multi-value cell; validate each token.
     if (r.usage_type) {
         const tokens = String(r.usage_type).split(",").map((s) => s.trim()).filter(Boolean);
@@ -287,6 +331,9 @@ export const printerBulkConfig = {
         color: PRINTER_COLORS,
         connectivity: PRINTER_CONNECTIVITY,
         paper_sizes: PRINTER_PAPER_SIZES,
+        max_resolution: PRINTER_RESOLUTIONS,
+        mobile_printing: PRINTER_MOBILE,
+        special_features: PRINTER_SPECIAL_FEATURES,
         printer_warranty: WARRANTY_OPTIONS,
         gst_rate: GST_RATE_OPTIONS,
     },
@@ -296,6 +343,8 @@ export const printerBulkConfig = {
         usage_type: "corporate", color: "bw", price: "33040", gst_rate: "18", price_type: "incl", stock: "5",
         print_speed_ppm: "38", monthly_volume_min: "750", monthly_volume_max: "4000",
         connectivity: "Wi-Fi, Ethernet, USB", paper_sizes: "A4, A5, Legal",
+        max_resolution: "1200x1200", mobile_printing: "AirPrint, Mopria",
+        special_features: "Duplex Printing, Auto Document Feeder, Cloud Printing",
         printer_warranty: "1 Year",
         description: "Compact mono laser printer with auto-duplex.",
     },
@@ -305,7 +354,10 @@ export const printerBulkConfig = {
     toPayload: (r) => ({
         brand: r.brand.trim(),
         model_number: r.model_number.trim(),
-        category: r.category || "",
+        // Wave 78 — primary category = first selected (DB CHECK accepts a
+        // single value); second is sent in `functions` so it isn't lost.
+        category: (r.category || "").split(",")[0]?.trim() || "",
+        secondary_category: (r.category || "").split(",")[1]?.trim() || null,
         condition: r.condition || "new",
         usage_type: (r.usage_type || "").split(",")[0] || "",
         usage_types: (r.usage_type || "").split(",").filter(Boolean),
@@ -318,6 +370,9 @@ export const printerBulkConfig = {
         monthly_volume_max: r.monthly_volume_max !== "" ? Number(r.monthly_volume_max) : 0,
         connectivity: splitList(r.connectivity),
         paper_sizes: splitList(r.paper_sizes),
+        max_resolution: (r.max_resolution || "").split(",").map((s) => s.trim()).filter(Boolean).join(", ") || null,
+        mobile_printing: splitList(r.mobile_printing),
+        special_features: splitList(r.special_features),
         printer_warranty: r.printer_warranty || "1 Year",
         description: (r.description || "").trim(),
         image_url: "",
@@ -332,7 +387,9 @@ export const printerBulkConfig = {
             _id: l.id,
             brand: l.brand || "",
             model_number: l.model_number || "",
-            category: l.category || "laser",
+            // Wave 78 — `category` cell carries primary,secondary so the
+            // edit modal shows both chips when present.
+            category: [l.category, l.secondary_category].filter(Boolean).join(", ") || "laser",
             condition: l.condition || "new",
             usage_type: (Array.isArray(l.usage_types) && l.usage_types[0]) || l.usage_type || "corporate",
             color: l.color || "color",
@@ -345,6 +402,9 @@ export const printerBulkConfig = {
             monthly_volume_max: l.monthly_volume_max ? String(l.monthly_volume_max) : "",
             connectivity: joinList(l.connectivity),
             paper_sizes: joinList(l.paper_sizes),
+            max_resolution: l.max_resolution || "",
+            mobile_printing: joinList(l.mobile_printing),
+            special_features: joinList(l.special_features),
             printer_warranty: l.printer_warranty || "1 Year",
             description: l.description || "",
         };
@@ -352,7 +412,8 @@ export const printerBulkConfig = {
     toUpdatePayload: (r) => ({
         brand: r.brand.trim(),
         model_number: r.model_number.trim(),
-        category: r.category || "laser",
+        category: (r.category || "").split(",")[0]?.trim() || "laser",
+        secondary_category: (r.category || "").split(",")[1]?.trim() || null,
         condition: r.condition || "new",
         usage_type: r.usage_type || "corporate",
         usage_types: [r.usage_type || "corporate"],
@@ -365,6 +426,9 @@ export const printerBulkConfig = {
         monthly_volume_max: r.monthly_volume_max !== "" ? Number(r.monthly_volume_max) : 0,
         connectivity: splitList(r.connectivity),
         paper_sizes: splitList(r.paper_sizes),
+        max_resolution: (r.max_resolution || "").split(",").map((s) => s.trim()).filter(Boolean).join(", ") || null,
+        mobile_printing: splitList(r.mobile_printing),
+        special_features: splitList(r.special_features),
         printer_warranty: r.printer_warranty || "1 Year",
         description: (r.description || "").trim(),
     }),

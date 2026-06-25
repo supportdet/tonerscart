@@ -132,7 +132,7 @@ export default function Scanners() {
                         <div className="mt-1 text-[12.5px] text-[#6E6E73]">Verified dealers are onboarding. Check back soon or request a specific model below.</div>
                     </div>
                 ) : (
-                    <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="scanners-grid">
+                    <div className="mt-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4" data-testid="scanners-grid">
                         {visible.map((sc) => (
                             <ScannerProductCard key={sc.id} s={sc} />
                         ))}

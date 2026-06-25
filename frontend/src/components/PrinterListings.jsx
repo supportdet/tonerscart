@@ -33,24 +33,25 @@ const USAGE_OPTS = [
 const TECH_BY_USAGE = {
     home: [
         { id: "inkjet", label: "Inkjet" }, { id: "laser", label: "Laser" },
-        { id: "tank", label: "Tank" }, { id: "thermal", label: "Thermal" },
+        { id: "ink-tank", label: "Ink Tank" }, { id: "thermal", label: "Thermal" },
+        { id: "dot-matrix", label: "Dot Matrix" }, { id: "led", label: "LED" },
         { id: "other", label: "Other" },
     ],
     corporate: [
-        { id: "laser", label: "Laser" }, { id: "tank", label: "Tank" },
-        { id: "inkjet", label: "Inkjet" }, { id: "other", label: "Other" },
+        { id: "laser", label: "Laser" }, { id: "ink-tank", label: "Ink Tank" },
+        { id: "inkjet", label: "Inkjet" }, { id: "led", label: "LED" },
+        { id: "dot-matrix", label: "Dot Matrix" }, { id: "other", label: "Other" },
     ],
     commercial: [
-        { id: "laser", label: "Laser" }, { id: "ink", label: "Ink" },
-        { id: "production", label: "Production" },
-        { id: "label_barcode", label: "Label / Barcode" },
-        { id: "other", label: "Other" },
+        { id: "laser", label: "Laser" }, { id: "ink-tank", label: "Ink Tank" },
+        { id: "inkjet", label: "Inkjet" }, { id: "led", label: "LED" },
+        { id: "thermal", label: "Thermal" }, { id: "production", label: "Production" },
+        { id: "dot-matrix", label: "Dot Matrix" }, { id: "other", label: "Other" },
     ],
     print_shop: [
         { id: "laser", label: "Laser" }, { id: "inkjet", label: "Inkjet" },
-        { id: "production", label: "Production" },
-        { id: "digital_press", label: "Digital Press" },
-        { id: "other", label: "Other" },
+        { id: "ink-tank", label: "Ink Tank" }, { id: "led", label: "LED" },
+        { id: "production", label: "Production" }, { id: "other", label: "Other" },
     ],
 };
 
@@ -97,8 +98,10 @@ const PRETTY = {
     print_only: "Print only", print_scan: "Print + Scan",
     all_in_one: "Print + Copy + Scan", high_volume: "High-volume",
     new: "Brand New", refurbished: "Refurbished",
-    other: "Other", inkjet: "Inkjet", laser: "Laser", tank: "Tank",
-    thermal: "Thermal", ink: "Ink", production: "Production",
+    other: "Other", inkjet: "Inkjet", laser: "Laser",
+    "ink-tank": "Ink Tank", tank: "Ink Tank", ink: "Ink Tank",  // Wave 77 — all legacy variants display as "Ink Tank"
+    "dot-matrix": "Dot Matrix", led: "LED",
+    thermal: "Thermal", production: "Production",
     label_barcode: "Label / Barcode", digital_press: "Digital Press",
 };
 const fmt = (v) => PRETTY[v] || v;
@@ -109,7 +112,7 @@ const EMPTY = {
     image_url: "",
     image_urls: [],
     spec_pdf_path: "",
-    usage_type: "", category: "",
+    usage_type: "", category: "", categories: [],
     usage_types: [],
     special_features: [],
     color: "",
@@ -303,6 +306,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                 special_features: Array.isArray(editing.special_features) ? editing.special_features : [],
                 gst_rate: editing.gst_rate != null ? Number(editing.gst_rate) : 18,
                 category: editing.category || "",
+                categories: [editing.category, editing.secondary_category].filter(Boolean),
                 color: editing.color || "",
                 functions: Array.isArray(editing.functions) ? editing.functions : [],
                 monthly_volume_min: editing.monthly_volume_min != null ? String(editing.monthly_volume_min) : "",
@@ -335,6 +339,19 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
         ...cur,
         [k]: (cur[k] || []).includes(v) ? cur[k].filter((x) => x !== v) : [...(cur[k] || []), v],
     }));
+    // Wave 78 — printer type allows up to 2 selections. "Ink Tank" is one
+    // atomic option; never split. Clicking a third option is a no-op so the
+    // dealer is forced to deselect first.
+    const toggleCategoryMax2 = (id) => setF((cur) => {
+        const arr = Array.isArray(cur.categories) ? cur.categories : (cur.category ? [cur.category] : []);
+        if (arr.includes(id)) {
+            const next = arr.filter((x) => x !== id);
+            return { ...cur, categories: next, category: next[0] || "" };
+        }
+        if (arr.length >= 2) return cur;
+        const next = [...arr, id];
+        return { ...cur, categories: next, category: next[0] };
+    });
 
     // ---------- Step 1: Basic info ----------
     const onPickFile = (e) => {
@@ -427,8 +444,11 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
             for (const u of usageList) {
                 for (const t of (TECH_BY_USAGE[u] || [])) allowed.add(t.id);
             }
-            if (f.category && !allowed.has(f.category)) {
-                setF((cur) => ({ ...cur, category: "" }));
+            // Wave 78 — when usage changes, drop any selected categories
+            // that aren't valid under the new usage union.
+            const validCats = (f.categories || []).filter((c) => allowed.has(c));
+            if (validCats.length !== (f.categories || []).length || (f.category && !allowed.has(f.category))) {
+                setF((cur) => ({ ...cur, category: validCats[0] || "", categories: validCats }));
                 toast.error("Pick a printer technology that matches the selected usage type(s)"); return;
             }
         }
@@ -454,7 +474,8 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                 usage_types: f.usage_types || (f.usage_type ? [f.usage_type] : []),
                 special_features: f.special_features || [],
                 gst_rate: Number(f.gst_rate ?? 18),
-                category: f.category,
+                category: (f.categories && f.categories[0]) || f.category,
+                secondary_category: (f.categories && f.categories[1]) || null,
                 color: f.color,
                 functions: f.functions,
                 monthly_volume_min: Number(f.monthly_volume_min) || 0,
@@ -610,7 +631,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                                 <Textarea rows={3} value={f.description} onChange={upd("description")} placeholder="Highlight key strengths buyers should know…" className="tc-input-lg" data-testid="wizard-description" />
                             </div>
                             <div>
-                                <Label>Compatible cartridges / toners (optional)</Label>
+                                <Label>Compatible cartridges / inks (optional)</Label>
                                 <CompatibleModelsSelect
                                     mode="toners"
                                     value={f.compatible_models}
@@ -641,12 +662,12 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                             <SpecGroup
                                 label="Printer technology"
                                 required
-                                hint={(!f.usage_types || f.usage_types.length === 0) ? "Pick at least one usage type first" : undefined}
+                                hint={(!f.usage_types || f.usage_types.length === 0) ? "Pick at least one usage type first" : "Select up to 2"}
                             >
                                 <PillRow
                                     options={techOpts}
-                                    selected={[f.category]}
-                                    onClick={(id) => setVal("category", id)}
+                                    selected={f.categories && f.categories.length ? f.categories : (f.category ? [f.category] : [])}
+                                    onClick={(id) => toggleCategoryMax2(id)}
                                     disabled={!f.usage_types || f.usage_types.length === 0}
                                     testKey="tech"
                                 />
