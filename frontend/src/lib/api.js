@@ -39,6 +39,17 @@ api.interceptors.request.use(async (cfg) => {
         try { await sessionReady; } catch { /* ignore */ }
     }
     if (cachedToken) cfg.headers.Authorization = `Bearer ${cachedToken}`;
+    // Wave 77 — admin impersonation. When an admin has flipped into "Act as
+    // Dealer" mode (via sessionStorage flag set by DealerProfile.jsx), every
+    // subsequent API call carries the dealer's user_id in X-Impersonate-User-Id.
+    // The backend's require_user() honours this header only when the caller
+    // is an admin and logs each impersonated request to audit_log.
+    try {
+        const impersonateId = typeof window !== "undefined"
+            ? window.sessionStorage.getItem("tc_impersonate_user_id")
+            : null;
+        if (impersonateId) cfg.headers["X-Impersonate-User-Id"] = impersonateId;
+    } catch { /* ignore */ }
     return cfg;
 });
 

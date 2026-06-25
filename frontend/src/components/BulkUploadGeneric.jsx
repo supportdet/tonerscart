@@ -48,6 +48,9 @@ const HEADER_SYNONYMS = {
     monthly_volume_max:     ["monthlyvolmax", "monthlyvolumemax", "maxmonthlyvolume", "volmax", "maxpages", "maxpagespermonth", "maximumvolume", "monthlymax", "dutycycle"],
     connectivity:           ["connectivity", "interface", "interfaces", "ports", "connections", "connection", "network", "networking"],
     paper_sizes:            ["papersizes", "supportedpapersizes", "papersize", "paper", "supportedpaper", "supportedsizes", "pagesize", "pagesizes", "papersizessupported", "papertype", "papertypes", "papersizecompatibility", "supportedpapertypes", "sizessupported", "papersizessupport"],
+    max_resolution:         ["maxresolution", "maximumresolution", "maximumprintresolution", "maxprintresolution", "printresolution", "resolution", "dpi", "printingresolution"],
+    mobile_printing:        ["mobileprinting", "mobileprintingsupport", "mobile", "mobileprint"],
+    special_features:       ["specialfeatures", "features", "features supported", "supportedfeatures", "extras", "highlights"],
     description:            ["description", "desc", "productdescription", "details", "about", "notes", "remarks"],
     size:                   ["size", "papersize"],
     gsm:                    ["gsm", "weight", "gsmweight"],
@@ -387,6 +390,14 @@ const _coerceCell = (key, value) => {
             const snapped = allowed.find((a) => Math.abs(a - n) < 0.5);
             return snapped != null ? String(snapped) : "";
         }
+        case "max_resolution":
+        case "mobile_printing":
+        case "special_features":
+            // Wave 77 — multi-value chip columns. Split, dedupe, and pass
+            // through. The cell renderer matches each token to the dropdown
+            // option list by value, so any unknown token still appears as a
+            // pass-through chip (dealer can correct it inline).
+            return Array.from(new Set(_splitMulti(raw))).join(", ");
         default:
             return raw;
     }

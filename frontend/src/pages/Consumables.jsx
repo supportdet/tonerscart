@@ -189,7 +189,7 @@ export default function Consumables() {
                         <div className="mt-1 text-[12.5px] text-[#6E6E73]">Verified dealers are onboarding. Check back soon or contact us for bulk needs.</div>
                     </div>
                 ) : (
-                    <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="mt-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                         {visible.map((c) => (
                             <ConsumableProductCard key={c.id} c={c} />
                         ))}

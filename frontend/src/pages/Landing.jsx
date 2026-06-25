@@ -181,6 +181,31 @@ export default function Landing() {
                         </div>
                     )}
 
+                    {/* Wave 77 — "Sell on TonersCart" banner promoted to the
+                        hero section, directly below the search bar / popular
+                        chips, ABOVE the headline + printer animation. */}
+                    <div
+                        className="mt-6 sm:mt-7 tc-fade-up tc-fade-up-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl bg-gradient-to-r from-[#1A1B1F] via-[#23252B] to-[#1A1B1F] border border-white/10 p-4 sm:px-5 sm:py-4"
+                        data-testid="hero-sell-banner"
+                    >
+                        <div className="flex items-start sm:items-center gap-3">
+                            <Sparkles size={18} className="text-[#3FD267] shrink-0 mt-0.5 sm:mt-0" />
+                            <div>
+                                <div className="text-white text-[14px] sm:text-[15px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                                    Sell on TonersCart — <span className="text-[#3FD267]">free for suppliers, sellers &amp; partners</span>
+                                </div>
+                                <div className="text-white/60 text-[12px] mt-0.5">List your toners, printers and consumables in minutes — no listing fee.</div>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => navigate("/sell")}
+                            className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-full bg-[#3FD267] hover:bg-[#34BD58] text-[#0A0A0B] text-[13px] font-semibold transition shrink-0"
+                            data-testid="hero-sell-banner-cta"
+                        >
+                            Apply for FREE <ArrowRight size={14} />
+                        </button>
+                    </div>
+
                     {/* Hero content split */}
                     <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-center mt-10 lg:mt-16">
                         <div className="lg:col-span-7 order-2 lg:order-1">
@@ -318,35 +343,9 @@ export default function Landing() {
             </section>
             )}
 
-            {/* "Sell on TonersCart" CTA — always visible, public-facing.
-                Wave 55: replaces the older "Get your brand featured" tile —
-                points dealers, suppliers and partners to the FREE seller
-                application at /sell. */}
-            <section className="bg-[#0A0A0B] pb-12 sm:pb-16">
-                <div className="tc-container">
-                    <div
-                        className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl bg-gradient-to-r from-[#1A1B1F] via-[#23252B] to-[#1A1B1F] border border-white/10 p-5 sm:px-6 sm:py-5"
-                        data-testid="sell-on-tonerscart-banner"
-                    >
-                        <div className="flex items-start sm:items-center gap-3">
-                            <Sparkles size={18} className="text-[#3FD267] shrink-0 mt-0.5 sm:mt-0" />
-                            <div>
-                                <div className="text-white text-[14.5px] sm:text-[15.5px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-                                    Sell on TonersCart — <span className="text-[#3FD267]">free for suppliers, sellers &amp; partners</span>
-                                </div>
-                                <div className="text-white/65 text-[12.5px] mt-0.5">List your toners, printers and consumables in minutes — no listing fee.</div>
-                            </div>
-                        </div>
-                        <button
-                            onClick={() => navigate("/sell")}
-                            className="inline-flex items-center justify-center gap-1.5 h-11 px-5 rounded-full bg-[#3FD267] hover:bg-[#34BD58] text-[#0A0A0B] text-[13.5px] font-semibold transition shrink-0"
-                            data-testid="sell-on-tonerscart-apply-btn"
-                        >
-                            Apply for FREE <ArrowRight size={14} />
-                        </button>
-                    </div>
-                </div>
-            </section>
+            {/* Wave 77 — the "Sell on TonersCart" banner was relocated to the
+                hero section (directly below the search bar). The legacy
+                bottom-page banner section was removed to avoid duplication. */}
 
             {/* ====== STATS STRIP — Montserrat light, dot-separated, justified ====== */}
             <section className="bg-white border-b border-black/[0.06]">

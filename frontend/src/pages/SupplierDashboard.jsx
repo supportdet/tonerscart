@@ -7,7 +7,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle, Camera, Loader2, Package, ShoppingCart, Clock, Printer, FileText, Pencil, X as XIcon } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle, Camera, Loader2, Package, ShoppingCart, Clock, Printer, FileText, Pencil, X as XIcon, Eye } from "lucide-react";
 import { GST_RATES, formatINR, withGst, priceFromInclusive, inclGstPrice } from "../lib/listingConstants";
 import { TONER_BRANDS } from "../lib/brands";
 import { supabase, PRODUCT_BUCKET } from "../lib/supabase";
@@ -459,6 +459,34 @@ export default function SupplierDashboard() {
             loadAllProducts();
             load();
         } catch (e) { toast.error(formatApiError(e)); }
+    };
+
+    // Wave 77 — "No Stock" toggle. Setting stock=0 marks the listing as
+    // unavailable to buyers without deleting it. Re-enable defaults back to
+    // stock=1; dealer can edit to the real number via the edit dialog.
+    const toggleStock = async (p) => {
+        const base = { toner: "/supplier/listings", printer: "/supplier/printers", paper: "/supplier/papers", consumable: "/supplier/consumables", scanner: "/supplier/scanners" }[p.kind];
+        const newStock = Number(p.stock) > 0 ? 0 : 1;
+        try {
+            await api.put(`${base}/${p.id}`, { stock: newStock });
+            toast.success(newStock === 0 ? "Marked as out of stock" : "Marked back in stock — update the count in Edit if needed");
+            loadAllProducts();
+            load();
+        } catch (e) { toast.error(formatApiError(e)); }
+    };
+
+    // Wave 77 — "View as buyer" opens the same product detail page a
+    // shopper sees. The detail page itself shows the inline Edit button
+    // when the viewer is the owning dealer.
+    const viewAsBuyer = (p) => {
+        const path = {
+            toner: `/toner/${p.id}`,
+            printer: `/printer/${p.id}`,
+            paper: `/paper/${p.id}`,
+            consumable: `/consumable/${p.id}`,
+            scanner: `/scanner/${p.id}`,
+        }[p.kind];
+        if (path) window.open(path, "_blank", "noopener,noreferrer");
     };
 
     const saveName = async () => {
@@ -1086,7 +1114,11 @@ export default function SupplierDashboard() {
                                                 </span>
                                             </td>
                                             <td className="p-3">
-                                                <div className="flex items-center justify-end gap-3">
+                                                <div className="flex items-center justify-end gap-3 flex-wrap">
+                                                    <button onClick={() => viewAsBuyer(p)} className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#0A0A0B] hover:text-[#00B7C7]" data-testid={`all-view-${p.id}`}><Eye size={12} /> View</button>
+                                                    <button onClick={() => toggleStock(p)} className={`inline-flex items-center gap-1 text-[12px] font-semibold ${active ? "text-amber-600 hover:text-amber-700" : "text-emerald-600 hover:text-emerald-700"}`} data-testid={`all-stocktoggle-${p.id}`}>
+                                                        {active ? "Mark out of stock" : "Mark in stock"}
+                                                    </button>
                                                     <button onClick={() => editProduct(p)} className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#0A0A0B] hover:text-[#00B7C7]" data-testid={`all-edit-${p.id}`}><Pencil size={12} /> Edit</button>
                                                     <button onClick={() => deleteProduct(p)} className="inline-flex items-center gap-1 text-[12px] font-semibold text-red-600 hover:text-red-700" data-testid={`all-delete-${p.id}`}><Trash2 size={12} /> Delete</button>
                                                 </div>

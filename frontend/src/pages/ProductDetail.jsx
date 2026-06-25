@@ -301,6 +301,24 @@ export default function ProductDetail({ kind = "toner" }) {
                             <span className="text-[#0A0A0B]">{kind === "paper" ? `${data.size} · ${data.gsm} GSM` : (data.model_number || data.name)}</span>
                         </h1>
 
+                        {/* Wave 77 — dealer-only "Edit listing" pill. Visible
+                            only when the logged-in user owns this listing
+                            (their supplier_id matches). Lets dealers see
+                            their listing as a buyer would, with one-click
+                            inline edit. */}
+                        {user && data.supplier_id && user?.supplier?.id === data.supplier_id && (
+                            <div className="mt-3" data-testid="owner-edit-banner">
+                                <button
+                                    onClick={() => navigate(`/supplier/dashboard?edit=${kind}:${data.id}`)}
+                                    className="inline-flex items-center gap-1.5 px-3.5 h-9 rounded-full border border-[#0A0A0B] bg-[#0A0A0B] text-white text-[12.5px] font-semibold hover:bg-[#23252B] transition"
+                                    data-testid="owner-edit-listing-btn"
+                                >
+                                    Edit my listing
+                                </button>
+                                <span className="ml-2 text-[11.5px] text-[#86868B]">You're viewing your own listing as a buyer would.</span>
+                            </div>
+                        )}
+
                         {/* Compatibility shoutout + page yield (toners & consumables) — key buying signals shown prominently */}
                         {(kind === "toner" || kind === "consumable") && (
                             <div className="mt-4 flex flex-wrap gap-2" data-testid="product-highlight-row">

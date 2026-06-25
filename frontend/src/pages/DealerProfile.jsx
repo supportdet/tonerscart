@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { inclGstPrice, formatINR } from "../lib/listingConstants";
 import {
     ArrowLeft, Loader2, FileText, Download, ExternalLink, Save, ShieldCheck,
-    Package, Edit3, Image as ImageIcon, CheckCircle2, AlertCircle, Upload,
+    Package, Edit3, Image as ImageIcon, CheckCircle2, AlertCircle, Upload, UserCog,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
@@ -204,6 +204,33 @@ export default function DealerProfile() {
         } finally { setDownloading(false); }
     };
 
+    // Wave 77 — admin impersonation. Flips into "Act as Dealer" mode and
+    // opens the dealer's supplier dashboard in a new tab. The admin keeps
+    // their own bearer token; subsequent API calls carry the dealer's
+    // user_id in X-Impersonate-User-Id (api.js interceptor reads
+    // sessionStorage). The persistent ImpersonationBanner shows on every
+    // page until the admin ends impersonation.
+    const actAsDealer = async () => {
+        try {
+            const { data } = await api.post(`/admin/suppliers/${id}/impersonate`);
+            if (!data?.user_id) { toast.error("Impersonation failed"); return; }
+            // Store in BOTH session and local storage so the new tab (which
+            // has its own sessionStorage) can read it on mount.
+            try {
+                window.localStorage.setItem("tc_impersonate_user_id", data.user_id);
+                window.localStorage.setItem("tc_impersonate_name", data.business_name || "Dealer");
+                window.localStorage.setItem("tc_impersonate_supplier_id", data.supplier_id || "");
+                window.sessionStorage.setItem("tc_impersonate_user_id", data.user_id);
+                window.sessionStorage.setItem("tc_impersonate_name", data.business_name || "Dealer");
+                window.sessionStorage.setItem("tc_impersonate_supplier_id", data.supplier_id || "");
+            } catch { /* ignore */ }
+            toast.success(`Acting as ${data.business_name}`);
+            window.open("/supplier/dashboard", "_blank", "noopener,noreferrer");
+        } catch (e) {
+            toast.error(formatApiError(e) || "Impersonation failed");
+        }
+    };
+
     const listings = useMemo(() => flattenListings(data), [data]);
 
     if (loading) {
@@ -244,15 +271,24 @@ export default function DealerProfile() {
                             <span className="text-[12.5px] text-[#6E6E73]">{s.city || "—"}</span>
                         </div>
                     </div>
-                    <Button
-                        onClick={downloadFullProfile}
-                        disabled={downloading}
-                        className="bg-[#0A0A0B] text-white hover:bg-black/80 inline-flex items-center gap-2"
-                        data-testid="download-full-profile-btn"
-                    >
-                        {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                        Download Full Profile
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            onClick={actAsDealer}
+                            className="bg-[#00838f] text-white hover:bg-[#006570] inline-flex items-center gap-2"
+                            data-testid="act-as-dealer-btn"
+                        >
+                            <UserCog size={14} /> Act as Dealer
+                        </Button>
+                        <Button
+                            onClick={downloadFullProfile}
+                            disabled={downloading}
+                            className="bg-[#0A0A0B] text-white hover:bg-black/80 inline-flex items-center gap-2"
+                            data-testid="download-full-profile-btn"
+                        >
+                            {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                            Download Full Profile
+                        </Button>
+                    </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
                     <Stat label="Listings" value={`${stats.active_listing_count || 0}/${stats.listing_count || 0}`} sub="active / total" />

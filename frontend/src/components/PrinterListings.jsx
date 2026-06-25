@@ -33,23 +33,24 @@ const USAGE_OPTS = [
 const TECH_BY_USAGE = {
     home: [
         { id: "inkjet", label: "Inkjet" }, { id: "laser", label: "Laser" },
-        { id: "tank", label: "Tank" }, { id: "thermal", label: "Thermal" },
+        { id: "ink-tank", label: "Ink Tank" }, { id: "thermal", label: "Thermal" },
+        { id: "dot-matrix", label: "Dot Matrix" }, { id: "led", label: "LED" },
         { id: "other", label: "Other" },
     ],
     corporate: [
-        { id: "laser", label: "Laser" }, { id: "tank", label: "Tank" },
-        { id: "inkjet", label: "Inkjet" }, { id: "other", label: "Other" },
+        { id: "laser", label: "Laser" }, { id: "ink-tank", label: "Ink Tank" },
+        { id: "inkjet", label: "Inkjet" }, { id: "led", label: "LED" },
+        { id: "dot-matrix", label: "Dot Matrix" }, { id: "other", label: "Other" },
     ],
     commercial: [
-        { id: "laser", label: "Laser" }, { id: "ink", label: "Ink" },
-        { id: "production", label: "Production" },
-        { id: "label_barcode", label: "Label / Barcode" },
+        { id: "laser", label: "Laser" }, { id: "ink-tank", label: "Ink Tank" },
+        { id: "inkjet", label: "Inkjet" }, { id: "led", label: "LED" },
+        { id: "thermal", label: "Thermal" }, { id: "dot-matrix", label: "Dot Matrix" },
         { id: "other", label: "Other" },
     ],
     print_shop: [
         { id: "laser", label: "Laser" }, { id: "inkjet", label: "Inkjet" },
-        { id: "production", label: "Production" },
-        { id: "digital_press", label: "Digital Press" },
+        { id: "ink-tank", label: "Ink Tank" }, { id: "led", label: "LED" },
         { id: "other", label: "Other" },
     ],
 };
@@ -97,8 +98,10 @@ const PRETTY = {
     print_only: "Print only", print_scan: "Print + Scan",
     all_in_one: "Print + Copy + Scan", high_volume: "High-volume",
     new: "Brand New", refurbished: "Refurbished",
-    other: "Other", inkjet: "Inkjet", laser: "Laser", tank: "Tank",
-    thermal: "Thermal", ink: "Ink", production: "Production",
+    other: "Other", inkjet: "Inkjet", laser: "Laser",
+    "ink-tank": "Ink Tank", tank: "Ink Tank", ink: "Ink Tank",  // Wave 77 — all legacy variants display as "Ink Tank"
+    "dot-matrix": "Dot Matrix", led: "LED",
+    thermal: "Thermal", production: "Production",
     label_barcode: "Label / Barcode", digital_press: "Digital Press",
 };
 const fmt = (v) => PRETTY[v] || v;
@@ -610,7 +613,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                                 <Textarea rows={3} value={f.description} onChange={upd("description")} placeholder="Highlight key strengths buyers should know…" className="tc-input-lg" data-testid="wizard-description" />
                             </div>
                             <div>
-                                <Label>Compatible cartridges / toners (optional)</Label>
+                                <Label>Compatible cartridges / inks (optional)</Label>
                                 <CompatibleModelsSelect
                                     mode="toners"
                                     value={f.compatible_models}
