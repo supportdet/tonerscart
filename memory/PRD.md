@@ -2,6 +2,24 @@
 
 > **Latest (2026-06-14 Wave 52):** Iteration 50 — "Consumables" rebranded to **"Inks & Consumables"** + navbar reorder + dealer-pill redesign + delivery-notice rewording. **(1) Rename** — all user-facing copy updated: navbar pill, dealer dashboard tab (`DEALER_TABS` consumables label), Footer link, Search universal-tab label, breadcrumb on `/consumable/:id` ProductDetail, page H1 + strip label on `/consumables` ("Inks, drums, fusers & kits from verified dealers"), bulk-upload hub card. No URL changes (`/consumables`, `/consumable/:id`, `/api/consumables` all unchanged). No DB schema changes. **(2) Navbar reorder** — new left-to-right pill order: `Toners · Printers · Inks & Consumables · Scanners · Papers · MPS/Rentals · Bulk Orders · Dealer to Dealer · OEM Marketplace · Govt Portal` (`CATEGORY_PILLS` in `Header.jsx`). **(3) Subcategory filter tabs** on `/consumables` — exactly 6 amber-tinted pills (`#FFC107` active fill + white text, inactive `#FFF8E0` tint + amber text, mobile horizontally scrollable): All · Ink Cartridges · Drums · Fusers · Maintenance Kits · Accessories. "Accessories" is an umbrella over `Staple Cartridges + Transfer Belts + Other` (single API hit, client-side filter). Testids `consumables-tab-all/-ink/-drums/-fusers/-maintenance/-accessories`. **(4) Dealer-pill redesign** — `DealerTabBar` rewritten to render modern brand-color pills matching the public-site navbar palette: Toners `#FF1F75` (magenta), Printers `#00D4E5` (cyan), Inks & Consumables `#FFC107` (amber), Scanners `#5468FF` (indigo), Papers `#C58A6E` (brown), plus Orders/Earnings/Insights/Bulk/D2D/OEM. Active pill = solid accent + white text + accent box-shadow, inactive = tint background + accent text. Horizontally scrollable on narrow viewports. `CAT_BADGE` colour map updated to match. **(5) DeliveryPolicyNote** rewritten with exact wording per user spec: "Delivery charges are set by TonersCart and added to the buyer's total at checkout — same-city delivery is free, intercity delivery is ₹100–₹350 depending on product type. You are responsible for shipping the order to the buyer using your preferred courier. The delivery charge collected from the buyer is passed to you in full to cover your shipping costs." Verified live on `/supplier` consumable upload form. Testing agent (iteration_50.json) — 14/14 actionable PASS; main-agent live-verified dealer dashboard pills + DeliveryPolicyNote text (3/3 string assertions).
 
+> **Latest (2026-06-25 Wave 78):** Iteration 68 — **Ink Tank is now ONE atomic option everywhere + multi-select up to 2 printer types.**
+>
+> (1) **PRINTER_CATEGORIES** (`bulkConfigs.js`) — added `Production` back and confirmed only `Ink Tank` (no separate `Ink` / `Tank` entries). Final list: Laser · Inkjet · **Ink Tank** · Thermal · Dot Matrix · LED · Production · Other.
+>
+> (2) **Bulk upload** — the `category` column is now `{multi: true, maxSelect: 2}`. Excel cells with comma/slash/pipe-separated values (e.g. `"Laser/Ink Tank"`, `"Inkjet & Laser"`) are parsed per-segment, deduped, and capped at 2. Whole-string match runs first per segment so `"Ink Tank"` never decomposes. 10/10 sanity tests pass.
+>
+> (3) **Single form** (`PrinterListings.jsx`) — `f.categories: []` added; `toggleCategoryMax2(id)` enforces the 2-selection cap and prevents toggling a 3rd option. `TECH_BY_USAGE` rebuilt: Production added to commercial + print_shop paths; every legacy `tank` / `ink` ID purged. The "Printer technology" pill row's `selected` reads from `f.categories` and falls back to legacy `f.category` for older drafts.
+>
+> (4) **Backend** — `PrinterListingCreate.secondary_category: Optional[str]` added; `create_printer` validates secondary against the same `PRINTER_CATEGORIES` allow-list, silently drops invalid extras (never rejects the row), and dedupes against primary. `secondary_category` added to the column-degradation auto-drop list so a stale DB schema still ingests cleanly.
+>
+> (5) **DB migration** — `migrations/2026_06_25_wave78_secondary_category.sql` adds the column with a matching CHECK constraint reusing the Wave-72 allow-list. Run once in Supabase SQL Editor.
+>
+> (6) **Edit flow** — bulk `fromListing` joins `primary,secondary` into the multi-cell so editing an existing row shows both chips; `toUpdatePayload` splits them back on save.
+>
+> Lint clean, ESLint + Pyflakes clean. Backend boots OK.
+
+
+
 > **Latest (2026-06-25 Wave 77):** Iteration 67 — **9 fixes shipped in one push.**
 >
 > **#1 Three missing chip columns added to printer bulk** (`max_resolution`, `mobile_printing`, `special_features`) plus `Wi-Fi Direct` added to connectivity. Each is a multi-select chip column with the exact options the user listed (8 / 4 / 10 respectively). Template example includes all three so downloads are pre-populated. HEADER_SYNONYMS + `_coerceCell` handle dealer-typed Excel headers and comma/slash-separated values. Backend already accepted these fields — no schema change needed.

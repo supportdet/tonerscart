@@ -162,6 +162,8 @@ const CATEGORY_VALUES = {
     dotmatrixprinter: "dot-matrix",
     led: "led",
     ledprinter: "led",
+    production: "production",
+    productionprinter: "production",
     other: "other",
 };
 // Wave 72 — contains-based fallback for messy real-world Excel values like
@@ -172,6 +174,7 @@ const CATEGORY_CONTAINS = [
     ["inktank", "ink-tank"],
     ["ecotank", "ink-tank"],
     ["dotmatrix", "dot-matrix"],
+    ["production", "production"],
     ["laser", "laser"],
     ["inkjet", "inkjet"],
     ["thermal", "thermal"],
@@ -262,9 +265,26 @@ const _coerceCell = (key, value) => {
     if (raw === "") return "";
     switch (key) {
         case "category": {
-            // Wave 72 — whole-string match first against the full allowed set,
+            // Wave 72 — whole-string match first against the full allowed list,
             // then contains-fallback for messy values like "Color Laser
             // Printer". Never split the value; "Ink Tank" stays atomic.
+            // Wave 78 — category is now multi-select (max 2). If the raw
+            // value contains a separator (/, &, |, ;, comma), each segment
+            // is canonicalised independently and joined back. "Ink Tank" is
+            // matched as a WHOLE token first so it never decomposes.
+            const segments = _splitMulti(raw);
+            if (segments.length > 1) {
+                const out = [];
+                for (const seg of segments) {
+                    const whole = _mapValue(seg, CATEGORY_VALUES);
+                    if (whole) { if (!out.includes(whole)) out.push(whole); continue; }
+                    const cs = _canon(seg);
+                    for (const [needle, val] of CATEGORY_CONTAINS) {
+                        if (cs.includes(needle)) { if (!out.includes(val)) out.push(val); break; }
+                    }
+                }
+                return out.slice(0, 2).join(", ");
+            }
             const whole = _mapValue(raw, CATEGORY_VALUES);
             if (whole) return whole;
             const c = _canon(raw);

@@ -760,6 +760,7 @@ class PrinterListingCreate(BaseModel):
     usage_type: Optional[str] = None
     category: str
     color: str = "color"
+    secondary_category: Optional[str] = None  # Wave 78 — dealers can pick up to 2 printer types
     paper_sizes: List[str] = Field(default_factory=list)
     functions: List[str] = Field(default_factory=list)
     connectivity: List[str] = Field(default_factory=list)

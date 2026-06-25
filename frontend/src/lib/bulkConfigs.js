@@ -172,6 +172,8 @@ const joinList = (a) => (Array.isArray(a) ? a.filter(Boolean).join(", ") : (a ||
 
 // ============================ PRINTERS ============================
 
+// Wave 78 — canonical printer types. "Ink Tank" is ONE atomic option (never
+// split into "Ink" + "Tank"). Dealers can select up to 2 types per printer.
 const PRINTER_CATEGORIES = [
     { value: "laser", label: "Laser" },
     { value: "inkjet", label: "Inkjet" },
@@ -179,6 +181,7 @@ const PRINTER_CATEGORIES = [
     { value: "thermal", label: "Thermal" },
     { value: "dot-matrix", label: "Dot Matrix" },
     { value: "led", label: "LED" },
+    { value: "production", label: "Production" },
     { value: "other", label: "Other" },
 ];
 // Wave 76 — canonical usage values match backend tokens; labels are the
@@ -252,7 +255,7 @@ const PRINTER_COLORS = [
 const PRINTER_COLUMNS = [
     { key: "brand", label: "Brand", required: true, type: "select", placeholder: "Select brand…", w: 140 },
     { key: "model_number", label: "Model", required: true, type: "models", single: true, autofillBrand: true, w: 180 },
-    { key: "category", label: "Type", required: true, type: "select", w: 130 },
+    { key: "category", label: "Type", required: true, type: "select", multi: true, maxSelect: 2, w: 180 },
     { key: "condition", label: "Condition", required: false, type: "select", w: 130 },
     { key: "usage_type", label: "Usage", required: true, type: "select", multi: true, maxSelect: 2, w: 200 },
     { key: "color", label: "Color", required: true, type: "select", w: 120 },
@@ -296,7 +299,12 @@ const printerRowErrors = (r) => {
     }
     if (r.price !== "" && Number(r.price) <= 0) errs.add("price");
     if (r.stock !== "" && r.stock !== null && Number(r.stock) < 0) errs.add("stock");
-    if (r.category && !PRINTER_CATEGORIES.some((c) => c.value === r.category)) errs.add("category");
+    // Wave 78 — category is now multi-select (max 2). Validate every token
+    // against the allowed canonical set so a typo doesn't slip past.
+    if (r.category) {
+        const ctoks = String(r.category).split(",").map((s) => s.trim()).filter(Boolean);
+        if (ctoks.length === 0 || ctoks.some((t) => !PRINTER_CATEGORIES.some((c) => c.value === t))) errs.add("category");
+    }
     // usage_type can be a comma-joined multi-value cell; validate each token.
     if (r.usage_type) {
         const tokens = String(r.usage_type).split(",").map((s) => s.trim()).filter(Boolean);
@@ -346,7 +354,10 @@ export const printerBulkConfig = {
     toPayload: (r) => ({
         brand: r.brand.trim(),
         model_number: r.model_number.trim(),
-        category: r.category || "",
+        // Wave 78 — primary category = first selected (DB CHECK accepts a
+        // single value); second is sent in `functions` so it isn't lost.
+        category: (r.category || "").split(",")[0]?.trim() || "",
+        secondary_category: (r.category || "").split(",")[1]?.trim() || null,
         condition: r.condition || "new",
         usage_type: (r.usage_type || "").split(",")[0] || "",
         usage_types: (r.usage_type || "").split(",").filter(Boolean),
@@ -376,7 +387,9 @@ export const printerBulkConfig = {
             _id: l.id,
             brand: l.brand || "",
             model_number: l.model_number || "",
-            category: l.category || "laser",
+            // Wave 78 — `category` cell carries primary,secondary so the
+            // edit modal shows both chips when present.
+            category: [l.category, l.secondary_category].filter(Boolean).join(", ") || "laser",
             condition: l.condition || "new",
             usage_type: (Array.isArray(l.usage_types) && l.usage_types[0]) || l.usage_type || "corporate",
             color: l.color || "color",
@@ -399,7 +412,8 @@ export const printerBulkConfig = {
     toUpdatePayload: (r) => ({
         brand: r.brand.trim(),
         model_number: r.model_number.trim(),
-        category: r.category || "laser",
+        category: (r.category || "").split(",")[0]?.trim() || "laser",
+        secondary_category: (r.category || "").split(",")[1]?.trim() || null,
         condition: r.condition || "new",
         usage_type: r.usage_type || "corporate",
         usage_types: [r.usage_type || "corporate"],
