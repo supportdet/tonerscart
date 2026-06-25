@@ -219,7 +219,7 @@ export default function Printers() {
                         <p className="text-[13px] text-[#6E6E73] mt-1">Try removing a filter or <button onClick={() => navigate("/printers/guide")} className="text-[#00B7C7] font-semibold hover:underline" data-testid="printers-guide-cta">use the guided finder</button>.</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4" data-testid="printers-grid">
+                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4" data-testid="printers-grid">
                         {visible.map((p) => <PrinterProductCard key={p.id} p={p} />)}
                     </div>
                 )}

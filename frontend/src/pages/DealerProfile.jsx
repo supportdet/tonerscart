@@ -204,28 +204,26 @@ export default function DealerProfile() {
         } finally { setDownloading(false); }
     };
 
-    // Wave 77 — admin impersonation. Flips into "Act as Dealer" mode and
-    // opens the dealer's supplier dashboard in a new tab. The admin keeps
-    // their own bearer token; subsequent API calls carry the dealer's
-    // user_id in X-Impersonate-User-Id (api.js interceptor reads
-    // sessionStorage). The persistent ImpersonationBanner shows on every
-    // page until the admin ends impersonation.
+    // Wave 79 — admin impersonation flow rewritten to use SAME-tab
+    // navigation. Admin's bearer token is preserved (still localStorage
+    // 'sb-…-auth-token'); only the X-Impersonate-User-Id header changes
+    // (api.js interceptor). The ImpersonationBanner shows globally; the
+    // "End Session" button clears the flag and returns the admin to the
+    // admin dashboard. ProtectedRoute now allows admins through to
+    // supplier-only routes when this flag is set.
     const actAsDealer = async () => {
         try {
             const { data } = await api.post(`/admin/suppliers/${id}/impersonate`);
             if (!data?.user_id) { toast.error("Impersonation failed"); return; }
-            // Store in BOTH session and local storage so the new tab (which
-            // has its own sessionStorage) can read it on mount.
             try {
-                window.localStorage.setItem("tc_impersonate_user_id", data.user_id);
-                window.localStorage.setItem("tc_impersonate_name", data.business_name || "Dealer");
-                window.localStorage.setItem("tc_impersonate_supplier_id", data.supplier_id || "");
                 window.sessionStorage.setItem("tc_impersonate_user_id", data.user_id);
                 window.sessionStorage.setItem("tc_impersonate_name", data.business_name || "Dealer");
                 window.sessionStorage.setItem("tc_impersonate_supplier_id", data.supplier_id || "");
+                window.sessionStorage.setItem("tc_impersonate_return_to", window.location.pathname + window.location.search);
             } catch { /* ignore */ }
             toast.success(`Acting as ${data.business_name}`);
-            window.open("/supplier/dashboard", "_blank", "noopener,noreferrer");
+            // Same-tab navigation — admin token is preserved in localStorage.
+            navigate("/supplier");
         } catch (e) {
             toast.error(formatApiError(e) || "Impersonation failed");
         }

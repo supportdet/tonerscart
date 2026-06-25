@@ -164,9 +164,10 @@ export default function Landing() {
                         </button>
                     </div>
 
-                    {/* Popular model chips */}
+                    {/* Popular model chips — desktop-only (Wave 79 hides on
+                        mobile to reduce hero scroll). */}
                     {popularChips.length > 0 && (
-                        <div className="mt-4 flex flex-wrap items-center gap-2 tc-fade-up tc-fade-up-2" data-testid="popular-chips">
+                        <div className="mt-4 hidden md:flex flex-wrap items-center gap-2 tc-fade-up tc-fade-up-2" data-testid="popular-chips">
                             <span className="text-[10px] sm:text-[11px] tracking-[0.22em] uppercase font-semibold text-white/45 mr-1">Popular:</span>
                             {popularChips.map((c) => (
                                 <button

@@ -150,7 +150,7 @@ export default function CompatiblePage() {
                     {listings.length === 0 ? (
                         <div className="text-[13.5px] text-[#6E6E73]" data-testid="compatible-no-stock">No verified dealer has listed a compatible product yet — see the suggestions below, or get notified when stock arrives.</div>
                     ) : (
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4" data-testid="compatible-listings-grid">
+                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4" data-testid="compatible-listings-grid">
                             {listings.map((l) => <CompatListingCard l={l} key={`${l.kind}-${l.id}`} />)}
                         </div>
                     )}
