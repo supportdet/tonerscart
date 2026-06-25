@@ -63,7 +63,6 @@ export default function Sell() {
                     <ul className="mt-5 space-y-1.5 text-white/70 text-[13.5px]">
                         <li>• Upload toners, printers, inks, consumables, papers &amp; scanners.</li>
                         <li>• Set your own price &mdash; we add GST &amp; delivery at checkout.</li>
-                        <li>• Get paid weekly to your bank account.</li>
                     </ul>
                     <div className="mt-7 flex flex-col sm:flex-row gap-3 sm:items-center w-full sm:w-auto">
                         <Button
