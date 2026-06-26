@@ -27,7 +27,7 @@ export default function TonerProductCard({ p, qty, setQty, onBuy, onCart, userCi
             <Link to={`/toner/${p.id}`} className="tc-product-img block hover:opacity-95 transition" data-testid={`product-link-${p.id}`}>
                 <span className="tc-product-img-label">{extractBrand(p.brand)}</span>
                 {p.image_url ? (
-                    <img src={p.image_url} alt={`${p.brand} ${p.model_number}`} className="w-full h-full object-cover" loading="lazy" />
+                    <img src={p.image_url} alt={`${p.brand} ${p.model_number}`} className="w-full h-full object-contain" loading="lazy" />
                 ) : (
                     <TonerCartridge color={p.color || "Black"} brand={p.brand} model={p.model_number} type={p.toner_type || "Original"} />
                 )}

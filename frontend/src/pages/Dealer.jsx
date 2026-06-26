@@ -35,7 +35,7 @@ function D2DCard({ kind, p, onBuy }) {
             <Link to={detailHref} className="tc-product-img block">
                 <span className="tc-product-img-label">{p.brand}</span>
                 {p.image_url && kind === "printer" ? (
-                    <img src={p.image_url} alt={title} className="w-full h-full object-cover" loading="lazy" />
+                    <img src={p.image_url} alt={title} className="w-full h-full object-contain" loading="lazy" />
                 ) : kind === "toner" ? (
                     <TonerCartridge color={p.color || "Black"} brand={p.brand} model={p.model_number} type={p.toner_type || "Original"} />
                 ) : (

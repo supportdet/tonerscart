@@ -1,6 +1,28 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-26 Wave 89):** **All watermarking permanently removed from TonersCart per user request.**
+> **Latest (2026-06-26 Wave 90):** **Frontend `object-cover` → `object-contain` fix on all product-image displays.**
+>
+> User reported product images appeared cropped at top/bottom on listing cards. Root cause: 5 product-facing components were using Tailwind `object-cover` which scales images to fill the container by cropping. Switched all to `object-contain` so the full image is visible with letterboxing where aspect ratios don't match.
+>
+> Files updated:
+> - `components/cards/TonerProductCard.jsx:30`
+> - `components/RelatedProducts.jsx:45`
+> - `pages/Cart.jsx:43`
+> - `pages/Dealer.jsx:38`
+> - `pages/OemDashboard.jsx:180`
+>
+> Already correct (no change needed): `PrinterProductCard`, `ScannerProductCard`, `ConsumableProductCard`, `ProductDetail`, `D2DProductDetail`, `Search`.
+>
+> ### Wave 89 crop — cannot be undone from server side
+> The user also asked to re-run the backend restore from `originals/printer-images-pre-wave84/` with NO crop applied. **The `originals` bucket was deleted in Wave 89 per the explicit instruction** ("Delete the originals Supabase Storage bucket after restoring images"). Those pre-Wave84 snapshots no longer exist anywhere in the system. The Wave 89 bottom-strip crop (22% × ~13% of width) is permanent for the existing 57 images.
+>
+> Recovery paths for the cropped images (require user action):
+> - **Supabase Pro point-in-time recovery** (if user is on Pro plan, last 7 days). Triggered from Supabase Dashboard → Database → Backups.
+> - **Ask dealers to re-upload** the affected listings — new uploads use the cleaned-up `compress_image()` pipeline with no watermark and no crop.
+
+
+
+> **Prev (2026-06-26 Wave 89):** **All watermarking permanently removed from TonersCart per user request.**
 >
 > ### Code cleanup (server.py)
 > - Deleted: `_WATERMARK_PATH`, `_WATERMARK_IMG`, `_load_watermark()`, `apply_watermark()`, `save_original_to_supabase()`.

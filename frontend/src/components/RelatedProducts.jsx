@@ -42,7 +42,7 @@ export default function RelatedProducts({ kind, id }) {
                             <div className="tc-product-img relative" style={{ height: 116 }}>
                                 <span className="tc-product-img-label">{extractBrand(it.brand)}</span>
                                 {it.image_url ? (
-                                    <img src={it.image_url} alt={it.title} className="w-full h-full object-cover" loading="lazy" />
+                                    <img src={it.image_url} alt={it.title} className="w-full h-full object-contain" loading="lazy" />
                                 ) : it.kind === "toner" ? (
                                     <TonerCartridge brand={it.brand} />
                                 ) : ["printer", "consumable", "scanner"].includes(it.kind) ? (
