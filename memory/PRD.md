@@ -1,6 +1,25 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-26 Wave 90):** **Frontend `object-cover` → `object-contain` fix on all product-image displays.**
+> **Latest (2026-06-26 Wave 91):** **Watermark pipeline re-enabled for NEW product-image uploads only.**
+>
+> User provided fresh transparent-bg RGBA PNG (1679×335, 177 KB, all 4 corners alpha=0). Saved to `/app/frontend/public/TONERSCART-bg.png` (MD5 `6a9e576…`).
+>
+> ### server.py changes
+> - Added back `_WATERMARK_PATH`, `_WATERMARK_IMG`, `_load_watermark()`, `apply_watermark()`.
+> - `apply_watermark(opacity=0.20, width_ratio=0.20)` per user spec. Compositing uses `base.paste(wm, pos, mask=wm.split()[3])` exactly as requested — alpha channel as the explicit paste mask so ONLY logo pixels blend.
+> - `compress_image()` accepts a `watermark: bool = False` kwarg (defaults to False so avatars / featured banners / OEM uploads stay watermark-free).
+>
+> ### routes/products.py changes
+> - `/api/supplier/printer-image` and `/api/supplier/listing-image` pass `watermark=True`. These two endpoints serve all 5 product types (printer, toner, consumable, paper, scanner).
+>
+> ### Verification
+> - Smoke test on white canvas: pixels above WM zone are pure `RGB(255,255,255)` (no background box). Transparent pixels stay untouched.
+> - End-to-end test via `POST /api/supplier/printer-image` with a 1200×900 red canvas: pixels above WM zone = `RGB(220,40,41)` ≈ input red (no bleed); between-letter pixels = pure red (transparent pixels skipped); on logo strokes = exact 20% blend values. Test artifact deleted.
+> - Lint clean. Existing 60 product images NOT touched.
+
+
+
+> **Prev (2026-06-26 Wave 90):** **Frontend `object-cover` → `object-contain` fix on all product-image displays.**
 >
 > User reported product images appeared cropped at top/bottom on listing cards. Root cause: 5 product-facing components were using Tailwind `object-cover` which scales images to fill the container by cropping. Switched all to `object-contain` so the full image is visible with letterboxing where aspect ratios don't match.
 >
