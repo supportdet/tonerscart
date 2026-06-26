@@ -1048,7 +1048,7 @@ def _load_watermark():
     return _WATERMARK_IMG
 
 
-def apply_watermark(im, *, opacity: float = 0.35, width_ratio: float = 0.18):
+def apply_watermark(im, *, opacity: float = 0.20, width_ratio: float = 0.18):
     """Composite the TonersCart logo onto the bottom-right corner of `im`.
     Logo width ≈ width_ratio * image width, opacity ~35%.
 
