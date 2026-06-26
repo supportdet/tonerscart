@@ -1050,27 +1050,37 @@ def _load_watermark():
 
 def apply_watermark(im, *, opacity: float = 0.35, width_ratio: float = 0.18):
     """Composite the TonersCart logo onto the bottom-right corner of `im`.
-    Logo width ≈ width_ratio * image width, opacity ~35%."""
+    Logo width ≈ width_ratio * image width, opacity ~35%.
+
+    Wave 85: explicitly uses the watermark's alpha channel as the paste
+    mask so ONLY the actual CMYK bars / text pixels are blended — no
+    rectangular background is drawn even if the source PNG has any
+    semi-transparent fill outside the logo strokes.
+    """
     try:
         from PIL import Image  # noqa: WPS433
         wm_src = _load_watermark()
         if wm_src is None:
             return im
+        # Defensive: force RGBA in case the cached copy lost its alpha
+        if wm_src.mode != "RGBA":
+            wm_src = wm_src.convert("RGBA")
         wm = wm_src.copy()
         target_w = max(64, int(im.width * width_ratio))
         scale = target_w / wm.width
         target_h = max(1, int(wm.height * scale))
         wm = wm.resize((target_w, target_h), Image.LANCZOS)
-        # Apply opacity by scaling the alpha channel
-        if wm.mode != "RGBA":
-            wm = wm.convert("RGBA")
+        # Scale alpha by opacity so transparent stays transparent (0 * x = 0)
+        # and opaque becomes ~89/255 (≈35%).
         alpha = wm.split()[-1].point(lambda px: int(px * opacity))
         wm.putalpha(alpha)
-        # Composite onto a working RGBA copy then flatten back to RGB
+        # Composite onto a working RGBA copy, then flatten back to RGB.
+        # Use paste(...) with the alpha as the explicit mask so ONLY the
+        # logo's coloured pixels are blended — no background rectangle.
         base = im.convert("RGBA")
         margin = max(8, int(im.width * 0.02))
         pos = (base.width - wm.width - margin, base.height - wm.height - margin)
-        base.alpha_composite(wm, dest=pos)
+        base.paste(wm, pos, mask=wm.split()[-1])
         return base.convert("RGB")
     except Exception as e:
         logger.debug("apply_watermark failed (%s) — returning un-watermarked", e)
