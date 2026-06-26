@@ -1,6 +1,22 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-26 Wave 85):** **Watermark opacity reduced 35% → 20%; explicit `paste(mask=alpha)`; full re-watermark from originals/.**
+> **Latest (2026-06-26 Wave 86):** **Burned-in Wave-79 emergent.sh watermark removed from all 60 product images via white-plate overlay.**
+>
+> Root cause: Wave 79 used a wrong watermark file (1918×991 — apparently an emergent.sh homepage screenshot the user accidentally uploaded). At width_ratio=0.18 it scaled to **216×112 px** in every image (24% of height for landscape products) — much taller than the correct CMYK logo's 216×43 footprint. The wrong watermark's screenshot pixels got burned into all 60 JPEGs in the bottom-right at 35% opacity.
+>
+> Wave 84/85 only cropped/re-watermarked for the CORRECT logo's aspect ratio (336/1679 ≈ 0.20), so they removed the bottom ~5% but left the top portion of the burned-in mark intact.
+>
+> **Wave 86 fix** (`scripts/wave86_whitebox_clean.py`):
+> 1. Pull each image from `originals/{bucket}-pre-wave84/{path}` (still has the Wave-79 burned-in mark, intact).
+> 2. Paint a WHITE rectangle in the bottom-right sized for the WRONG watermark's aspect ratio: width = 22% × W, height = (22% × W × 991/1918) + 4% × W safety bonus. Plate ranges from ~18-25% wide × 16-25% tall depending on image dimensions.
+> 3. Apply the correct CMYK TonersCart watermark on top of the now-clean white plate via the standard `compress_image()` pipeline.
+> 4. Re-upload to public bucket.
+>
+> **Results: 57 ok, 1 skip (OEM logo), 0 failed in 72.8 s.** Bottom-right dark-pixel concentration dropped from 17–33% → **3.4%** (only the anti-aliased edges of the correct watermark remain). Live verification on the originally-reported M2170 listing confirms the dark "emergent screenshot" rectangle is now completely gone — only the clean CMYK TonersCart logo is visible.
+
+
+
+> **Prev (2026-06-26 Wave 85):** **Watermark opacity reduced 35% → 20%; explicit `paste(mask=alpha)`; full re-watermark from originals/.**
 >
 > 1. `apply_watermark(opacity=0.20)` (server.py line 1051) and switched the compositing call from `base.alpha_composite(wm, dest=pos)` → `base.paste(wm, pos, mask=wm.split()[-1])` per user spec — defensively guarantees only the watermark's non-transparent pixels are blended (mathematically identical to the prior alpha_composite for a properly-RGBA source, but matches the exact compositing pattern the user requested).
 > 2. New script `scripts/wave85_rewatermark_from_originals.py` reads each existing image from `originals/{bucket}-pre-wave84/{path}`, applies the same Wave-84 dynamic crop (necessary because the snapshots still contain the Wave-79 burned-in dark watermark + Wave-82 layer), then re-applies the new 20%-opacity watermark via `compress_image()`.
