@@ -1,6 +1,14 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-26 Wave 91):** **Watermark pipeline re-enabled for NEW product-image uploads only.**
+> **Latest (2026-06-26 Wave 92):** **Watermark applied to all existing 65 product images on live site.**
+>
+> User reversed Wave-91's "do not touch existing images" decision after seeing no watermarks visible. Created `scripts/wave92_apply_to_existing.py`: iterates every object in `printer-images` + `product-images`, downloads → runs through `compress_image(..., watermark=True)` → upserts back. No cropping, no white plate — only the new 20%-opacity transparent-bg watermark composited via `paste(mask=alpha)`.
+>
+> **Results: 65 OK, 1 SKIP (OEM partner logo) , 0 failed in 135.6 s.** Live verification: every product card on `/printers` now shows the faint CMYK + "TonersCart" watermark in the bottom-right corner with no background box of any kind.
+
+
+
+> **Prev (2026-06-26 Wave 91):** **Watermark pipeline re-enabled for NEW product-image uploads only.**
 >
 > User provided fresh transparent-bg RGBA PNG (1679×335, 177 KB, all 4 corners alpha=0). Saved to `/app/frontend/public/TONERSCART-bg.png` (MD5 `6a9e576…`).
 >
