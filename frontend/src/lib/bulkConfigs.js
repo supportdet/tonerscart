@@ -215,14 +215,17 @@ const PRINTER_PAPER_SIZES = [
 // Wave 77 — three new optional spec columns surfaced on the printer bulk
 // upload table (already exist on the single-add form / product detail page).
 const PRINTER_RESOLUTIONS = [
-    { value: "600x600", label: "600x600 dpi" },
-    { value: "1200x600", label: "1200x600 dpi" },
-    { value: "1200x1200", label: "1200x1200 dpi" },
-    { value: "2400x600", label: "2400x600 dpi" },
-    { value: "1200x2400", label: "1200x2400 dpi" },
-    { value: "4800x1200", label: "4800x1200 dpi" },
-    { value: "4800x2400", label: "4800x2400 dpi" },
-    { value: "9600x2400", label: "9600x2400 dpi" },
+    { value: "203x203", label: "203x203 DPI" },
+    { value: "300x300", label: "300x300 DPI" },
+    { value: "600x600", label: "600x600 DPI" },
+    { value: "1200x1200", label: "1200x1200 DPI" },
+    { value: "1440x720", label: "1440x720 DPI" },
+    { value: "2400x600", label: "2400x600 DPI" },
+    { value: "2400x1200", label: "2400x1200 DPI" },
+    { value: "2880x1440", label: "2880x1440 DPI" },
+    { value: "4800x1200", label: "4800x1200 DPI" },
+    { value: "5760x1440", label: "5760x1440 DPI" },
+    { value: "9600x2400", label: "9600x2400 DPI" },
 ];
 const PRINTER_MOBILE = [
     { value: "AirPrint", label: "AirPrint" },

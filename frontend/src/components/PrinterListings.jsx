@@ -70,8 +70,9 @@ const MOBILE_PRINT_OPTS = [
 ];
 
 const RESOLUTION_OPTS = [
-    "600 x 600 dpi", "1200 x 600 dpi", "1200 x 1200 dpi",
-    "2400 x 600 dpi", "4800 x 1200 dpi", "4800 x 2400 dpi", "9600 x 2400 dpi",
+    "203x203 DPI", "300x300 DPI", "600x600 DPI", "1200x1200 DPI",
+    "1440x720 DPI", "2400x600 DPI", "2400x1200 DPI", "2880x1440 DPI",
+    "4800x1200 DPI", "5760x1440 DPI", "9600x2400 DPI",
 ];
 
 const PAPER_SIZES   = []; /* legacy — buyer-only */

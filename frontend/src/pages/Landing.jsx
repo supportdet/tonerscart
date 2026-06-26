@@ -184,26 +184,28 @@ export default function Landing() {
 
                     {/* Wave 77 — "Sell on TonersCart" banner promoted to the
                         hero section, directly below the search bar / popular
-                        chips, ABOVE the headline + printer animation. */}
+                        chips, ABOVE the headline + printer animation.
+                        Wave 80 — slim mobile variant: single-line text + compact CTA. */}
                     <div
-                        className="mt-6 sm:mt-7 tc-fade-up tc-fade-up-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl bg-gradient-to-r from-[#1A1B1F] via-[#23252B] to-[#1A1B1F] border border-white/10 p-4 sm:px-5 sm:py-4"
+                        className="mt-3 sm:mt-7 tc-fade-up tc-fade-up-2 flex items-center justify-between gap-2 sm:gap-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-[#1A1B1F] via-[#23252B] to-[#1A1B1F] border border-white/10 px-3 py-2 sm:p-4 sm:px-5 sm:py-4"
                         data-testid="hero-sell-banner"
                     >
-                        <div className="flex items-start sm:items-center gap-3">
-                            <Sparkles size={18} className="text-[#3FD267] shrink-0 mt-0.5 sm:mt-0" />
-                            <div>
-                                <div className="text-white text-[14px] sm:text-[15px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-                                    Sell on TonersCart — <span className="text-[#3FD267]">free for suppliers, sellers &amp; partners</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                            <Sparkles size={14} className="text-[#3FD267] shrink-0 sm:hidden" />
+                            <Sparkles size={18} className="text-[#3FD267] shrink-0 hidden sm:block" />
+                            <div className="min-w-0">
+                                <div className="text-white text-[12.5px] sm:text-[15px] font-semibold truncate sm:whitespace-normal" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                                    Sell on TonersCart — <span className="text-[#3FD267]">free for suppliers</span>
                                 </div>
-                                <div className="text-white/60 text-[12px] mt-0.5">List your toners, printers and consumables in minutes — no listing fee.</div>
+                                <div className="hidden sm:block text-white/60 text-[12px] mt-0.5">List your toners, printers and consumables in minutes — no listing fee.</div>
                             </div>
                         </div>
                         <button
                             onClick={() => navigate("/sell")}
-                            className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-full bg-[#3FD267] hover:bg-[#34BD58] text-[#0A0A0B] text-[13px] font-semibold transition shrink-0"
+                            className="inline-flex items-center justify-center gap-1 sm:gap-1.5 h-8 sm:h-10 px-2.5 sm:px-4 rounded-full bg-[#3FD267] hover:bg-[#34BD58] text-[#0A0A0B] text-[11.5px] sm:text-[13px] font-semibold transition shrink-0"
                             data-testid="hero-sell-banner-cta"
                         >
-                            Apply for FREE <ArrowRight size={14} />
+                            Apply <ArrowRight size={12} className="sm:hidden" /><ArrowRight size={14} className="hidden sm:block" />
                         </button>
                     </div>
 
