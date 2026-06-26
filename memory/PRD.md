@@ -1,6 +1,18 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-26 Wave 86):** **Burned-in Wave-79 emergent.sh watermark removed from all 60 product images via white-plate overlay.**
+> **Latest (2026-06-26 Wave 87):** **New TonersCart logo deployed as header + watermark across all surfaces.**
+>
+> User uploaded an updated logo (979×143 RGBA, 134 KB) — narrower aspect ratio (143/979 ≈ 0.146) than the previous Wave 82 version (336/1679 ≈ 0.20). New file has CMYK vertical bars (cyan/magenta/yellow) + "Toners" in black + "Cart" in cyan on a solid white background.
+>
+> Because the new PNG has no transparency (all pixels alpha=255), `_load_watermark()` was upgraded to **auto-detect and knockout near-white backgrounds**: at load time, if 3+ corner samples are near-white opaque (R,G,B > 240 AND alpha > 250), iterate every pixel and set alpha=0 for any pixel where R,G,B all > 240. Logged: "Watermark: auto-knockout applied (979x143 white→transparent)".
+>
+> File replacement at `/app/frontend/public/TONERSCART-bg.png`: MD5 changed from `7c4c139…` → `46a432a…`. Backend restarted to reload cached watermark. Both **header logo** (the navbar `<img src="/TONERSCART-bg.png">`) AND **watermark overlay** (used by `compress_image()` → `apply_watermark()`) now use the new file.
+>
+> Re-ran `wave86_whitebox_clean.py` on all images: **57 OK, 1 SKIP (OEM logo), 0 failed in 83.4 s**. Pixel verification on a white canvas confirms 20% opacity composite math: magenta bar pixel `(250, 205, 230)` exactly matches expected `(255×0.8 + 231×0.2, 255×0.8 + 0×0.2, 255×0.8 + 130×0.2)`.
+
+
+
+> **Prev (2026-06-26 Wave 86):** **Burned-in Wave-79 emergent.sh watermark removed from all 60 product images via white-plate overlay.**
 >
 > Root cause: Wave 79 used a wrong watermark file (1918×991 — apparently an emergent.sh homepage screenshot the user accidentally uploaded). At width_ratio=0.18 it scaled to **216×112 px** in every image (24% of height for landscape products) — much taller than the correct CMYK logo's 216×43 footprint. The wrong watermark's screenshot pixels got burned into all 60 JPEGs in the bottom-right at 35% opacity.
 >

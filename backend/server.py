@@ -1034,13 +1034,42 @@ _WATERMARK_IMG = None
 
 
 def _load_watermark():
-    """Lazy-load the watermark PNG; return Pillow Image or None on failure."""
+    """Lazy-load the watermark PNG; return Pillow Image or None on failure.
+
+    Wave 87: if the source PNG has a solid white background (no alpha
+    channel from the design tool), we auto-detect and convert near-white
+    pixels to fully transparent so only the actual logo strokes are
+    blended onto product photos.
+    """
     global _WATERMARK_IMG
     if _WATERMARK_IMG is not None:
         return _WATERMARK_IMG if _WATERMARK_IMG is not False else None
     try:
         from PIL import Image  # noqa: WPS433
-        _WATERMARK_IMG = Image.open(_WATERMARK_PATH).convert("RGBA")
+        im = Image.open(_WATERMARK_PATH).convert("RGBA")
+        # Auto-knockout near-white background: if more than half of the
+        # corner pixels are near-white AND opaque, the source PNG lacks
+        # transparency — convert white-ish pixels (R,G,B all > 240) to
+        # alpha=0 so the watermark blends cleanly.
+        W, H = im.size
+        corner_samples = [
+            im.getpixel((0, 0)), im.getpixel((W - 1, 0)),
+            im.getpixel((0, H - 1)), im.getpixel((W - 1, H - 1)),
+            im.getpixel((W // 2, 0)), im.getpixel((W // 2, H - 1)),
+        ]
+        opaque_white_corners = sum(
+            1 for p in corner_samples
+            if p[3] >= 250 and p[0] >= 240 and p[1] >= 240 and p[2] >= 240
+        )
+        if opaque_white_corners >= 3:
+            pixels = im.load()
+            for y in range(H):
+                for x in range(W):
+                    r, g, b, a = pixels[x, y]
+                    if r >= 240 and g >= 240 and b >= 240:
+                        pixels[x, y] = (r, g, b, 0)
+            logger.info("Watermark: auto-knockout applied (%dx%d white→transparent)", W, H)
+        _WATERMARK_IMG = im
     except Exception as e:
         logger.debug("Watermark not loaded (%s) — uploads will be saved un-watermarked", e)
         _WATERMARK_IMG = False
