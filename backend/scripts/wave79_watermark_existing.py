@@ -101,11 +101,16 @@ def process_object(path: str, logger: logging.Logger, *, dry_run: bool) -> bool:
 
 
 def main() -> int:
+    global BUCKET
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true", help="don't re-upload, just download + report")
     parser.add_argument("--prefix", default="", help="limit to objects under this prefix")
     parser.add_argument("--limit", type=int, default=0, help="cap number of objects processed (0 = no cap)")
+    parser.add_argument("--bucket", default=BUCKET, help="Supabase Storage bucket to process (default: printer-images)")
     args = parser.parse_args()
+
+    # Override module-level BUCKET so list/process helpers pick up the override
+    BUCKET = args.bucket
 
     logger = setup_logger()
     wm = _load_watermark()
