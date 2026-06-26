@@ -1077,6 +1077,22 @@ def apply_watermark(im, *, opacity: float = 0.35, width_ratio: float = 0.18):
         return im
 
 
+def save_original_to_supabase(path: str, raw: bytes, *, source_bucket: str = "printer-images", content_type: str = "image/jpeg") -> bool:
+    """Wave 84 — store the un-watermarked source bytes in the private
+    `originals` bucket at `{source_bucket}/{path}` so future watermark
+    re-runs can rebuild cleanly without ghosting. Best-effort: never
+    raises — logs and returns False on failure."""
+    try:
+        full = f"{source_bucket}/{path}"
+        sb_admin.storage.from_("originals").upload(
+            full, raw, {"content-type": content_type, "upsert": "true"}
+        )
+        return True
+    except Exception as e:
+        logger.warning("save_original failed (%s/%s): %s", source_bucket, path, e)
+        return False
+
+
 def compress_image(
     content: bytes,
     *,
