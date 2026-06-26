@@ -1,6 +1,16 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-26 Wave 87):** **New TonersCart logo deployed as header + watermark across all surfaces.**
+> **Latest (2026-06-26 Wave 88):** **Watermark source file switched to `TC-WATERMARK.png` (user-provided via GitHub).**
+>
+> User added `TC-WATERMARK.png` to the repo at `/app/frontend/public/TC-WATERMARK.png` (1679×336 RGBA, 224.8 KB, MD5 `7c4c139…`) — the same proper transparent-bg CMYK logo file the live site has always rendered correctly in the header. Backend `_WATERMARK_PATH` constant updated from `TONERSCART-bg.png` → `TC-WATERMARK.png` (server.py line 1032). Auto-knockout in `_load_watermark` detects no white background (all corner samples are already alpha=0) and uses the file as-is.
+>
+> Re-ran `wave86_whitebox_clean.py` on all 60 images: **57 OK, 1 SKIP (OEM logo), 0 failed in 79.6 s**. Live verification on the M2170 listing confirms the clean white plate now shows ONLY the proper TC-WATERMARK CMYK logo — no other artifacts.
+>
+> The original `TONERSCART-bg.png` file is left in place as the header logo (referenced by `Header.jsx`) and still works correctly for that use.
+
+
+
+> **Prev (2026-06-26 Wave 87):** **New TonersCart logo deployed as header + watermark across all surfaces.**
 >
 > User uploaded an updated logo (979×143 RGBA, 134 KB) — narrower aspect ratio (143/979 ≈ 0.146) than the previous Wave 82 version (336/1679 ≈ 0.20). New file has CMYK vertical bars (cyan/magenta/yellow) + "Toners" in black + "Cart" in cyan on a solid white background.
 >
