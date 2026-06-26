@@ -1029,7 +1029,7 @@ def sanitize(s: Optional[str], max_len: int = 2000) -> str:
 # ---------- Pillow image compression + watermarking ----------
 # Wave 77 — watermark cached once at process start. /app/frontend/public/TONERSCART-bg.png
 # is the brand mark; falls back to None silently if not present (no error).
-_WATERMARK_PATH = "/app/frontend/public/TONERSCART-bg.png"
+_WATERMARK_PATH = "/app/frontend/public/TC-WATERMARK.png"
 _WATERMARK_IMG = None
 
 
