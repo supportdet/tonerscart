@@ -241,8 +241,6 @@ async def upload_printer_image(file: UploadFile = File(...), user: dict = Depend
         raise HTTPException(400, "Max 5 MB")
     ext = "jpg"
     path = f"{user['id']}/{uuid.uuid4().hex}.{ext}"
-    # Wave 84 — preserve the un-watermarked source before compression+watermark
-    save_original_to_supabase(path, content, source_bucket="printer-images", content_type=file.content_type or "image/jpeg")
     # Compress / resize so storage stays cheap and pages load fast
     content = compress_image(content, max_side=1200, quality=85)
     try:
@@ -268,8 +266,6 @@ async def upload_listing_image(file: UploadFile = File(...), user: dict = Depend
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(400, "Max 5 MB")
     path = f"{user['id']}/{uuid.uuid4().hex}.jpg"
-    # Wave 84 — preserve the un-watermarked source before compression+watermark
-    save_original_to_supabase(path, content, source_bucket="printer-images", content_type=file.content_type or "image/jpeg")
     content = compress_image(content, max_side=1200, quality=85)
     try:
         sb_admin.storage.from_("printer-images").upload(

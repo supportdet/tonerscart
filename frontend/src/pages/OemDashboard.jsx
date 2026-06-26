@@ -177,7 +177,7 @@ export default function OemDashboard() {
                         {products.map((p) => (
                             <div key={p.id} className={`tc-card-flat overflow-hidden flex flex-col ${p.is_active ? "" : "opacity-60"}`} data-testid={`oem-dash-product-${p.id}`}>
                                 <div className="aspect-[4/3] bg-[#F5F5F7] flex items-center justify-center overflow-hidden">
-                                    {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <Package size={26} className="text-[#C7C7CC]" />}
+                                    {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-contain" /> : <Package size={26} className="text-[#C7C7CC]" />}
                                 </div>
                                 <div className="p-4 flex flex-col flex-1">
                                     <div className="text-[10px] tracking-[0.12em] uppercase font-semibold text-[#86868B] mb-1">{CATEGORIES.find((c) => c.value === p.category)?.label || "Product"}{!p.is_active && " · Hidden"}</div>

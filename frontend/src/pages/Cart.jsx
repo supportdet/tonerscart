@@ -40,7 +40,7 @@ export default function Cart() {
                                     <div key={it.id} className="bg-white border border-black/[0.06] rounded-2xl p-3 sm:p-4 flex gap-3 sm:gap-4 items-start text-[#0A0A0B] min-w-0" data-testid={`cart-row-${it.id}`}>
                                         <div className="w-16 h-14 sm:w-24 sm:h-20 rounded-xl bg-[#F2F3F5] grid place-items-center overflow-hidden shrink-0">
                                             {p.image_url ? (
-                                                <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+                                                <img src={p.image_url} alt="" className="w-full h-full object-contain" />
                                             ) : (
                                                 <TonerCartridge color={p.color || "Black"} brand={p.brand} model={p.model_number} type={p.toner_type || "Original"} />
                                             )}

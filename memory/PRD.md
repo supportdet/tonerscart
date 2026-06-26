@@ -1,6 +1,51 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-26 Wave 88):** **Watermark source file switched to `TC-WATERMARK.png` (user-provided via GitHub).**
+> **Latest (2026-06-26 Wave 90):** **Frontend `object-cover` → `object-contain` fix on all product-image displays.**
+>
+> User reported product images appeared cropped at top/bottom on listing cards. Root cause: 5 product-facing components were using Tailwind `object-cover` which scales images to fill the container by cropping. Switched all to `object-contain` so the full image is visible with letterboxing where aspect ratios don't match.
+>
+> Files updated:
+> - `components/cards/TonerProductCard.jsx:30`
+> - `components/RelatedProducts.jsx:45`
+> - `pages/Cart.jsx:43`
+> - `pages/Dealer.jsx:38`
+> - `pages/OemDashboard.jsx:180`
+>
+> Already correct (no change needed): `PrinterProductCard`, `ScannerProductCard`, `ConsumableProductCard`, `ProductDetail`, `D2DProductDetail`, `Search`.
+>
+> ### Wave 89 crop — cannot be undone from server side
+> The user also asked to re-run the backend restore from `originals/printer-images-pre-wave84/` with NO crop applied. **The `originals` bucket was deleted in Wave 89 per the explicit instruction** ("Delete the originals Supabase Storage bucket after restoring images"). Those pre-Wave84 snapshots no longer exist anywhere in the system. The Wave 89 bottom-strip crop (22% × ~13% of width) is permanent for the existing 57 images.
+>
+> Recovery paths for the cropped images (require user action):
+> - **Supabase Pro point-in-time recovery** (if user is on Pro plan, last 7 days). Triggered from Supabase Dashboard → Database → Backups.
+> - **Ask dealers to re-upload** the affected listings — new uploads use the cleaned-up `compress_image()` pipeline with no watermark and no crop.
+
+
+
+> **Prev (2026-06-26 Wave 89):** **All watermarking permanently removed from TonersCart per user request.**
+>
+> ### Code cleanup (server.py)
+> - Deleted: `_WATERMARK_PATH`, `_WATERMARK_IMG`, `_load_watermark()`, `apply_watermark()`, `save_original_to_supabase()`.
+> - `compress_image()` simplified to compression-only: decode → resize ≤1200px → JPEG q=85 → step quality down to 60 if >500 KB. No watermark parameter, no watermark logic.
+>
+> ### Upload routes (routes/products.py)
+> - Both endpoints (`/api/supplier/printer-image` and `/api/supplier/listing-image`) no longer call `save_original_to_supabase()` — just compress + upload. Originals pipeline gone.
+>
+> ### Batch scripts deleted from `/app/backend/scripts/`
+> - `wave79_watermark_existing.py`, `wave84_crop_and_rewatermark.py`, `wave85_rewatermark_from_originals.py`, `wave86_whitebox_clean.py` — all removed. Only the new `wave89_clean_restore.py` remains.
+>
+> ### Live image restore (Wave 89)
+> Restored all images from `originals/printer-images-pre-wave84/` snapshots — cropped the bottom strip per Wave-79's wrong-watermark footprint math (22% × ~13% of width) to physically remove the burned-in emergent.sh pixels, then ran compression-only pipeline. **57 OK, 1 SKIP (OEM logo), 0 failed in 74.7 s.**
+>
+> ### Supabase Storage
+> Deleted the `originals` bucket (emptied 60 files, then `delete_bucket`). Final bucket list: `printer-images` (public), `product-images` (public, legacy), `supplier-documents` (private KYC).
+>
+> ### Verification
+> Live screenshot of the originally-reported M2170 listing: clean Epson printer photo, no watermark, no white plate, no logo overlay — exactly what was requested.
+
+
+
+> **Prev (2026-06-26 Wave 88):** **Watermark source file switched to `TC-WATERMARK.png` (user-provided via GitHub).**
 >
 > User added `TC-WATERMARK.png` to the repo at `/app/frontend/public/TC-WATERMARK.png` (1679×336 RGBA, 224.8 KB, MD5 `7c4c139…`) — the same proper transparent-bg CMYK logo file the live site has always rendered correctly in the header. Backend `_WATERMARK_PATH` constant updated from `TONERSCART-bg.png` → `TC-WATERMARK.png` (server.py line 1032). Auto-knockout in `_load_watermark` detects no white background (all corner samples are already alpha=0) and uses the file as-is.
 >
