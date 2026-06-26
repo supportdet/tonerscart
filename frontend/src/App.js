@@ -1,6 +1,26 @@
 import React, { useCallback } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+
+// Wave 80 — consume the impersonation hash (#imp=<base64-json>) BEFORE React
+// mounts, so the very first ProtectedRoute render already has the
+// impersonation flag set in sessionStorage. Eliminates the "Forbidden" flash
+// and application-review redirect when a new tab opens for "Act as Dealer".
+(function _consumeImpersonationHash() {
+    try {
+        const h = typeof window !== "undefined" ? window.location.hash || "" : "";
+        const m = /^#imp=([A-Za-z0-9+/=]+)$/.exec(h);
+        if (!m) return;
+        const decoded = JSON.parse(atob(m[1]));
+        if (decoded && decoded.u) {
+            window.sessionStorage.setItem("tc_impersonate_user_id", String(decoded.u));
+            window.sessionStorage.setItem("tc_impersonate_name", String(decoded.n || "Dealer"));
+            window.sessionStorage.setItem("tc_impersonate_supplier_id", String(decoded.s || ""));
+        }
+        // Strip the hash so a reload doesn't re-trigger (and the URL stays clean).
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+    } catch { /* ignore — bad hash just means no impersonation */ }
+})();
 import { HelmetProvider } from "react-helmet-async";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";

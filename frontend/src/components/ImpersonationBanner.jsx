@@ -37,15 +37,21 @@ export default function ImpersonationBanner() {
     }, []);
 
     const end = () => {
-        let returnTo = "/admin";
         try {
-            returnTo = window.sessionStorage.getItem("tc_impersonate_return_to") || "/admin";
             window.sessionStorage.removeItem("tc_impersonate_user_id");
             window.sessionStorage.removeItem("tc_impersonate_name");
             window.sessionStorage.removeItem("tc_impersonate_supplier_id");
             window.sessionStorage.removeItem("tc_impersonate_return_to");
         } catch { /* ignore */ }
-        window.location.href = returnTo;
+        // Wave 80 — impersonation now opens in a new tab. "Close" just closes
+        // the tab (admin's original tab is untouched). If the tab can't be
+        // closed (e.g. opened manually), redirect to /admin as fallback.
+        try {
+            window.close();
+        } catch { /* ignore */ }
+        // If still open after window.close (browsers block tabs opened by user
+        // not by script), fall back to navigating home.
+        setTimeout(() => { window.location.href = "/admin"; }, 100);
     };
 
     if (!name) return null;
@@ -57,14 +63,14 @@ export default function ImpersonationBanner() {
             <div className="tc-container py-2.5 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-[13px] font-semibold">
                     <UserCog size={15} />
-                    Acting as <span className="font-bold">{name}</span> — Admin Mode
+                    Admin Mode — Acting as <span className="font-bold">{name}</span>
                 </div>
                 <button
                     onClick={end}
                     className="inline-flex items-center gap-1.5 text-[12px] font-semibold px-3 h-8 rounded-full bg-[#0A0A0B] text-white hover:bg-[#23252B]"
                     data-testid="impersonation-end-btn"
                 >
-                    <X size={12} /> End Session
+                    <X size={12} /> Close
                 </button>
             </div>
         </div>

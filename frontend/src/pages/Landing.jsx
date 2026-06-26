@@ -184,16 +184,18 @@ export default function Landing() {
 
                     {/* Wave 77 — "Sell on TonersCart" banner promoted to the
                         hero section, directly below the search bar / popular
-                        chips, ABOVE the headline + printer animation. */}
+                        chips, ABOVE the headline + printer animation.
+                        Wave 81 — full-size banner restored on mobile (user
+                        request 2026-06-26). */}
                     <div
-                        className="mt-6 sm:mt-7 tc-fade-up tc-fade-up-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl bg-gradient-to-r from-[#1A1B1F] via-[#23252B] to-[#1A1B1F] border border-white/10 p-4 sm:px-5 sm:py-4"
+                        className="mt-7 tc-fade-up tc-fade-up-2 flex items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-[#1A1B1F] via-[#23252B] to-[#1A1B1F] border border-white/10 p-4 px-5 py-4"
                         data-testid="hero-sell-banner"
                     >
-                        <div className="flex items-start sm:items-center gap-3">
-                            <Sparkles size={18} className="text-[#3FD267] shrink-0 mt-0.5 sm:mt-0" />
-                            <div>
-                                <div className="text-white text-[14px] sm:text-[15px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-                                    Sell on TonersCart — <span className="text-[#3FD267]">free for suppliers, sellers &amp; partners</span>
+                        <div className="flex items-center gap-3 min-w-0">
+                            <Sparkles size={18} className="text-[#3FD267] shrink-0" />
+                            <div className="min-w-0">
+                                <div className="text-white text-[15px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                                    Sell on TonersCart — <span className="text-[#3FD267]">free for suppliers</span>
                                 </div>
                                 <div className="text-white/60 text-[12px] mt-0.5">List your toners, printers and consumables in minutes — no listing fee.</div>
                             </div>
@@ -203,12 +205,15 @@ export default function Landing() {
                             className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-full bg-[#3FD267] hover:bg-[#34BD58] text-[#0A0A0B] text-[13px] font-semibold transition shrink-0"
                             data-testid="hero-sell-banner-cta"
                         >
-                            Apply for FREE <ArrowRight size={14} />
+                            Apply <ArrowRight size={14} />
                         </button>
                     </div>
 
-                    {/* Hero content split */}
-                    <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-center mt-10 lg:mt-16">
+                    {/* Hero content split.
+                        Wave 81 — shrink mobile top margin so the printer
+                        animation nudges upward and the headline below it
+                        is visible above the fold without scrolling. */}
+                    <div className="grid lg:grid-cols-12 gap-4 sm:gap-8 lg:gap-12 items-center mt-3 sm:mt-10 lg:mt-16">
                         <div className="lg:col-span-7 order-2 lg:order-1">
                             <h1
                                 className="text-white max-w-2xl tc-fade-up tc-fade-up-3"
@@ -228,7 +233,7 @@ export default function Landing() {
                             </p>
                         </div>
 
-                        <div className="lg:col-span-5 order-1 lg:order-2 tc-fade-up tc-fade-up-2">
+                        <div className="lg:col-span-5 order-1 lg:order-2 tc-fade-up tc-fade-up-2 -mt-2 sm:mt-0">
                             <TonerAnimation />
                         </div>
                     </div>
