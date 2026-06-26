@@ -1,6 +1,29 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-26 Wave 82):** **Correct TonersCart logo restored as header logo AND watermark.**
+> **Latest (2026-06-26 Wave 84):** **Clean watermark on all 60 existing product images + originals-preservation pipeline live.**
+>
+> ### Wave 84-A — Existing image cleanup (60/60 OK)
+> Existing images had the Wave-79 dark wrong watermark burned into the JPEG bottom-right corner with the Wave-82/83 correct CMYK logo layered on top → muddy "double watermark" effect. `scripts/wave84_crop_and_rewatermark.py` runs per-image dynamic crop based on the exact watermark math from `apply_watermark()`:
+> - `margin = max(8, int(W * 0.02))` (2% of width)
+> - `wm_w = max(64, int(W * 0.18))` (18% of width)
+> - `wm_h = int(wm_w * 336/1679)` (proportional, ≈ 0.20 × wm_w)
+> - Crop bottom strip = `margin + wm_h + 8 px safety` (10–20% of H depending on aspect)
+> - Crop right gutter = `margin + 8 px safety` (cleans JPEG bleed on right edge)
+>
+> Each pre-Wave84 byte stream snapshotted to `originals/<bucket>-pre-wave84/<path>` for rollback. After crop, `compress_image(..., watermark=True)` re-applies the correct CMYK logo cleanly. OEM partner brand logos (`oem/*/logo-*`) explicitly skipped (3rd-party trademarks).
+>
+> **Final results: 60 ok, 1 skip (OEM logo), 0 failed in 170.3 s.** Pixel-level verification confirms pixels just above the new WM zone are pure background (RGB(254,254,254), (242,242,242)) — zero old-watermark residue. AI visual analysis of the "above watermark" strip confirms no TonersCart features bleed into adjacent areas.
+>
+> Note: cropping causes a ~10–15% bottom strip + ~3% right gutter loss per image. Acceptable because the watermark zone never contained primary product detail.
+>
+> ### Wave 84-B — Originals preservation pipeline (live for new uploads)
+> Created private Supabase bucket `originals`. Added helper `save_original_to_supabase(path, raw, source_bucket)` in `server.py`. Wired into the two product-image endpoints in `routes/products.py` — `/api/supplier/printer-image` and `/api/supplier/listing-image`. On every upload, the raw bytes are persisted to `originals/{source_bucket}/{path}` BEFORE compression/watermarking. End-to-end smoke test confirmed: 8230 byte test image stored both compressed+watermarked in `printer-images` AND untouched in `originals/printer-images/...`.
+>
+> Future watermark/branding changes can now rebuild from clean originals without ghosting. OEM uploads in `oem.py` left unmodified (no current watermarking).
+
+
+
+> **Prev (2026-06-26 Wave 82):** **Correct TonersCart logo restored as header logo AND watermark.**
 >
 > The file at `/app/frontend/public/TONERSCART-bg.png` was a wrong DARK-BACKGROUND version (1918×991, 426 KB, most pixels near-black RGB(14,14,15)). The CORRECT logo (CMYK vertical bars + "Toners" in black + "Cart" in cyan, transparent background) was already stored as an asset (1679×336, 224 KB, RGBA with proper alpha=0 on corners + RGB(1,174,246) cyan / (229,1,136) magenta / (2,176,247) cyan "Cart" pixels). Replaced the public file with the correct asset.
 >
