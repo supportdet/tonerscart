@@ -114,7 +114,7 @@ export default function Papers() {
                         <div className="mt-1 text-[12.5px] text-[#6E6E73]">Suppliers are onboarding. Check back soon or contact us for bulk needs.</div>
                     </div>
                 ) : (
-                    <div className="mt-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                         {visible.map((p) => (
                             <PaperProductCard key={p.id} p={p} />
                         ))}

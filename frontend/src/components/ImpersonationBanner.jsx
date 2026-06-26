@@ -2,16 +2,13 @@ import React, { useEffect, useState } from "react";
 import { UserCog, X } from "lucide-react";
 
 /**
- * Wave 77 — persistent "Acting as <dealer>" banner.
+ * Wave 79 — sticky "Acting as <dealer>" banner.
  *
- * Shown across every page whenever sessionStorage has the impersonation
- * flags set (by DealerProfile.jsx → actAsDealer). The banner stays sticky
- * at the top of the viewport so the admin always sees it. Clicking "End"
- * clears the flags and reloads the current page.
- *
- * The flags use both session AND local storage so a new browser tab opened
- * from the admin click (which has its own sessionStorage) can copy them
- * across on mount.
+ * Mounted globally in App.js. Renders whenever the admin has flipped into
+ * impersonation mode via DealerProfile.jsx → actAsDealer (same-tab). The
+ * admin's bearer token is preserved; only the X-Impersonate-User-Id
+ * header changes (api.js interceptor). "End Session" clears the flag and
+ * returns to the originating admin page (or /admin if missing).
  */
 export default function ImpersonationBanner() {
     const [name, setName] = useState(null);
@@ -19,44 +16,36 @@ export default function ImpersonationBanner() {
     useEffect(() => {
         const read = () => {
             try {
-                let n = window.sessionStorage.getItem("tc_impersonate_name");
-                if (!n) {
-                    // First-tab-load handoff: copy from localStorage that the
-                    // originating tab set, then clear local so a future
-                    // restart doesn't accidentally resume impersonation.
-                    n = window.localStorage.getItem("tc_impersonate_name");
-                    const uid = window.localStorage.getItem("tc_impersonate_user_id");
-                    const sid = window.localStorage.getItem("tc_impersonate_supplier_id");
-                    if (n && uid) {
-                        window.sessionStorage.setItem("tc_impersonate_name", n);
-                        window.sessionStorage.setItem("tc_impersonate_user_id", uid);
-                        if (sid) window.sessionStorage.setItem("tc_impersonate_supplier_id", sid);
-                        // clear local so it doesn't leak into other tabs
-                        window.localStorage.removeItem("tc_impersonate_name");
-                        window.localStorage.removeItem("tc_impersonate_user_id");
-                        window.localStorage.removeItem("tc_impersonate_supplier_id");
-                    }
-                }
-                setName(n);
+                setName(window.sessionStorage.getItem("tc_impersonate_name"));
             } catch { setName(null); }
         };
         read();
+        // Re-read on storage changes (e.g. End Session in another tab) and
+        // on every route change in this tab.
         const onStorage = () => read();
+        const onFocus = () => read();
         window.addEventListener("storage", onStorage);
-        return () => window.removeEventListener("storage", onStorage);
+        window.addEventListener("focus", onFocus);
+        // also re-poll every 1s so same-tab state changes propagate even
+        // without an explicit event
+        const t = setInterval(read, 1000);
+        return () => {
+            window.removeEventListener("storage", onStorage);
+            window.removeEventListener("focus", onFocus);
+            clearInterval(t);
+        };
     }, []);
 
     const end = () => {
+        let returnTo = "/admin";
         try {
+            returnTo = window.sessionStorage.getItem("tc_impersonate_return_to") || "/admin";
             window.sessionStorage.removeItem("tc_impersonate_user_id");
             window.sessionStorage.removeItem("tc_impersonate_name");
             window.sessionStorage.removeItem("tc_impersonate_supplier_id");
-            window.localStorage.removeItem("tc_impersonate_user_id");
-            window.localStorage.removeItem("tc_impersonate_name");
-            window.localStorage.removeItem("tc_impersonate_supplier_id");
+            window.sessionStorage.removeItem("tc_impersonate_return_to");
         } catch { /* ignore */ }
-        // Reload to drop any cached dealer-scoped data
-        window.location.href = "/admin";
+        window.location.href = returnTo;
     };
 
     if (!name) return null;
@@ -75,7 +64,7 @@ export default function ImpersonationBanner() {
                     className="inline-flex items-center gap-1.5 text-[12px] font-semibold px-3 h-8 rounded-full bg-[#0A0A0B] text-white hover:bg-[#23252B]"
                     data-testid="impersonation-end-btn"
                 >
-                    <X size={12} /> End impersonation
+                    <X size={12} /> End Session
                 </button>
             </div>
         </div>

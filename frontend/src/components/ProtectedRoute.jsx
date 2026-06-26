@@ -13,6 +13,18 @@ export default function ProtectedRoute({ children, roles, allowApplicationStatus
     const pendingOk =
         Array.isArray(allowApplicationStatus)
         && allowApplicationStatus.includes(user.application_status);
-    if (!roleOk && !pendingOk) return <Navigate to="/" replace />;
+    // Wave 79 — admin impersonation: when an admin has flipped into "Act as
+    // Dealer" mode (sessionStorage flag set by DealerProfile.jsx), allow them
+    // to view supplier-only routes WITHOUT a real role swap. Their bearer
+    // token still says admin; the X-Impersonate-User-Id header (api.js)
+    // makes every backend call execute as the target dealer.
+    let impersonateOk = false;
+    try {
+        if (user.role === "admin" && typeof window !== "undefined"
+            && window.sessionStorage.getItem("tc_impersonate_user_id")) {
+            impersonateOk = true;
+        }
+    } catch { /* ignore */ }
+    if (!roleOk && !pendingOk && !impersonateOk) return <Navigate to="/" replace />;
     return children;
 }

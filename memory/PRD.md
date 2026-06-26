@@ -2,6 +2,28 @@
 
 > **Latest (2026-06-14 Wave 52):** Iteration 50 — "Consumables" rebranded to **"Inks & Consumables"** + navbar reorder + dealer-pill redesign + delivery-notice rewording. **(1) Rename** — all user-facing copy updated: navbar pill, dealer dashboard tab (`DEALER_TABS` consumables label), Footer link, Search universal-tab label, breadcrumb on `/consumable/:id` ProductDetail, page H1 + strip label on `/consumables` ("Inks, drums, fusers & kits from verified dealers"), bulk-upload hub card. No URL changes (`/consumables`, `/consumable/:id`, `/api/consumables` all unchanged). No DB schema changes. **(2) Navbar reorder** — new left-to-right pill order: `Toners · Printers · Inks & Consumables · Scanners · Papers · MPS/Rentals · Bulk Orders · Dealer to Dealer · OEM Marketplace · Govt Portal` (`CATEGORY_PILLS` in `Header.jsx`). **(3) Subcategory filter tabs** on `/consumables` — exactly 6 amber-tinted pills (`#FFC107` active fill + white text, inactive `#FFF8E0` tint + amber text, mobile horizontally scrollable): All · Ink Cartridges · Drums · Fusers · Maintenance Kits · Accessories. "Accessories" is an umbrella over `Staple Cartridges + Transfer Belts + Other` (single API hit, client-side filter). Testids `consumables-tab-all/-ink/-drums/-fusers/-maintenance/-accessories`. **(4) Dealer-pill redesign** — `DealerTabBar` rewritten to render modern brand-color pills matching the public-site navbar palette: Toners `#FF1F75` (magenta), Printers `#00D4E5` (cyan), Inks & Consumables `#FFC107` (amber), Scanners `#5468FF` (indigo), Papers `#C58A6E` (brown), plus Orders/Earnings/Insights/Bulk/D2D/OEM. Active pill = solid accent + white text + accent box-shadow, inactive = tint background + accent text. Horizontally scrollable on narrow viewports. `CAT_BADGE` colour map updated to match. **(5) DeliveryPolicyNote** rewritten with exact wording per user spec: "Delivery charges are set by TonersCart and added to the buyer's total at checkout — same-city delivery is free, intercity delivery is ₹100–₹350 depending on product type. You are responsible for shipping the order to the buyer using your preferred courier. The delivery charge collected from the buyer is passed to you in full to cover your shipping costs." Verified live on `/supplier` consumable upload form. Testing agent (iteration_50.json) — 14/14 actionable PASS; main-agent live-verified dealer dashboard pills + DeliveryPolicyNote text (3/3 string assertions).
 
+> **Latest (2026-06-25 Wave 79):** Iteration 69 — **5 fixes shipped.**
+>
+> (1) **Mobile product grid reverted to 1-column** with compact cards. New CSS rule under `@media (max-width: 767.98px)` shrinks `.tc-product-img` aspect ratio (1.85:1 vs 1.25:1), reduces SVG width, body padding, and title font size to ~12-13px. Tablet (md) stays 3-col, desktop (lg) stays 4-col. Applied via index.css — all five product card variants inherit automatically.
+>
+> (2) **Impersonation rewrite — SAME-tab + admin-token preserved.**
+>   - `actAsDealer` now uses `navigate("/supplier")` instead of `window.open` — admin's bearer token (localStorage) is preserved, no logout, no new broken window.
+>   - `ProtectedRoute` now allows admins through supplier-only routes WHEN the `tc_impersonate_user_id` flag is set — eliminates the "Navigate to '/'" redirect that broke the old flow.
+>   - `ImpersonationBanner` polls sessionStorage every 1s (covers same-tab nav) and re-renders. "End Session" reads `tc_impersonate_return_to` (stored at start) and `window.location.href`s back to the admin's originating page; clears all flags.
+>
+> (3) **Mobile-only popular chips hidden** on Landing.jsx via `hidden md:flex` — sell banner + printer animation now sit fully above-the-fold on phones (verified via 375×800 screenshot).
+>
+> (4) **Toner image upload BUG FIXED.** SupplierDashboard.jsx had a stale Wave-12 comment claiming "image upload removed", and the submit handler set `finalImageUrls = existingImages || []` — meaning every `imageFiles[]` File was silently dropped before send. Restored the proper upload loop: each File POSTs to `/supplier/listing-image`; returned URLs are merged with `existingImages`, then `image_url` / `image_urls` go to the listing payload. The endpoint already calls `compress_image()` so new toner uploads are watermarked + ≤500KB automatically. Pipeline confirmed end-to-end: 18KB JPEG → 18.7KB watermarked JPEG in ~1s.
+>
+> (5) **Wave-79 batch watermark script** at `/app/backend/scripts/wave79_watermark_existing.py`. Recursively walks `printer-images` bucket, downloads each object, runs `compress_image(watermark=True)`, uploads back with `upsert=true`. Idempotent. Dry-run tested on 5 sample objects → all 5 OK in 8.4s. Full log to `/tmp/wave79_watermark_<timestamp>.log`. **NOT run on production yet** — operator must execute when ready:
+>     ```bash
+>     python3 /app/backend/scripts/wave79_watermark_existing.py
+>     ```
+>
+> Lint clean (ESLint + Pyflakes). Mobile smoke screenshot confirms 1-column grid, no popular chips, sell banner above printer animation.
+
+
+
 > **Latest (2026-06-25 Wave 78):** Iteration 68 — **Ink Tank is now ONE atomic option everywhere + multi-select up to 2 printer types.**
 >
 > (1) **PRINTER_CATEGORIES** (`bulkConfigs.js`) — added `Production` back and confirmed only `Ink Tank` (no separate `Ink` / `Tank` entries). Final list: Laser · Inkjet · **Ink Tank** · Thermal · Dot Matrix · LED · Production · Other.

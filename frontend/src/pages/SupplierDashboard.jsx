@@ -588,10 +588,24 @@ export default function SupplierDashboard() {
         }
         setSaving(true);
         try {
-            // Wave 12 — image upload removed. Animated cartridge fallback renders
-            // on every card. Existing image URLs (if editing an older listing)
-            // are preserved.
-            const finalImageUrls = existingImages || [];
+            // Wave 79 — toner image upload restored. Each File in imageFiles is
+            // POSTed to /supplier/listing-image (which compresses + watermarks
+            // via Pillow) and the returned URLs are merged with any
+            // already-stored URLs for edit mode. Previously the toner submit
+            // path silently dropped imageFiles, which is why uploaded images
+            // never showed on the listing cards or detail pages.
+            const uploadedUrls = [];
+            for (const f of imageFiles.filter(Boolean)) {
+                try {
+                    const fd = new FormData();
+                    fd.append("file", f);
+                    const { data } = await api.post("/supplier/listing-image", fd, { headers: { "Content-Type": "multipart/form-data" } });
+                    if (data?.url) uploadedUrls.push(data.url);
+                } catch (e) {
+                    toast.error(`Image upload failed: ${formatApiError(e)}`);
+                }
+            }
+            const finalImageUrls = [...(existingImages || []), ...uploadedUrls];
 
             // Top-level price/stock derived from cheapest variant for backward compatibility
             const cheapest = cleanedVariants.reduce((a, b) => (a.price <= b.price ? a : b));
