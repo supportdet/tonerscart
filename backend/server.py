@@ -1026,129 +1026,17 @@ def sanitize(s: Optional[str], max_len: int = 2000) -> str:
     return s[:max_len]
 
 
-# ---------- Pillow image compression + watermarking ----------
-# Wave 77 — watermark cached once at process start. /app/frontend/public/TONERSCART-bg.png
-# is the brand mark; falls back to None silently if not present (no error).
-_WATERMARK_PATH = "/app/frontend/public/TC-WATERMARK.png"
-_WATERMARK_IMG = None
-
-
-def _load_watermark():
-    """Lazy-load the watermark PNG; return Pillow Image or None on failure.
-
-    Wave 87: if the source PNG has a solid white background (no alpha
-    channel from the design tool), we auto-detect and convert near-white
-    pixels to fully transparent so only the actual logo strokes are
-    blended onto product photos.
-    """
-    global _WATERMARK_IMG
-    if _WATERMARK_IMG is not None:
-        return _WATERMARK_IMG if _WATERMARK_IMG is not False else None
-    try:
-        from PIL import Image  # noqa: WPS433
-        im = Image.open(_WATERMARK_PATH).convert("RGBA")
-        # Auto-knockout near-white background: if more than half of the
-        # corner pixels are near-white AND opaque, the source PNG lacks
-        # transparency — convert white-ish pixels (R,G,B all > 240) to
-        # alpha=0 so the watermark blends cleanly.
-        W, H = im.size
-        corner_samples = [
-            im.getpixel((0, 0)), im.getpixel((W - 1, 0)),
-            im.getpixel((0, H - 1)), im.getpixel((W - 1, H - 1)),
-            im.getpixel((W // 2, 0)), im.getpixel((W // 2, H - 1)),
-        ]
-        opaque_white_corners = sum(
-            1 for p in corner_samples
-            if p[3] >= 250 and p[0] >= 240 and p[1] >= 240 and p[2] >= 240
-        )
-        if opaque_white_corners >= 3:
-            pixels = im.load()
-            for y in range(H):
-                for x in range(W):
-                    r, g, b, a = pixels[x, y]
-                    if r >= 240 and g >= 240 and b >= 240:
-                        pixels[x, y] = (r, g, b, 0)
-            logger.info("Watermark: auto-knockout applied (%dx%d white→transparent)", W, H)
-        _WATERMARK_IMG = im
-    except Exception as e:
-        logger.debug("Watermark not loaded (%s) — uploads will be saved un-watermarked", e)
-        _WATERMARK_IMG = False
-        return None
-    return _WATERMARK_IMG
-
-
-def apply_watermark(im, *, opacity: float = 0.20, width_ratio: float = 0.18):
-    """Composite the TonersCart logo onto the bottom-right corner of `im`.
-    Logo width ≈ width_ratio * image width, opacity ~35%.
-
-    Wave 85: explicitly uses the watermark's alpha channel as the paste
-    mask so ONLY the actual CMYK bars / text pixels are blended — no
-    rectangular background is drawn even if the source PNG has any
-    semi-transparent fill outside the logo strokes.
-    """
-    try:
-        from PIL import Image  # noqa: WPS433
-        wm_src = _load_watermark()
-        if wm_src is None:
-            return im
-        # Defensive: force RGBA in case the cached copy lost its alpha
-        if wm_src.mode != "RGBA":
-            wm_src = wm_src.convert("RGBA")
-        wm = wm_src.copy()
-        target_w = max(64, int(im.width * width_ratio))
-        scale = target_w / wm.width
-        target_h = max(1, int(wm.height * scale))
-        wm = wm.resize((target_w, target_h), Image.LANCZOS)
-        # Scale alpha by opacity so transparent stays transparent (0 * x = 0)
-        # and opaque becomes ~89/255 (≈35%).
-        alpha = wm.split()[-1].point(lambda px: int(px * opacity))
-        wm.putalpha(alpha)
-        # Composite onto a working RGBA copy, then flatten back to RGB.
-        # Use paste(...) with the alpha as the explicit mask so ONLY the
-        # logo's coloured pixels are blended — no background rectangle.
-        base = im.convert("RGBA")
-        margin = max(8, int(im.width * 0.02))
-        pos = (base.width - wm.width - margin, base.height - wm.height - margin)
-        base.paste(wm, pos, mask=wm.split()[-1])
-        return base.convert("RGB")
-    except Exception as e:
-        logger.debug("apply_watermark failed (%s) — returning un-watermarked", e)
-        return im
-
-
-def save_original_to_supabase(path: str, raw: bytes, *, source_bucket: str = "printer-images", content_type: str = "image/jpeg") -> bool:
-    """Wave 84 — store the un-watermarked source bytes in the private
-    `originals` bucket at `{source_bucket}/{path}` so future watermark
-    re-runs can rebuild cleanly without ghosting. Best-effort: never
-    raises — logs and returns False on failure."""
-    try:
-        full = f"{source_bucket}/{path}"
-        sb_admin.storage.from_("originals").upload(
-            full, raw, {"content-type": content_type, "upsert": "true"}
-        )
-        return True
-    except Exception as e:
-        logger.warning("save_original failed (%s/%s): %s", source_bucket, path, e)
-        return False
-
-
+# ---------- Pillow image compression ----------
 def compress_image(
     content: bytes,
     *,
     max_side: int = 1200,
     quality: int = 85,
     max_bytes: int = 500 * 1024,
-    watermark: bool = True,
 ) -> bytes:
-    """Wave 77 — pipeline:
-      1) If the original is already under both `max_side` and `max_bytes` AND
-         no watermark is requested, return it unchanged (fast path).
-      2) Otherwise: decode → resize so longest side ≤ max_side → apply
-         watermark (semi-transparent TonersCart logo, bottom-right) → encode
-         JPEG at `quality`. If output still exceeds `max_bytes`, drop quality
-         in 5-point steps down to 60 to hit the budget.
-      3) Returns original bytes if Pillow can't decode the format.
-    """
+    """Decode → resize so longest side ≤ max_side → encode JPEG at `quality`.
+    If output still exceeds `max_bytes`, drop quality in 5-point steps down to
+    60 to hit the budget. Returns original bytes if Pillow can't decode."""
     try:
         from PIL import Image  # noqa: WPS433
         im = Image.open(BytesIO(content))
@@ -1161,18 +1049,13 @@ def compress_image(
         else:
             im = im.convert("RGB")
         w, h = im.size
-        already_small_dims = max(w, h) <= max_side
-        already_small_bytes = len(content) <= max_bytes
-        # Fast path: original is small AND no watermark requested → keep as-is.
-        if already_small_dims and already_small_bytes and not watermark:
+        # Fast path: original already small enough
+        if max(w, h) <= max_side and len(content) <= max_bytes:
             return content
         # Resize so longest side ≤ max_side
         scale = max(w, h) / max_side
         if scale > 1:
             im = im.resize((int(w / scale), int(h / scale)), Image.LANCZOS)
-        # Watermark
-        if watermark:
-            im = apply_watermark(im)
         # Encode + iteratively trim quality until under budget
         q = quality
         while True:

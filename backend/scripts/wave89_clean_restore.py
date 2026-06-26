@@ -1,19 +1,22 @@
-"""Wave 86 — clean the burned-in Wave-79 wrong-watermark from all 60 images.
+"""Wave 89 — final clean restore.
 
-Root cause discovered: Wave 79 used a wrong watermark file that was 1918x991
-(an emergent.sh screenshot). Applied at 18% width on every image, it burned a
-~24%-of-height dark rectangle into the bottom-right of every JPEG. Wave 84/85
-only cropped ~14% of height (sized for the CORRECT logo's 336/1679 ≈ 0.20
-aspect) — so the top portion of the burned-in mark was still visible.
+Restores all 60 existing product images from the pre-Wave84 snapshots in
+the `originals/` bucket, applies COMPRESSION ONLY (no watermark, no white
+plate, no logo overlay), and replaces the live versions in `printer-images`
+and `product-images`.
 
-Fix: paint a clean WHITE rectangle (sized for the WRONG watermark's footprint
-+ safety) over the bottom-right of every pre-Wave84 snapshot, then re-apply
-the correct TonersCart CMYK logo on top of that clean plate via the standard
-compress_image() pipeline.
+Note on burned-in Wave-79 mark: the pre-Wave84 snapshots still contain the
+emergent.sh screenshot that was burned into the JPEG bytes during Wave 79.
+This script crops the bottom strip using the WRONG-watermark's footprint
+math (991/1918 aspect, 22% width) to physically remove those baked-in
+pixels — otherwise the dark rectangle would reappear when we strip the
+white plate that was covering it.
+
+After this run, the `originals` bucket can be safely deleted.
 
 USAGE:
-    python3 /app/backend/scripts/wave86_whitebox_clean.py --limit 3
-    python3 /app/backend/scripts/wave86_whitebox_clean.py
+    python3 /app/backend/scripts/wave89_clean_restore.py --dry-run --limit 3
+    python3 /app/backend/scripts/wave89_clean_restore.py
 """
 import argparse
 import logging
@@ -24,20 +27,17 @@ from io import BytesIO
 
 sys.path.insert(0, "/app/backend")
 
-from server import sb_admin, compress_image, _load_watermark  # noqa: E402
+from server import sb_admin, compress_image  # noqa: E402
 
 
-# Wave 79 wrong-watermark footprint (1918x991, aspect 0.517) scaled to 18%
-# of image width. We add a generous safety margin so even slight JPEG bleed
-# or scaling differences are covered.
-WRONG_WM_ASPECT = 991 / 1918  # ≈ 0.517
-WIDTH_RATIO = 0.22            # 22% of image width (was 18% — adds margin)
-HEIGHT_RATIO_BONUS = 0.04     # +4% of width as extra height safety
+WRONG_WM_ASPECT = 991 / 1918  # ≈ 0.517 — Wave-79 wrong-watermark footprint
+WIDTH_RATIO = 0.22
+HEIGHT_RATIO_BONUS = 0.04
 
 
 def setup_logger() -> logging.Logger:
-    log_path = f"/tmp/wave86_whitebox_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.log"
-    logger = logging.getLogger("wave86")
+    log_path = f"/tmp/wave89_clean_restore_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.log"
+    logger = logging.getLogger("wave89")
     logger.setLevel(logging.INFO)
     fh = logging.FileHandler(log_path)
     sh = logging.StreamHandler(sys.stdout)
@@ -50,17 +50,16 @@ def setup_logger() -> logging.Logger:
     return logger
 
 
-def compute_white_plate(W: int, H: int) -> tuple:
-    """Return (x1, y1, x2, y2) for the white plate that covers the burned-in
-    Wave-79 wrong-watermark mark in the bottom-right corner."""
+def compute_crop_box(W: int, H: int) -> tuple:
+    """Compute (new_W, new_H) such that the bottom-right Wave-79
+    burned-in mark is fully cropped out. We trim the bottom strip
+    AND a small right gutter."""
     margin = max(8, int(W * 0.02))
-    plate_w = max(96, int(W * WIDTH_RATIO))
-    plate_h = max(48, int(plate_w * WRONG_WM_ASPECT + W * HEIGHT_RATIO_BONUS))
-    x1 = max(0, W - plate_w - margin)
-    y1 = max(0, H - plate_h - margin)
-    x2 = W
-    y2 = H
-    return (x1, y1, x2, y2)
+    burned_w = max(96, int(W * WIDTH_RATIO))
+    burned_h = max(48, int(burned_w * WRONG_WM_ASPECT + W * HEIGHT_RATIO_BONUS))
+    bottom_trim = burned_h + margin + 4
+    right_trim = margin + 4
+    return max(1, W - right_trim), max(1, H - bottom_trim)
 
 
 def list_originals(prefix: str) -> list:
@@ -82,7 +81,11 @@ def list_originals(prefix: str) -> list:
                 stack.append(path)
             else:
                 target_path = path[len(prefix) + 1:]
-                out.append({"originals_path": path, "target_bucket": target_bucket, "target_path": target_path})
+                out.append({
+                    "originals_path": path,
+                    "target_bucket": target_bucket,
+                    "target_path": target_path,
+                })
     return out
 
 
@@ -91,6 +94,7 @@ def process(item: dict, logger: logging.Logger, *, dry_run: bool) -> bool:
     tb = item["target_bucket"]
     tp = item["target_path"]
 
+    # OEM partner logos: don't crop / no compress — restore as-is
     if tp.startswith("oem/") and "/logo-" in tp:
         logger.info("SKIP OEM logo %s", tp)
         return True
@@ -101,11 +105,11 @@ def process(item: dict, logger: logging.Logger, *, dry_run: bool) -> bool:
         logger.error("download FAIL %s — %s", op, e)
         return False
     if not raw or len(raw) < 1024:
-        logger.warning("too small (%d bytes), skipping", len(raw) if raw else 0)
+        logger.warning("too small (%d bytes), skipping %s", len(raw) if raw else 0, op)
         return True
 
     try:
-        from PIL import Image, ImageDraw
+        from PIL import Image
         im = Image.open(BytesIO(raw))
         im.load()
         if im.mode in ("RGBA", "P", "LA"):
@@ -116,33 +120,28 @@ def process(item: dict, logger: logging.Logger, *, dry_run: bool) -> bool:
             im = im.convert("RGB")
 
         W, H = im.size
-        plate = compute_white_plate(W, H)
-        # Paint the white plate over the burned-in wrong-watermark zone
-        draw = ImageDraw.Draw(im)
-        draw.rectangle(plate, fill=(255, 255, 255))
-
-        # Re-encode to JPEG, then run through compress_image which re-applies
-        # the correct CMYK watermark at the current 20% opacity onto the now
-        # CLEAN white plate area.
+        new_W, new_H = compute_crop_box(W, H)
+        cropped = im.crop((0, 0, new_W, new_H))
         buf = BytesIO()
-        im.save(buf, format="JPEG", quality=92)
-        out = compress_image(buf.getvalue(), max_side=1200, quality=85, watermark=True)
+        cropped.save(buf, format="JPEG", quality=92)
+        # Pure compression — no watermark anywhere.
+        out = compress_image(buf.getvalue(), max_side=1200, quality=85)
     except Exception as e:
         logger.error("process FAIL %s — %s", op, e)
         return False
 
     if dry_run:
-        logger.info("DRY %s/%s — %d→%d bytes (plate=%dx%d at %dx%d)", tb, tp, len(raw), len(out),
-                    plate[2]-plate[0], plate[3]-plate[1], W, H)
+        logger.info("DRY %s/%s — %d→%d bytes (%dx%d→%dx%d)", tb, tp, len(raw), len(out), W, H, new_W, new_H)
         return True
 
     try:
-        sb_admin.storage.from_(tb).upload(tp, out, {"content-type": "image/jpeg", "upsert": "true"})
+        sb_admin.storage.from_(tb).upload(
+            tp, out, {"content-type": "image/jpeg", "upsert": "true"}
+        )
     except Exception as e:
         logger.error("upload FAIL %s/%s — %s", tb, tp, e)
         return False
-    logger.info("OK %s/%s — %d→%d bytes (plate=%dx%d at %dx%d)", tb, tp, len(raw), len(out),
-                plate[2]-plate[0], plate[3]-plate[1], W, H)
+    logger.info("OK %s/%s — %d→%d bytes (%dx%d→%dx%d)", tb, tp, len(raw), len(out), W, H, new_W, new_H)
     return True
 
 
@@ -153,13 +152,6 @@ def main() -> int:
     args = parser.parse_args()
 
     logger = setup_logger()
-    wm = _load_watermark()
-    if wm is None:
-        logger.error("Watermark not loaded — aborting")
-        return 2
-    logger.info("Watermark: %dx%d %s", wm.size[0], wm.size[1], wm.mode)
-    logger.info("Plate config: width=%.0f%% of W, height=%.0f%% × W + bonus", WIDTH_RATIO*100, WRONG_WM_ASPECT*100)
-
     all_items = []
     for prefix in ("printer-images-pre-wave84", "product-images-pre-wave84"):
         items = list_originals(prefix)
