@@ -1,6 +1,10 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-26 Wave 80):** Iteration 70 — **Wave-79/80 four-fix bundle verified 100% PASS.**
+> **Latest (2026-06-26 Wave 81):** **Mobile sell-banner reverted to full-size + printer animation nudged up.** Per user request after Wave-80 verification, the slim mobile sell-banner variant was reverted — the full-size desktop banner now renders identically on mobile (135px tall, includes title + description + Apply button). To keep the headline above the fold at 390×800, the hero grid top-margin was reduced on mobile (`mt-3 sm:mt-10`) and the printer animation column got a `-mt-2 sm:mt-0`. Verified: headline starts at y=659 and is fully visible within an 800px viewport.
+
+
+
+> **Prev (2026-06-26 Wave 80):** Iteration 70 — **Wave-79/80 four-fix bundle verified 100% PASS.**
 >
 > (1) **Watermark restored to `/app/frontend/public/TONERSCART-bg.png`** (1918×991 PNG, loaded once at backend start). Batch script `wave79_watermark_existing.py` previously executed end-to-end: 59/59 OK, 0 failed in 132.7s. Every object in the `printer-images` bucket now carries the TonersCart logo overlay.
 >
