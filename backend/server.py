@@ -1026,17 +1026,74 @@ def sanitize(s: Optional[str], max_len: int = 2000) -> str:
     return s[:max_len]
 
 
-# ---------- Pillow image compression ----------
+# ---------- Pillow image compression + watermarking ----------
+# Wave 91 — watermark re-enabled for NEW product-image uploads only.
+# Source: /app/frontend/public/TONERSCART-bg.png (RGBA, transparent bg).
+# Cached at process start; falls back silently if file is missing.
+_WATERMARK_PATH = "/app/frontend/public/TONERSCART-bg.png"
+_WATERMARK_IMG = None
+
+
+def _load_watermark():
+    """Lazy-load the watermark PNG into RGBA. Returns Pillow Image or None."""
+    global _WATERMARK_IMG
+    if _WATERMARK_IMG is not None:
+        return _WATERMARK_IMG if _WATERMARK_IMG is not False else None
+    try:
+        from PIL import Image  # noqa: WPS433
+        _WATERMARK_IMG = Image.open(_WATERMARK_PATH).convert("RGBA")
+    except Exception as e:
+        logger.debug("Watermark not loaded (%s) — uploads will be saved un-watermarked", e)
+        _WATERMARK_IMG = False
+        return None
+    return _WATERMARK_IMG
+
+
+def apply_watermark(im, *, opacity: float = 0.20, width_ratio: float = 0.20):
+    """Composite the TonersCart logo onto the bottom-right corner of `im`.
+    Logo width = `width_ratio` × image width, opacity = `opacity` (20%).
+    Uses alpha channel as paste mask so ONLY the logo pixels blend onto
+    the photo — no background rectangle, no white box, no dark box."""
+    try:
+        from PIL import Image  # noqa: WPS433
+        wm_src = _load_watermark()
+        if wm_src is None:
+            return im
+        if wm_src.mode != "RGBA":
+            wm_src = wm_src.convert("RGBA")
+        wm = wm_src.copy()
+        target_w = max(64, int(im.width * width_ratio))
+        scale = target_w / wm.width
+        target_h = max(1, int(wm.height * scale))
+        wm = wm.resize((target_w, target_h), Image.LANCZOS)
+        # Scale alpha by opacity so transparent stays transparent (0×k = 0)
+        # and opaque becomes opacity × 255.
+        alpha = wm.split()[3].point(lambda px: int(px * opacity))
+        wm.putalpha(alpha)
+        base = im.convert("RGBA")
+        margin = max(8, int(im.width * 0.02))
+        pos = (base.width - wm.width - margin, base.height - wm.height - margin)
+        # Use the watermark's alpha channel as the explicit mask — only the
+        # logo pixels are drawn, transparent regions are skipped.
+        base.paste(wm, pos, mask=wm.split()[3])
+        return base.convert("RGB")
+    except Exception as e:
+        logger.debug("apply_watermark failed (%s) — returning un-watermarked", e)
+        return im
+
+
 def compress_image(
     content: bytes,
     *,
     max_side: int = 1200,
     quality: int = 85,
     max_bytes: int = 500 * 1024,
+    watermark: bool = False,
 ) -> bytes:
-    """Decode → resize so longest side ≤ max_side → encode JPEG at `quality`.
-    If output still exceeds `max_bytes`, drop quality in 5-point steps down to
-    60 to hit the budget. Returns original bytes if Pillow can't decode."""
+    """Decode → resize so longest side ≤ max_side → optional watermark →
+    encode JPEG at `quality`. Drops quality in 5-point steps down to 60
+    if output exceeds `max_bytes`. Returns original bytes if Pillow can't
+    decode."""
     try:
         from PIL import Image  # noqa: WPS433
         im = Image.open(BytesIO(content))
@@ -1049,13 +1106,16 @@ def compress_image(
         else:
             im = im.convert("RGB")
         w, h = im.size
-        # Fast path: original already small enough
-        if max(w, h) <= max_side and len(content) <= max_bytes:
+        # Fast path: original already small AND no watermark requested
+        if max(w, h) <= max_side and len(content) <= max_bytes and not watermark:
             return content
         # Resize so longest side ≤ max_side
         scale = max(w, h) / max_side
         if scale > 1:
             im = im.resize((int(w / scale), int(h / scale)), Image.LANCZOS)
+        # Watermark (only when explicitly requested)
+        if watermark:
+            im = apply_watermark(im)
         # Encode + iteratively trim quality until under budget
         q = quality
         while True:

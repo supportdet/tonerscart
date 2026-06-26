@@ -242,7 +242,7 @@ async def upload_printer_image(file: UploadFile = File(...), user: dict = Depend
     ext = "jpg"
     path = f"{user['id']}/{uuid.uuid4().hex}.{ext}"
     # Compress / resize so storage stays cheap and pages load fast
-    content = compress_image(content, max_side=1200, quality=85)
+    content = compress_image(content, max_side=1200, quality=85, watermark=True)
     try:
         sb_admin.storage.from_("printer-images").upload(
             path, content, {"content-type": "image/jpeg", "upsert": "false"}
@@ -266,7 +266,7 @@ async def upload_listing_image(file: UploadFile = File(...), user: dict = Depend
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(400, "Max 5 MB")
     path = f"{user['id']}/{uuid.uuid4().hex}.jpg"
-    content = compress_image(content, max_side=1200, quality=85)
+    content = compress_image(content, max_side=1200, quality=85, watermark=True)
     try:
         sb_admin.storage.from_("printer-images").upload(
             path, content, {"content-type": "image/jpeg", "upsert": "false"}
