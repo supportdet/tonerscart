@@ -1,6 +1,16 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-26 Wave 81):** **Mobile sell-banner reverted to full-size + printer animation nudged up.** Per user request after Wave-80 verification, the slim mobile sell-banner variant was reverted — the full-size desktop banner now renders identically on mobile (135px tall, includes title + description + Apply button). To keep the headline above the fold at 390×800, the hero grid top-margin was reduced on mobile (`mt-3 sm:mt-10`) and the printer animation column got a `-mt-2 sm:mt-0`. Verified: headline starts at y=659 and is fully visible within an 800px viewport.
+> **Latest (2026-06-26 Wave 82):** **Correct TonersCart logo restored as header logo AND watermark.**
+>
+> The file at `/app/frontend/public/TONERSCART-bg.png` was a wrong DARK-BACKGROUND version (1918×991, 426 KB, most pixels near-black RGB(14,14,15)). The CORRECT logo (CMYK vertical bars + "Toners" in black + "Cart" in cyan, transparent background) was already stored as an asset (1679×336, 224 KB, RGBA with proper alpha=0 on corners + RGB(1,174,246) cyan / (229,1,136) magenta / (2,176,247) cyan "Cart" pixels). Replaced the public file with the correct asset.
+>
+> Backend restarted to clear the cached `_load_watermark()` Pillow instance. Re-ran `scripts/wave79_watermark_existing.py` on the entire `printer-images` Supabase bucket: **59/59 OK, 0 failed in 126.2 s** (log: `/tmp/wave81_full_run.log`). Spot-check on `cafd037d-…/02362eb…jpg` confirms via image-analysis that the new watermark in the bottom-right corner shows sharp CMYK color bars, "Toners" text in black, and "Cart" in cyan — no longer the muddy dark blob from the old wrong watermark.
+>
+> The header logo on the live site (Wave-82 cache-busted screenshot) now displays correctly: 4 vertical CMYK strokes followed by "Toners" black + "Cart" cyan, scaled to 36-40 px high in the navbar.
+
+
+
+> **Prev (2026-06-26 Wave 81):** **Mobile sell-banner reverted to full-size + printer animation nudged up.** Per user request after Wave-80 verification, the slim mobile sell-banner variant was reverted — the full-size desktop banner now renders identically on mobile (135px tall, includes title + description + Apply button). To keep the headline above the fold at 390×800, the hero grid top-margin was reduced on mobile (`mt-3 sm:mt-10`) and the printer animation column got a `-mt-2 sm:mt-0`. Verified: headline starts at y=659 and is fully visible within an 800px viewport.
 
 
 
