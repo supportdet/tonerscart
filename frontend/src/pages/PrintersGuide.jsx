@@ -18,6 +18,7 @@ import PageMeta from "../components/PageMeta";
 const USAGES = [
     { id: "home", label: "Home", desc: "Personal / household use" },
     { id: "corporate", label: "Corporate / Office", desc: "Shared by a team or department" },
+    { id: "government", label: "Government / PSU", desc: "Government department, PSU, or public sector" },
     { id: "commercial", label: "Commercial / Industrial", desc: "Factory, warehouse, retail chain" },
     { id: "print_shop", label: "Print Shop / Copy Center", desc: "Commercial printing business" },
 ];
@@ -111,13 +112,14 @@ const BUDGETS = [
 const QUANTITIES = [
     { id: "1",     label: "1 printer",     num: 1 },
     { id: "2-5",   label: "2 – 5 printers",   num: 5 },
-    { id: "6-20",  label: "6 – 20 printers",  num: 20 },
-    { id: "20+",   label: "20+ printers",  num: 999, leadCapture: true },
+    { id: "6-10",  label: "6 – 10 printers",  num: 10 },
+    { id: "11-20", label: "11 – 20 printers", num: 20, mpsRedirect: true },
+    { id: "20+",   label: "20+ printers",  num: 999, mpsRedirect: true },
 ];
 
 // Pretty labels for the summary card on the lead-capture screen
 const LABELS = {
-    home: "Home", corporate: "Corporate / Office",
+    home: "Home", corporate: "Corporate / Office", government: "Government / PSU",
     commercial: "Commercial / Industrial", print_shop: "Print Shop / Copy Center",
     color: "Color", bw: "Black & White", both: "Color + B&W",
     print_only: "Print only", print_scan: "Print + Scan",
@@ -137,7 +139,14 @@ const ALL_STEPS = [
 
 function visibleSteps(a) {
     const list = ["usage"];
-    if (a.usage) list.push("tech");
+    if (!a.usage) return list;
+    // Wave 93: Corporate / Government go straight from usage → quantity
+    // (skipping all intermediate spec questions). MPS team handles them.
+    if (a.usage === "corporate" || a.usage === "government") {
+        list.push("quantity");
+        return list;
+    }
+    list.push("tech");
     const needsPaper = a.usage === "commercial" || a.usage === "print_shop";
     if (needsPaper && a.tech) list.push("paper");
     // If non-A4 chosen, we short-circuit before color shows
@@ -173,16 +182,15 @@ export default function PrintersGuide({ embedded = false, onClose }) {
     // ---------- routing ----------
 
     const routeToMarketplace = (a) => {
+        // Wave 93: Questionnaire filters ONLY on print technology + color.
+        // All other selections (usage, function, volume, connectivity,
+        // features, paper size, budget, quantity) are kept as lead signals
+        // but do NOT narrow the marketplace listing — those filters live on
+        // the listings page itself for the user to apply or remove.
         const params = new URLSearchParams();
-        if (a.usage) params.set("usage_type", a.usage);
         if (a.tech && a.tech !== "other") params.set("category", a.tech);
         if (a.color) params.set("color", a.color);
-        if (a.function) params.set("function_", a.function);
-        const vol = VOLUMES_BY_USAGE[a.usage]?.find((v) => v.id === a.volume);
-        if (vol) { params.set("min_volume", String(vol.min)); params.set("max_volume", String(vol.max)); }
         if (currentCity) params.set("city", currentCity);
-        // Note: paper_size, connectivity, feature, budget and quantity are
-        // intentionally NOT sent — questionnaire-only signals for routing.
         // Wave 56: when rendered inside the auto-open popup, close it first
         // so the final-step click reveals the freshly-filtered marketplace
         // underneath. Without this the overlay stayed mounted after the URL
@@ -191,13 +199,25 @@ export default function PrintersGuide({ embedded = false, onClose }) {
         navigate(`/printers/results?${params.toString()}`);
     };
 
+    const routeToMps = () => {
+        if (embedded && onClose) onClose();
+        navigate("/mps");
+    };
+
     const advance = (next) => {
         // Branch: paper size non-A4 → lead capture
         if (next.paper && next.paper !== "A4") return setPhase("lead");
         // Branch: budget above 1.5L → lead capture
         if (next.budget === ">150k") return setPhase("lead");
-        // Branch: quantity 20+ → lead capture
-        if (next.quantity === "20+") return setPhase("lead");
+        // Wave 93: Corporate / Government usage → straight to MPS form
+        // (their flow only asks quantity, and the MPS team handles them
+        // regardless of count).
+        if (stepKey === "quantity" && (next.usage === "corporate" || next.usage === "government")) {
+            return routeToMps();
+        }
+        // Wave 93: quantity > 10 → MPS inquiry instead of marketplace
+        const qSel = QUANTITIES.find((q) => q.id === next.quantity);
+        if (qSel?.mpsRedirect) return routeToMps();
         // Final step: route to marketplace
         if (stepKey === "quantity") return routeToMarketplace(next);
         setDir("fwd");

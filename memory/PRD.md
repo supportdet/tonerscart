@@ -1,6 +1,25 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-26 Wave 92):** **Watermark applied to all existing 65 product images on live site.**
+> **Latest (2026-06-27 Wave 93):** **Questionnaire / MPS flow + navbar tweaks.**
+>
+> ### 1) Corporate & Government skip to quantity
+> Added new `government` usage option ("Government / PSU"). `visibleSteps()` short-circuits to `["usage", "quantity"]` whenever `a.usage` is `corporate` or `government` — bypasses tech / paper / color / function / volume / connectivity / features / budget steps entirely. (Both branches still funnel to MPS at the end — see #2.)
+>
+> ### 2) Quantity > 10 → MPS auto-redirect
+> Renamed `QUANTITIES` buckets to: `1`, `2–5`, `6–10`, `11–20` (`mpsRedirect: true`), `20+` (`mpsRedirect: true`). New `routeToMps()` helper in `PrintersGuide.jsx` navigates to `/mps`. Triggered from `advance()` when (a) `quantity.mpsRedirect === true` OR (b) `usage` is corporate/government on the quantity step. `MPS.jsx` gained a green pill: "We typically respond within a few hours" (`data-testid="mps-response-note"`).
+>
+> ### 3) Navbar pill order
+> `Header.jsx CATEGORY_PILLS` reordered: `Toners → Printers → MPS/Rentals → Inks & Consumables → Scanners → Papers → …`. MPS now 3rd, Inks & Consumables 4th. All other pills unchanged.
+>
+> ### 4) Questionnaire filters slimmed to tech + color only
+> `routeToMarketplace` now sends ONLY `category` (tech), `color`, and `city` to the marketplace URL. Stripped from the params: `usage_type`, `function_`, `min_volume`, `max_volume` — these were narrowing results based on questionnaire signals that the user can already configure via the listings-page filters.
+>
+> ### Verification
+> End-to-end Playwright flow: Corporate → quantity → 11-20 → lands on `/mps` with the response-time note visible. All 4 changes confirmed live. Lint clean.
+
+
+
+> **Prev (2026-06-26 Wave 92):** **Watermark applied to all existing 65 product images on live site.**
 >
 > User reversed Wave-91's "do not touch existing images" decision after seeing no watermarks visible. Created `scripts/wave92_apply_to_existing.py`: iterates every object in `printer-images` + `product-images`, downloads → runs through `compress_image(..., watermark=True)` → upserts back. No cropping, no white plate — only the new 20%-opacity transparent-bg watermark composited via `paste(mask=alpha)`.
 >

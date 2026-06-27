@@ -62,6 +62,10 @@ export default function MPS() {
                 <p className="text-white/65 mt-3 text-[14.5px] max-w-2xl">
                     Tell us what you&apos;re looking for and our team will get back to you within one business day with tailored recommendations.
                 </p>
+                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#3FD267]/15 border border-[#3FD267]/30 text-[#3FD267] text-[12.5px] font-medium" data-testid="mps-response-note">
+                    <Clock size={13} />
+                    We typically respond within a few hours.
+                </div>
 
                 <div className="mt-8 grid lg:grid-cols-3 gap-6">
                     {/* Form */}
