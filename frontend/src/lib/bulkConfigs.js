@@ -560,7 +560,7 @@ export const consumableBulkConfig = {
 
 // ============================ SCANNERS ============================
 
-const SCANNER_TYPES = ["Flatbed", "ADF", "Sheet-fed", "Drum", "Photo", "All-in-one"];
+const SCANNER_TYPES = ["Flatbed", "ADF", "Sheet-fed", "Drum", "Photo", "Book Scanner"];
 const SCANNER_CONDITIONS = ["New", "Refurbished"];
 const SCANNER_RESOLUTIONS = ["600dpi", "1200dpi", "2400dpi", "4800dpi", "9600dpi"];
 const SCANNER_COLOR_MODES = ["Color", "Mono"];
@@ -583,8 +583,8 @@ const SCANNER_COLUMNS = [
 ];
 
 const scannerEmptyRow = () => ({
-    brand: "", model_number: "", scanner_type: "Flatbed", condition: "New",
-    scan_resolution: "1200dpi", connectivity: "", scan_speed_ppm: "", color_mode: "Color",
+    brand: "", model_number: "", scanner_type: "", condition: "",
+    scan_resolution: "", connectivity: "", scan_speed_ppm: "", color_mode: "Color",
     warranty: "No warranty", price: "", gst_rate: "18", price_type: "incl", stock: "",
     intercity_delivery_charge: "0", description: "",
 });
@@ -608,9 +608,13 @@ const scannerRowErrors = (r) => {
 const scannerScalarPayload = (r) => ({
     brand: r.brand.trim(),
     model_number: r.model_number.trim(),
-    scanner_type: r.scanner_type || "Flatbed",
-    condition: r.condition || "New",
-    scan_resolution: r.scan_resolution || null,
+    // Wave 94: pass scanner_type / condition / scan_resolution through verbatim
+    // (no silent fallback) so Excel-uploaded values are honoured exactly as
+    // entered. Required-field validation in `scannerRowErrors` already catches
+    // a missing scanner_type and surfaces it to the user.
+    scanner_type: (r.scanner_type || "").trim(),
+    condition: (r.condition || "").trim() || "New",
+    scan_resolution: (r.scan_resolution || "").trim() || null,
     connectivity: splitList(r.connectivity),
     scan_speed_ppm: num(r.scan_speed_ppm),
     color_mode: r.color_mode || "Color",

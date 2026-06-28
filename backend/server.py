@@ -1401,7 +1401,7 @@ class ConsumablePatch(BaseModel):
 # Scanners — buyer feed + supplier CRUD (Wave 21)
 # =============================================================================
 
-SCANNER_TYPES = {"Flatbed", "ADF", "Sheet-fed", "Drum", "Photo", "All-in-one"}
+SCANNER_TYPES = {"Flatbed", "ADF", "Sheet-fed", "Drum", "Photo", "Book Scanner"}
 SCANNER_CONDITIONS = {"New", "Refurbished"}
 SCANNER_RESOLUTIONS = {"600dpi", "1200dpi", "2400dpi", "4800dpi", "9600dpi"}
 SCANNER_CONNECTIVITY = {"USB", "WiFi", "Ethernet", "Bluetooth"}
