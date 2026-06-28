@@ -1,6 +1,23 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-27 Wave 93):** **Questionnaire / MPS flow + navbar tweaks.**
+> **Latest (2026-06-28 Wave 94):** **Scanner type list updated + bulk-upload defaults removed.**
+>
+> ### 1) Scanner types: "All-in-one" → "Book Scanner"
+> Synced across all 3 sources of truth:
+> - `frontend/src/lib/scannerConstants.js` (shared list used by the dealer single-add form, listings filter pills, and product card)
+> - `frontend/src/lib/bulkConfigs.js` (local copy used by the bulk-upload table validator)
+> - `backend/server.py` `SCANNER_TYPES` set (the API validator)
+>
+> DB check: zero existing `scanner_listings` rows have `scanner_type = 'All-in-one'`, so no migration needed.
+>
+> ### 2) Bulk-upload template no longer pre-selects defaults
+> `bulkConfigs.js scannerEmptyRow()` was pre-filling `scanner_type="Flatbed"`, `condition="New"`, `scan_resolution="1200dpi"` on every empty row, which (a) silently overrode Excel-uploaded values when the user wanted them empty, and (b) confused dealers into thinking the values were already chosen for them.
+>
+> All three defaults now start as `""`. `scannerScalarPayload` was also tightened: `scanner_type` passes through verbatim (`(r.scanner_type || "").trim()`) so an empty cell triggers the existing required-field validation instead of being silently coerced to "Flatbed". `condition` and `scan_resolution` keep their backend fallbacks (`"New"` / `null`) since they're optional fields.
+
+
+
+> **Prev (2026-06-27 Wave 93):** **Questionnaire / MPS flow + navbar tweaks.**
 >
 > ### 1) Corporate & Government skip to quantity
 > Added new `government` usage option ("Government / PSU"). `visibleSteps()` short-circuits to `["usage", "quantity"]` whenever `a.usage` is `corporate` or `government` — bypasses tech / paper / color / function / volume / connectivity / features / budget steps entirely. (Both branches still funnel to MPS at the end — see #2.)
