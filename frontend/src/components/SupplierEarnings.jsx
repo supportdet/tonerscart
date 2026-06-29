@@ -35,7 +35,7 @@ export default function SupplierEarnings() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {[
                     { k: "Total GMV", v: fmtMoney(stats.total_gmv), Icon: TrendingUp },
-                    { k: "Commission deducted", v: fmtMoney(stats.total_commission), Icon: IndianRupee },
+                    { k: "Referral fee deducted", v: fmtMoney(stats.total_commission), Icon: IndianRupee },
                     { k: "Net payout", v: fmtMoney(stats.total_net), Icon: Wallet, hi: true },
                     { k: "Orders", v: stats.orders, Icon: Package },
                 ].map((s) => (
@@ -58,7 +58,7 @@ export default function SupplierEarnings() {
                                 <th className="text-left p-3">Product</th>
                                 <th className="text-right p-3">Qty</th>
                                 <th className="text-right p-3">Order value</th>
-                                <th className="text-right p-3">Commission</th>
+                                <th className="text-right p-3">Referral fee</th>
                                 <th className="text-right p-3">Net payout</th>
                                 <th className="text-left p-3">Status</th>
                             </tr>
@@ -74,10 +74,7 @@ export default function SupplierEarnings() {
                                         {o.commission == null ? (
                                             <span className="text-[11px] text-[#86868B] italic">Deal basis</span>
                                         ) : (
-                                            <>
-                                                <div className="font-mono text-[#0A0A0B]">−{fmtMoney(o.commission)}</div>
-                                                <div className="text-[10.5px] text-[#86868B]">{o.commission_rate}</div>
-                                            </>
+                                            <div className="font-mono text-[#0A0A0B]">−{fmtMoney(o.commission)}</div>
                                         )}
                                     </td>
                                     <td className="p-3 text-right font-mono font-semibold text-emerald-700">{fmtMoney(o.payout)}</td>

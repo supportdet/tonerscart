@@ -1,42 +1,26 @@
-// Commission utility — shared by Add Toner, Add Printer, Calculator, Order Detail.
-// Tiers per TonersCart commercial policy (2026 v3, Wave 58 — reaffirmed Wave 62),
-// charged on the order BILL VALUE EXCLUDING GST / taxes and EXCLUDING delivery,
-// deducted from the seller's payout:
-//   Under ₹15,000        → 10%
-//   ₹15,000 – ₹30,000    → 8%
-//   ₹30,000 – ₹75,000    → 6%
-//   ₹75,000 – ₹1,00,000  → 5%
-//   ₹1,00,000 & above    → 4%
-//
-// GST and delivery are passed through to the dealer in full — TonersCart never
-// takes a cut on either. The customer's bill = base + GST + delivery; no
-// platform fee is added on the buyer side.
+// Referral-fee utility (Wave 95).
+// Replaces the previous tiered commission model with a flat 7%. The fee is
+// computed on the BASE PRICE (excluding GST). GST and delivery are passed
+// through to the dealer in full — no platform cut on either. The customer
+// never pays any platform fee on top.
 
-export const COMMISSION_TIERS = [
-    { id: "tier1", upTo: 15000,    rate: 0.10, label: "Under ₹15,000",        rateLabel: "10%" },
-    { id: "tier2", upTo: 30000,    rate: 0.08, label: "₹15,000 – ₹30,000",    rateLabel: "8%" },
-    { id: "tier3", upTo: 75000,    rate: 0.06, label: "₹30,000 – ₹75,000",    rateLabel: "6%" },
-    { id: "tier4", upTo: 100000,   rate: 0.05, label: "₹75,000 – ₹1,00,000",  rateLabel: "5%" },
-    { id: "tier5", upTo: Infinity, rate: 0.04, label: "₹1,00,000 & above",    rateLabel: "4%" },
-];
+export const COMMISSION_RATE = 0.07;
 
 /**
- * Calculate commission and payout from BASE PRICE (excl GST).
- * Callers should strip GST first using priceFromInclusive when the dealer has
- * entered a GST-inclusive figure.
+ * Calculate referral fee and payout from BASE PRICE (excl GST).
+ * Returns same shape the old commissionFor() did, with `rateLabel` always
+ * "7%" — kept so existing call sites continue working during the rollout.
  */
 export function commissionFor(basePrice) {
     const p = Number(basePrice) || 0;
     if (p <= 0) return null;
-    const tier = COMMISSION_TIERS.find((t) => p < t.upTo) || COMMISSION_TIERS[COMMISSION_TIERS.length - 1];
-    const commission = Math.round(p * tier.rate * 100) / 100;
+    const commission = Math.round(p * COMMISSION_RATE * 100) / 100;
     return {
         price: p,
-        rate: tier.rate,
-        rateLabel: tier.rateLabel,
+        rate: COMMISSION_RATE,
+        rateLabel: "7%",
         commission,
         payout: p - commission, // legacy field — does NOT include GST/delivery
-        tier,
     };
 }
 
@@ -45,12 +29,11 @@ export function commissionFor(basePrice) {
  * GST or not, and the GST rate. Returns everything the calculator + upload
  * forms need to display.
  *
- *   basePrice          – GST-exclusive base (what TonersCart stores + uses for commission)
+ *   basePrice          – GST-exclusive base (used for referral-fee calc)
  *   gstAmount          – Tax on top of base (passed through to dealer in full)
- *   buyerInclPrice     – base + GST (what the customer pays at checkout, before delivery)
- *   commission         – TonersCart fee on basePrice only
- *   dealerPayout       – basePrice − commission + gstAmount (delivery added separately at order time)
- *   rateLabel          – e.g. "10%"
+ *   buyerInclPrice     – base + GST (what customer pays at checkout)
+ *   commission         – TonersCart referral fee on basePrice only (flat 7%)
+ *   dealerPayout       – basePrice − commission + gstAmount (delivery added at order time)
  */
 export function payoutBreakdown(typedPrice, priceType, gstRate) {
     const v = Number(typedPrice) || 0;
@@ -81,7 +64,7 @@ export function payoutBreakdown(typedPrice, priceType, gstRate) {
 }
 
 export const COMMISSION_BANNER_TEXT =
-    "TonersCart commission is calculated on your base price (excluding GST) only. GST and delivery charges are passed through to you in full. Commission tiers: under ₹15K = 10% · ₹15K–₹30K = 8% · ₹30K–₹75K = 6% · ₹75K–₹1L = 5% · ₹1L & above = 4%.";
+    "TonersCart charges a flat referral fee of 7% of your selling price (excluding GST) per completed order. GST and delivery charges are passed through to you in full. The referral fee is shown in rupee terms on every listing form.";
 
 export const COMMISSION_PAYOUT_NOTE =
-    "We take our commission only on the base price — GST and delivery flow through to you in full. Customers never pay any extra platform fee.";
+    "We deduct a flat 7% referral fee from your base price only — GST and delivery flow through to you in full. Customers never pay any platform fee.";

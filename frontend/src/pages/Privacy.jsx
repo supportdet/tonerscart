@@ -138,12 +138,10 @@ export default function Privacy() {
                         Phone: <a href="tel:+918884546789" className="text-[#00B7C7] hover:underline">+91 88845 46789</a>.
                     </Section>
 
-                    <Section title="15. Seller Payments & Commission">
+                    <Section title="15. Seller Payments & Referral Fee">
                         For sellers, the bank account details you provide (account holder name, account number, IFSC, bank and branch) are used
                         <strong> solely to remit your payouts</strong> for completed orders and are stored securely. Payouts are made after deducting
-                        TonersCart&apos;s platform commission, charged on the order <strong>bill value excluding GST</strong>:
-                        <strong> 10%</strong> under ₹15,000, <strong>8%</strong> for ₹15,000–₹30,000, <strong>6%</strong> for ₹30,000–₹75,000,
-                        <strong> 5%</strong> for ₹75,000–₹1,00,000, and <strong>4%</strong> for ₹1,00,000 &amp; above. See our
+                        TonersCart&apos;s <strong>flat 7% referral fee</strong> on the order value excluding GST. See our
                         <Link to="/terms" className="text-[#00B7C7] hover:underline"> Terms of Service</Link> for full commercial terms.
                     </Section>
 

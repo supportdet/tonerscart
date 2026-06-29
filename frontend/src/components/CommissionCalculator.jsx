@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Calculator } from "lucide-react";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { payoutBreakdown, COMMISSION_TIERS } from "../lib/commission";
+import { payoutBreakdown } from "../lib/commission";
 import { GST_RATES } from "../lib/listingConstants";
 
 const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -27,7 +27,7 @@ export default function CommissionCalculator() {
                 </h3>
             </div>
             <p className="text-[13px] text-[#6E6E73] mb-4">
-                Commission is calculated on your <strong>base price only</strong>. GST and delivery pass through to you in full.
+                A flat <strong>7% referral fee</strong> is deducted from your <strong>base price only</strong>. GST and delivery pass through to you in full.
             </p>
 
             <div className="grid grid-cols-2 gap-3 mb-3">
@@ -74,8 +74,8 @@ export default function CommissionCalculator() {
             {result ? (
                 <div className="mt-5 space-y-2.5" data-testid="calc-result">
                     <Row label="Buyer pays (incl. GST)" value={fmt(result.buyerInclPrice)} valueClass="text-[#0A0A0B]" testid="calc-buyer-pays" />
-                    <Row label="Base price (commission applied on this)" value={fmt(result.basePrice)} valueClass="text-[#0A0A0B]" testid="calc-base-price" />
-                    <Row label={`TonersCart commission (${result.rateLabel})`} value={`−${fmt(result.commission)}`} valueClass="text-red-700" testid="calc-commission" />
+                    <Row label="Base price (referral fee applied on this)" value={fmt(result.basePrice)} valueClass="text-[#0A0A0B]" testid="calc-base-price" />
+                    <Row label="Referral fee" value={`−${fmt(result.commission)}`} valueClass="text-red-700" testid="calc-commission" />
                     <Row label="GST passed through to you" value={`+${fmt(result.gstAmount)}`} valueClass="text-emerald-700" testid="calc-gst-passthrough" />
                     <div className="pt-2 mt-2 border-t border-black/[0.08]">
                         <Row label="Your payout (before delivery)" value={fmt(result.dealerPayout)} valueClass="text-emerald-700 font-bold text-[18px]" testid="calc-payout" />
@@ -87,15 +87,9 @@ export default function CommissionCalculator() {
             )}
 
             <div className="mt-5 pt-4 border-t border-black/[0.06]">
-                <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-[#86868B] mb-2" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 600 }}>Tier table</div>
-                <ul className="space-y-1.5 text-[13px] text-[#1D1D1F]" data-testid="calc-tier-list">
-                    {COMMISSION_TIERS.map((t) => (
-                        <li key={t.id} className="flex items-center justify-between">
-                            <span style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500 }}>{t.label}</span>
-                            <span className="font-mono text-[14px] text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 600 }}>{t.rateLabel}</span>
-                        </li>
-                    ))}
-                </ul>
+                <div className="text-[12.5px] text-[#1D1D1F] leading-relaxed" data-testid="calc-referral-note">
+                    <span className="font-semibold">Flat referral fee: 7%</span> of your base price (excluding GST), shown in rupees on every listing. GST and delivery pass through to you in full.
+                </div>
             </div>
         </div>
     );

@@ -79,16 +79,9 @@ export default function Terms() {
                         and is never stored on our servers.
                     </Section>
 
-                    <Section title="9. Commission Structure">
-                        TonersCart charges sellers a commission on successful orders, deducted from the seller&apos;s payout. The buyer-facing
-                        price is unaffected. Commission is charged on the order <strong>bill value, excluding GST / taxes</strong>. Tiers by order value:
-                        <List items={[
-                            "Under ₹15,000 → 10%",
-                            "₹15,000 to ₹30,000 → 8%",
-                            "₹30,000 to ₹75,000 → 6%",
-                            "₹75,000 to ₹1,00,000 → 5%",
-                            "₹1,00,000 and above → 4%",
-                        ]} />
+                    <Section title="9. Referral Fee">
+                        TonersCart charges sellers a flat referral fee of 7% on the order value excluding GST. This is deducted from the seller&apos;s payout.
+                        The referral fee is displayed in rupee terms on all listing forms.
                     </Section>
 
                     <Section title="10. Returns & Refunds">
@@ -106,7 +99,7 @@ export default function Terms() {
                     <Section title="11. Seller Payouts">
                         Seller payouts are queued for release as soon as the seller <strong>marks the order as dispatched and enters a valid
                         tracking number</strong>. Payouts are credited to the seller&apos;s registered bank account <strong>within 2 business
-                        days</strong> of dispatch, after deducting TonersCart&apos;s platform commission. Payouts are no longer gated on buyer
+                        days</strong> of dispatch, after deducting TonersCart&apos;s 7% referral fee. Payouts are no longer gated on buyer
                         confirmation or any post-dispatch waiting period; the buyer may still confirm delivery in their order history for
                         their own records. Seller bank account details provided during registration are shared with <strong>Razorpay</strong>,
                         TonersCart&apos;s payment partner, <strong>solely for the purpose of processing payouts</strong>. Sellers consent to
@@ -123,7 +116,7 @@ export default function Terms() {
                         The following are strictly prohibited and are grounds for suspension or termination:
                         <List items={[
                             "Listing or selling counterfeit, pirated or otherwise unauthorised goods",
-                            "Soliciting or completing off-platform deals to bypass commission",
+                            "Soliciting or completing off-platform deals to bypass the referral fee",
                             "Scraping, crawling or unauthorised automated access to the Platform",
                             "Spam, phishing, harassment or abuse of other users",
                             "Posting fake, misleading or fraudulent listings or reviews",
@@ -139,7 +132,7 @@ export default function Terms() {
 
                     <Section title="15. Limitation of Liability">
                         To the maximum extent permitted by law, TonersCart&apos;s aggregate liability for any claim arising from or relating to
-                        the Platform or an order is <strong>limited to the commission actually received by TonersCart on the underlying order</strong>.
+                        the Platform or an order is <strong>limited to the referral fee actually received by TonersCart on the underlying order</strong>.
                         We are not liable for indirect, incidental, special or consequential damages.
                     </Section>
 
