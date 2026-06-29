@@ -267,7 +267,7 @@ class SignupSupplier(BaseModel):
     pan_number: Optional[str] = ""
     annual_turnover: Optional[str] = ""
     years_in_business: Optional[int] = None
-    business_address: str
+    business_address: Optional[str] = ""
     seller_types: List[str] = Field(default_factory=list)        # ["Original","Compatible","Refilled"]
     compatible_brands: List[str] = Field(default_factory=list)
     testing_before_delivery: bool = False

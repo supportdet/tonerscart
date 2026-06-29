@@ -1602,7 +1602,15 @@ async def admin_bulk_create_dealers(payload: BulkDealerPayload, _: dict = Depend
                 "user_metadata": {"name": r.business_name, "role": "supplier"},
             })
         except Exception as ex:
-            failed.append({"email": e, "business_name": r.business_name, "reason": f"auth create failed: {ex}"})
+            # Wave 100 — "Already registered" from Supabase Auth must count as
+            # SKIPPED (the user already has an account, possibly as a buyer or
+            # admin), not FAILED. Failed is reserved for genuine errors
+            # (network, validation, server errors).
+            msg = str(ex).lower()
+            if "already" in msg or "registered" in msg or "exists" in msg or "duplicate" in msg or "user_already_exists" in msg:
+                skipped_existing.append({"email": e, "business_name": r.business_name, "reason": "already registered (Supabase Auth) — preserved"})
+            else:
+                failed.append({"email": e, "business_name": r.business_name, "reason": f"auth create failed: {ex}"})
             continue
         uid = created_user.user.id
 
@@ -1675,4 +1683,90 @@ async def admin_bulk_create_dealers(payload: BulkDealerPayload, _: dict = Depend
         "skipped_rows": skipped_existing,
         "failed_rows": failed,
     }
+
+
+
+# ============================================================================
+# Wave 100 — Admin "All Users" panel (list + delete)
+# ============================================================================
+
+@router.get("/admin/users")
+def admin_list_users(_: dict = Depends(require_role("admin"))):
+    """List every public.users row + protection flags.
+
+    Returns each user enriched with:
+      * `supplier_status`: 'approved' if a row exists in `suppliers`,
+                           'pending'/'rejected' if a row exists in
+                           `suppliers_pending`, else null.
+      * `is_protected`: True when the user has an APPROVED supplier row —
+        the admin UI hides the Delete button so the existing dealer base
+        (Big C, DET, Zion, Bios, Verve, Ravi, Shree, Amman, etc.) is
+        future-proofed without any hard-coded email list.
+
+    Sorted by created_at desc."""
+    users = sb_admin.table("users").select(
+        "id,email,name,role,user_type,phone,city,created_at"
+    ).order("created_at", desc=True).limit(2000).execute().data or []
+    try:
+        suppliers = sb_admin.table("suppliers").select("user_id").execute().data or []
+    except Exception:
+        suppliers = []
+    approved_uids = {s["user_id"] for s in suppliers}
+    try:
+        pending = sb_admin.table("suppliers_pending").select("user_id,status").execute().data or []
+    except Exception:
+        pending = []
+    pending_map = {p["user_id"]: p.get("status", "pending") for p in pending}
+
+    out = []
+    for u in users:
+        uid = u["id"]
+        if uid in approved_uids:
+            ss = "approved"
+        elif uid in pending_map:
+            ss = pending_map[uid] or "pending"
+        else:
+            ss = None
+        u["supplier_status"] = ss
+        u["is_protected"] = ss == "approved"
+        out.append(u)
+    return {"users": out, "count": len(out)}
+
+
+@router.delete("/admin/users/{user_id}")
+def admin_delete_user(user_id: str, _: dict = Depends(require_role("admin"))):
+    """Permanently delete a user account.
+
+    Protection: refuses to delete any user whose id appears in `suppliers`
+    (approved dealer). The error code mirrors the UI's hidden-button state.
+
+    Side effects:
+      * users row removed
+      * suppliers_pending row removed (if any)
+      * Supabase Auth user removed → email becomes free to re-register
+    """
+    try:
+        sup = sb_admin.table("suppliers").select("id").eq("user_id", user_id).maybe_single().execute()
+    except Exception:
+        sup = None
+    if sup and getattr(sup, "data", None):
+        raise HTTPException(403, "This account belongs to an approved dealer and cannot be deleted from this panel. Suspend or move to inactive instead.")
+    # Best-effort cleanup of related rows. Wrap each in try/except so a
+    # missing/already-clean row doesn't abort the cascade.
+    for tbl in ("suppliers_pending", "user_agreements", "saved_addresses"):
+        try:
+            sb_admin.table(tbl).delete().eq("user_id", user_id).execute()
+        except Exception as ex:
+            logger.warning("admin_delete_user: %s cleanup failed for %s: %s", tbl, user_id, ex)
+    try:
+        sb_admin.table("users").delete().eq("id", user_id).execute()
+    except Exception as ex:
+        logger.warning("admin_delete_user: users cleanup failed for %s: %s", user_id, ex)
+    # Finally drop the Supabase Auth user so the email is free again.
+    try:
+        sb_admin.auth.admin.delete_user(user_id)
+    except Exception as ex:
+        logger.warning("admin_delete_user: auth delete failed for %s: %s", user_id, ex)
+        raise HTTPException(500, f"Auth deletion failed: {ex}") from ex
+    return {"ok": True, "user_id": user_id}
 

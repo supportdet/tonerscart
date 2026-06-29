@@ -5,9 +5,9 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { useAuth } from "../context/AuthContext";
-import { formatApiError } from "../lib/api";
+import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, ShoppingBag, Store, Building2, Check } from "lucide-react";
 import PhonePrefixInput from "../components/PhonePrefixInput";
 
 const GoogleIcon = (props) => (
@@ -19,11 +19,39 @@ const GoogleIcon = (props) => (
     </svg>
 );
 
+// Wave 100 — account-type cards. Each maps to a stable backend `user_type`
+// value (`personal`, `dealer`, `corporate`) and to a redirect target after
+// successful signup. Visual cards prevent the dealer/buyer mis-pick problem.
+const ACCOUNT_TYPES = [
+    {
+        key: "personal",
+        label: "Buyer",
+        tagline: "I want to buy printers, toners and supplies",
+        Icon: ShoppingBag,
+        redirect: "/",
+    },
+    {
+        key: "dealer",
+        label: "Dealer / Seller",
+        tagline: "I want to list and sell products on TonersCart",
+        Icon: Store,
+        redirect: "/supplier",
+    },
+    {
+        key: "corporate",
+        label: "Corporate / Institution",
+        tagline: "I'm procuring for my organisation",
+        Icon: Building2,
+        redirect: "/procurement",
+    },
+];
+
 export default function Register() {
-    const { signupCustomer, signInWithGoogle } = useAuth();
+    const { signupCustomer, signInWithGoogle, refresh, login } = useAuth();
     const navigate = useNavigate();
     const [params] = useSearchParams();
-    const next = params.get("next") || "/search";
+    const next = params.get("next") || "";
+    const [accountType, setAccountType] = useState("");
     const [c, setC] = useState({ email: "", password: "", confirm: "", name: "", phone: "", city: "" });
     const [loading, setLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
@@ -32,8 +60,8 @@ export default function Register() {
 
     const submit = async (e) => {
         e.preventDefault();
-        // Client-side inline validation
         const next_errors = {};
+        if (!accountType) next_errors.account_type = "Please pick what kind of account you want";
         if (!c.name.trim()) next_errors.name = "Please enter your name";
         if ((c.password || "").length < 6) next_errors.password = "Password must be at least 6 characters";
         if (c.confirm !== c.password) next_errors.confirm = "Passwords don't match";
@@ -42,10 +70,31 @@ export default function Register() {
         setLoading(true);
         try {
             const { confirm: _omit, ...rest } = c;
-            const payload = { ...rest, phone: c.phone ? `+91 ${c.phone}` : "" };
-            await signupCustomer(payload);
+            const phoneFull = c.phone ? `+91 ${c.phone}` : "";
+            if (accountType === "dealer") {
+                // Wave 100 — full dealer account so the dashboard can show the
+                // Step-2 (business details) onboarding state immediately.
+                await api.post("/auth/signup-supplier", {
+                    email: c.email,
+                    password: c.password,
+                    contact_person: c.name,
+                    phone: phoneFull,
+                    business_name: c.name,
+                    city: c.city || "",
+                });
+                await login(c.email, c.password);
+                toast.success("Welcome to TonersCart — let's set up your seller account");
+                navigate("/supplier");
+                return;
+            }
+            // Buyer / Corporate — single signup-customer call, post user_type.
+            await signupCustomer({ ...rest, phone: phoneFull, user_type: accountType });
+            // Persist the account type onto the user row (idempotent).
+            try { await api.post("/auth/user-type", { user_type: accountType }); } catch { /* harmless */ }
+            await refresh();
             toast.success("Welcome to TonersCart!");
-            navigate(next);
+            const target = ACCOUNT_TYPES.find((t) => t.key === accountType)?.redirect || "/";
+            navigate(next || target);
         } catch (err) {
             const msg = formatApiError(err);
             if ((msg || "").toLowerCase().includes("already")) {
@@ -60,7 +109,7 @@ export default function Register() {
         setErrors({});
         flushSync(() => setGoogleLoading(true));
         (async () => {
-            try { await signInWithGoogle(next); }
+            try { await signInWithGoogle(next || "/"); }
             catch (e) { setErrors({ form: e?.message || "Google sign-in unavailable" }); setGoogleLoading(false); }
         })();
     };
@@ -76,7 +125,7 @@ export default function Register() {
                 </div>
             )}
             <div className="tc-hero-grid" />
-            <div className="tc-container relative pt-10 sm:pt-14 max-w-md">
+            <div className="tc-container relative pt-10 sm:pt-14 max-w-2xl">
                 <div className="flex items-center gap-3 mb-3">
                     <span className="tc-strip" />
                     <span className="text-[11px] tracking-[0.22em] uppercase font-semibold text-white/60">Create account</span>
@@ -84,9 +133,36 @@ export default function Register() {
                 <h1 className="text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 300, letterSpacing: "-0.025em", lineHeight: 1.12 }}>
                     Join TonersCart
                 </h1>
-                <p className="text-white/65 mt-3 text-[14px]">One account for buying and selling. Want to sell? Sign up first, then click <span className="text-[#00B7C7] font-semibold">Sell</span> in the navbar.</p>
+                <p className="text-white/65 mt-3 text-[14px]">Pick what you want to do on TonersCart — you can change later from your profile if needed.</p>
 
                 <div className="mt-6 bg-white border border-black/[0.06] rounded-2xl shadow-2xl p-5 sm:p-6 text-[#0A0A0B]">
+                    {/* Wave 100 — account-type cards */}
+                    <div className="mb-5">
+                        <div className="text-[10.5px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73] mb-2">I am a…</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5" data-testid="register-account-type">
+                            {ACCOUNT_TYPES.map(({ key, label, tagline, Icon }) => {
+                                const active = accountType === key;
+                                return (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        onClick={() => { setAccountType(key); if (errors.account_type) setErrors((p) => ({ ...p, account_type: undefined })); }}
+                                        data-testid={`account-type-${key}`}
+                                        className={`text-left p-3.5 rounded-xl border-2 transition-all ${active ? "border-[#00B7C7] bg-[#ECFBFD] shadow-md" : "border-black/[0.08] bg-white hover:border-black/[0.2] hover:shadow-sm"}`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <Icon size={20} className={active ? "text-[#00B7C7]" : "text-[#0A0A0B]"} />
+                                            {active && <Check size={16} className="text-[#00B7C7]" />}
+                                        </div>
+                                        <div className={`mt-2 text-[14px] font-semibold ${active ? "text-[#0A0A0B]" : "text-[#0A0A0B]"}`} style={{ fontFamily: "'Montserrat', sans-serif" }}>{label}</div>
+                                        <div className="mt-0.5 text-[11.5px] text-[#6E6E73] leading-snug">{tagline}</div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        {errors.account_type && <p className="text-red-600 text-[12px] mt-2" data-testid="register-account-type-error">{errors.account_type}</p>}
+                    </div>
+
                     <button onClick={onGoogle} type="button" disabled={googleLoading} className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-full border border-[#D2D2D7] bg-white hover:bg-black/[0.03] text-[#0A0A0B] font-semibold text-[13.5px] disabled:opacity-60 disabled:cursor-not-allowed" data-testid="register-google-btn">
                         {googleLoading ? <><Loader2 size={14} className="animate-spin" /> Connecting to Google…</> : <><GoogleIcon /> Continue with Google</>}
                     </button>
