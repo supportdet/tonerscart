@@ -1,5 +1,30 @@
 # TonersCart — Product Requirements (Supabase edition)
 
+> **Latest (2026-06-29 Wave 98):** **Compact 4/5-col dealer grid, clickable cards → detail+edit, Phase-1/Phase-2 seller split, admin bulk-dealer onboarding with magic-link emails.**
+>
+> ### 1) Compact dealer dashboard grid
+> All 5 product category grids (Toners in `SupplierDashboard.jsx`, Printers / Papers / Inks / Scanners in their respective components) changed from `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3` to **`grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5`**. Reduced card padding `p-4`→`p-2.5`, image height `h-? `→ `h-32`, body font `text-[16px]`→`text-[13px]`, action buttons `text-[12px]`→`text-[11px]` with `size={10}` icons. **Removed the Compatible-printer line** from toner cards (saved ~24 px vertical).
+>
+> ### 2) Clickable cards → product detail page + edit
+> Each card is now `onClick={() => navigate('/{kind}/{id}')}` (toner / printer / paper / consumable / scanner). The public `ProductDetail.jsx` page already detects the owning dealer (Wave 77) and renders an "Edit my listing" button, so reusing the same route gives free dealer-side preview. Inline pencil price/stock + Edit/Duplicate/Remove buttons + D2DRow wrap in `onClick={e=>e.stopPropagation()}` so they don't trigger navigation.
+>
+> ### 3) Phase-1 / Phase-2 seller split
+> Public `/sell` form now only **3 steps**:
+> Step 1 — contact (unchanged) · Step 2 — **only** business name + GSTIN + PAN · Step 3 — what you sell.
+> Removed from Step 2: business address, annual turnover, years in business, all bank fields. Removed entirely: Step 4 (document uploads).
+> Backend: `SellerApplication.business_address` now `Optional[str] = ""`.
+> Inside the dealer dashboard, new **`Phase2Banner.jsx`** is mounted for approved dealers (between the pending banner and the dashboard body). It shows two CTAs: **Add bank details** (5 fields validated client-side) and **Upload documents** (GST, PAN, ID, address, cancelled cheque + brand authorisation for OEM). Banner auto-dismisses once both groups are complete. Backend endpoint **`POST /api/auth/supplier-phase2`** writes onto the live `suppliers` row (or `suppliers_pending` if not yet approved). `/auth/me` extended to return the bank + doc paths so the banner can compute completeness. Phase 2 never blocks listing or selling — payouts are gated by it (existing wave logic preserved).
+>
+> ### 4) Admin bulk-dealer onboarding with magic-link welcome
+> Backend `POST /api/admin/dealers/bulk-create` (in `routes/admin.py`) — takes `{rows: [{business_name, email, phone, city, gstin}]}`. For each row:
+> 1) Skip if email already exists in `users` (case-insensitive). 2) `sb_admin.auth.admin.create_user(email_confirm=True)` — no password. 3) `users` upsert with `role=supplier`. 4) `suppliers_pending` row with status=`pending`. 5) `sb_admin.auth.admin.generate_link(type='magiclink', redirect_to={origin}/auth/callback?next=/supplier)` — 7-day TTL. 6) `email_dealer_welcome_magic(email, business_name, action_link)` via Resend with subject **"Your TonersCart seller account is ready — start listing for free"**, highlighting free listing until **15 Aug 2026** and a "Go to Dashboard →" button. Returns `{created, skipped_existing, skipped_duplicate_in_file, failed, emails_sent, *_rows[]}`.
+> Frontend `pages/admin/BulkDealerUpload.jsx` — parses .csv / .xlsx via the existing `xlsx` package, alias-tolerant header mapping (Business Name / Email / Phone / City / GSTIN), preview table with per-row validation (missing fields, invalid email, in-file duplicates), summary modal after submission with skipped/failed breakdowns. Wired into `DealersTab.jsx` via a "Bulk add dealers" CTA next to the search bar. **Existing dealers (Big C Technologies, DET, Zion Entr, Bios Computers, Verve IT Solutions, Ravi Marketing, Shree Infotech, Amman Gaming Origin, and every other email already in the users table) are NEVER overwritten — they show up under "skipped_rows" with reason "already exists — preserved".**
+>
+> ### Verification
+> 7/7 backend pytest cases in `/app/test_reports/iteration_73.json` covering all 4 endpoint variants (empty, single valid, new+existing mix, in-file duplicate, unauth=401) + the Phase-1 apply-seller without address (regression). All 5 frontend wiring layers verified via code review (testids: phase2-banner, phase2-bank-cta, phase2-docs-cta, bulk-add-dealers-btn, bulk-dealers-dialog, supplier-listing-{id}, printer/paper/consumable/scanner-listing-{id}).
+
+
+
 > **Latest (2026-06-29 Wave 97):** **Legal docs v2.4/v2.2 + Suitable-For auto-suggest (bidirectional, all 5 forms incl. bulk).**
 >
 > ### Legal
