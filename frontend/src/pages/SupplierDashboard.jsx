@@ -32,6 +32,7 @@ import D2DRow, { D2DExplainer } from "../components/D2DRow";
 import CompatibleModelsSelect from "../components/CompatibleModelsSelect";
 import MissingModelLink from "../components/MissingModelLink";
 import InlineEditCell from "../components/InlineEditCell";
+import Phase2Banner from "../components/Phase2Banner";
 
 const colorSwatchHex = (name) => {
     const v = _colorSwatch(name);
@@ -847,6 +848,14 @@ export default function SupplierDashboard() {
                 </div>
             )}
 
+            {/* Wave 98 — Phase 2 "Complete your profile" banner.
+                Shown to APPROVED dealers whose bank details or KYC docs are
+                still missing. Auto-dismisses when complete. Does NOT block
+                listing/selling — payouts are gated by it. */}
+            {isApproved && user?.supplier && (
+                <Phase2Banner supplier={user.supplier} onUpdated={refresh} />
+            )}
+
             {/* Sticky full-width pastel control bar — stays pinned below the navbar */}
             <DealerTabBar active={catalog} onSelect={selectTab} />
 
@@ -1050,52 +1059,57 @@ export default function SupplierDashboard() {
                         : <>No listings yet. Tap <span className="font-semibold text-[#0A0A0B]">Add Toner</span> to publish your first toner.</>}
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3" data-testid="supplier-toner-grid">
                     {visibleListings.map((l) => {
                         const typeStyle = l.toner_type === "Original"
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                             : l.toner_type === "Compatible"
                             ? "bg-blue-50 text-blue-700 border-blue-200"
                             : "bg-amber-50 text-amber-700 border-amber-200";
+                        // Wave 98 — entire card is clickable; navigates to the
+                        // public product detail page (which itself shows an
+                        // "Edit my listing" button for the owning dealer).
+                        // The inline pencil/price/stock + Edit/Duplicate/Remove
+                        // buttons stop propagation so they don't trigger the
+                        // navigation.
+                        const openDetail = () => navigate(`/toner/${l.id}`);
                         return (
-                            <div key={l.id} className="tc-product-card" data-testid={`supplier-listing-${l.id}`}>
-                                <div className="tc-product-img">
+                            <div key={l.id} onClick={openDetail} className="tc-product-card cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all" data-testid={`supplier-listing-${l.id}`}>
+                                <div className="tc-product-img h-32">
                                     <span className="tc-product-img-label">{l.brand}</span>
                                     {l.image_url ? (
-                                        <img src={l.image_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                                        <img src={l.image_url} alt="" className="w-full h-full object-contain" loading="lazy" />
                                     ) : (
                                         <TonerCartridge color={l.color || "Black"} brand={l.brand} model={l.model_number} type={l.toner_type} />
                                     )}
                                 </div>
-                                <div className="p-4 flex flex-col gap-2 flex-1">
-                                    <div className="flex items-center justify-between">
-                                        <div className="text-[16px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>{l.brand}</div>
-                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-md border uppercase tracking-[0.08em] ${typeStyle}`}>{l.toner_type}</span>
+                                <div className="p-2.5 flex flex-col gap-1.5 flex-1">
+                                    <div className="flex items-center justify-between gap-1">
+                                        <div className="text-[13px] font-semibold text-[#0A0A0B] truncate" style={{ fontFamily: "'Montserrat', sans-serif" }}>{l.brand}</div>
+                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-[0.06em] shrink-0 ${typeStyle}`}>{l.toner_type}</span>
                                     </div>
-                                    {l.compatible_models ? (
-                                        <div className="text-[12px] text-[#6E6E73]" data-testid={`listing-compat-${l.id}`}>Compatible: {l.compatible_models}</div>
-                                    ) : (
-                                        <div className="text-[12px] text-[#6E6E73]">{l.color}</div>
-                                    )}
-                                    <div className="mt-1 flex items-center justify-between">
+                                    <div className="text-[11px] text-[#6E6E73] truncate" title={l.model_number}>{l.model_number || l.color || "—"}</div>
+                                    <div className="mt-0.5 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
                                         <div className="leading-tight">
-                                            <div className="font-mono text-[18px] font-semibold text-[#0A0A0B]" data-testid={`listing-incl-price-${l.id}`}>{formatINR(inclGstPrice(l.price, l.gst_rate))}</div>
-                                            <div className="text-[10px] text-[#86868B] tracking-[0.06em]">incl. {l.gst_rate ?? 18}% GST · base {formatINR(l.price)}</div>
+                                            <div className="font-mono text-[14px] font-semibold text-[#0A0A0B]" data-testid={`listing-incl-price-${l.id}`}>{formatINR(inclGstPrice(l.price, l.gst_rate))}</div>
+                                            <div className="text-[9px] text-[#86868B]">incl. {l.gst_rate ?? 18}% GST</div>
                                         </div>
                                         <InlineStock stock={l.stock} onSave={(v) => patchStock(l.id, v)} testId={`stock-edit-${l.id}`} />
                                     </div>
-                                    <div className="mt-2 flex items-center gap-3">
-                                        <button onClick={openEditBulk} className="text-[12px] text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`edit-${l.id}`}>
-                                            <Pencil size={12} /> Edit
+                                    <div className="mt-1 flex items-center gap-2 text-[11px]" onClick={(e) => e.stopPropagation()}>
+                                        <button onClick={openEditBulk} className="text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`edit-${l.id}`}>
+                                            <Pencil size={10} /> Edit
                                         </button>
-                                        <button onClick={() => duplicateListing(l.id)} className="text-[12px] text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`duplicate-${l.id}`}>
-                                            <Copy size={12} /> Duplicate
+                                        <button onClick={() => duplicateListing(l.id)} className="text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`duplicate-${l.id}`}>
+                                            <Copy size={10} /> Dup
                                         </button>
-                                        <button onClick={() => removeListing(l.id)} className="text-[12px] text-red-600 hover:text-red-700 inline-flex items-center gap-1" data-testid={`remove-${l.id}`}>
-                                            <Trash2 size={12} /> Remove
+                                        <button onClick={() => removeListing(l.id)} className="text-red-600 hover:text-red-700 inline-flex items-center gap-1" data-testid={`remove-${l.id}`}>
+                                            <Trash2 size={10} /> Del
                                         </button>
                                     </div>
-                                    <D2DRow listing={l} endpoint={`/supplier/listings/${l.id}`} onChanged={load} />
+                                    <div onClick={(e) => e.stopPropagation()}>
+                                        <D2DRow listing={l} endpoint={`/supplier/listings/${l.id}`} onChanged={load} />
+                                    </div>
                                 </div>
                             </div>
                         );

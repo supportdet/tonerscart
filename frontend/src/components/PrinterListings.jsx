@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -149,6 +150,7 @@ const PRINTER_WARRANTIES = [
 // ============================================================
 
 export default function PrinterListings() {
+    const navigate = useNavigate();
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
     const [open, setOpen] = useState(false);
@@ -208,47 +210,49 @@ export default function PrinterListings() {
                     No printers yet. Tap <span className="font-semibold text-[#0A0A0B]">Add printer</span> to publish your first printer.
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                     {items.map((p) => (
-                        <div key={p.id} className="tc-listing-card" data-testid={`printer-listing-${p.id}`}>
+                        <div key={p.id} onClick={() => navigate(`/printer/${p.id}`)} className="tc-listing-card cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all" data-testid={`printer-listing-${p.id}`}>
                             {p.image_url
-                                ? <img src={p.image_url} alt="" className="tc-listing-img" loading="lazy" />
-                                : <div className="tc-listing-img-ph"><ImageIcon size={32} /></div>}
-                            <div className="p-4 space-y-2">
-                                <div className="flex items-center justify-between gap-2">
-                                    <span className={p.condition === "new" ? "tc-badge-new" : "tc-badge-refurb"}>
-                                        {p.condition === "new" ? "New" : "Refurbished"}
+                                ? <img src={p.image_url} alt="" className="tc-listing-img h-32 object-contain" loading="lazy" />
+                                : <div className="tc-listing-img-ph h-32"><ImageIcon size={28} /></div>}
+                            <div className="p-2.5 space-y-1.5">
+                                <div className="flex items-center justify-between gap-1">
+                                    <span className={p.condition === "new" ? "tc-badge-new text-[9px]" : "tc-badge-refurb text-[9px]"}>
+                                        {p.condition === "new" ? "New" : "Refurb"}
                                     </span>
-                                    <span className="tc-badge-tag">{fmt(p.usage_type)} · {fmt(p.category)}</span>
+                                    <span className="tc-badge-tag text-[9px] truncate">{fmt(p.category)}</span>
                                 </div>
-                                <div className="text-[#0A0A0B] text-[16px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif", letterSpacing: "-0.005em" }}>
+                                <div className="text-[#0A0A0B] text-[12.5px] font-semibold truncate" style={{ fontFamily: "'Montserrat', sans-serif", letterSpacing: "-0.005em" }}>
                                     {p.brand} · {p.model_number}
                                 </div>
-                                <div className="flex items-center justify-between">
-                                    <div className="font-mono text-[20px] font-bold text-[#0A0A0B] leading-none">₹{Number(p.price).toLocaleString("en-IN")}</div>
-                                    <span className={`tc-stock-dot ${p.stock > 0 ? "is-in" : "is-out"}`}>
-                                        {p.stock > 0 ? `${p.stock} in stock` : "Out of stock"}
+                                <div className="flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+                                    <div className="font-mono text-[14px] font-bold text-[#0A0A0B] leading-none">₹{Number(p.price).toLocaleString("en-IN")}</div>
+                                    <span className={`tc-stock-dot text-[10px] ${p.stock > 0 ? "is-in" : "is-out"}`}>
+                                        {p.stock > 0 ? `${p.stock}` : "Out"}
                                     </span>
                                 </div>
-                                <div className="flex items-center justify-end pt-1 gap-3">
+                                <div className="flex items-center justify-end pt-0.5 gap-2 text-[11px]" onClick={(e) => e.stopPropagation()}>
                                     <button
                                         type="button"
                                         onClick={() => onEdit(p)}
-                                        className="text-[11.5px] text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1"
+                                        className="text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1"
                                         data-testid={`edit-printer-${p.id}`}
                                     >
-                                        <Pencil size={11} /> Edit
+                                        <Pencil size={10} /> Edit
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => remove(p.id)}
-                                        className="text-[11.5px] text-red-600 hover:text-red-700 inline-flex items-center gap-1"
+                                        className="text-red-600 hover:text-red-700 inline-flex items-center gap-1"
                                         data-testid={`remove-printer-${p.id}`}
                                     >
-                                        <Trash2 size={11} /> Remove
+                                        <Trash2 size={10} /> Del
                                     </button>
                                 </div>
-                                <D2DRow listing={p} endpoint={`/supplier/printers/${p.id}`} onChanged={load} />
+                                <div onClick={(e) => e.stopPropagation()}>
+                                    <D2DRow listing={p} endpoint={`/supplier/printers/${p.id}`} onChanged={load} />
+                                </div>
                             </div>
                         </div>
                     ))}

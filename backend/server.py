@@ -41,6 +41,7 @@ from email_service import (
     email_order_delivered_support,
     email_dealer_suspended,
     email_dealer_unsuspended,
+    email_dealer_welcome_magic,
     email_admin_reply,
     _commission_breakdown,
 )
@@ -215,7 +216,11 @@ class SignupCustomer(BaseModel):
 
 class SellerApplication(BaseModel):
     """Submitted by a logged-in user (any role) to apply to become a seller.
-    Does not change users.role — only admin-approval can do that."""
+    Does not change users.role — only admin-approval can do that.
+
+    Wave 98 — split into Phase 1 (contact + business basics, public form) and
+    Phase 2 (bank details + documents, completed inside the dealer dashboard
+    after approval). Phase 2 fields below are all optional at submission."""
     business_name: str
     contact_person: str
     phone: str
@@ -227,10 +232,11 @@ class SellerApplication(BaseModel):
     pan_number: Optional[str] = ""
     annual_turnover: Optional[str] = ""
     years_in_business: Optional[int] = None
-    business_address: str
+    business_address: Optional[str] = ""
     seller_types: List[str] = Field(default_factory=list)
     compatible_brands: List[str] = Field(default_factory=list)
     testing_before_delivery: bool = False
+    # Phase 2 — documents (all optional at Phase 1 submit)
     doc_brand_authorization: Optional[str] = ""
     doc_shop_photo: Optional[str] = ""
     doc_gst: Optional[str] = ""
@@ -238,6 +244,7 @@ class SellerApplication(BaseModel):
     doc_bank_proof: Optional[str] = ""
     doc_address_proof: Optional[str] = ""
     doc_id_proof: Optional[str] = ""
+    # Phase 2 — bank details (all optional at Phase 1 submit)
     account_holder_name: Optional[str] = ""
     account_number: Optional[str] = ""
     ifsc_code: Optional[str] = ""

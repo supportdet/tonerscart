@@ -362,6 +362,43 @@ async def supplier_document_upload(
     return {"path": path, "field": field}
 
 
+# ── Wave 98 — Phase 2 (approved dealers complete bank + docs from dashboard) ──
+
+class SupplierProfilePhase2(BaseModel):
+    """Phase 2 update from an approved supplier's dashboard.
+    All fields optional — sent as the dealer fills them in."""
+    account_holder_name: Optional[str] = None
+    account_number: Optional[str] = None
+    ifsc_code: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_branch: Optional[str] = None
+    business_address: Optional[str] = None
+    doc_brand_authorization: Optional[str] = None
+    doc_gst: Optional[str] = None
+    doc_pan: Optional[str] = None
+    doc_bank_proof: Optional[str] = None
+    doc_id_proof: Optional[str] = None
+    doc_address_proof: Optional[str] = None
+
+
+@router.post("/auth/supplier-phase2")
+def supplier_phase2_update(payload: SupplierProfilePhase2, user: dict = Depends(require_user)):
+    """Writes bank-detail and document-path updates onto the live `suppliers`
+    row for an approved dealer (or onto `suppliers_pending` if still pending —
+    so it carries over once approved). Wave 98."""
+    if user.get("role") != "supplier":
+        # Still applying — write to pending row.
+        upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v}
+        if upd:
+            _exec_dropping_cols(lambda a: sb_admin.table("suppliers_pending").update(a).eq("user_id", user["id"]).execute(), upd)
+        return {"ok": True, "target": "pending"}
+    upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v}
+    if not upd:
+        return {"ok": True, "target": "supplier", "updated": 0}
+    _exec_dropping_cols(lambda a: sb_admin.table("suppliers").update(a).eq("user_id", user["id"]).execute(), upd)
+    return {"ok": True, "target": "supplier", "updated": len(upd)}
+
+
 @router.post("/supplier/business-logo")
 async def supplier_business_logo_upload(
     file: UploadFile = File(...),
@@ -458,11 +495,16 @@ def me(user: dict = Depends(require_user)):
         out["user_type"] = None
     # Approved supplier?
     if user.get("role") == "supplier":
+        # Wave 98 — also return bank + doc completeness so the dashboard
+        # can show the Phase 2 "Complete your profile" banner.
+        _SUPP_COLS = ("id,business_name,city,approved_at,business_logo,seller_id,"
+                      "account_holder_name,account_number,ifsc_code,bank_name,bank_branch,"
+                      "doc_gst,doc_pan,doc_id_proof,doc_address_proof,doc_bank_proof,"
+                      "doc_brand_authorization,seller_types")
         try:
-            s = sb_admin.table("suppliers").select(
-                "id,business_name,city,approved_at,business_logo,seller_id"
-            ).eq("user_id", user["id"]).maybe_single().execute()
+            s = sb_admin.table("suppliers").select(_SUPP_COLS).eq("user_id", user["id"]).maybe_single().execute()
         except Exception:
+            # Graceful degradation if any new column is missing on this deploy.
             s = sb_admin.table("suppliers").select(
                 "id,business_name,city,approved_at,business_logo"
             ).eq("user_id", user["id"]).maybe_single().execute()

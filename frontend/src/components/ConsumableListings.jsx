@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -31,6 +32,7 @@ function emptyForm() {
 const CONSUMABLE_WARRANTIES = ["1 Year", "2 Years", "3 Years", "On-site", "Carry-in", "No Warranty"];
 
 export default function ConsumableListings() {
+    const navigate = useNavigate();
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [open, setOpen] = useState(false);
@@ -187,26 +189,26 @@ export default function ConsumableListings() {
                     <div className="mt-1 text-[12.5px]">Tap <span className="font-semibold text-[#0A0A0B]">Add consumable</span> to publish your first SKU.</div>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="consumables-grid">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3" data-testid="consumables-grid">
                     {rows.map((c) => (
-                        <div key={c.id} className="tc-product-card p-4" data-testid={`supplier-consumable-${c.id}`}>
-                            <div className="flex items-start justify-between gap-2">
+                        <div key={c.id} onClick={() => navigate(`/consumable/${c.id}`)} className="tc-product-card p-2.5 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all" data-testid={`supplier-consumable-${c.id}`}>
+                            <div className="flex items-start justify-between gap-1">
                                 <div className="min-w-0">
-                                    <div className="text-[10.5px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">{c.brand}</div>
-                                    <div className="text-[15px] font-semibold text-[#0A0A0B] truncate" style={{ fontFamily: "'Montserrat', sans-serif" }}>{c.model_number}</div>
+                                    <div className="text-[9px] tracking-[0.14em] uppercase font-semibold text-[#86868B] truncate">{c.brand}</div>
+                                    <div className="text-[13px] font-semibold text-[#0A0A0B] truncate" style={{ fontFamily: "'Montserrat', sans-serif" }}>{c.model_number}</div>
                                 </div>
-                                <span className="inline-flex items-center text-[10px] font-bold px-2 py-1 rounded-md border bg-[#FFF8E0] text-[#8C6A00] border-[#F5E5A6] uppercase shrink-0">{c.subcategory === "Other" && c.subcategory_other ? c.subcategory_other : c.subcategory}</span>
+                                <span className="inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded border bg-[#FFF8E0] text-[#8C6A00] border-[#F5E5A6] uppercase shrink-0">{c.subcategory === "Other" && c.subcategory_other ? c.subcategory_other : c.subcategory}</span>
                             </div>
-                            <div className="mt-3 text-[12.5px] text-[#3a3a40]">
-                                <div className="font-mono">{fmtMoney(c.price)}</div>
-                                <div className="text-[#86868B] text-[11.5px]">{c.stock} in stock · {c.condition || "New"}</div>
+                            <div className="mt-1.5 text-[11.5px] text-[#3a3a40]">
+                                <div className="font-mono text-[13px]">{fmtMoney(c.price)}</div>
+                                <div className="text-[#86868B] text-[10px]">{c.stock} in stock</div>
                             </div>
-                            <div className="mt-3 flex items-center gap-3">
-                                <button onClick={() => openEdit(c)} className="text-[12px] text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`edit-consumable-${c.id}`}>
-                                    <Pencil size={12} /> Edit
+                            <div className="mt-1.5 flex items-center gap-2 text-[11px]" onClick={(e) => e.stopPropagation()}>
+                                <button onClick={() => openEdit(c)} className="text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`edit-consumable-${c.id}`}>
+                                    <Pencil size={10} /> Edit
                                 </button>
-                                <button onClick={() => remove(c.id)} className="text-[12px] text-red-600 hover:text-red-700 inline-flex items-center gap-1" data-testid={`remove-consumable-${c.id}`}>
-                                    <Trash2 size={12} /> Remove
+                                <button onClick={() => remove(c.id)} className="text-red-600 hover:text-red-700 inline-flex items-center gap-1" data-testid={`remove-consumable-${c.id}`}>
+                                    <Trash2 size={10} /> Del
                                 </button>
                             </div>
                         </div>
