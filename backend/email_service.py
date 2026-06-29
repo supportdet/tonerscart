@@ -1126,8 +1126,9 @@ async def email_dealer_unsuspended(supplier: dict):
 
 
 
-async def email_proc_order_placed(u: dict, order: dict):
-    """Order confirmation for a procurement (govt/corporate) buyer."""
+async def email_proc_order_placed(u: dict, order: dict, invoice_pdf: bytes | None = None):
+    """Order confirmation for a procurement (govt/corporate) buyer.
+    Wave 101 Phase 3 — attaches the tax-invoice PDF when generation succeeds."""
     email_to = u.get("email")
     if not email_to:
         return False
@@ -1147,10 +1148,13 @@ async def email_proc_order_placed(u: dict, order: dict):
       <tr><td style="padding:4px 12px;color:#86868B;">Total (inc. GST)</td><td style="padding:4px 12px;"><strong>₹{total:,.2f}</strong></td></tr>
       <tr><td style="padding:4px 12px;color:#86868B;">Payment due</td><td style="padding:4px 12px;">{due} (net-30 credit terms)</td></tr>
     </table>
-    <p style="margin-top:16px;color:#6E6E73;font-size:12.5px;">Track the status timeline anytime from your procurement dashboard.
+    <p style="margin-top:16px;color:#6E6E73;font-size:12.5px;">A tax invoice is attached to this email. Track the status timeline anytime from your procurement dashboard.
     {"Please upload your official PO document from the My Orders section." if (u.get('type') == 'govt') else ""}</p>
     """
-    return await _send(email_to, f"TonersCart Order {ref} confirmed", html)
+    attachments = None
+    if invoice_pdf:
+        attachments = [{"filename": f"{ref}.pdf", "content": list(invoice_pdf)}]
+    return await _send(email_to, f"TonersCart Order {ref} confirmed", html, attachments=attachments)
 
 
 # ---------------------------------------------------------------------------

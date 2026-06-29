@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Package, Loader2, Upload, FileText, Check, ExternalLink } from "lucide-react";
+import { Package, Loader2, Upload, FileText, Check, ExternalLink, Download } from "lucide-react";
 import { Button } from "../ui/button";
 import procApi, { formatApiError } from "../../lib/procApi";
 
@@ -27,6 +27,39 @@ function StatusTimeline({ order }) {
                 );
             })}
         </div>
+    );
+}
+
+function InvoiceDownloadBtn({ order }) {
+    const [busy, setBusy] = useState(false);
+    const download = async () => {
+        setBusy(true);
+        try {
+            const res = await procApi.get(`/procurement/orders/${order.id}/invoice.pdf`, { responseType: "blob" });
+            const blob = new Blob([res.data], { type: "application/pdf" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${order.ref_number || order.id}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (e) { toast.error(formatApiError(e)); }
+        finally { setBusy(false); }
+    };
+    return (
+        <Button
+            variant="outline"
+            size="sm"
+            onClick={download}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 text-[12px]"
+            data-testid={`proc-invoice-download-${order.ref_number}`}
+        >
+            {busy ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+            Tax invoice
+        </Button>
     );
 }
 
@@ -127,11 +160,14 @@ export default function MyOrders({ active, isGovt }) {
                                 </div>
                                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                                     <StatusTimeline order={o} />
-                                    {isGovt ? (
-                                        <PoBlock order={o} onUploaded={load} />
-                                    ) : o.po_document_url ? (
-                                        <span className="inline-flex items-center gap-1 text-[11.5px] text-[#6E6E73]"><FileText size={12} /> PO attached</span>
-                                    ) : null}
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <InvoiceDownloadBtn order={o} />
+                                        {isGovt ? (
+                                            <PoBlock order={o} onUploaded={load} />
+                                        ) : o.po_document_url ? (
+                                            <span className="inline-flex items-center gap-1 text-[11.5px] text-[#6E6E73]"><FileText size={12} /> PO attached</span>
+                                        ) : null}
+                                    </div>
                                 </div>
                             </div>
                         );

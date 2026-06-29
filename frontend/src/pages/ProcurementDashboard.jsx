@@ -13,6 +13,7 @@ import { useProcAuth } from "../context/ProcAuthContext";
 import SearchCompare from "../components/procurement/SearchCompare";
 import MyQuotations from "../components/procurement/MyQuotations";
 import MyOrders from "../components/procurement/MyOrders";
+import CreditSummaryWidget from "../components/procurement/CreditSummaryWidget";
 import AgreementGate from "../components/AgreementGate";
 import PageMeta from "../components/PageMeta";
 
@@ -149,6 +150,8 @@ export default function ProcurementDashboard() {
                                             <div className="h-full rounded-full bg-[#00B7C7]" style={{ width: `${usedPct}%` }} />
                                         </div>
                                     </div>
+                                    {/* Phase 3 — Outstanding, next due, ledger */}
+                                    <CreditSummaryWidget />
                                 </>
                             )}
                         </div>

@@ -4,7 +4,8 @@ import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog";
 import { Textarea } from "../../components/ui/textarea";
 import { toast } from "sonner";
-import { CheckCircle2, Landmark, Building2, Mail, Phone, MapPin, Loader2, Package, ExternalLink, ArrowRight } from "lucide-react";
+import { CheckCircle2, Landmark, Building2, Mail, Phone, MapPin, Loader2, Package, ExternalLink, ArrowRight, Download, Wallet } from "lucide-react";
+import CreditAdjustDialog from "./CreditAdjustDialog";
 
 const ORDER_STATUSES = ["confirmed", "processing", "shipped", "delivered"];
 const fmtMoney = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -14,6 +15,7 @@ function OrdersSection() {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
+    const [adjustOrder, setAdjustOrder] = useState(null);
 
     const load = async () => {
         setLoading(true);
@@ -45,6 +47,21 @@ function OrdersSection() {
         } catch (e) { toast.error(formatApiError(e)); }
     };
 
+    const downloadInvoice = async (o) => {
+        try {
+            const res = await api.get(`/admin/procurement/orders/${o.id}/invoice.pdf`, { responseType: "blob" });
+            const blob = new Blob([res.data], { type: "application/pdf" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${o.ref_number || o.id}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (e) { toast.error(formatApiError(e)); }
+    };
+
     return (
         <div className="mb-8" data-testid="proc-admin-orders">
             <div className="flex items-center gap-2 mb-3">
@@ -68,6 +85,7 @@ function OrdersSection() {
                                 <th className="px-3 py-2.5">Total</th>
                                 <th className="px-3 py-2.5">Due</th>
                                 <th className="px-3 py-2.5">Status</th>
+                                <th className="px-3 py-2.5">Payment</th>
                                 <th className="px-3 py-2.5">Actions</th>
                             </tr>
                         </thead>
@@ -93,11 +111,24 @@ function OrdersSection() {
                                             </span>
                                         </td>
                                         <td className="px-3 py-2.5">
-                                            <div className="flex items-center gap-1.5">
+                                            <span className={`text-[10.5px] font-semibold px-2 py-0.5 rounded-full border uppercase tracking-wide ${o.payment_status === "paid" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}`} data-testid={`proc-admin-order-payment-${o.ref_number}`}>
+                                                {o.payment_status === "paid" ? "Paid" : "Unpaid"}
+                                            </span>
+                                        </td>
+                                        <td className="px-3 py-2.5">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
                                                 {next && (
                                                     <Button size="sm" variant="outline" onClick={() => advance(o)} disabled={busyId === o.id}
                                                         className="h-7 px-2.5 text-[11.5px] inline-flex items-center gap-1" data-testid={`proc-admin-advance-${o.ref_number}`}>
                                                         {busyId === o.id ? <Loader2 size={12} className="animate-spin" /> : <ArrowRight size={12} />} {next}
+                                                    </Button>
+                                                )}
+                                                <Button size="sm" variant="outline" onClick={() => downloadInvoice(o)} className="h-7 px-2.5 text-[11.5px] inline-flex items-center gap-1" data-testid={`proc-admin-invoice-${o.ref_number}`}>
+                                                    <Download size={12} /> Invoice
+                                                </Button>
+                                                {o.payment_status !== "paid" && (
+                                                    <Button size="sm" variant="outline" onClick={() => setAdjustOrder(o)} className="h-7 px-2.5 text-[11.5px] inline-flex items-center gap-1" data-testid={`proc-admin-adjust-${o.ref_number}`}>
+                                                        <Wallet size={12} /> Adjust
                                                     </Button>
                                                 )}
                                                 {o.po_document_url && (
@@ -114,6 +145,13 @@ function OrdersSection() {
                     </table>
                 </div>
             )}
+            <CreditAdjustDialog
+                open={!!adjustOrder}
+                onClose={() => setAdjustOrder(null)}
+                buyerId={adjustOrder?.user_id}
+                order={adjustOrder}
+                onSaved={() => load()}
+            />
         </div>
     );
 }
