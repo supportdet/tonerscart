@@ -690,6 +690,111 @@ PRINTERS_RAW = [
     ("Riso", "CV 3230", "duplicator", ["S-2489"]),
     ("Riso", "SF 5130", "duplicator", ["S-7613"]),
     ("Riso", "EZ 221", "duplicator", ["S-4253"]),
+
+    # ============================== Wave 97 additions ======================
+    # Added to fill the most-requested India-market gaps surfaced by the
+    # Suitable-For auto-suggest feature. Each tuple maps a printer to its
+    # native cartridge code(s); the toner catalogue derives the reverse map.
+
+    # HP — CF244A / 44A (LaserJet Pro M15/M28 in some EMEA SKUs)
+    ("HP", "LaserJet Pro M15 / M17", "laser", ["CF244A"]),
+    ("HP", "LaserJet Pro MFP M28 / M30", "mfd", ["CF244A"]),
+    # HP — CF258A / CF258X / 58A/58X (LaserJet Pro M404/M428 region SKUs)
+    ("HP", "LaserJet Pro M404n / M404dn / M404dw (58A)", "laser", ["CF258A", "CF258X"]),
+    ("HP", "LaserJet Pro MFP M428dw / M428fdw (58A)", "mfd", ["CF258A", "CF258X"]),
+    # HP — CC388A / 88A (very common India model)
+    ("HP", "LaserJet Pro P1007", "laser", ["CC388A"]),
+    ("HP", "LaserJet Pro P1008", "laser", ["CC388A"]),
+    ("HP", "LaserJet Pro M1136 MFP (88A)", "mfd", ["CC388A"]),
+    ("HP", "LaserJet Pro M1213nf MFP (88A)", "mfd", ["CC388A"]),
+    ("HP", "LaserJet Pro M126a MFP", "mfd", ["CC388A"]),
+    ("HP", "LaserJet Pro M126nw MFP", "mfd", ["CC388A"]),
+    ("HP", "LaserJet Pro M128fn MFP", "mfd", ["CC388A"]),
+    ("HP", "LaserJet Pro M128fw MFP", "mfd", ["CC388A"]),
+    ("HP", "LaserJet Pro M202n", "laser", ["CC388A"]),
+    ("HP", "LaserJet Pro M226dw MFP (88A)", "mfd", ["CC388A"]),
+
+    # Canon — 925 (LBP6018 series very common in India)
+    ("Canon", "imageCLASS LBP6018", "laser", ["925"]),
+    ("Canon", "imageCLASS LBP6018B", "laser", ["925"]),
+    ("Canon", "imageCLASS LBP6030", "laser", ["925"]),
+    ("Canon", "imageCLASS LBP6030B", "laser", ["925"]),
+    ("Canon", "imageCLASS LBP6030w", "laser", ["925"]),
+    ("Canon", "imageCLASS MF3010", "mfd", ["925"]),
+    # Canon — 071 / 071H (new India release)
+    ("Canon", "imageCLASS LBP122dw", "laser", ["071", "071H"]),
+    ("Canon", "imageCLASS LBP123dw", "laser", ["071", "071H"]),
+    ("Canon", "imageCLASS MF272dw", "mfd", ["071", "071H"]),
+    ("Canon", "imageCLASS MF273dw", "mfd", ["071", "071H"]),
+    ("Canon", "imageCLASS MF275dw", "mfd", ["071", "071H"]),
+    # Canon — 054 colour (LBP621/622/623 + MF642/643/644)
+    ("Canon", "imageCLASS LBP621Cw", "laser", ["054", "054H"]),
+    ("Canon", "imageCLASS LBP622Cdw", "laser", ["054", "054H"]),
+    ("Canon", "imageCLASS LBP623Cdw", "laser", ["054", "054H"]),
+    ("Canon", "imageCLASS MF642Cdw", "mfd", ["054", "054H"]),
+    ("Canon", "imageCLASS MF643Cdw", "mfd", ["054", "054H"]),
+    ("Canon", "imageCLASS MF644Cdw", "mfd", ["054", "054H"]),
+    # Canon — 056 mono (LBP320 / MF540 series)
+    ("Canon", "imageCLASS LBP320 Series", "laser", ["056", "056H"]),
+    ("Canon", "imageCLASS LBP325dn", "laser", ["056", "056H"]),
+    ("Canon", "imageCLASS LBP325x", "laser", ["056", "056H"]),
+    ("Canon", "imageCLASS MF540 Series", "mfd", ["056", "056H"]),
+    ("Canon", "imageCLASS MF543dw", "mfd", ["056", "056H"]),
+    ("Canon", "imageCLASS MF543x", "mfd", ["056", "056H"]),
+
+    # Brother — TN-2280 (HL-2240D / DCP-7060 / MFC-7860 family)
+    ("Brother", "HL-2240D", "laser", ["TN-2280", "TN-2260"]),
+    ("Brother", "HL-2250DN", "laser", ["TN-2280", "TN-2260"]),
+    ("Brother", "HL-2270DW", "laser", ["TN-2280", "TN-2260"]),
+    ("Brother", "DCP-7060D", "mfd", ["TN-2280", "TN-2260"]),
+    ("Brother", "DCP-7065DN", "mfd", ["TN-2280", "TN-2260"]),
+    ("Brother", "MFC-7360N", "mfd", ["TN-2280", "TN-2260"]),
+    ("Brother", "MFC-7860DW", "mfd", ["TN-2280", "TN-2260"]),
+    # Brother — TN-2360 / TN-2380 (HL-L2300 family)
+    ("Brother", "HL-L2300D", "laser", ["TN-2360", "TN-2380"]),
+    ("Brother", "HL-L2320D", "laser", ["TN-2360", "TN-2380"]),
+    ("Brother", "HL-L2360DN", "laser", ["TN-2360", "TN-2380"]),
+    ("Brother", "HL-L2365DW", "laser", ["TN-2360", "TN-2380"]),
+    ("Brother", "DCP-L2520DW", "mfd", ["TN-2360", "TN-2380"]),
+    ("Brother", "DCP-L2540DW", "mfd", ["TN-2360", "TN-2380"]),
+    ("Brother", "MFC-L2700DW", "mfd", ["TN-2360", "TN-2380"]),
+    ("Brother", "MFC-L2740DW", "mfd", ["TN-2360", "TN-2380"]),
+    # Brother — TN-660 (US naming variant — HL-L2300/2360/2380 series)
+    ("Brother", "HL-L2380DW", "laser", ["TN-660", "TN-630"]),
+    ("Brother", "HL-L2340DW", "laser", ["TN-660", "TN-630"]),
+    ("Brother", "MFC-L2685DW", "mfd", ["TN-660", "TN-630"]),
+    ("Brother", "MFC-L2705DW", "mfd", ["TN-660", "TN-630"]),
+    # Brother — TN-730 / TN-760 (HL-L2350/2370/2390 family)
+    ("Brother", "HL-L2350DW", "laser", ["TN-730", "TN-760"]),
+    ("Brother", "HL-L2370DW", "laser", ["TN-730", "TN-760"]),
+    ("Brother", "HL-L2390DW", "laser", ["TN-730", "TN-760"]),
+    ("Brother", "HL-L2395DW", "laser", ["TN-730", "TN-760"]),
+    ("Brother", "DCP-L2550DW", "mfd", ["TN-730", "TN-760"]),
+    ("Brother", "MFC-L2710DW", "mfd", ["TN-730", "TN-760"]),
+    ("Brother", "MFC-L2730DW", "mfd", ["TN-730", "TN-760"]),
+    ("Brother", "MFC-L2750DW", "mfd", ["TN-730", "TN-760"]),
+
+    # Epson — 001 (EcoTank L4150 / L6160 family)
+    ("Epson", "EcoTank L4150", "inkjet", ["001"]),
+    ("Epson", "EcoTank L4160", "inkjet", ["001"]),
+    ("Epson", "EcoTank L6160", "inkjet", ["001"]),
+    ("Epson", "EcoTank L6170", "inkjet", ["001"]),
+    ("Epson", "EcoTank L6190", "inkjet", ["001"]),
+    # Epson — 532 (WorkForce ST-C2100 / ST-C8000 region SKUs; also EcoTank ET-3700)
+    ("Epson", "WorkForce ST-C2100", "inkjet", ["532"]),
+    ("Epson", "WorkForce ST-C8000", "inkjet", ["532"]),
+    ("Epson", "EcoTank ET-3700", "inkjet", ["532"]),
+
+    # Samsung — MLT-D116S (Xpress M2625/M2675/M2825/M2875/M2885 family)
+    ("Samsung", "Xpress SL-M2625", "laser", ["MLT-D116S", "MLT-D116L"]),
+    ("Samsung", "Xpress SL-M2625D", "laser", ["MLT-D116S", "MLT-D116L"]),
+    ("Samsung", "Xpress SL-M2675F", "mfd", ["MLT-D116S", "MLT-D116L"]),
+    ("Samsung", "Xpress SL-M2675FN", "mfd", ["MLT-D116S", "MLT-D116L"]),
+    ("Samsung", "Xpress SL-M2825ND", "laser", ["MLT-D116S", "MLT-D116L"]),
+    ("Samsung", "Xpress SL-M2835DW", "laser", ["MLT-D116S", "MLT-D116L"]),
+    ("Samsung", "Xpress SL-M2875FW", "mfd", ["MLT-D116S", "MLT-D116L"]),
+    ("Samsung", "Xpress SL-M2876ND", "mfd", ["MLT-D116S", "MLT-D116L"]),
+    ("Samsung", "Xpress SL-M2885FW", "mfd", ["MLT-D116S", "MLT-D116L"]),
 ]
 
 # Cartridge metadata — brand + type[toner|ink|drum]. Used to enrich the derived
@@ -709,6 +814,10 @@ TONER_META = {
     "CF230X": ("HP", "toner"), "CF259A": ("HP", "toner"), "CF259X": ("HP", "toner"),
     "CF289A": ("HP", "toner"), "CF289X": ("HP", "toner"), "CF294A": ("HP", "toner"),
     "CF325X": ("HP", "toner"), "W1103A": ("HP", "toner"),
+    # Wave 97 — HP additions
+    "CF244A": ("HP", "toner"),
+    "CF258A": ("HP", "toner"), "CF258X": ("HP", "toner"),
+    "CC388A": ("HP", "toner"),
     # HP colour toners
     "CF500A": ("HP", "toner"), "CF501A": ("HP", "toner"), "CF502A": ("HP", "toner"), "CF503A": ("HP", "toner"),
     "W2110A": ("HP", "toner"), "W2111A": ("HP", "toner"), "W2112A": ("HP", "toner"), "W2113A": ("HP", "toner"),

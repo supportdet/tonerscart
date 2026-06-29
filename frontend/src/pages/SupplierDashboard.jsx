@@ -1253,6 +1253,21 @@ export default function SupplierDashboard() {
                                     mode="printers"
                                     value={compatibleModels}
                                     onChange={setCompatibleModels}
+                                    onItemAdded={async (printerLabel, { isFirst }) => {
+                                        // Wave 97 — bidirectional auto-suggest:
+                                        // if the dealer adds the first printer
+                                        // before picking a toner model, look up
+                                        // the printer's native cartridge code
+                                        // and offer to fill the model field.
+                                        if (!isFirst || (tonerModel || "").trim()) return;
+                                        try {
+                                            const { data } = await api.get(
+                                                `/compat/lookup-by-printer?model=${encodeURIComponent(printerLabel)}`
+                                            );
+                                            const t = Array.isArray(data?.toners) ? data.toners[0] : null;
+                                            if (t) setTonerModel(t);
+                                        } catch { /* silent — printer not in catalogue */ }
+                                    }}
                                     brand={brand}
                                     testid="listing-compatible-models"
                                 />

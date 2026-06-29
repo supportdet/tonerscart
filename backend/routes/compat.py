@@ -142,6 +142,59 @@ def compat_search_toners(q: str = "", limit: int = 20, brand: str = ""):
     return base + extras
 
 
+@router.get("/lookup-by-toner")
+def compat_lookup_by_toner(model: str):
+    """Wave 97 — Suitable-For auto-suggest. Given a toner/ink model number
+    (e.g. 'CF226A', 'TN-2280', 'Canon 303') return the brand, type, and a list
+    of compatible printer model full-names. Tolerant to whitespace and
+    parenthetical aliases. Returns empty list when nothing matches so the
+    caller can fall back to the existing free-text input."""
+    key = (model or "").strip()
+    if not key:
+        return {"model": "", "brand": "", "type": "", "printers": []}
+    # Try direct lookup first (matches '925', 'CF226A', 'TN-2280' etc.)
+    t = cdb.get_toner(key)
+    if t is None:
+        # Tolerant fallback: alias / slug lookup (handles 'TN 2280', 'CF-226A',
+        # 'CF226A (26A)' marketing names, etc.).
+        s = cdb.toner_slugify("", key)
+        t = cdb.get_toner_by_slug(s)
+    if t is None:
+        return {"model": key, "brand": "", "type": "", "printers": []}
+    return {
+        "model": t["model"],
+        "brand": t.get("brand", ""),
+        "type": t.get("type", "toner"),
+        "printers": t.get("printers", []),
+    }
+
+
+@router.get("/lookup-by-printer")
+def compat_lookup_by_printer(model: str):
+    """Wave 97 — reverse Suitable-For auto-suggest. Given a printer model
+    full-name (or just the model part), return the cartridge model number(s)
+    it natively uses, plus the printer brand. Used by the dealer single-form
+    when they fill the printer name first."""
+    key = (model or "").strip()
+    if not key:
+        return {"model": "", "brand": "", "toners": []}
+    p = None
+    s = cdb.slugify("", key)
+    p = cdb.get_printer(s)
+    if p is None:
+        # Tolerant fallback via search (the search index drops marketing tokens).
+        matches = cdb.search_printers(key, limit=1)
+        if matches:
+            p = cdb.get_printer(matches[0]["slug"])
+    if p is None:
+        return {"model": key, "brand": "", "toners": []}
+    return {
+        "model": p["full_name"],
+        "brand": p.get("brand", ""),
+        "toners": list(p.get("toners", [])),
+    }
+
+
 def _search_custom_printers(q: str, brand: str | None, brand_only: bool, limit: int = 12) -> list:
     try:
         qb = sb_admin.table("custom_printer_models").select(

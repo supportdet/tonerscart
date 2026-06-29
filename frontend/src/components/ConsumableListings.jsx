@@ -13,6 +13,7 @@ import DeliveryPolicyNote from "./DeliveryPolicyNote";
 import BulkUploadGeneric from "./BulkUploadGeneric";
 import { consumableBulkConfig } from "../lib/bulkConfigs";
 import CompatibleModelsSelect from "./CompatibleModelsSelect";
+import TonerModelSearchSelect from "./TonerModelSearchSelect";
 import MissingModelLink from "./MissingModelLink";
 import { CONSUMABLE_SUBCATEGORIES, CONSUMABLE_CONDITIONS } from "../lib/consumableConstants";
 
@@ -247,7 +248,26 @@ export default function ConsumableListings() {
                             </div>
                             <div>
                                 <Label>Model number <span className="text-red-500">*</span></Label>
-                                <Input value={form.model_number} onChange={(e) => setForm({ ...form, model_number: e.target.value })} required placeholder="DR-2305" className="tc-input-lg" data-testid="consumable-model-input" />
+                                <TonerModelSearchSelect
+                                    value={form.model_number}
+                                    onChange={(v) => setForm({ ...form, model_number: v })}
+                                    onSelect={(model, printers) => {
+                                        // Wave 97 — auto-fill Suitable-For from the
+                                        // compatibility catalogue. Only overwrite when
+                                        // empty so dealer-typed values are preserved.
+                                        if (Array.isArray(printers) && printers.length > 0) {
+                                            setForm((f) => ({
+                                                ...f,
+                                                model_number: model,
+                                                compatible_models: f.compatible_models?.trim() ? f.compatible_models : printers.join(", "),
+                                            }));
+                                        }
+                                    }}
+                                    brand={form.brand}
+                                    placeholder="DR-2305, CF226A, TN-2280…"
+                                    testIdPrefix="consumable-model"
+                                    required
+                                />
                             </div>
                             <div className="col-span-2">
                                 <Label>Suitable for</Label>
@@ -255,6 +275,16 @@ export default function ConsumableListings() {
                                     mode="printers"
                                     value={form.compatible_models}
                                     onChange={(v) => setForm({ ...form, compatible_models: v })}
+                                    onItemAdded={async (printerLabel, { isFirst }) => {
+                                        if (!isFirst || (form.model_number || "").trim()) return;
+                                        try {
+                                            const { data } = await api.get(
+                                                `/compat/lookup-by-printer?model=${encodeURIComponent(printerLabel)}`
+                                            );
+                                            const t = Array.isArray(data?.toners) ? data.toners[0] : null;
+                                            if (t) setForm((f) => ({ ...f, model_number: t }));
+                                        } catch { /* silent */ }
+                                    }}
                                     brand={form.brand}
                                     testid="consumable-compatible"
                                 />
