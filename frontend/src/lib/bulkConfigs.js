@@ -110,6 +110,7 @@ const tonerScalarPayload = (r) => ({
     oem_part_number: r.oem_part_number?.trim() || null,
     warranty: r.warranty || "1 Year",
     intercity_delivery_charge: r.intercity_delivery_charge !== "" ? Number(r.intercity_delivery_charge) : 0,
+    intracity_delivery_charge: r.intracity_delivery_charge !== undefined && r.intracity_delivery_charge !== "" ? Number(r.intracity_delivery_charge) : 0,
 });
 
 export const tonerBulkConfig = {
@@ -516,6 +517,7 @@ export const consumableBulkConfig = {
         gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
         warranty: r.warranty || "1 Year",
         intercity_delivery_charge: r.intercity_delivery_charge !== "" ? Number(r.intercity_delivery_charge) : 0,
+    intracity_delivery_charge: r.intracity_delivery_charge !== undefined && r.intracity_delivery_charge !== "" ? Number(r.intracity_delivery_charge) : 0,
         description: (r.description || "").trim() || null,
         image_url: "",
         image_urls: [],
@@ -554,6 +556,7 @@ export const consumableBulkConfig = {
         gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
         warranty: r.warranty || "1 Year",
         intercity_delivery_charge: r.intercity_delivery_charge !== "" ? Number(r.intercity_delivery_charge) : 0,
+    intracity_delivery_charge: r.intracity_delivery_charge !== undefined && r.intracity_delivery_charge !== "" ? Number(r.intracity_delivery_charge) : 0,
         description: (r.description || "").trim() || null,
     }),
 };
@@ -623,6 +626,7 @@ const scannerScalarPayload = (r) => ({
     stock: Number(r.stock),
     gst_rate: r.gst_rate !== "" ? Number(r.gst_rate) : 18,
     intercity_delivery_charge: r.intercity_delivery_charge !== "" ? Number(r.intercity_delivery_charge) : 0,
+    intracity_delivery_charge: r.intracity_delivery_charge !== undefined && r.intracity_delivery_charge !== "" ? Number(r.intracity_delivery_charge) : 0,
     description: (r.description || "").trim() || null,
 });
 

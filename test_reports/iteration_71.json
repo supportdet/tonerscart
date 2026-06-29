@@ -1,0 +1,34 @@
+{
+  "summary": "Wave 96 frontend verification on TonersCart. Verified (a) Referral-fee terminology sweep across /terms §9, /, /about and admin tabs (Analytics, Finance, Orders) — ZERO user-facing 'Commission' strings remain (only internal data-testid attribute names like stat-commission/chart-commission-daily retain the legacy key, which is per-spec). (b) Inline edit (pencil-icon) cells on supplier All-Listings table and (c) per-listing intra/inter-city delivery-charge inputs on all 5 product categories — verified via static code review with exact data-testid + default-value references (creating a fresh approved supplier in this DB was avoided to prevent test-data pollution per memory/test_credentials.md guidance). No console errors. All admin terminology checks passed via Playwright on the live preview URL.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_fixes": [
+    {"fix": "/terms §9 heading", "result": "PASS — '9. Referral Fee' heading present (Terms.jsx:82); body uses 'referral fee' throughout; ZERO occurrences of 'Commission' on the page."},
+    {"fix": "/ (Landing) terminology", "result": "PASS — playwright body scrape: 0 occurrences of 'Commission'."},
+    {"fix": "/about terminology", "result": "PASS — body uses 'transparent referral fee' (About.jsx:41,52); 0 'Commission'."},
+    {"fix": "Admin Analytics tab", "result": "PASS — [data-testid=stat-commission] inner text = 'Referral fees earned · ₹560 · Across all orders'; [data-testid=chart-commission-daily] title = 'Referral fee revenue / day (last 30 days)'. No 'Commission' anywhere in the tab content."},
+    {"fix": "Admin Finance tab", "result": "PASS — body contains both 'Referral fees earned' (KPI) and 'Referral fee' (table column header), zero 'Commission' user-facing strings (FinanceTab.jsx:59,90,128)."},
+    {"fix": "Admin Orders tab", "result": "PASS — table column header 'Referral fee' rendered (OrdersTab.jsx:115), and order-detail KV label = 'Referral fee' (line 194). No 'Commission' text. Screenshot confirms 'REFERRAL FEE' column header in orders table."},
+    {"fix": "Inline edit pencil (price + stock) — code review only", "result": "PASS via code review — InlineEditCell.jsx renders {testid}-value/-edit/-input/-save/-cancel with Enter→commit, Esc→cancel, blur→commit, invalid-number stays open (lines 53-77). SupplierDashboard.jsx:1156-1177 wires testid='inline-price-{id}' (min=1) and 'inline-stock-{id}' (min=0) on every row of All-Listings table. inlineUpdate handler is wired via onSave. NOT runtime-tested with a live dealer account — see note below."},
+    {"fix": "Per-listing delivery-charge inputs (5 categories) — code review", "result": "PASS via code review. Toner Add dialog (SupplierDashboard.jsx:1454-1465): toner-intracity-charge default 0 + toner-intercity-charge default 100. PrinterListings.jsx:821-837: printer-intracity-charge 0 + printer-intercity-charge 350. PaperListings.jsx:389,394: paper-intracity 0 + paper-intercity 100. ConsumableListings.jsx:346,351: consumable-intracity 0 + consumable-intercity 100. ScannerListings.jsx:338,343: scanner-intracity 0 + scanner-intercity 100. All defaults match spec exactly."},
+    {"fix": "Buyer-side DeliveryInfo (ProductDetail.jsx) — code review", "result": "PASS via code review. ProductDetail.jsx:494-499 renders [data-testid=delivery-same-city] with '✅ Free delivery' OR '🚚 Same-city delivery: +₹X' branches based on intra rate; [data-testid=delivery-intercity] renders '🚚 Intercity delivery to {city}: +₹X' using deliveryRate() which prefers per-listing intercity_delivery_charge over category default."}
+  ],
+  "test_report_links": ["/app/test_reports/iteration_71.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "data-testid keys 'stat-commission' and 'chart-commission-daily' intentionally retain 'commission' in the attribute name (per spec). User-visible LABELS correctly read 'Referral fee'. This is good — keeps test selectors stable while updating wording.",
+    "Migration NOT applied yet: 2026_06_28_wave96_delivery_charges.sql. Backend will silently DROP intracity_delivery_charge column writes. UI inputs render correctly and submit gracefully (per main-agent note). Apply migration before production cut.",
+    "SupplierDashboard.jsx is 1520 lines (over 700-line threshold). Consider splitting All-Listings table + Add-Toner dialog into separate components for maintainability."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only request)", "frontend": "100% (all terminology + UI structure checks passed)"},
+  "test_credentials": "Admin: support@tonerscart.com / Bangara1@# (used successfully). No fresh supplier created — would have required DB-pollution to runtime-test inline-edit & Add-dialog interactivity.",
+  "seed_data_creation": "None — no test users or listings created.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Admin pages use TAB navigation inside /admin (NOT separate URLs). To reach Analytics/Finance/Orders/Disputes/Featured/etc, login to /admin then click [data-testid=tab-{name}] (analytics, finance, orders, dealers, customers, disputes, messages, activity, content, procurement, oem, agreements, pending, approved, featured). Hitting /admin/analytics directly returns 404. Headers in admin tables use CSS text-transform: uppercase so playwright inner_text() returns 'REFERRAL FEE' even though source code has 'Referral fee' — use case-insensitive string matching. Inline-edit interactive flow and Add-Toner dialog opening were NOT runtime-verified because creating an approved supplier requires register→admin-approve cycle which would pollute the production-ish DB; relies on code review of InlineEditCell.jsx + SupplierDashboard.jsx + PrinterListings/PaperListings/ConsumableListings/ScannerListings. If main agent wants live UI verification, suggest seeding a disposable supplier via /api/auth/register + admin POST /api/admin/dealers/{id}/approve then cleanup at end."
+}

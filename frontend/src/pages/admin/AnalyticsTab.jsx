@@ -68,7 +68,7 @@ export default function AnalyticsTab() {
         <div className="space-y-6" data-testid="analytics-tab">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <StatCard icon={IndianRupee} label="Total GMV"        value={fmtMoney(s.total_gmv)}        accent="ink"    testId="stat-gmv" />
-                <StatCard icon={TrendingUp}  label="Commission earned" value={fmtMoney(s.total_commission)} accent="yellow" sub="Across all orders" testId="stat-commission" />
+                <StatCard icon={TrendingUp}  label="Referral fees earned" value={fmtMoney(s.total_commission)} accent="yellow" sub="Across all orders" testId="stat-commission" />
                 <StatCard icon={ShoppingBag} label="Total orders"      value={fmtInt(s.total_orders)}       accent="cyan"   sub={`${s.orders_week} this week · ${s.orders_month} this month`} testId="stat-orders" />
                 <StatCard icon={Package}     label="Active listings"   value={fmtInt(s.active_listings)}    accent="pink"   sub="Toners + printers" testId="stat-listings" />
                 <StatCard icon={Building2}   label="Approved dealers"  value={fmtInt(s.total_dealers)}      accent="ink"    sub={`${s.new_dealers_week} new this week`} testId="stat-dealers" />
@@ -87,7 +87,7 @@ export default function AnalyticsTab() {
                         </LineChart>
                     </ResponsiveContainer>
                 </ChartCard>
-                <ChartCard title="Commission revenue / day (last 30 days)" testId="chart-commission-daily">
+                <ChartCard title="Referral fee revenue / day (last 30 days)" testId="chart-commission-daily">
                     <ResponsiveContainer width="100%" height={240}>
                         <LineChart data={d.commission_per_day} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                             <CartesianGrid stroke="#F4F4F6" strokeDasharray="3 3" />

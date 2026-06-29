@@ -863,10 +863,10 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
     seller_email = (supplier or {}).get("contact_email") or (supplier or {}).get("email")
     if seller_email:
         payout_line = (
-            f"<tr><td style='padding:4px 12px;color:#86868B;'>Commission ({rate_label})</td><td style='padding:4px 12px;'>−{_money(commission)}</td></tr>"
+            f"<tr><td style='padding:4px 12px;color:#86868B;'>Referral fee ({rate_label})</td><td style='padding:4px 12px;'>−{_money(commission)}</td></tr>"
             f"<tr><td style='padding:4px 12px;color:#86868B;'>Your payout</td><td style='padding:4px 12px;'><strong style='color:#0A8754;'>{_money(payout)}</strong></td></tr>"
             if rate_label != "Deal basis"
-            else "<tr><td style='padding:4px 12px;color:#86868B;'>Commission</td><td style='padding:4px 12px;'>Deal basis — our team will contact you.</td></tr>"
+            else "<tr><td style='padding:4px 12px;color:#86868B;'>Referral fee</td><td style='padding:4px 12px;'>Deal basis — our team will contact you.</td></tr>"
         )
         seller_id_row = (
             f"<tr><td style='padding:4px 12px;color:#86868B;'>Your Seller ID</td><td style='padding:4px 12px;'><strong style='font-family:monospace;color:#00838f;'>{seller_id}</strong></td></tr>"
@@ -1042,7 +1042,7 @@ async def email_order_delivered_support(order: dict, listing: dict, supplier: di
       <tr><td style='padding:4px 12px;color:#86868B;'>Product</td><td style='padding:4px 12px;'>{brand} {model}</td></tr>
       <tr><td style='padding:4px 12px;color:#86868B;'>Dealer</td><td style='padding:4px 12px;'>{seller}</td></tr>
       <tr><td style='padding:4px 12px;color:#86868B;'>Total</td><td style='padding:4px 12px;'><strong>{_money(order.get('total') or 0)}</strong></td></tr>
-      <tr><td style='padding:4px 12px;color:#86868B;'>Commission ({rate_label})</td><td style='padding:4px 12px;'>{_money(commission)}</td></tr>
+      <tr><td style='padding:4px 12px;color:#86868B;'>Referral fee ({rate_label})</td><td style='padding:4px 12px;'>{_money(commission)}</td></tr>
       <tr><td style='padding:4px 12px;color:#86868B;'>Payout to dealer</td><td style='padding:4px 12px;'><strong>{_money(payout)}</strong></td></tr>
     </table>
     """

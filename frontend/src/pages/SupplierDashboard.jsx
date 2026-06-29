@@ -31,6 +31,7 @@ import { tonerBulkConfig } from "../lib/bulkConfigs";
 import D2DRow, { D2DExplainer } from "../components/D2DRow";
 import CompatibleModelsSelect from "../components/CompatibleModelsSelect";
 import MissingModelLink from "../components/MissingModelLink";
+import InlineEditCell from "../components/InlineEditCell";
 
 const colorSwatchHex = (name) => {
     const v = _colorSwatch(name);
@@ -316,7 +317,8 @@ export default function SupplierDashboard() {
     const [warranty, setWarranty] = useState("1 Year");
     const [warrantyOther, setWarrantyOther] = useState("");
     const [printTechnology, setPrintTechnology] = useState("Laser");
-    const [intercityCharge, setIntercityCharge] = useState("0");
+    const [intercityCharge, setIntercityCharge] = useState("100");
+    const [intracityCharge, setIntracityCharge] = useState("0");
     const [gstRate, setGstRate] = useState(18);
     // Whether the per-variant prices below were entered as GST-inclusive or
     // GST-exclusive. Starts UNSELECTED — dealer must pick one before
@@ -398,7 +400,7 @@ export default function SupplierDashboard() {
         setPrice(""); setStock(""); setTonerType("Original"); setPageYield("");
         setImageFiles([]); setImagePreviews([]);
         setBrochureFile(null);
-        setCompatibleModels(""); setTonerModel(""); setOemPartNumber(""); setCartridgeWeight(""); setWarranty(""); setWarrantyOther(""); setPrintTechnology("Laser"); setIntercityCharge("0"); setGstRate(18); setPriceType(null); setPriceTypeError(false);
+        setCompatibleModels(""); setTonerModel(""); setOemPartNumber(""); setCartridgeWeight(""); setWarranty(""); setWarrantyOther(""); setPrintTechnology("Laser"); setIntercityCharge("100"); setIntracityCharge("0"); setGstRate(18); setPriceType(null); setPriceTypeError(false);
         setVariants([{ color: "Black", price: "", stock: "" }]);
         setEditingId(null);
         setExistingImages([]);
@@ -459,6 +461,40 @@ export default function SupplierDashboard() {
             loadAllProducts();
             load();
         } catch (e) { toast.error(formatApiError(e)); }
+    };
+
+    // Wave 96 — inline edit for price + stock on the All Listings table.
+    // Updates the listing immediately via the per-category PUT endpoint and
+    // re-loads only the combined feed so the rest of the dashboard state
+    // stays untouched. Paper uses `price_per_ream`; all others use `price`.
+    const KIND_ENDPOINT = {
+        toner: "/supplier/listings",
+        printer: "/supplier/printers",
+        paper: "/supplier/papers",
+        consumable: "/supplier/consumables",
+        scanner: "/supplier/scanners",
+    };
+    const inlineUpdate = async (p, field, value) => {
+        const base = KIND_ENDPOINT[p.kind];
+        if (!base) throw new Error("Unknown product kind");
+        let payload;
+        if (field === "price") {
+            payload = p.kind === "paper" ? { price_per_ream: Number(value) } : { price: Number(value) };
+        } else if (field === "stock") {
+            payload = { stock: Number(value) };
+        } else {
+            throw new Error("Unsupported field");
+        }
+        try {
+            await api.put(`${base}/${p.id}`, payload);
+            toast.success(field === "price" ? "Price updated" : "Stock updated");
+            // Optimistically update local row + reload feed in background
+            setAllProducts((prev) => prev.map((x) => (x.id === p.id && x.kind === p.kind ? { ...x, [field]: Number(value) } : x)));
+            loadAllProducts();
+        } catch (e) {
+            toast.error(formatApiError(e));
+            throw e;
+        }
     };
 
     // Wave 77 — "No Stock" toggle. Setting stock=0 marks the listing as
@@ -634,6 +670,7 @@ export default function SupplierDashboard() {
                 warranty: warrantyValue,
                 print_technology: printTechnology || null,
                 intercity_delivery_charge: parseFloat(intercityCharge || 0) || 0,
+                intracity_delivery_charge: parseFloat(intracityCharge || 0) || 0,
                 gst_rate: Number(gstRate) || 0,
             };
 
@@ -905,7 +942,7 @@ export default function SupplierDashboard() {
                                                         }
                                                         return (
                                                             <div className="mt-0.5 leading-tight" data-testid={`order-payout-${o.id}`}>
-                                                                <div className="text-[10.5px] text-[#86868B]">Commission ({c.rateLabel}): −₹{c.commission.toLocaleString("en-IN")}</div>
+                                                                <div className="text-[10.5px] text-[#86868B]">Referral fee ({c.rateLabel}): −₹{c.commission.toLocaleString("en-IN")}</div>
                                                                 <div className="text-[11px] text-emerald-700 font-semibold">Payout: ₹{c.payout.toLocaleString("en-IN")}</div>
                                                             </div>
                                                         );
@@ -1115,13 +1152,30 @@ export default function SupplierDashboard() {
                                             <td className="p-3"><span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${CAT_BADGE[p.cat] || ""}`}>{p.cat}</span></td>
                                             <td className="p-3" data-testid={`all-row-price-${p.id}`}>
                                                 {p.price != null ? (
-                                                    <>
-                                                        <div className="font-mono text-[#0A0A0B]">{formatINR(inclGstPrice(p.price, p.gst_rate))}</div>
+                                                    <div className="leading-tight">
+                                                        <InlineEditCell
+                                                            value={p.price}
+                                                            displayValue={<span className="font-mono text-[#0A0A0B]">{formatINR(inclGstPrice(p.price, p.gst_rate))}</span>}
+                                                            onSave={(v) => inlineUpdate(p, "price", v)}
+                                                            min={1}
+                                                            step="0.01"
+                                                            ariaLabel="Edit price"
+                                                            testid={`inline-price-${p.id}`}
+                                                        />
                                                         <div className="text-[10px] text-[#86868B] mt-0.5">incl. {p.gst_rate ?? 18}% GST</div>
-                                                    </>
+                                                    </div>
                                                 ) : "—"}
                                             </td>
-                                            <td className="p-3">{p.stock ?? 0}</td>
+                                            <td className="p-3" data-testid={`all-row-stock-${p.id}`}>
+                                                <InlineEditCell
+                                                    value={p.stock ?? 0}
+                                                    onSave={(v) => inlineUpdate(p, "stock", v)}
+                                                    min={0}
+                                                    step="1"
+                                                    ariaLabel="Edit stock"
+                                                    testid={`inline-stock-${p.id}`}
+                                                />
+                                            </td>
                                             <td className="p-3">
                                                 <span className={`inline-flex items-center gap-1.5 text-[12px] font-semibold ${active ? "text-emerald-600" : "text-[#9A9AA0]"}`}>
                                                     <span className={`w-1.5 h-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-[#C8C8CD]"}`} /> {active ? "Active" : "Inactive"}
@@ -1396,6 +1450,19 @@ export default function SupplierDashboard() {
                         </div>
 
                         <CompetitivePricingNote />
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3" data-testid="toner-delivery-charges">
+                            <div>
+                                <Label>Intra-city delivery charge (₹)</Label>
+                                <Input type="number" min="0" step="1" value={intracityCharge} onChange={(e) => setIntracityCharge(e.target.value)} className="tc-input-lg" data-testid="toner-intracity-charge" />
+                                <div className="text-[11px] text-[#86868B] mt-1">Charged when buyer is in your city. Default ₹0.</div>
+                            </div>
+                            <div>
+                                <Label>Inter-city delivery charge (₹)</Label>
+                                <Input type="number" min="0" step="1" value={intercityCharge} onChange={(e) => setIntercityCharge(e.target.value)} className="tc-input-lg" data-testid="toner-intercity-charge" />
+                                <div className="text-[11px] text-[#86868B] mt-1">Charged when buyer is in a different city. Default ₹100.</div>
+                            </div>
+                        </div>
 
                         <DialogFooter className="mt-6">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>

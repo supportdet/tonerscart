@@ -23,6 +23,7 @@ function emptyForm() {
         subcategory: "Ink Cartridges", subcategory_other: "", brand: "", model_number: "",
         compatible_models: "", condition: "New", price: "", gst_rate: 18, price_type: null, stock: "", description: "",
         warranty: "1 Year", page_yield: "", cartridge_weight: "",
+        intercity_delivery_charge: "100", intracity_delivery_charge: "0",
     };
 }
 
@@ -60,6 +61,8 @@ export default function ConsumableListings() {
             warranty: c.warranty || "1 Year",
             page_yield: c.page_yield != null ? String(c.page_yield) : "",
             cartridge_weight: c.cartridge_weight != null ? String(c.cartridge_weight) : "",
+            intercity_delivery_charge: c.intercity_delivery_charge != null ? String(c.intercity_delivery_charge) : "100",
+            intracity_delivery_charge: c.intracity_delivery_charge != null ? String(c.intracity_delivery_charge) : "0",
         });
         setImageFiles([]); setImagePreviews([]);
         setOpen(true);
@@ -145,6 +148,8 @@ export default function ConsumableListings() {
                 warranty: form.warranty || "1 Year",
                 page_yield: form.page_yield ? parseInt(form.page_yield, 10) : null,
                 cartridge_weight: form.cartridge_weight ? parseInt(form.cartridge_weight, 10) : null,
+                intercity_delivery_charge: parseFloat(form.intercity_delivery_charge || 0) || 0,
+                intracity_delivery_charge: parseFloat(form.intracity_delivery_charge || 0) || 0,
             };
             if (uploadedUrls.length > 0) {
                 payload.image_url = uploadedUrls[0];
@@ -335,6 +340,18 @@ export default function ConsumableListings() {
 
                         <DeliveryPolicyNote />
                         <CompetitivePricingNote />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="consumable-delivery-charges">
+                            <div>
+                                <label className="block text-[12.5px] font-semibold text-[#0A0A0B] mb-1">Intra-city delivery charge (₹)</label>
+                                <input type="number" min="0" step="1" value={form.intracity_delivery_charge} onChange={(e) => setForm({ ...form, intracity_delivery_charge: e.target.value })} className="tc-input-lg w-full" data-testid="consumable-intracity-charge" />
+                                <div className="text-[11px] text-[#86868B] mt-1">Charged when buyer is in your city. Default ₹0.</div>
+                            </div>
+                            <div>
+                                <label className="block text-[12.5px] font-semibold text-[#0A0A0B] mb-1">Inter-city delivery charge (₹)</label>
+                                <input type="number" min="0" step="1" value={form.intercity_delivery_charge} onChange={(e) => setForm({ ...form, intercity_delivery_charge: e.target.value })} className="tc-input-lg w-full" data-testid="consumable-intercity-charge" />
+                                <div className="text-[11px] text-[#86868B] mt-1">Charged when buyer is in a different city. Default ₹100.</div>
+                            </div>
+                        </div>
                         <DialogFooter className="mt-3">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
                             <Button type="submit" className="btn-pill-cta" disabled={saving} data-testid="consumable-save-btn">

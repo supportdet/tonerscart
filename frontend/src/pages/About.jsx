@@ -49,7 +49,7 @@ export default function About() {
                         </h2>
                         <ul className="mt-5 space-y-4 text-[14.5px] text-[#3a3a40]">
                             {[
-                                { Icon: Target,   t: "Transparent pricing",  d: "No middlemen markup. Buyers see the dealer's price, the platform commission, and zero hidden fees." },
+                                { Icon: Target,   t: "Transparent pricing",  d: "No middlemen markup. Buyers see the dealer's price, the platform referral fee, and zero hidden fees." },
                                 { Icon: Shield,   t: "Verified suppliers",   d: "Every dealer is KYC-verified — GST, PAN, address proof, AI-checked business documents." },
                                 { Icon: Sparkles, t: "Real stock, real time", d: "Live inventory from dealers, not stale catalogues. Orders are placed against actual on-shelf stock." },
                                 { Icon: Users,    t: "Built for everyone",       d: "GST invoicing, bulk orders, MPS sourcing, fleet management — built for offices, businesses and homes alike." },

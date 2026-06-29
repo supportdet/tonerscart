@@ -308,6 +308,7 @@ class ListingCreate(BaseModel):
     warranty: Optional[str] = None
     print_technology: Optional[str] = None
     intercity_delivery_charge: Optional[float] = 0
+    intracity_delivery_charge: Optional[float] = 0
     gst_rate: Optional[int] = 18
     # D2D (Dealer-to-Dealer) marketplace — Wave 10
     d2d_enabled: Optional[bool] = False
@@ -418,23 +419,23 @@ def _city_key(c: Optional[str]) -> str:
     return _CITY_EQUIV.get(k, k)
 
 
-# ── System-defined flat intercity delivery rates (Wave 22) ──────────────────
-# Same-city delivery is free. For intercity orders a flat charge per product
-# category is added to the buyer's total at checkout — set by TonersCart, NOT by
-# dealers. Charged once per dealer per order (the checkout attributes the rate
-# to a single order line per dealer; non-bearing lines store 0).
+# ── System-defined flat delivery-rate fallbacks (Wave 22, updated Wave 96) ──
+# Defaults applied ONLY when the listing has no explicit per-row delivery
+# charge. Same-city defaults to 0; intercity defaults to ₹350 for printers,
+# ₹100 for everything else. Per-listing values (set by the dealer on the
+# product form) always take precedence.
 DELIVERY_RATES = {
     "toner": 100,
     "printer": 350,
-    "paper": 150,
-    "scanner": 250,
+    "paper": 100,
+    "scanner": 100,
     "consumable": 100,
 }
 DELIVERY_RATE_MAX = max(DELIVERY_RATES.values())
 
 
 def _delivery_rate(kind: Optional[str]) -> int:
-    """Flat intercity delivery rate (₹) for a product category."""
+    """Default intercity delivery rate (₹) for a category — fallback only."""
     return DELIVERY_RATES.get((kind or "toner").lower(), DELIVERY_RATES["toner"])
 
 
@@ -449,13 +450,34 @@ def _is_intercity(dealer_city: Optional[str], buyer_city: Optional[str]) -> bool
 
 
 def _resolve_delivery_charge(kind: Optional[str], dealer_city: Optional[str],
-                             buyer_city: Optional[str], charge_delivery: bool) -> float:
-    """Authoritative, system-defined delivery charge for one order line.
-    Returns 0 for same-city, or when this line is not the delivery-bearing line
-    for its dealer (charge_delivery=False). Dealers cannot set or inflate this."""
+                             buyer_city: Optional[str], charge_delivery: bool,
+                             listing: Optional[dict] = None) -> float:
+    """Authoritative delivery charge for one order line.
+
+    Wave 96: per-listing `intercity_delivery_charge` / `intracity_delivery_charge`
+    take precedence; falls back to the category default (intercity only).
+    Returns 0 when `charge_delivery=False` (non-bearing line in a multi-line
+    order)."""
     if not charge_delivery:
         return 0.0
-    if not _is_intercity(dealer_city, buyer_city):
+    intercity = _is_intercity(dealer_city, buyer_city)
+    if listing is not None:
+        if intercity:
+            v = listing.get("intercity_delivery_charge")
+            if v is not None:
+                try:
+                    return float(v)
+                except (TypeError, ValueError):
+                    pass
+        else:
+            v = listing.get("intracity_delivery_charge")
+            if v is not None:
+                try:
+                    return float(v)
+                except (TypeError, ValueError):
+                    pass
+            return 0.0
+    if not intercity:
         return 0.0
     return float(_delivery_rate(kind))
 
@@ -609,7 +631,7 @@ async def _create_direct_order(payload: "OrderCreate", user: dict, kind: str):
         _sup = sb_admin.table("suppliers").select("city").eq("id", L["supplier_id"]).maybe_single().execute()
         _dealer_city = (_sup.data or {}).get("city") if _sup else None
     delivery_charge = _resolve_delivery_charge(
-        kind, _dealer_city, payload.order_city, bool(payload.charge_delivery)
+        kind, _dealer_city, payload.order_city, bool(payload.charge_delivery), L
     )
 
     row = {
@@ -781,6 +803,7 @@ class PrinterListingCreate(BaseModel):
     mobile_printing: List[str] = Field(default_factory=list)
     monthly_volume_recommended: Optional[int] = None
     intercity_delivery_charge: Optional[float] = 0
+    intracity_delivery_charge: Optional[float] = 0
     gst_rate: Optional[int] = 18
     # Wave 9: multi-select usage + special features
     usage_types: List[str] = Field(default_factory=list)
@@ -1311,6 +1334,7 @@ class PaperCreate(BaseModel):
     suitable_for: List[str] = Field(default_factory=list)
     description: Optional[str] = None
     intercity_delivery_charge: Optional[float] = 0
+    intracity_delivery_charge: Optional[float] = 0
     gst_rate: Optional[int] = 18
     # Wave 49 — warranty now required for papers (reams batch QC)
     warranty: Optional[str] = None
@@ -1354,6 +1378,7 @@ class ConsumableCreate(BaseModel):
     image_url: Optional[str] = None
     image_urls: List[str] = Field(default_factory=list)
     intercity_delivery_charge: Optional[float] = 0
+    intracity_delivery_charge: Optional[float] = 0
     # Wave 49 — warranty + page_yield + cartridge_weight are now required
     # for ink cartridges + drums + fusers + maintenance kits so buyers see
     # the same coverage info they get on toners.
@@ -1393,6 +1418,7 @@ class ConsumablePatch(BaseModel):
     image_url: Optional[str] = None
     image_urls: Optional[List[str]] = None
     intercity_delivery_charge: Optional[float] = None
+    intracity_delivery_charge: Optional[float] = None
     d2d_enabled: Optional[bool] = None
     d2d_price: Optional[float] = None
 
@@ -1427,6 +1453,7 @@ class ScannerCreate(BaseModel):
     image_url: Optional[str] = None
     image_urls: List[str] = Field(default_factory=list)
     intercity_delivery_charge: Optional[float] = 0
+    intracity_delivery_charge: Optional[float] = 0
     d2d_enabled: Optional[bool] = False
     d2d_price: Optional[float] = None
 
@@ -1448,6 +1475,7 @@ class ScannerPatch(BaseModel):
     image_url: Optional[str] = None
     image_urls: Optional[List[str]] = None
     intercity_delivery_charge: Optional[float] = None
+    intracity_delivery_charge: Optional[float] = None
     d2d_enabled: Optional[bool] = None
     d2d_price: Optional[float] = None
 
@@ -1511,6 +1539,7 @@ class ListingPatch(BaseModel):
     warranty: Optional[str] = None
     print_technology: Optional[str] = None
     intercity_delivery_charge: Optional[float] = None
+    intracity_delivery_charge: Optional[float] = None
     # Printer-specific
     description: Optional[str] = None
     usage_type: Optional[str] = None

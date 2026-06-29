@@ -21,7 +21,7 @@ const GSMS = [70, 75, 80, 90, 100, 120, 150];
 const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
 
 function emptyForm() {
-    return { brand: "JK Paper", size: "A4", gsm: 75, reams_per_box: 10, price_per_ream: "", stock: "", description: "", brightness: "", thickness_microns: "", acid_free: false, suitable_for: [], gst_rate: 18, price_type: null, warranty: "" };
+    return { brand: "JK Paper", size: "A4", gsm: 75, reams_per_box: 10, price_per_ream: "", stock: "", description: "", brightness: "", thickness_microns: "", acid_free: false, suitable_for: [], gst_rate: 18, price_type: null, warranty: "", intercity_delivery_charge: "100", intracity_delivery_charge: "0" };
 }
 
 const PAPER_WARRANTIES = ["No warranty", "Batch defect replacement", "30 days", "3 months", "6 months", "1 year"];
@@ -61,6 +61,8 @@ export default function PaperListings() {
             gst_rate: gstRate,
             price_type: "incl",
             warranty: p.warranty || "",
+            intercity_delivery_charge: p.intercity_delivery_charge != null ? String(p.intercity_delivery_charge) : "100",
+            intracity_delivery_charge: p.intracity_delivery_charge != null ? String(p.intracity_delivery_charge) : "0",
         });
         setImageFiles([]); setImagePreviews([]);
         setOpen(true);
@@ -144,6 +146,8 @@ export default function PaperListings() {
                 suitable_for: form.suitable_for || [],
                 gst_rate: Number(form.gst_rate || 18),
                 warranty: form.warranty,
+                intercity_delivery_charge: parseFloat(form.intercity_delivery_charge || 0) || 0,
+                intracity_delivery_charge: parseFloat(form.intracity_delivery_charge || 0) || 0,
             };
             if (uploadedUrls.length > 0) {
                 payload.image_url = uploadedUrls[0];
@@ -379,6 +383,18 @@ export default function PaperListings() {
                         </div>
                         <DeliveryPolicyNote />
                         <CompetitivePricingNote />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="paper-delivery-charges">
+                            <div>
+                                <label className="block text-[12.5px] font-semibold text-[#0A0A0B] mb-1">Intra-city delivery charge (₹)</label>
+                                <input type="number" min="0" step="1" value={form.intracity_delivery_charge} onChange={(e) => setForm({ ...form, intracity_delivery_charge: e.target.value })} className="tc-input-lg w-full" data-testid="paper-intracity-charge" />
+                                <div className="text-[11px] text-[#86868B] mt-1">Charged when buyer is in your city. Default ₹0.</div>
+                            </div>
+                            <div>
+                                <label className="block text-[12.5px] font-semibold text-[#0A0A0B] mb-1">Inter-city delivery charge (₹)</label>
+                                <input type="number" min="0" step="1" value={form.intercity_delivery_charge} onChange={(e) => setForm({ ...form, intercity_delivery_charge: e.target.value })} className="tc-input-lg w-full" data-testid="paper-intercity-charge" />
+                                <div className="text-[11px] text-[#86868B] mt-1">Charged when buyer is in a different city. Default ₹100.</div>
+                            </div>
+                        </div>
                         <DialogFooter className="mt-3">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
                             <Button type="submit" className="btn-pill-cta" disabled={saving} data-testid="paper-save-btn">

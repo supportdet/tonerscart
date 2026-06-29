@@ -127,7 +127,8 @@ const EMPTY = {
     max_resolution: "",
     paper_sizes: [],
     mobile_printing: [],
-    intercity_delivery_charge: "0",
+    intercity_delivery_charge: "350",
+    intracity_delivery_charge: "0",
     gst_rate: 18,
     price_type: null,
     price: "",
@@ -319,7 +320,8 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                 max_resolution: editing.max_resolution || "",
                 paper_sizes: Array.isArray(editing.paper_sizes) ? editing.paper_sizes : [],
                 mobile_printing: Array.isArray(editing.mobile_printing) ? editing.mobile_printing : [],
-                intercity_delivery_charge: editing.intercity_delivery_charge != null ? String(editing.intercity_delivery_charge) : "0",
+                intercity_delivery_charge: editing.intercity_delivery_charge != null ? String(editing.intercity_delivery_charge) : "350",
+                intracity_delivery_charge: editing.intracity_delivery_charge != null ? String(editing.intracity_delivery_charge) : "0",
                 price_type: "incl",
                 price: editing.price != null ? String(withGst(Number(editing.price), editing.gst_rate != null ? Number(editing.gst_rate) : 18)) : "",
                 stock: editing.stock != null ? String(editing.stock) : "1",
@@ -489,6 +491,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                 paper_sizes: f.paper_sizes || [],
                 mobile_printing: f.mobile_printing || [],
                 intercity_delivery_charge: parseFloat(f.intercity_delivery_charge || 0) || 0,
+                intracity_delivery_charge: parseFloat(f.intracity_delivery_charge || 0) || 0,
                 printer_warranty: f.printer_warranty || "1 Year",
                 price: getBasePrice(f.price, f.price_type, f.gst_rate),
                 stock: parseInt(f.stock || "1", 10),
@@ -807,6 +810,34 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                             <CompetitivePricingNote />
                             <div>
                                 <DeliveryPolicyNote />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="wizard-delivery-charges">
+                                <div>
+                                    <Label>Intra-city delivery charge (₹)</Label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        value={f.intracity_delivery_charge}
+                                        onChange={(e) => setVal("intracity_delivery_charge", e.target.value)}
+                                        className="tc-input-lg w-full"
+                                        data-testid="printer-intracity-charge"
+                                    />
+                                    <div className="text-[11px] text-[#86868B] mt-1">Charged when buyer is in your city. Default ₹0.</div>
+                                </div>
+                                <div>
+                                    <Label>Inter-city delivery charge (₹)</Label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        value={f.intercity_delivery_charge}
+                                        onChange={(e) => setVal("intercity_delivery_charge", e.target.value)}
+                                        className="tc-input-lg w-full"
+                                        data-testid="printer-intercity-charge"
+                                    />
+                                    <div className="text-[11px] text-[#86868B] mt-1">Charged when buyer is in a different city. Default ₹350 for printers.</div>
+                                </div>
                             </div>
                         </div>
                     </div>

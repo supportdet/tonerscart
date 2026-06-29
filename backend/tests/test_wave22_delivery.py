@@ -42,10 +42,10 @@ def test_resolver_unit():
     assert _resolve_delivery_charge("printer", "Bangalore", "Mumbai", True) == 350.0
     # Intercity toner => 100
     assert _resolve_delivery_charge("toner", "Bangalore", "Mumbai", True) == 100.0
-    # Intercity scanner => 250
-    assert _resolve_delivery_charge("scanner", "Bangalore", "Mumbai", True) == 250.0
-    # Intercity paper => 150
-    assert _resolve_delivery_charge("paper", "Bangalore", "Mumbai", True) == 150.0
+    # Intercity scanner => 100 (Wave 96 normalised: ₹100 for non-printer cats)
+    assert _resolve_delivery_charge("scanner", "Bangalore", "Mumbai", True) == 100.0
+    # Intercity paper => 100 (Wave 96 normalised)
+    assert _resolve_delivery_charge("paper", "Bangalore", "Mumbai", True) == 100.0
     # charge_delivery False => 0 (non-bearing line for the dealer)
     assert _resolve_delivery_charge("printer", "Bangalore", "Mumbai", False) == 0.0
 

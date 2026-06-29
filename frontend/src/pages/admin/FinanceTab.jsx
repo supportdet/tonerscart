@@ -56,7 +56,7 @@ export default function FinanceTab() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {[
                     { k: "Total GMV", v: fmtMoney(totals.gmv), Icon: TrendingUp, color: "text-[#0A0A0B]" },
-                    { k: "Commission earned", v: fmtMoney(totals.commission), Icon: IndianRupee, color: "text-emerald-600" },
+                    { k: "Referral fees earned", v: fmtMoney(totals.commission), Icon: IndianRupee, color: "text-emerald-600" },
                     { k: "Dealer payouts", v: fmtMoney(totals.payout), Icon: Wallet, color: "text-blue-600" },
                     { k: "Active dealers", v: dealers.length, Icon: Users, color: "text-[#0A0A0B]" },
                 ].map((s) => (
@@ -87,7 +87,7 @@ export default function FinanceTab() {
                                     <th className="text-left p-3">Month</th>
                                     <th className="text-right p-3">Orders</th>
                                     <th className="text-right p-3">GMV</th>
-                                    <th className="text-right p-3">Commission</th>
+                                    <th className="text-right p-3">Referral fee</th>
                                     <th className="text-right p-3">Dealer payouts</th>
                                 </tr>
                             </thead>
@@ -125,7 +125,7 @@ export default function FinanceTab() {
                                     <th className="text-left p-3">City</th>
                                     <th className="text-right p-3">Orders</th>
                                     <th className="text-right p-3">GMV</th>
-                                    <th className="text-right p-3">Commission</th>
+                                    <th className="text-right p-3">Referral fee</th>
                                     <th className="text-right p-3">Net payout</th>
                                     <th className="text-right p-3">Pending payout</th>
                                 </tr>

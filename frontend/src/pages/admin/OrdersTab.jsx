@@ -112,7 +112,7 @@ export default function OrdersTab() {
                                 <th className="text-left p-3">Dealer</th>
                                 <th className="text-right p-3">Qty</th>
                                 <th className="text-right p-3">Total</th>
-                                <th className="text-right p-3">Commission</th>
+                                <th className="text-right p-3">Referral fee</th>
                                 <th className="text-right p-3">Payout</th>
                                 <th className="text-left p-3">Status</th>
                                 <th className="text-left p-3">Date</th>
@@ -191,7 +191,7 @@ function OrderDetailDialog({ order, onClose, onChange, onFlag }) {
                     <KV k="Tracking"  v={order.tracking_number || "—"} />
                     <KV k="Qty / Unit"v={`${order.qty} × ${fmtMoney(order.unit_price)}`} />
                     <KV k="Total"     v={fmtMoney(order.total)} />
-                    <KV k="Commission" v={`${fmtMoney(order.commission)} (${order.commission_rate})`} />
+                    <KV k="Referral fee" v={`${fmtMoney(order.commission)} (${order.commission_rate})`} />
                     <KV k="Dealer payout" v={fmtMoney(order.payout)} />
                     {order.notes && <KV k="Notes" v={order.notes} />}
                     <div className="pt-2">
