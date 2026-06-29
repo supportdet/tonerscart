@@ -1,5 +1,25 @@
 # TonersCart — Product Requirements (Supabase edition)
 
+> **Latest (2026-06-29 Wave 97):** **Legal docs v2.4/v2.2 + Suitable-For auto-suggest (bidirectional, all 5 forms incl. bulk).**
+>
+> ### Legal
+> Terms of Service bumped to **v2.4** (`/app/frontend/src/pages/Terms.jsx`): §9 (Referral Fee) rewritten — "flat referral fee of 7% on order value excluding GST, **not** charged on delivery"; new **§9A Delivery Policy** inserted between §9 and §10 (default ₹0 intra-city, ₹350 printers / ₹100 others inter-city); §10 (Returns) replaced — only Wrong Model (verified against dealer dispatch photo) or DOA, within 48 h with photo proof; §11 + §15 terminology aligned to "referral fee of 7%". Privacy Policy bumped to **v2.2** (`/app/frontend/src/pages/Privacy.jsx`): §7 third-party processors gains a Logistics-partners line; §15 rewritten — "Delivery charges are passed through in full with no deduction".
+>
+> ### Suitable-For auto-suggest
+> Expanded `/app/backend/compatibility_db.py` (Wave 97 PRINTERS_RAW additions + TONER_META additions) — now covers all 38 India-market codes the user named (HP CF226A/CF230A/CF217A/CF244A/CF248A/CF258A/CF259A/Q2612A/CE285A/CC388A/CB435A/CB436A; Canon 303/925/337/057/057H/070/070H/071/071H/069/054/056; Brother TN-2280/2360/2380/660/730/760; Epson 001/003/008/664/532; Samsung MLT-D101S/D111S/D116S). Catalogue grew from 619→700 printers + 585→601 toners.
+> New endpoints in `/app/backend/routes/compat.py`: `GET /api/compat/lookup-by-toner?model=…` returns `{brand,type,printers[]}`; `GET /api/compat/lookup-by-printer?model=…` returns `{brand,toners[]}`. Both slug-tolerant ("tn 2280", "CF-226A", "HP LaserJet P1108" all resolve).
+> Wiring:
+> • `TonerModelSearchSelect.jsx` — new `lastAutoRef` effect: typing ≥ 3 chars debounce-fires `onSelect(model, printers[])` once per unique value; works without clicking a dropdown option. Used by the toner Add form and (now) the consumable Add form.
+> • `CompatibleModelsSelect.jsx` — new `onItemAdded(label, {isFirst})` callback for the **reverse** direction.
+> • `SupplierDashboard.jsx` toner form — `onItemAdded` calls `/lookup-by-printer` on the first printer add and auto-fills the toner model when empty.
+> • `ConsumableListings.jsx` — model_number swapped from plain `<Input>` to `<TonerModelSearchSelect>`; Suitable-For has bidirectional `onItemAdded`.
+> • `BulkUploadGeneric.jsx` — `updateCell` watches `model_number` edits, debounces 450 ms, calls `/lookup-by-toner`, fills `compatible_models` cell only when empty.
+>
+> ### Verification
+> 24/24 backend pytest in `/app/backend/tests/test_wave97_compat_autosuggest.py` (parametrised over all required codes + slug-tolerant + reverse + empty fallback + stats). 14/14 frontend `/terms` and `/privacy` text checks via Playwright on the live preview URL. 4 dealer-form UI flows confirmed by code review (testing agent had no shared dealer login).
+
+
+
 > **Latest (2026-06-29 Wave 96):** **Inline price/stock edit, per-listing delivery charges, terminology sweep finished.**
 >
 > ### 1) Inline price + stock edit on dealer All-Listings table
