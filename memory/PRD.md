@@ -1,5 +1,23 @@
 # TonersCart — Product Requirements (Supabase edition)
 
+> **Latest (2026-06-29 Wave 96):** **Inline price/stock edit, per-listing delivery charges, terminology sweep finished.**
+>
+> ### 1) Inline price + stock edit on dealer All-Listings table
+> New `/app/frontend/src/components/InlineEditCell.jsx` — reusable pencil-icon → input → save/cancel cell. Wired into `SupplierDashboard.jsx` All-Listings table for both the **price** (`inline-price-{id}-edit/-input/-save/-cancel`) and **stock** (`inline-stock-{id}-…`) columns. Enter saves, Esc cancels, blur commits, invalid input keeps the editor open. `inlineUpdate` helper routes each kind to the correct `PUT /api/supplier/{listings|printers|papers|consumables|scanners}/{id}` and refreshes the All-Listings feed in place.
+>
+> ### 2) Per-listing delivery charges (Intra-city + Inter-city)
+> Added `intracity_delivery_charge` column to all 5 product tables (migration: `/app/backend/migrations/2026_06_28_wave96_delivery_charges.sql` — MUST be applied via Supabase SQL Editor; backend gracefully degrades until then). Existing `intercity_delivery_charge` now also has per-row UI inputs. Defaults: intra ₹0 everywhere; inter ₹350 for printers, ₹100 for toner/paper/consumable/scanner. UI inputs added to all 5 single-product forms (`{kind}-intracity-charge` / `{kind}-intercity-charge`). `_resolve_delivery_charge` in `server.py` now reads the listing's per-row values first, with category default as fallback. Mirrored frontend logic in `lib/delivery.js computeCartDelivery`. Buyer-side `DeliveryInfo` block on `ProductDetail.jsx` shows the per-listing intra/inter value (or "Free delivery" when intra is 0). Bulk-config `scalarPayload` for all 5 kinds also carries `intracity_delivery_charge`. **DELIVERY_RATES normalised** in both `server.py` and `lib/delivery.js`: paper 150→100, scanner 250→100.
+>
+> ### 3) Referral fee terminology — final sweep
+> Wave 95 implemented the flat 7% math. Wave 96 finished removing the user-facing word "Commission" from: seller-confirmation email (`email_service.py` lines 866, 869, 1045), Admin Orders tab (column + KV), Admin Finance tab (KPI + table columns), Admin Analytics tab (StatCard + Chart title), Admin DealerProfile, About page, D2DProductDetail, SupplierDashboard order-row breakdown. Internal data-testids and DB column names retain `commission` (no UI impact).
+>
+> ### Verification
+> Backend pytest `/app/backend/tests/test_wave96_referral_delivery.py` — **16 passed, 1 skipped, 0 failed** (covers `_commission_breakdown` flat 7%, `_resolve_delivery_charge` all 8 logical paths incl. per-listing overrides + missing-column graceful degradation, public product endpoints, supplier PUT acceptance). Frontend Playwright sweep (iteration_71) — **100% pass** on terminology + code-review of inline edit + delivery-charge UI on all 5 product forms.
+>
+> ### TODO for the user
+> Run `/app/backend/migrations/2026_06_28_wave96_delivery_charges.sql` once in Supabase SQL Editor so `intracity_delivery_charge` actually persists (today it is silently dropped on write; defaults still resolve correctly).
+
+
 > **Latest (2026-06-28 Wave 94):** **Scanner type list updated + bulk-upload defaults removed.**
 >
 > ### 1) Scanner types: "All-in-one" → "Book Scanner"
