@@ -186,7 +186,7 @@ export default function D2DProductDetail() {
                             <li>D2D pricing is wholesale — applies only to approved TonersCart dealers. Re-sale to end customers is at your sole discretion.</li>
                             <li>GST is charged on top of the base D2D price; tax invoice is issued by the selling dealer.</li>
                             <li>Delivery charges, return policy and warranty are governed by the selling dealer&apos;s standard B2B terms.</li>
-                            <li>TonersCart commission on D2D transactions is computed on the base price only — see <Link to="/terms" className="underline">Terms § 11 Seller Payouts</Link>.</li>
+                            <li>TonersCart referral fee on D2D transactions is computed on the base price only — see <Link to="/terms" className="underline">Terms § 9 Referral Fee</Link>.</li>
                             <li>Disputes are routed through the platform&apos;s dealer-only grievance channel; standard customer return windows do not apply.</li>
                         </ul>
                     </div>

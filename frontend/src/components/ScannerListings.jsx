@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -24,10 +25,12 @@ function emptyForm() {
         brand: "", model_number: "", scanner_type: "Flatbed", condition: "New",
         scan_resolution: "1200dpi", connectivity: [], scan_speed_ppm: "", color_mode: "Color",
         warranty: "No warranty", price: "", gst_rate: 18, price_type: null, stock: "", description: "",
+        intercity_delivery_charge: "100", intracity_delivery_charge: "0",
     };
 }
 
 export default function ScannerListings() {
+    const navigate = useNavigate();
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [open, setOpen] = useState(false);
@@ -59,6 +62,8 @@ export default function ScannerListings() {
             price_type: "incl",
             stock: String(s.stock ?? ""),
             description: s.description || "",
+            intercity_delivery_charge: s.intercity_delivery_charge != null ? String(s.intercity_delivery_charge) : "100",
+            intracity_delivery_charge: s.intracity_delivery_charge != null ? String(s.intracity_delivery_charge) : "0",
         });
         setImageFiles([]); setImagePreviews([]);
         setOpen(true);
@@ -146,6 +151,8 @@ export default function ScannerListings() {
                 gst_rate: Number(form.gst_rate || 18),
                 stock: Number(form.stock),
                 description: (form.description || "").trim() || null,
+                intercity_delivery_charge: parseFloat(form.intercity_delivery_charge || 0) || 0,
+                intracity_delivery_charge: parseFloat(form.intracity_delivery_charge || 0) || 0,
             };
             if (uploadedUrls.length > 0) {
                 payload.image_url = uploadedUrls[0];
@@ -182,26 +189,26 @@ export default function ScannerListings() {
                     <div className="mt-1 text-[12.5px]">Tap <span className="font-semibold text-[#0A0A0B]">Add scanner</span> to publish your first SKU.</div>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="scanners-grid">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3" data-testid="scanners-grid">
                     {rows.map((s) => (
-                        <div key={s.id} className="tc-product-card p-4" data-testid={`supplier-scanner-${s.id}`}>
-                            <div className="flex items-start justify-between gap-2">
+                        <div key={s.id} onClick={() => navigate(`/scanner/${s.id}`)} className="tc-product-card p-2.5 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all" data-testid={`supplier-scanner-${s.id}`}>
+                            <div className="flex items-start justify-between gap-1">
                                 <div className="min-w-0">
-                                    <div className="text-[10.5px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">{s.brand}</div>
-                                    <div className="text-[15px] font-semibold text-[#0A0A0B] truncate" style={{ fontFamily: "'Montserrat', sans-serif" }}>{s.model_number}</div>
+                                    <div className="text-[9px] tracking-[0.14em] uppercase font-semibold text-[#86868B] truncate">{s.brand}</div>
+                                    <div className="text-[13px] font-semibold text-[#0A0A0B] truncate" style={{ fontFamily: "'Montserrat', sans-serif" }}>{s.model_number}</div>
                                 </div>
-                                <span className="inline-flex items-center text-[10px] font-bold px-2 py-1 rounded-md border bg-[#EAF6FF] text-[#0369A1] border-[#BFE3FB] uppercase shrink-0">{s.scanner_type}</span>
+                                <span className="inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded border bg-[#EAF6FF] text-[#0369A1] border-[#BFE3FB] uppercase shrink-0">{s.scanner_type}</span>
                             </div>
-                            <div className="mt-3 text-[12.5px] text-[#3a3a40]">
-                                <div className="font-mono">{fmtMoney(s.price)}</div>
-                                <div className="text-[#86868B] text-[11.5px]">{s.stock} in stock · {s.condition || "New"}{s.scan_resolution ? ` · ${s.scan_resolution}` : ""}</div>
+                            <div className="mt-1.5 text-[11.5px] text-[#3a3a40]">
+                                <div className="font-mono text-[13px]">{fmtMoney(s.price)}</div>
+                                <div className="text-[#86868B] text-[10px]">{s.stock} in stock</div>
                             </div>
-                            <div className="mt-3 flex items-center gap-3">
-                                <button onClick={() => openEdit(s)} className="text-[12px] text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`edit-scanner-${s.id}`}>
-                                    <Pencil size={12} /> Edit
+                            <div className="mt-1.5 flex items-center gap-2 text-[11px]" onClick={(e) => e.stopPropagation()}>
+                                <button onClick={() => openEdit(s)} className="text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`edit-scanner-${s.id}`}>
+                                    <Pencil size={10} /> Edit
                                 </button>
-                                <button onClick={() => remove(s.id)} className="text-[12px] text-red-600 hover:text-red-700 inline-flex items-center gap-1" data-testid={`remove-scanner-${s.id}`}>
-                                    <Trash2 size={12} /> Remove
+                                <button onClick={() => remove(s.id)} className="text-red-600 hover:text-red-700 inline-flex items-center gap-1" data-testid={`remove-scanner-${s.id}`}>
+                                    <Trash2 size={10} /> Del
                                 </button>
                             </div>
                         </div>
@@ -327,6 +334,18 @@ export default function ScannerListings() {
 
                         <DeliveryPolicyNote />
                         <CompetitivePricingNote />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="scanner-delivery-charges">
+                            <div>
+                                <label className="block text-[12.5px] font-semibold text-[#0A0A0B] mb-1">Intra-city delivery charge (₹)</label>
+                                <input type="number" min="0" step="1" value={form.intracity_delivery_charge} onChange={(e) => setForm({ ...form, intracity_delivery_charge: e.target.value })} className="tc-input-lg w-full" data-testid="scanner-intracity-charge" />
+                                <div className="text-[11px] text-[#86868B] mt-1">Charged when buyer is in your city. Default ₹0.</div>
+                            </div>
+                            <div>
+                                <label className="block text-[12.5px] font-semibold text-[#0A0A0B] mb-1">Inter-city delivery charge (₹)</label>
+                                <input type="number" min="0" step="1" value={form.intercity_delivery_charge} onChange={(e) => setForm({ ...form, intercity_delivery_charge: e.target.value })} className="tc-input-lg w-full" data-testid="scanner-intercity-charge" />
+                                <div className="text-[11px] text-[#86868B] mt-1">Charged when buyer is in a different city. Default ₹100.</div>
+                            </div>
+                        </div>
                         <DialogFooter className="mt-3">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
                             <Button type="submit" className="btn-pill-cta" disabled={saving} data-testid="scanner-save-btn">

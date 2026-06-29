@@ -23,6 +23,7 @@ export default function CompatibleModelsSelect({
     mode = "printers",
     value = "",
     onChange,
+    onItemAdded,
     testid = "compatible-models",
     placeholder,
     brand = "",
@@ -46,8 +47,13 @@ export default function CompatibleModelsSelect({
 
     const add = (label) => {
         if (!label) return;
+        const isFirst = selected.length === 0;
         if (!selected.some((s) => s.toLowerCase() === label.toLowerCase())) {
             commit([...selected, label]);
+            // Wave 97 — bidirectional auto-suggest: fire the caller's hook on
+            // every add (and especially the first one) so the parent form can
+            // look up the reverse mapping (e.g. printer → toner code).
+            onItemAdded && onItemAdded(label, { isFirst });
         }
         setQ("");
         setResults([]);

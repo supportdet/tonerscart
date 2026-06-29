@@ -290,7 +290,7 @@ export default function DealerProfile() {
                     <Stat label="Listings" value={`${stats.active_listing_count || 0}/${stats.listing_count || 0}`} sub="active / total" />
                     <Stat label="Orders" value={stats.order_count || 0} />
                     <Stat label="GMV" value={fmtMoney(stats.gmv)} />
-                    <Stat label="Commission earned" value={fmtMoney(stats.commission_earned)} />
+                    <Stat label="Referral fees earned" value={fmtMoney(stats.commission_earned)} />
                 </div>
 
                 {/* Tabs */}

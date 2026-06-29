@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -127,7 +128,8 @@ const EMPTY = {
     max_resolution: "",
     paper_sizes: [],
     mobile_printing: [],
-    intercity_delivery_charge: "0",
+    intercity_delivery_charge: "350",
+    intracity_delivery_charge: "0",
     gst_rate: 18,
     price_type: null,
     price: "",
@@ -148,6 +150,7 @@ const PRINTER_WARRANTIES = [
 // ============================================================
 
 export default function PrinterListings() {
+    const navigate = useNavigate();
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
     const [open, setOpen] = useState(false);
@@ -207,47 +210,49 @@ export default function PrinterListings() {
                     No printers yet. Tap <span className="font-semibold text-[#0A0A0B]">Add printer</span> to publish your first printer.
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                     {items.map((p) => (
-                        <div key={p.id} className="tc-listing-card" data-testid={`printer-listing-${p.id}`}>
+                        <div key={p.id} onClick={() => navigate(`/printer/${p.id}`)} className="tc-listing-card cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all" data-testid={`printer-listing-${p.id}`}>
                             {p.image_url
-                                ? <img src={p.image_url} alt="" className="tc-listing-img" loading="lazy" />
-                                : <div className="tc-listing-img-ph"><ImageIcon size={32} /></div>}
-                            <div className="p-4 space-y-2">
-                                <div className="flex items-center justify-between gap-2">
-                                    <span className={p.condition === "new" ? "tc-badge-new" : "tc-badge-refurb"}>
-                                        {p.condition === "new" ? "New" : "Refurbished"}
+                                ? <img src={p.image_url} alt="" className="tc-listing-img h-32 object-contain" loading="lazy" />
+                                : <div className="tc-listing-img-ph h-32"><ImageIcon size={28} /></div>}
+                            <div className="p-2.5 space-y-1.5">
+                                <div className="flex items-center justify-between gap-1">
+                                    <span className={p.condition === "new" ? "tc-badge-new text-[9px]" : "tc-badge-refurb text-[9px]"}>
+                                        {p.condition === "new" ? "New" : "Refurb"}
                                     </span>
-                                    <span className="tc-badge-tag">{fmt(p.usage_type)} · {fmt(p.category)}</span>
+                                    <span className="tc-badge-tag text-[9px] truncate">{fmt(p.category)}</span>
                                 </div>
-                                <div className="text-[#0A0A0B] text-[16px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif", letterSpacing: "-0.005em" }}>
+                                <div className="text-[#0A0A0B] text-[12.5px] font-semibold truncate" style={{ fontFamily: "'Montserrat', sans-serif", letterSpacing: "-0.005em" }}>
                                     {p.brand} · {p.model_number}
                                 </div>
-                                <div className="flex items-center justify-between">
-                                    <div className="font-mono text-[20px] font-bold text-[#0A0A0B] leading-none">₹{Number(p.price).toLocaleString("en-IN")}</div>
-                                    <span className={`tc-stock-dot ${p.stock > 0 ? "is-in" : "is-out"}`}>
-                                        {p.stock > 0 ? `${p.stock} in stock` : "Out of stock"}
+                                <div className="flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+                                    <div className="font-mono text-[14px] font-bold text-[#0A0A0B] leading-none">₹{Number(p.price).toLocaleString("en-IN")}</div>
+                                    <span className={`tc-stock-dot text-[10px] ${p.stock > 0 ? "is-in" : "is-out"}`}>
+                                        {p.stock > 0 ? `${p.stock}` : "Out"}
                                     </span>
                                 </div>
-                                <div className="flex items-center justify-end pt-1 gap-3">
+                                <div className="flex items-center justify-end pt-0.5 gap-2 text-[11px]" onClick={(e) => e.stopPropagation()}>
                                     <button
                                         type="button"
                                         onClick={() => onEdit(p)}
-                                        className="text-[11.5px] text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1"
+                                        className="text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1"
                                         data-testid={`edit-printer-${p.id}`}
                                     >
-                                        <Pencil size={11} /> Edit
+                                        <Pencil size={10} /> Edit
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => remove(p.id)}
-                                        className="text-[11.5px] text-red-600 hover:text-red-700 inline-flex items-center gap-1"
+                                        className="text-red-600 hover:text-red-700 inline-flex items-center gap-1"
                                         data-testid={`remove-printer-${p.id}`}
                                     >
-                                        <Trash2 size={11} /> Remove
+                                        <Trash2 size={10} /> Del
                                     </button>
                                 </div>
-                                <D2DRow listing={p} endpoint={`/supplier/printers/${p.id}`} onChanged={load} />
+                                <div onClick={(e) => e.stopPropagation()}>
+                                    <D2DRow listing={p} endpoint={`/supplier/printers/${p.id}`} onChanged={load} />
+                                </div>
                             </div>
                         </div>
                     ))}
@@ -319,7 +324,8 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                 max_resolution: editing.max_resolution || "",
                 paper_sizes: Array.isArray(editing.paper_sizes) ? editing.paper_sizes : [],
                 mobile_printing: Array.isArray(editing.mobile_printing) ? editing.mobile_printing : [],
-                intercity_delivery_charge: editing.intercity_delivery_charge != null ? String(editing.intercity_delivery_charge) : "0",
+                intercity_delivery_charge: editing.intercity_delivery_charge != null ? String(editing.intercity_delivery_charge) : "350",
+                intracity_delivery_charge: editing.intracity_delivery_charge != null ? String(editing.intracity_delivery_charge) : "0",
                 price_type: "incl",
                 price: editing.price != null ? String(withGst(Number(editing.price), editing.gst_rate != null ? Number(editing.gst_rate) : 18)) : "",
                 stock: editing.stock != null ? String(editing.stock) : "1",
@@ -489,6 +495,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                 paper_sizes: f.paper_sizes || [],
                 mobile_printing: f.mobile_printing || [],
                 intercity_delivery_charge: parseFloat(f.intercity_delivery_charge || 0) || 0,
+                intracity_delivery_charge: parseFloat(f.intracity_delivery_charge || 0) || 0,
                 printer_warranty: f.printer_warranty || "1 Year",
                 price: getBasePrice(f.price, f.price_type, f.gst_rate),
                 stock: parseInt(f.stock || "1", 10),
@@ -807,6 +814,34 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                             <CompetitivePricingNote />
                             <div>
                                 <DeliveryPolicyNote />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="wizard-delivery-charges">
+                                <div>
+                                    <Label>Intra-city delivery charge (₹)</Label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        value={f.intracity_delivery_charge}
+                                        onChange={(e) => setVal("intracity_delivery_charge", e.target.value)}
+                                        className="tc-input-lg w-full"
+                                        data-testid="printer-intracity-charge"
+                                    />
+                                    <div className="text-[11px] text-[#86868B] mt-1">Charged when buyer is in your city. Default ₹0.</div>
+                                </div>
+                                <div>
+                                    <Label>Inter-city delivery charge (₹)</Label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        value={f.intercity_delivery_charge}
+                                        onChange={(e) => setVal("intercity_delivery_charge", e.target.value)}
+                                        className="tc-input-lg w-full"
+                                        data-testid="printer-intercity-charge"
+                                    />
+                                    <div className="text-[11px] text-[#86868B] mt-1">Charged when buyer is in a different city. Default ₹350 for printers.</div>
+                                </div>
                             </div>
                         </div>
                     </div>

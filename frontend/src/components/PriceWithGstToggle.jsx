@@ -168,6 +168,10 @@ export default function PriceWithGstToggle({
                                         <span>You&rsquo;ll receive (per unit):</span>
                                         <span className="font-mono">{formatINR(pb.basePrice - pb.commission)}</span>
                                     </div>
+                                    <div className="flex justify-between text-[12px] text-[#6E6E73] mt-1" data-testid={`${testIdPrefix}-referral-fee`}>
+                                        <span>Referral fee:</span>
+                                        <span className="font-mono">−{formatINR(pb.commission)}</span>
+                                    </div>
                                     <div className="text-[11px] text-[#6E6E73] mt-2 leading-snug">
                                         GST of {formatINR(pb.gstAmount)} ({gstRate}%) and delivery charges pass through to you in full.
                                     </div>

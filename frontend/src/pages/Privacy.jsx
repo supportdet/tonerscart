@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import PageMeta from "../components/PageMeta";
 
-export const PRIVACY_VERSION = "2.1";
+export const PRIVACY_VERSION = "2.2";
 
 export default function Privacy() {
     return (
@@ -79,6 +79,7 @@ export default function Privacy() {
                             "Resend — transactional email delivery",
                             "Razorpay — payment processing (per RBI guidelines)",
                             "Google — sign-in / authentication services",
+                            "Logistics partners — buyer delivery addresses are shared with the fulfilling seller solely for the purpose of dispatching the order. Where TonersCart integrates third-party logistics or courier partners in future, such partners will be listed here and will be contractually bound to handle delivery data only for fulfilment purposes.",
                         ]} />
                         Payment data including card numbers, UPI IDs and net banking credentials are processed exclusively by
                         <strong> Razorpay</strong>, our PCI-DSS compliant payment partner, and are <strong>never stored on TonersCart
@@ -138,12 +139,8 @@ export default function Privacy() {
                         Phone: <a href="tel:+918884546789" className="text-[#00B7C7] hover:underline">+91 88845 46789</a>.
                     </Section>
 
-                    <Section title="15. Seller Payments & Commission">
-                        For sellers, the bank account details you provide (account holder name, account number, IFSC, bank and branch) are used
-                        <strong> solely to remit your payouts</strong> for completed orders and are stored securely. Payouts are made after deducting
-                        TonersCart&apos;s platform commission, charged on the order <strong>bill value excluding GST</strong>:
-                        <strong> 10%</strong> under ₹15,000, <strong>8%</strong> for ₹15,000–₹30,000, <strong>6%</strong> for ₹30,000–₹75,000,
-                        <strong> 5%</strong> for ₹75,000–₹1,00,000, and <strong>4%</strong> for ₹1,00,000 &amp; above. See our
+                    <Section title="15. Seller Payments & Referral Fee">
+                        For sellers, the bank account details you provide (account holder name, account number, IFSC, bank and branch) are used <strong>solely to remit your payouts</strong> for completed orders and are stored securely. Payouts are made after deducting TonersCart&apos;s <strong>flat referral fee of 7%</strong> on the order value excluding GST. <strong>Delivery charges are passed through in full with no deduction.</strong> See our
                         <Link to="/terms" className="text-[#00B7C7] hover:underline"> Terms of Service</Link> for full commercial terms.
                     </Section>
 

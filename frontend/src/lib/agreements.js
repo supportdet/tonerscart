@@ -8,7 +8,7 @@ export const AGREEMENTS = {
             "You will list only genuine, legally sellable products with accurate stock and pricing",
             "You will dispatch within 2 business days of order confirmation",
             "You will issue a GST-compliant tax invoice to every buyer under your own GSTIN",
-            "TonersCart will deduct platform commission from your payout: under ₹15K = 10% · ₹15K–₹30K = 8% · ₹30K–₹75K = 6% · ₹75K–₹1L = 5% · ₹1L+ = 4%",
+            "TonersCart charges a flat referral fee of 7% of your selling price per completed order, shown as ₹XYZ at the time of listing",
             "Your bank account details are shared with Razorpay solely for payout processing",
             "You consent to TonersCart handling your data as described in the Privacy Policy",
         ],

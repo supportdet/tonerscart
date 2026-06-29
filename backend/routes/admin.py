@@ -1505,3 +1505,174 @@ async def admin_upload_featured_image(supplier_id: str, file: UploadFile = File(
     except Exception as e:
         logger.exception("upload featured image failed")
         raise HTTPException(500, f"Failed to upload featured image: {e}") from e
+
+
+# ============================================================================
+# Wave 98 — Admin bulk-create dealers (CSV/Excel) + magic-link welcome email
+# ============================================================================
+
+class BulkDealerRow(BaseModel):
+    business_name: str
+    email: EmailStr
+    phone: Optional[str] = ""
+    city: Optional[str] = ""
+    gstin: Optional[str] = ""
+
+
+class BulkDealerPayload(BaseModel):
+    rows: List[BulkDealerRow] = Field(default_factory=list)
+
+
+def _frontend_origin() -> str:
+    """Best-effort canonical frontend URL for embed-in-email links."""
+    raw = (os.environ.get("FRONTEND_URL")
+           or os.environ.get("REACT_APP_BACKEND_URL")
+           or os.environ.get("APP_URL")
+           or "").strip().rstrip("/")
+    if raw:
+        return raw
+    return "https://tonerscart.com"
+
+
+@router.post("/admin/dealers/bulk-create")
+async def admin_bulk_create_dealers(payload: BulkDealerPayload, _: dict = Depends(require_role("admin"))):
+    """Wave 98 — bulk dealer onboarding.
+
+    For each input row (business_name, email, phone, city, gstin):
+      * Skip if the email already exists in `public.users` (case-insensitive).
+        This protects every existing dealer (Big C, DET, Zion Entr, Bios,
+        Verve IT, Ravi Marketing, Shree Infotech, Amman Gaming Origin, …).
+      * Otherwise: create a Supabase auth user (no password, email confirmed),
+        insert `public.users` (role=supplier), insert `suppliers_pending`
+        (Phase 1 only — no bank or KYC docs), generate a single-use magic-link
+        via `sb_admin.auth.admin.generate_link` (7-day TTL), and send the
+        branded welcome email through Resend.
+
+    Returns a summary `{created, skipped_existing, skipped_duplicate, failed}`
+    so the admin UI can show counts + a per-row error breakdown."""
+
+    # De-duplicate by email *inside the file* first — first row wins.
+    seen_in_file = set()
+    deduped: List[BulkDealerRow] = []
+    duplicates_in_file = 0
+    for r in payload.rows:
+        e = (r.email or "").strip().lower()
+        if not e:
+            continue
+        if e in seen_in_file:
+            duplicates_in_file += 1
+            continue
+        seen_in_file.add(e)
+        deduped.append(r)
+
+    # Fetch already-existing emails in one shot (case-insensitive).
+    existing_emails: set = set()
+    if deduped:
+        chunk = [r.email.lower() for r in deduped]
+        try:
+            res = sb_admin.table("users").select("email").in_("email", chunk).execute()
+            existing_emails = {(u.get("email") or "").lower() for u in (res.data or [])}
+        except Exception:
+            existing_emails = set()
+        # Also check capitalised variants (some legacy rows are mixed-case).
+        try:
+            res2 = sb_admin.table("users").select("email").execute()
+            existing_emails |= {(u.get("email") or "").lower() for u in (res2.data or [])}
+        except Exception:
+            pass
+
+    origin = _frontend_origin()
+    redirect_to = f"{origin}/auth/callback?next=/supplier"
+
+    created: List[dict] = []
+    skipped_existing: List[dict] = []
+    failed: List[dict] = []
+    email_sent_count = 0
+
+    for r in deduped:
+        e = r.email.strip().lower()
+        if e in existing_emails:
+            skipped_existing.append({"email": e, "business_name": r.business_name, "reason": "already exists — preserved"})
+            continue
+        # Step 1 — create the Supabase auth user (no password).
+        try:
+            created_user = sb_admin.auth.admin.create_user({
+                "email": e,
+                "email_confirm": True,
+                "user_metadata": {"name": r.business_name, "role": "supplier"},
+            })
+        except Exception as ex:
+            failed.append({"email": e, "business_name": r.business_name, "reason": f"auth create failed: {ex}"})
+            continue
+        uid = created_user.user.id
+
+        # Step 2 — users row (role=supplier so they land on the dealer dashboard).
+        try:
+            sb_admin.table("users").upsert({
+                "id": uid,
+                "email": e,
+                "name": r.business_name,
+                "role": "supplier",
+                "phone": (r.phone or None),
+                "city": (r.city or None),
+            }, on_conflict="id").execute()
+        except Exception as ex:
+            failed.append({"email": e, "business_name": r.business_name, "reason": f"profile insert failed: {ex}"})
+            continue
+
+        # Step 3 — suppliers_pending Phase 1 row. Status = 'pending' so admin
+        # still has to approve before the dealer can publish listings. The
+        # imported batch is treated like a regular application.
+        try:
+            sb_admin.table("suppliers_pending").upsert({
+                "user_id": uid,
+                "business_name": r.business_name,
+                "contact_person": r.business_name,
+                "phone": (r.phone or None),
+                "city": (r.city or None),
+                "gst_number": (r.gstin or "").strip().upper() or None,
+                "status": "pending",
+                "submitted_at": datetime.now(timezone.utc).isoformat(),
+            }, on_conflict="user_id").execute()
+        except Exception as ex:
+            logger.warning("bulk-dealer pending row insert failed for %s: %s", e, ex)
+            # Don't abort — user already created. Admin can patch later.
+
+        # Step 4 — generate magic-link (Supabase) and send branded email.
+        action_link = ""
+        try:
+            link_res = sb_admin.auth.admin.generate_link({
+                "type": "magiclink",
+                "email": e,
+                "options": {"redirect_to": redirect_to},
+            })
+            # supabase-py returns either `.properties.action_link` (object) or
+            # a dict with `properties: {action_link: ...}`. Handle both.
+            props = getattr(link_res, "properties", None) or (link_res.get("properties") if isinstance(link_res, dict) else None)
+            action_link = (getattr(props, "action_link", None) if props is not None else None) or (props.get("action_link") if isinstance(props, dict) else "")
+            action_link = action_link or ""
+        except Exception as ex:
+            logger.warning("bulk-dealer magic-link generation failed for %s: %s", e, ex)
+
+        # Fallback link → forgot-password flow.
+        dashboard_link = action_link or f"{origin}/forgot-password?email={e}"
+        try:
+            sent = await email_dealer_welcome_magic(e, r.business_name, dashboard_link)
+            if sent:
+                email_sent_count += 1
+        except Exception as ex:
+            logger.warning("bulk-dealer welcome email send failed for %s: %s", e, ex)
+
+        created.append({"email": e, "business_name": r.business_name, "user_id": uid, "magic_link_sent": bool(action_link)})
+
+    return {
+        "created": len(created),
+        "skipped_existing": len(skipped_existing),
+        "skipped_duplicate_in_file": duplicates_in_file,
+        "failed": len(failed),
+        "emails_sent": email_sent_count,
+        "created_rows": created,
+        "skipped_rows": skipped_existing,
+        "failed_rows": failed,
+    }
+

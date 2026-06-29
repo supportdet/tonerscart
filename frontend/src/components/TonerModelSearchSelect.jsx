@@ -69,6 +69,31 @@ export default function TonerModelSearchSelect({
         return () => debounceRef.current && clearTimeout(debounceRef.current);
     }, [value, brand, open]);
 
+    // Wave 97 — auto-suggest Suitable-For when the dealer types/pastes an exact
+    // catalogued model number (e.g. "CF226A" or "TN-2280") without clicking a
+    // dropdown option. Calls onSelect with the compatible printer list so the
+    // caller can pre-populate the "Suitable for" field. Fires once per unique
+    // typed value via a ref-tracked guard so it doesn't loop.
+    const lastAutoRef = useRef("");
+    useEffect(() => {
+        const typed = (value || "").trim();
+        if (!typed || typed.length < 3) return;
+        if (lastAutoRef.current === typed.toLowerCase()) return;
+        const handle = setTimeout(async () => {
+            try {
+                const { data } = await api.get(`/compat/lookup-by-toner?model=${encodeURIComponent(typed)}`);
+                const printers = Array.isArray(data?.printers) ? data.printers : [];
+                if (printers.length > 0 && data?.model) {
+                    lastAutoRef.current = typed.toLowerCase();
+                    onSelect && onSelect(data.model, printers);
+                }
+            } catch {
+                // silent — caller already lets the dealer free-type
+            }
+        }, 450);
+        return () => clearTimeout(handle);
+    }, [value, onSelect]);
+
     const pickFromDb = async (item) => {
         onChange(item.model);
         setOpen(false);

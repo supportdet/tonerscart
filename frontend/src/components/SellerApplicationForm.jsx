@@ -291,18 +291,12 @@ export default function SellerApplicationForm() {
             return true;
         }
         if (step === 2) {
+            // Wave 98 — Phase 1 form. Only business name + GSTIN + PAN.
+            // Bank details, address, annual turnover, and years-in-business
+            // moved to Phase 2 (inside dealer dashboard after approval).
             if (!s.business_name.trim()) return false;
-            if (!s.business_address.trim()) return false;
             if (!GSTIN_RE.test(s.gst_number.trim().toUpperCase())) return false;
             if (!PAN_RE.test(s.pan_number.trim().toUpperCase())) return false;
-            // Wave 63 — annual turnover and years in business are OPTIONAL.
-            // We still validate the typed years value if the dealer chose to fill it.
-            if (s.years_in_business && parseInt(s.years_in_business, 10) < 0) return false;
-            if (!s.account_holder_name.trim()) return false;
-            if (!/^\d{6,18}$/.test(s.account_number.trim())) return false;
-            if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(s.ifsc_code.trim().toUpperCase())) return false;
-            if (!s.bank_name.trim()) return false;
-            if (!s.bank_branch.trim()) return false;
             return true;
         }
         if (step === 3) {
@@ -326,28 +320,25 @@ export default function SellerApplicationForm() {
 
     const submit = async (e) => {
         e?.preventDefault?.();
-        if (step !== 4) return;
+        // Wave 98 — Phase 1 submit at end of Step 3. No documents, no bank
+        // details — those move to Phase 2 (dashboard banner after approval).
+        if (step !== 3) return;
         if (!canNext()) { toast.error("Please complete the previous steps"); return; }
-        if (!allDocsValid()) {
-            toast.error("All required documents must be uploaded before submitting");
-            return;
-        }
         if (!agreed) {
             toast.error("You must agree to the TonersCart Seller Terms to continue");
             return;
         }
         setLoading(true);
-        setProgress(6);
-        setProgressLabel("Creating your application…");
+        setProgress(20);
+        setProgressLabel("Submitting your application…");
         try {
-            // 1. Submit application (no role change yet)
             await api.post("/auth/apply-seller", {
                 ...s,
                 gst_number: s.gst_number.trim().toUpperCase(),
                 pan_number: s.pan_number.trim().toUpperCase(),
                 phone: `+91 ${s.phone.trim()}`,
                 pincode: s.pincode.trim(),
-                years_in_business: s.years_in_business ? parseInt(s.years_in_business, 10) : null,
+                years_in_business: null,
                 doc_brand_authorization: "",
                 doc_shop_photo: "",
                 doc_gst: "",
@@ -357,43 +348,7 @@ export default function SellerApplicationForm() {
                 doc_address_proof: "",
                 agreed_to_terms: agreed,
             });
-
-            // 2. Upload files via backend (service role — bypasses storage RLS for non-supplier users).
-            //    Uploads run in PARALLEL for speed; progress bar advances as each finishes.
-            const uploaded = {};
-            const docMap = {
-                doc_brand_authorization: docs.brand_authorization,
-                doc_shop_photo: docs.shop_photo,
-                doc_gst: docs.gst,
-                doc_pan: docs.pan,
-                doc_bank_proof: docs.bank_proof,
-                doc_id_proof: docs.id_proof,
-                doc_address_proof: docs.address_proof,
-            };
-            const docEntries = Object.entries(docMap).filter(([, f]) => !!f);
-            const totalSteps = 1 + docEntries.length + 1; // app + uploads + finalize
-            let completed = 1; // app submit done
-            setProgress(Math.round((completed / totalSteps) * 100));
-            setProgressLabel(`Uploading documents… (0/${docEntries.length})`);
-
-            let uploadedCount = 0;
-            await Promise.all(docEntries.map(async ([field, file]) => {
-                const fd = new FormData();
-                fd.append("file", file);
-                const { data: up } = await api.post(`/auth/supplier-document-upload?field=${field}`, fd);
-                uploaded[field] = up.path;
-                uploadedCount += 1;
-                completed += 1;
-                setProgress(Math.round((completed / totalSteps) * 100));
-                setProgressLabel(`Uploading documents… (${uploadedCount}/${docEntries.length})`);
-            }));
-
-            setProgressLabel("Finalizing your application…");
-            if (Object.keys(uploaded).length > 0) {
-                await api.post("/auth/supplier-documents", uploaded);
-            }
             setProgress(100);
-
             await refresh();
             toast.success("Application submitted — pending admin approval");
             navigate("/sell");
@@ -410,9 +365,9 @@ export default function SellerApplicationForm() {
     return (
         <form onSubmit={submit}
             onKeyDown={(e) => {
-                if (e.key === "Enter" && step < 4) {
+                if (e.key === "Enter" && step < 3) {
                     e.preventDefault();
-                    if (canNext()) setStep((st) => Math.min(4, st + 1));
+                    if (canNext()) setStep((st) => Math.min(3, st + 1));
                 }
             }}
             className="bg-white border border-black/[0.06] rounded-2xl shadow-2xl p-5 sm:p-7 text-[#0A0A0B] relative" data-testid="seller-application-form">
@@ -432,9 +387,9 @@ export default function SellerApplicationForm() {
             )}
             <div className="flex items-center justify-between mb-5">
                 <div className="text-[10px] tracking-[0.18em] uppercase font-semibold text-[#6E6E73]">
-                    Step {step} of 4 — {step === 1 ? "About you" : step === 2 ? "Business" : step === 3 ? "What you sell" : "Documents"}
+                    Step {step} of 3 — {step === 1 ? "About you" : step === 2 ? "Business" : "What you sell"}
                 </div>
-                <StepDots step={step} total={4} />
+                <StepDots step={step} total={3} />
             </div>
 
             {step === 1 && (
@@ -525,25 +480,9 @@ export default function SellerApplicationForm() {
                             <div className="text-[11px] text-red-600 mt-1">Enter a valid 10-character PAN (5 letters + 4 digits + 1 letter)</div>
                         )}
                     </div>
-                    <div>
-                        <Label>Annual turnover <span className="text-[#86868B] font-normal">(optional)</span></Label>
-                        <select value={s.annual_turnover} onChange={updS("annual_turnover")} className="w-full h-10 px-3 rounded-md border border-[#D2D2D7] bg-white text-[14px]" data-testid="apply-turnover">
-                            <option value="">Select…</option>
-                            {TURNOVER.map((v) => <option key={v} value={v}>{v}</option>)}
-                        </select>
+                    <div className="sm:col-span-2 mt-2 p-3 rounded-lg bg-[#ECFBFD] border border-[#C2EFF5] text-[12.5px] text-[#0A4A50]" data-testid="phase2-helper">
+                        <strong>Bank details and document uploads</strong> happen <em>after approval</em>, inside your dealer dashboard. We&apos;ll guide you there once your application is approved (usually within 24 hours).
                     </div>
-                    <div><Label>Years in business <span className="text-[#86868B] font-normal">(optional)</span></Label><Input type="number" min="0" max="100" value={s.years_in_business} onChange={updS("years_in_business")} data-testid="apply-years" /></div>
-                    <div className="sm:col-span-2"><Label>Business address<span className="text-red-500"> *</span></Label><Textarea rows={2} value={s.business_address} onChange={updS("business_address")} required data-testid="apply-address" /></div>
-
-                    <div className="sm:col-span-2 mt-2 pt-4 border-t border-black/[0.06]">
-                        <div className="text-[14px] text-[#0A0A0B] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>Bank account for payouts</div>
-                        <p className="text-[12.5px] text-[#6E6E73] mt-0.5">These details are used to <strong>send your payouts</strong> for completed orders. The account holder name must match your business name.</p>
-                    </div>
-                    <div className="sm:col-span-2"><Label>Account holder name<span className="text-red-500"> *</span> <span className="text-[#86868B] font-normal">(must match business name)</span></Label><Input value={s.account_holder_name} onChange={updS("account_holder_name")} required data-testid="apply-acct-holder" /></div>
-                    <div><Label>Account number<span className="text-red-500"> *</span></Label><Input value={s.account_number} onChange={(e) => setS({ ...s, account_number: e.target.value.replace(/\D/g, "").slice(0, 18) })} inputMode="numeric" placeholder="Bank account number" required data-testid="apply-acct-number" /></div>
-                    <div><Label>IFSC code<span className="text-red-500"> *</span></Label><Input value={s.ifsc_code} onChange={(e) => setS({ ...s, ifsc_code: e.target.value.toUpperCase().slice(0, 11) })} placeholder="HDFC0001234" maxLength={11} required data-testid="apply-ifsc" /></div>
-                    <div><Label>Bank name<span className="text-red-500"> *</span></Label><Input value={s.bank_name} onChange={updS("bank_name")} placeholder="e.g. HDFC Bank" required data-testid="apply-bank-name" /></div>
-                    <div><Label>Branch<span className="text-red-500"> *</span></Label><Input value={s.bank_branch} onChange={updS("bank_branch")} placeholder="e.g. MG Road, Bangalore" required data-testid="apply-bank-branch" /></div>
                 </div>
             )}
 
@@ -612,62 +551,7 @@ export default function SellerApplicationForm() {
                 </div>
             )}
 
-            {step === 4 && (
-                <div className="space-y-3" data-testid="apply-step-4">
-                    {/* Checklist card — what's required */}
-                    <div className="rounded-xl border border-white/10 bg-gradient-to-br from-[#1A1B1F] to-[#0F1013] text-white p-4 sm:p-5" data-testid="kyc-checklist-card">
-                        <div className="flex items-center gap-2 mb-3">
-                            <ShieldCheck size={15} className="text-emerald-400" />
-                            <div className="text-[12px] tracking-[0.16em] uppercase font-semibold text-white/65" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-                                Documents required
-                            </div>
-                        </div>
-                        <ul className="space-y-1.5 text-[13.5px]" style={{ fontFamily: "'Inter', sans-serif" }}>
-                            <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>GST Certificate</strong> <span className="text-white/55">(required)</span></span></li>
-                            <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>PAN Card</strong> <span className="text-white/55">(required)</span></span></li>
-                            <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>ID Proof — Aadhaar / Passport</strong> <span className="text-white/55">(required)</span></span></li>
-                            <li className="flex items-start gap-2"><CircleDashed size={14} className="text-amber-400 mt-0.5 shrink-0" /><span><strong>Cancelled Cheque</strong> <span className="text-white/55">(optional — required before your first payout)</span></span></li>
-                            <li className="flex items-start gap-2"><CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" /><span><strong>Address Proof</strong> <span className="text-white/55">(utility bill / rent agreement)</span></span></li>
-                            <li className="flex items-start gap-2"><CircleDashed size={14} className="text-amber-400 mt-0.5 shrink-0" /><span><strong>Brand Authorization Letter</strong> <span className="text-white/55">{s.seller_types.includes("Original") ? "(required — you sell Original OEM cartridges)" : "(optional — required only if you sell original OEM cartridges)"}</span></span></li>
-                        </ul>
-                    </div>
-
-                    <div className="text-[12.5px] text-[#6E6E73] mb-1">All required documents are stored privately. Only TonersCart admins can view them via short-lived signed links.</div>
-                    <FileSlot label="GST certificate *" hint="Required" file={docs.gst}
-                        setFile={(f) => setDocs({ ...docs, gst: f })} testid="doc-gst" />
-                    <FileSlot label="PAN card *" hint="Required" file={docs.pan}
-                        setFile={(f) => setDocs({ ...docs, pan: f })} testid="doc-pan" />
-                    <FileSlot label="ID proof — Aadhaar / Passport *" hint="Government photo ID of the owner" file={docs.id_proof}
-                        setFile={(f) => setDocs({ ...docs, id_proof: f })} testid="doc-id-proof" />
-                    <FileSlot label="Cancelled cheque (optional)" hint="Required before your first payout. You can submit this later." file={docs.bank_proof}
-                        setFile={(f) => setDocs({ ...docs, bank_proof: f })} testid="doc-bank-proof" />
-                    <FileSlot label="Address proof *" hint="Utility bill / rent agreement" file={docs.address_proof}
-                        setFile={(f) => setDocs({ ...docs, address_proof: f })} testid="doc-address-proof" />
-                    {/* Wave 63 — Brand Authorization Letter is always rendered at the bottom.
-                        Required only when the dealer chose "Original" (Genuine OEM cartridges).
-                        For everyone else it stays optional with a clarifying helper line. */}
-                    {(() => {
-                        const isOriginal = s.seller_types.includes("Original");
-                        return (
-                            <FileSlot
-                                label={isOriginal ? "Brand Authorization Letter *" : "Brand Authorization Letter (optional)"}
-                                hint={isOriginal
-                                    ? "Required for Original (OEM) sellers"
-                                    : "Required only if you sell original OEM cartridges."}
-                                file={docs.brand_authorization}
-                                setFile={(f) => setDocs({ ...docs, brand_authorization: f })}
-                                testid="doc-brand-authorization"
-                            />
-                        );
-                    })()}
-                    <div className="flex items-start gap-2 mt-4 p-3 rounded-lg bg-[#FFF8DD] border border-[#F5C400]/40 text-[#5C4A00] text-[12.5px]">
-                        <FileText size={14} className="mt-0.5 shrink-0" />
-                        <div>Once you submit, our AI quickly checks each document is clear and legible. Any unclear file is flagged for the admin team.</div>
-                    </div>
-                </div>
-            )}
-
-            <div className="mt-6 flex items-start gap-2 bg-[#F4F4F6] border border-black/[0.06] rounded-lg p-3" data-testid="apply-agreement-row" style={{ display: step === 4 ? "flex" : "none" }}>
+            <div className="mt-6 flex items-start gap-2 bg-[#F4F4F6] border border-black/[0.06] rounded-lg p-3" data-testid="apply-agreement-row" style={{ display: step === 3 ? "flex" : "none" }}>
                 <input
                     type="checkbox"
                     id="apply-agreement-cb"
@@ -680,7 +564,7 @@ export default function SellerApplicationForm() {
                     I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-[#00B7C7] hover:underline font-semibold">TonersCart Seller Terms</a> operated by <strong>TonersCart Private Limited</strong>.
                 </label>
             </div>
-            {step === 4 && !agreed && (
+            {step === 3 && !agreed && (
                 <div className="mt-2 text-[12px] text-red-600 font-semibold" data-testid="apply-agreement-error">
                     You must agree to the terms to continue
                 </div>
@@ -690,12 +574,12 @@ export default function SellerApplicationForm() {
                 <Button type="button" variant="outline" disabled={step === 1 || loading} onClick={() => setStep(Math.max(1, step - 1))} data-testid="apply-back-btn">
                     <ChevronLeft size={14} className="mr-1" /> Back
                 </Button>
-                {step < 4 ? (
+                {step < 3 ? (
                     <Button type="button" disabled={!canNext()} onClick={() => setStep(step + 1)} className="btn-cta" data-testid="apply-next-btn">
                         Next <ChevronRight size={14} className="ml-1" />
                     </Button>
                 ) : (
-                    <Button type="submit" className="btn-cta" disabled={loading || !allDocsValid() || !agreed} data-testid="apply-submit-btn">
+                    <Button type="submit" className="btn-cta" disabled={loading || !canNext() || !agreed} data-testid="apply-submit-btn">
                         {loading ? "Submitting…" : "Submit application"}
                     </Button>
                 )}

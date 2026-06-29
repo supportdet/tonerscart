@@ -140,6 +140,7 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
         "warranty": warranty_value,
         "print_technology": payload.print_technology,
         "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
+        "intracity_delivery_charge": (float(payload.intracity_delivery_charge) if payload.intracity_delivery_charge is not None else None),
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
         "d2d_enabled": bool(payload.d2d_enabled) if payload.d2d_enabled is not None else None,
         "d2d_price": (float(payload.d2d_price) if payload.d2d_price else None),
@@ -156,7 +157,7 @@ def create_listing(payload: ListingCreate, user: dict = Depends(require_role("su
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("spec_pdf_url", "image_urls", "compatible_models", "oem_part_number", "cartridge_weight", "pack_size", "warranty", "print_technology", "intercity_delivery_charge", "gst_rate", "d2d_enabled", "d2d_price"):
+            for k in ("spec_pdf_url", "image_urls", "compatible_models", "oem_part_number", "cartridge_weight", "pack_size", "warranty", "print_technology", "intercity_delivery_charge", "intracity_delivery_charge", "gst_rate", "d2d_enabled", "d2d_price"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True
@@ -349,6 +350,7 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         "mobile_printing": payload.mobile_printing or None,
         "monthly_volume_recommended": payload.monthly_volume_recommended,
         "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
+        "intracity_delivery_charge": (float(payload.intracity_delivery_charge) if payload.intracity_delivery_charge is not None else None),
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
         "usage_types": usage_types,
         "special_features": payload.special_features or None,
@@ -367,7 +369,7 @@ def create_printer(payload: PrinterListingCreate, user: dict = Depends(require_u
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("spec_pdf_url", "image_urls", "print_speed_ppm", "duty_cycle", "display_type", "dimensions", "weight_kg", "printer_warranty", "max_resolution", "mobile_printing", "monthly_volume_recommended", "intercity_delivery_charge", "gst_rate", "usage_types", "special_features", "compatible_models", "d2d_enabled", "d2d_price", "secondary_category"):
+            for k in ("spec_pdf_url", "image_urls", "print_speed_ppm", "duty_cycle", "display_type", "dimensions", "weight_kg", "printer_warranty", "max_resolution", "mobile_printing", "monthly_volume_recommended", "intercity_delivery_charge", "intracity_delivery_charge", "gst_rate", "usage_types", "special_features", "compatible_models", "d2d_enabled", "d2d_price", "secondary_category"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True
@@ -691,6 +693,7 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
         "suitable_for": payload.suitable_for or None,
         "description": (payload.description or "").strip() or None,
         "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
+        "intracity_delivery_charge": (float(payload.intracity_delivery_charge) if payload.intracity_delivery_charge is not None else None),
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
         "warranty": payload.warranty,
         "d2d_enabled": bool(payload.d2d_enabled) if payload.d2d_enabled is not None else None,
@@ -706,7 +709,7 @@ def create_paper(payload: PaperCreate, user: dict = Depends(require_user)):
         except Exception as e:
             msg = str(e)
             dropped = False
-            for k in ("image_urls", "brightness", "thickness_microns", "acid_free", "suitable_for", "description", "intercity_delivery_charge", "gst_rate", "warranty", "d2d_enabled", "d2d_price"):
+            for k in ("image_urls", "brightness", "thickness_microns", "acid_free", "suitable_for", "description", "intercity_delivery_charge", "intracity_delivery_charge", "gst_rate", "warranty", "d2d_enabled", "d2d_price"):
                 if k in msg and k in row:
                     row.pop(k, None)
                     dropped = True
@@ -850,6 +853,7 @@ def create_consumable(payload: ConsumableCreate, user: dict = Depends(require_us
         "image_urls": payload.image_urls or None,
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
         "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
+        "intracity_delivery_charge": (float(payload.intracity_delivery_charge) if payload.intracity_delivery_charge is not None else None),
         "warranty": consumable_warranty,
         "page_yield": page_yield_value,
         "cartridge_weight": cartridge_weight_value,
@@ -870,7 +874,7 @@ def create_consumable(payload: ConsumableCreate, user: dict = Depends(require_us
             msg = str(e)
             dropped = False
             for k in ("subcategory_other", "compatible_models", "description", "image_urls",
-                      "gst_rate", "intercity_delivery_charge", "warranty", "page_yield",
+                      "gst_rate", "intercity_delivery_charge", "intracity_delivery_charge", "warranty", "page_yield",
                       "cartridge_weight", "d2d_enabled", "d2d_price", "search_norm"):
                 if k in msg and k in row:
                     row.pop(k, None)
@@ -1039,7 +1043,7 @@ def get_consumable_public(consumable_id: str):
 
 SCANNER_OPTIONAL_DROP = (
     "scan_resolution", "connectivity", "scan_speed_ppm", "color_mode", "warranty",
-    "description", "image_urls", "gst_rate", "intercity_delivery_charge",
+    "description", "image_urls", "gst_rate", "intercity_delivery_charge", "intracity_delivery_charge",
     "d2d_enabled", "d2d_price", "search_norm",
 )
 
@@ -1073,6 +1077,7 @@ def create_scanner(payload: ScannerCreate, user: dict = Depends(require_user)):
         "image_urls": payload.image_urls or None,
         "gst_rate": (int(payload.gst_rate) if payload.gst_rate is not None else None),
         "intercity_delivery_charge": (float(payload.intercity_delivery_charge) if payload.intercity_delivery_charge is not None else None),
+        "intracity_delivery_charge": (float(payload.intracity_delivery_charge) if payload.intracity_delivery_charge is not None else None),
         "d2d_enabled": bool(payload.d2d_enabled) if payload.d2d_enabled is not None else None,
         "d2d_price": (float(payload.d2d_price) if payload.d2d_price else None),
     }
@@ -1326,6 +1331,8 @@ def supplier_patch_listing(listing_id: str, payload: ListingPatch, user: dict = 
         upd["cartridge_weight"] = int(payload.cartridge_weight)
     if payload.intercity_delivery_charge is not None:
         upd["intercity_delivery_charge"] = float(payload.intercity_delivery_charge)
+    if payload.intracity_delivery_charge is not None:
+        upd["intracity_delivery_charge"] = float(payload.intracity_delivery_charge)
     if payload.gst_rate is not None:
         upd["gst_rate"] = int(payload.gst_rate)
     if payload.d2d_enabled is not None:
@@ -1394,6 +1401,8 @@ def supplier_patch_printer(printer_id: str, payload: ListingPatch, user: dict = 
         upd["monthly_volume_recommended"] = int(payload.monthly_volume_recommended)
     if payload.intercity_delivery_charge is not None:
         upd["intercity_delivery_charge"] = float(payload.intercity_delivery_charge)
+    if payload.intracity_delivery_charge is not None:
+        upd["intracity_delivery_charge"] = float(payload.intracity_delivery_charge)
     if payload.gst_rate is not None:
         upd["gst_rate"] = int(payload.gst_rate)
     if payload.usage_types is not None:
@@ -1493,6 +1502,8 @@ def patch_paper(paper_id: str, payload: ListingPatch, user: dict = Depends(requi
         upd["reams_per_box"] = int(payload.reams_per_box)
     if payload.intercity_delivery_charge is not None:
         upd["intercity_delivery_charge"] = float(payload.intercity_delivery_charge)
+    if payload.intracity_delivery_charge is not None:
+        upd["intracity_delivery_charge"] = float(payload.intracity_delivery_charge)
     if payload.gst_rate is not None:
         upd["gst_rate"] = int(payload.gst_rate)
     if payload.d2d_enabled is not None:

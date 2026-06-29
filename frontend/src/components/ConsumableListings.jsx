@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -13,6 +14,7 @@ import DeliveryPolicyNote from "./DeliveryPolicyNote";
 import BulkUploadGeneric from "./BulkUploadGeneric";
 import { consumableBulkConfig } from "../lib/bulkConfigs";
 import CompatibleModelsSelect from "./CompatibleModelsSelect";
+import TonerModelSearchSelect from "./TonerModelSearchSelect";
 import MissingModelLink from "./MissingModelLink";
 import { CONSUMABLE_SUBCATEGORIES, CONSUMABLE_CONDITIONS } from "../lib/consumableConstants";
 
@@ -23,12 +25,14 @@ function emptyForm() {
         subcategory: "Ink Cartridges", subcategory_other: "", brand: "", model_number: "",
         compatible_models: "", condition: "New", price: "", gst_rate: 18, price_type: null, stock: "", description: "",
         warranty: "1 Year", page_yield: "", cartridge_weight: "",
+        intercity_delivery_charge: "100", intracity_delivery_charge: "0",
     };
 }
 
 const CONSUMABLE_WARRANTIES = ["1 Year", "2 Years", "3 Years", "On-site", "Carry-in", "No Warranty"];
 
 export default function ConsumableListings() {
+    const navigate = useNavigate();
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [open, setOpen] = useState(false);
@@ -60,6 +64,8 @@ export default function ConsumableListings() {
             warranty: c.warranty || "1 Year",
             page_yield: c.page_yield != null ? String(c.page_yield) : "",
             cartridge_weight: c.cartridge_weight != null ? String(c.cartridge_weight) : "",
+            intercity_delivery_charge: c.intercity_delivery_charge != null ? String(c.intercity_delivery_charge) : "100",
+            intracity_delivery_charge: c.intracity_delivery_charge != null ? String(c.intracity_delivery_charge) : "0",
         });
         setImageFiles([]); setImagePreviews([]);
         setOpen(true);
@@ -145,6 +151,8 @@ export default function ConsumableListings() {
                 warranty: form.warranty || "1 Year",
                 page_yield: form.page_yield ? parseInt(form.page_yield, 10) : null,
                 cartridge_weight: form.cartridge_weight ? parseInt(form.cartridge_weight, 10) : null,
+                intercity_delivery_charge: parseFloat(form.intercity_delivery_charge || 0) || 0,
+                intracity_delivery_charge: parseFloat(form.intracity_delivery_charge || 0) || 0,
             };
             if (uploadedUrls.length > 0) {
                 payload.image_url = uploadedUrls[0];
@@ -181,26 +189,26 @@ export default function ConsumableListings() {
                     <div className="mt-1 text-[12.5px]">Tap <span className="font-semibold text-[#0A0A0B]">Add consumable</span> to publish your first SKU.</div>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="consumables-grid">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3" data-testid="consumables-grid">
                     {rows.map((c) => (
-                        <div key={c.id} className="tc-product-card p-4" data-testid={`supplier-consumable-${c.id}`}>
-                            <div className="flex items-start justify-between gap-2">
+                        <div key={c.id} onClick={() => navigate(`/consumable/${c.id}`)} className="tc-product-card p-2.5 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all" data-testid={`supplier-consumable-${c.id}`}>
+                            <div className="flex items-start justify-between gap-1">
                                 <div className="min-w-0">
-                                    <div className="text-[10.5px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">{c.brand}</div>
-                                    <div className="text-[15px] font-semibold text-[#0A0A0B] truncate" style={{ fontFamily: "'Montserrat', sans-serif" }}>{c.model_number}</div>
+                                    <div className="text-[9px] tracking-[0.14em] uppercase font-semibold text-[#86868B] truncate">{c.brand}</div>
+                                    <div className="text-[13px] font-semibold text-[#0A0A0B] truncate" style={{ fontFamily: "'Montserrat', sans-serif" }}>{c.model_number}</div>
                                 </div>
-                                <span className="inline-flex items-center text-[10px] font-bold px-2 py-1 rounded-md border bg-[#FFF8E0] text-[#8C6A00] border-[#F5E5A6] uppercase shrink-0">{c.subcategory === "Other" && c.subcategory_other ? c.subcategory_other : c.subcategory}</span>
+                                <span className="inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded border bg-[#FFF8E0] text-[#8C6A00] border-[#F5E5A6] uppercase shrink-0">{c.subcategory === "Other" && c.subcategory_other ? c.subcategory_other : c.subcategory}</span>
                             </div>
-                            <div className="mt-3 text-[12.5px] text-[#3a3a40]">
-                                <div className="font-mono">{fmtMoney(c.price)}</div>
-                                <div className="text-[#86868B] text-[11.5px]">{c.stock} in stock · {c.condition || "New"}</div>
+                            <div className="mt-1.5 text-[11.5px] text-[#3a3a40]">
+                                <div className="font-mono text-[13px]">{fmtMoney(c.price)}</div>
+                                <div className="text-[#86868B] text-[10px]">{c.stock} in stock</div>
                             </div>
-                            <div className="mt-3 flex items-center gap-3">
-                                <button onClick={() => openEdit(c)} className="text-[12px] text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`edit-consumable-${c.id}`}>
-                                    <Pencil size={12} /> Edit
+                            <div className="mt-1.5 flex items-center gap-2 text-[11px]" onClick={(e) => e.stopPropagation()}>
+                                <button onClick={() => openEdit(c)} className="text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`edit-consumable-${c.id}`}>
+                                    <Pencil size={10} /> Edit
                                 </button>
-                                <button onClick={() => remove(c.id)} className="text-[12px] text-red-600 hover:text-red-700 inline-flex items-center gap-1" data-testid={`remove-consumable-${c.id}`}>
-                                    <Trash2 size={12} /> Remove
+                                <button onClick={() => remove(c.id)} className="text-red-600 hover:text-red-700 inline-flex items-center gap-1" data-testid={`remove-consumable-${c.id}`}>
+                                    <Trash2 size={10} /> Del
                                 </button>
                             </div>
                         </div>
@@ -242,7 +250,26 @@ export default function ConsumableListings() {
                             </div>
                             <div>
                                 <Label>Model number <span className="text-red-500">*</span></Label>
-                                <Input value={form.model_number} onChange={(e) => setForm({ ...form, model_number: e.target.value })} required placeholder="DR-2305" className="tc-input-lg" data-testid="consumable-model-input" />
+                                <TonerModelSearchSelect
+                                    value={form.model_number}
+                                    onChange={(v) => setForm({ ...form, model_number: v })}
+                                    onSelect={(model, printers) => {
+                                        // Wave 97 — auto-fill Suitable-For from the
+                                        // compatibility catalogue. Only overwrite when
+                                        // empty so dealer-typed values are preserved.
+                                        if (Array.isArray(printers) && printers.length > 0) {
+                                            setForm((f) => ({
+                                                ...f,
+                                                model_number: model,
+                                                compatible_models: f.compatible_models?.trim() ? f.compatible_models : printers.join(", "),
+                                            }));
+                                        }
+                                    }}
+                                    brand={form.brand}
+                                    placeholder="DR-2305, CF226A, TN-2280…"
+                                    testIdPrefix="consumable-model"
+                                    required
+                                />
                             </div>
                             <div className="col-span-2">
                                 <Label>Suitable for</Label>
@@ -250,6 +277,16 @@ export default function ConsumableListings() {
                                     mode="printers"
                                     value={form.compatible_models}
                                     onChange={(v) => setForm({ ...form, compatible_models: v })}
+                                    onItemAdded={async (printerLabel, { isFirst }) => {
+                                        if (!isFirst || (form.model_number || "").trim()) return;
+                                        try {
+                                            const { data } = await api.get(
+                                                `/compat/lookup-by-printer?model=${encodeURIComponent(printerLabel)}`
+                                            );
+                                            const t = Array.isArray(data?.toners) ? data.toners[0] : null;
+                                            if (t) setForm((f) => ({ ...f, model_number: t }));
+                                        } catch { /* silent */ }
+                                    }}
                                     brand={form.brand}
                                     testid="consumable-compatible"
                                 />
@@ -335,6 +372,18 @@ export default function ConsumableListings() {
 
                         <DeliveryPolicyNote />
                         <CompetitivePricingNote />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="consumable-delivery-charges">
+                            <div>
+                                <label className="block text-[12.5px] font-semibold text-[#0A0A0B] mb-1">Intra-city delivery charge (₹)</label>
+                                <input type="number" min="0" step="1" value={form.intracity_delivery_charge} onChange={(e) => setForm({ ...form, intracity_delivery_charge: e.target.value })} className="tc-input-lg w-full" data-testid="consumable-intracity-charge" />
+                                <div className="text-[11px] text-[#86868B] mt-1">Charged when buyer is in your city. Default ₹0.</div>
+                            </div>
+                            <div>
+                                <label className="block text-[12.5px] font-semibold text-[#0A0A0B] mb-1">Inter-city delivery charge (₹)</label>
+                                <input type="number" min="0" step="1" value={form.intercity_delivery_charge} onChange={(e) => setForm({ ...form, intercity_delivery_charge: e.target.value })} className="tc-input-lg w-full" data-testid="consumable-intercity-charge" />
+                                <div className="text-[11px] text-[#86868B] mt-1">Charged when buyer is in a different city. Default ₹100.</div>
+                            </div>
+                        </div>
                         <DialogFooter className="mt-3">
                             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
                             <Button type="submit" className="btn-pill-cta" disabled={saving} data-testid="consumable-save-btn">

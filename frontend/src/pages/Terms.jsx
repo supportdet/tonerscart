@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import PageMeta from "../components/PageMeta";
 
-export const TERMS_VERSION = "2.3";
+export const TERMS_VERSION = "2.4";
 
 export default function Terms() {
     return (
@@ -79,34 +79,27 @@ export default function Terms() {
                         and is never stored on our servers.
                     </Section>
 
-                    <Section title="9. Commission Structure">
-                        TonersCart charges sellers a commission on successful orders, deducted from the seller&apos;s payout. The buyer-facing
-                        price is unaffected. Commission is charged on the order <strong>bill value, excluding GST / taxes</strong>. Tiers by order value:
-                        <List items={[
-                            "Under ₹15,000 → 10%",
-                            "₹15,000 to ₹30,000 → 8%",
-                            "₹30,000 to ₹75,000 → 6%",
-                            "₹75,000 to ₹1,00,000 → 5%",
-                            "₹1,00,000 and above → 4%",
-                        ]} />
+                    <Section title="9. Referral Fee">
+                        TonersCart charges sellers a <strong>flat referral fee of 7%</strong> on the order value <strong>excluding GST</strong>, deducted from the seller&apos;s payout. The buyer-facing price is unaffected. The referral fee is displayed in rupee terms on all listing and upload forms. TonersCart does <strong>not</strong> charge any referral fee on delivery charges — delivery charges pass through to the seller in full.
+                    </Section>
+
+                    <Section title="9A. Delivery Policy">
+                        Intra-city delivery (buyer and seller in the same city) is <strong>free by default</strong> unless the seller has set a custom intra-city charge on their listing. Inter-city delivery charges are set by the seller per listing and are <strong>shown clearly to the buyer on the product page and at checkout before payment</strong> — default inter-city charges are <strong>₹350 for printers</strong> and <strong>₹100 for toners, consumables, papers, and scanners</strong> unless the seller has set a different rate. Delivery charges are added to the order total at checkout and passed through to the seller in full. TonersCart is <strong>not responsible for delivery timelines, courier failures, or damage in transit</strong> — delivery is fulfilled by the seller using their own courier or logistics partner. Buyers are strongly advised to inspect the product on delivery and raise any damage claims within 48 hours.
                     </Section>
 
                     <Section title="10. Returns & Refunds">
-                        Returns are accepted <strong>only</strong> if:
+                        Returns are accepted <strong>only</strong> in the following two cases:
                         <List items={[
-                            "the wrong model was delivered, or",
-                            "the product arrived damaged or dead on arrival (DOA).",
+                            "Wrong model delivered — the seller dispatched a different model than what was ordered. TonersCart verifies this against the dispatch photo uploaded by the seller before marking the order as dispatched. If the dispatch photo confirms the wrong model was sent, the return is approved.",
+                            "Product arrived damaged or dead on arrival (DOA) — the product is non-functional or visibly damaged on receipt.",
                         ]} />
-                        <strong>No returns are accepted for change of mind, compatibility issues, or any other reason.</strong> Buyers must
-                        raise a return request <strong>within 48 hours of delivery</strong> with photo evidence (clear pictures of the product,
-                        packaging and any visible damage). Approved refunds are processed to the original payment method after seller
-                        verification in coordination with TonersCart support.
+                        <strong>No returns are accepted for any other reason</strong> including change of mind, compatibility issues, buyer error, or dissatisfaction with product quality. Buyers must raise a return request <strong>within 48 hours of delivery</strong> with clear photo evidence of the product, packaging, and any damage. Approved refunds are processed to the original payment method after verification by TonersCart support.
                     </Section>
 
                     <Section title="11. Seller Payouts">
                         Seller payouts are queued for release as soon as the seller <strong>marks the order as dispatched and enters a valid
                         tracking number</strong>. Payouts are credited to the seller&apos;s registered bank account <strong>within 2 business
-                        days</strong> of dispatch, after deducting TonersCart&apos;s platform commission. Payouts are no longer gated on buyer
+                        days</strong> of dispatch, after deducting TonersCart&apos;s <strong>platform referral fee of 7%</strong>. Payouts are no longer gated on buyer
                         confirmation or any post-dispatch waiting period; the buyer may still confirm delivery in their order history for
                         their own records. Seller bank account details provided during registration are shared with <strong>Razorpay</strong>,
                         TonersCart&apos;s payment partner, <strong>solely for the purpose of processing payouts</strong>. Sellers consent to
@@ -123,7 +116,7 @@ export default function Terms() {
                         The following are strictly prohibited and are grounds for suspension or termination:
                         <List items={[
                             "Listing or selling counterfeit, pirated or otherwise unauthorised goods",
-                            "Soliciting or completing off-platform deals to bypass commission",
+                            "Soliciting or completing off-platform deals to bypass the referral fee",
                             "Scraping, crawling or unauthorised automated access to the Platform",
                             "Spam, phishing, harassment or abuse of other users",
                             "Posting fake, misleading or fraudulent listings or reviews",
@@ -139,7 +132,7 @@ export default function Terms() {
 
                     <Section title="15. Limitation of Liability">
                         To the maximum extent permitted by law, TonersCart&apos;s aggregate liability for any claim arising from or relating to
-                        the Platform or an order is <strong>limited to the commission actually received by TonersCart on the underlying order</strong>.
+                        the Platform or an order is <strong>limited to the referral fee actually received by TonersCart on the underlying order</strong>.
                         We are not liable for indirect, incidental, special or consequential damages.
                     </Section>
 

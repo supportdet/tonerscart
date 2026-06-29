@@ -1,12 +1,12 @@
-// System-defined flat intercity delivery rates (Wave 22).
-// Same-city delivery is free. Intercity adds a flat charge per product category,
-// set by TonersCart (NOT by dealers), charged once per dealer per order.
-// Mirrors backend server.py DELIVERY_RATES / _is_intercity.
+// System-defined flat delivery-rate fallbacks (Wave 22, updated Wave 96).
+// Used ONLY when a listing has no explicit per-row delivery charge set.
+// Per-listing values (intracity_delivery_charge / intercity_delivery_charge)
+// always take precedence. Mirrors backend server.py DELIVERY_RATES.
 export const DELIVERY_RATES = {
     toner: 100,
     printer: 350,
-    paper: 150,
-    scanner: 250,
+    paper: 100,
+    scanner: 100,
     consumable: 100,
 };
 
@@ -53,8 +53,12 @@ export function computeCartDelivery(items, buyerCity) {
         const p = it.product || {};
         const key = dealerKeyOf(p);
         const kind = (p.kind || "toner").toLowerCase();
-        const rate = deliveryRate(kind);
+        // Wave 96 — prefer per-listing dealer-set charges. Fall back to the
+        // category default for intercity; intracity defaults to 0.
         const sameCity = !isIntercity(p.city, buyerCity);
+        const interRow = p.intercity_delivery_charge != null ? Number(p.intercity_delivery_charge) : deliveryRate(kind);
+        const intraRow = p.intracity_delivery_charge != null ? Number(p.intracity_delivery_charge) : 0;
+        const rate = sameCity ? intraRow : interRow;
         if (!groups.has(key)) groups.set(key, { dealerKey: key, dealerCity: p.city || "", sameCity, items: [] });
         groups.get(key).items.push({ id: it.id, kind, rate });
     }
@@ -62,14 +66,14 @@ export function computeCartDelivery(items, buyerCity) {
     const perDealer = [];
     let total = 0;
     for (const g of groups.values()) {
-        // bearing item = highest category rate in the group (first on tie)
+        // bearing item = highest charge in the group (first on tie)
         let bearing = null;
         for (const x of g.items) if (!bearing || x.rate > bearing.rate) bearing = x;
-        const charge = g.sameCity ? 0 : (bearing ? bearing.rate : 0);
+        const charge = bearing ? bearing.rate : 0;
         total += charge;
         perDealer.push({ dealerKey: g.dealerKey, dealerCity: g.dealerCity, sameCity: g.sameCity, charge });
         for (const x of g.items) {
-            const bears = !g.sameCity && bearing && x.id === bearing.id;
+            const bears = bearing && x.id === bearing.id && charge > 0;
             perItem[x.id] = {
                 sameCity: g.sameCity,
                 dealerCity: g.dealerCity,

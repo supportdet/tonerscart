@@ -96,6 +96,34 @@ async def email_password_reset(to: str, reset_link: str) -> bool:
     return await _send(to, "Reset your TonersCart password", body)
 
 
+async def email_dealer_welcome_magic(to: str, business_name: str, dashboard_link: str) -> bool:
+    """Wave 98 — branded welcome email for admin bulk-created dealers.
+    Contains a one-click "Go to Dashboard" magic-login link (Supabase magic
+    link via generate_link, valid for 7 days). Free-listing promise until
+    15 August 2026 is highlighted in the copy."""
+    if not to or not dashboard_link:
+        return False
+    safe_name = (business_name or "there").strip() or "there"
+    body = f"""
+      <h2 style="margin:0 0 12px 0;font-size:20px;color:#0A0A0B;font-family:'Montserrat',sans-serif;">Welcome to TonersCart, {safe_name}!</h2>
+      <p style="margin:0 0 14px 0;color:#0A0A0B;font-size:14px;">Your seller account is ready. TonersCart is India&rsquo;s marketplace for printer toners, printers, papers, consumables and scanners — connecting verified dealers like you to businesses, governments and home buyers across the country.</p>
+      <div style="margin:18px 0;padding:14px 16px;background:#FFFBEB;border:1px solid #F5C400;border-radius:10px;color:#5C4A00;font-size:13.5px;">
+        <strong>🎉 Listing is FREE until 15&nbsp;August&nbsp;2026.</strong><br/>
+        No setup fees, no monthly charges. After your first sale we charge a flat <strong>7% referral fee</strong> — that&rsquo;s it.
+      </div>
+      <p style="margin:0 0 22px 0;font-size:14px;color:#0A0A0B;">Click below to access your dashboard. The link logs you in directly — no password needed for now.</p>
+      <p style="margin:0 0 22px 0;">
+        <a href="{dashboard_link}" style="display:inline-block;background:#0A0A0B;color:#fff;text-decoration:none;padding:14px 26px;border-radius:10px;font-weight:700;font-size:14px;font-family:'Montserrat',sans-serif;">Go to Dashboard →</a>
+      </p>
+      <p style="margin:0 0 8px 0;font-size:12.5px;color:#6E6E73;">This one-time login link is valid for <strong>7 days</strong>. After using it (or once it expires) you can set your password via the <strong>Forgot Password</strong> link on the sign-in page.</p>
+      <p style="margin:0 0 18px 0;font-size:12px;word-break:break-all;color:#0A6E78;">{dashboard_link}</p>
+      <hr style="border:none;border-top:1px solid #E5E5EA;margin:18px 0;" />
+      <p style="margin:0 0 6px 0;font-size:12.5px;color:#6E6E73;">Inside the dashboard we&rsquo;ll ask for your bank account and a few KYC documents (GST, PAN, ID proof, address proof, cancelled cheque) — only required <em>before</em> your first payout. You can start listing right away.</p>
+      <p style="margin:0;font-size:12.5px;color:#6E6E73;">Questions? Reply to this email or write to <a href="mailto:{SUPPORT_INBOX}" style="color:#0A6E78;">{SUPPORT_INBOX}</a>.</p>
+    """
+    return await _send(to, "Your TonersCart seller account is ready — start listing for free", body)
+
+
 
 async def email_notify_available(to: str, printer_name: str, product_name: str, product_url: str):
     """Tell a buyer who asked to be notified that a compatible product is now in stock."""
@@ -733,24 +761,17 @@ async def email_quotation(*, quote_number: str, buyer: dict, item: dict, supplie
 
 # Wave 58 commission slabs (TonersCart commercial policy 2026 v3, reaffirmed Wave 62).
 # Single source of truth for orders, admin finance, quotation + order emails.
-_COMMISSION_TIERS = [
-    (15000,  0.10),
-    (30000,  0.08),
-    (75000,  0.06),
-    (100000, 0.05),
-]
+# Wave 95: flat 7% referral fee replaces the previous tiered slabs.
+COMMISSION_RATE = 0.07
+_COMMISSION_TIERS = [(float("inf"), COMMISSION_RATE)]  # back-compat: callers iterate this
 
 
 def _commission_breakdown(total: float) -> tuple[float, float, str]:
-    """Return (commission ₹, payout ₹, rateLabel) — matches frontend rules.
-    Charged on bill value excluding GST; ₹1,00,000 and above is a flat 4%."""
+    """Return (referral_fee ₹, payout ₹, rateLabel) — flat 7% on bill value
+    excluding GST. Name kept for back-compat with admin/orders routes."""
     t = float(total or 0)
-    for cap, rate in _COMMISSION_TIERS:
-        if t < cap:
-            c = round(t * rate)
-            return c, t - c, f"{int(rate * 100)}%"
-    c = round(t * 0.04)
-    return c, t - c, "4%"
+    c = round(t * COMMISSION_RATE)
+    return c, t - c, "7%"
 
 
 def _money(n) -> str:
@@ -870,10 +891,10 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
     seller_email = (supplier or {}).get("contact_email") or (supplier or {}).get("email")
     if seller_email:
         payout_line = (
-            f"<tr><td style='padding:4px 12px;color:#86868B;'>Commission ({rate_label})</td><td style='padding:4px 12px;'>−{_money(commission)}</td></tr>"
+            f"<tr><td style='padding:4px 12px;color:#86868B;'>Referral fee ({rate_label})</td><td style='padding:4px 12px;'>−{_money(commission)}</td></tr>"
             f"<tr><td style='padding:4px 12px;color:#86868B;'>Your payout</td><td style='padding:4px 12px;'><strong style='color:#0A8754;'>{_money(payout)}</strong></td></tr>"
             if rate_label != "Deal basis"
-            else "<tr><td style='padding:4px 12px;color:#86868B;'>Commission</td><td style='padding:4px 12px;'>Deal basis — our team will contact you.</td></tr>"
+            else "<tr><td style='padding:4px 12px;color:#86868B;'>Referral fee</td><td style='padding:4px 12px;'>Deal basis — our team will contact you.</td></tr>"
         )
         seller_id_row = (
             f"<tr><td style='padding:4px 12px;color:#86868B;'>Your Seller ID</td><td style='padding:4px 12px;'><strong style='font-family:monospace;color:#00838f;'>{seller_id}</strong></td></tr>"
@@ -1049,7 +1070,7 @@ async def email_order_delivered_support(order: dict, listing: dict, supplier: di
       <tr><td style='padding:4px 12px;color:#86868B;'>Product</td><td style='padding:4px 12px;'>{brand} {model}</td></tr>
       <tr><td style='padding:4px 12px;color:#86868B;'>Dealer</td><td style='padding:4px 12px;'>{seller}</td></tr>
       <tr><td style='padding:4px 12px;color:#86868B;'>Total</td><td style='padding:4px 12px;'><strong>{_money(order.get('total') or 0)}</strong></td></tr>
-      <tr><td style='padding:4px 12px;color:#86868B;'>Commission ({rate_label})</td><td style='padding:4px 12px;'>{_money(commission)}</td></tr>
+      <tr><td style='padding:4px 12px;color:#86868B;'>Referral fee ({rate_label})</td><td style='padding:4px 12px;'>{_money(commission)}</td></tr>
       <tr><td style='padding:4px 12px;color:#86868B;'>Payout to dealer</td><td style='padding:4px 12px;'><strong>{_money(payout)}</strong></td></tr>
     </table>
     """

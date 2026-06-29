@@ -486,11 +486,17 @@ function DeliveryInfo({ data, kind = "toner" }) {
     const buyer = (buyerCity || "").trim();
     if (!dealerCity) return null;
     const same = !isIntercity(dealerCity, buyer);
+    // Wave 96 — prefer the per-listing dealer-set charge; fall back to the
+    // category default (₹0 same-city, ₹350 printers / ₹100 others intercity).
     if (same) {
+        const intra = Number(data.intracity_delivery_charge ?? 0);
+        if (intra > 0) {
+            return (<div className="mt-2 text-[12.5px] text-[#6E6E73]" data-testid="delivery-same-city">🚚 Same-city delivery to {dealerCity}: +₹{intra.toLocaleString("en-IN")}</div>);
+        }
         return (<div className="mt-2 text-[12.5px] font-semibold text-emerald-700 inline-flex items-center gap-1" data-testid="delivery-same-city">✅ Free delivery to {dealerCity}</div>);
     }
-    const charge = deliveryRate(kind);
-    return (<div className="mt-2 text-[12.5px] text-[#6E6E73]" data-testid="delivery-intercity">🚚 Intercity delivery to {buyer || "your city"}: +₹{charge.toLocaleString("en-IN")}</div>);
+    const inter = data.intercity_delivery_charge != null ? Number(data.intercity_delivery_charge) : deliveryRate(kind);
+    return (<div className="mt-2 text-[12.5px] text-[#6E6E73]" data-testid="delivery-intercity">🚚 Intercity delivery to {buyer || "your city"}: +₹{inter.toLocaleString("en-IN")}</div>);
 }
 
 function SpecsBlock({ kind, data, selectedVariant }) {

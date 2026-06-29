@@ -1,5 +1,102 @@
 # TonersCart — Product Requirements (Supabase edition)
 
+> **Latest (2026-06-29 Wave 99):** **Universal + fuzzy search across all 5 categories.**
+>
+> ### What changed
+> `/api/search/universal` rewritten in `backend/routes/search.py` to use a **three-tier matching strategy** per category:
+> 1. **Normalised** — `search_norm ILIKE %<alphanum-lowercased>%` so `LBP6030W`, `LBP 6030W`, `LBP-6030W`, `lbp_6030w` all match. Powers partial matching too (`M404` → `M404dn`).
+> 2. **Multi-field ILIKE** — `brand / model_number / description / compatible_models / size` with the original query for human-readable matches.
+> 3. **pg_trgm fuzzy** — calls new RPC `tonerscart_fuzzy_search(tbl, needle, threshold, max_rows)` to catch typos (`Lasejet` → `LaserJet`, `Epsen` → `Epson`). Threshold = 0.22. Gracefully degrades when the migration isn't applied yet.
+> Final ranking: exact brand/model = 0 · prefix = 1 · contains brand = 2 · contains model = 3 · normalised contains = 4 · description contains = 5 · fuzzy-only = 6 minus trigram-similarity.
+> All 5 product tables + OEM showcase searched in one round-trip. Suspended dealers filtered out. `compatible_models` (toners + consumables) included.
+>
+> ### Frontend
+> No code changes needed — `/search` page already mounts `UniversalSearch` + universal-category-tabs (All / Toners / Printers / Papers / Inks / Scanners / OEM), defaults to "all" when a query is active. Submit on the home-page search bar already navigates to `/search?q=…`. The toner-only browse below is hidden when `q` is set and `cat ≠ 'toners'`.
+>
+> ### SQL migration
+> `/app/backend/migrations/2026_06_29_wave99_fuzzy_search.sql` (must be applied in Supabase SQL Editor — exec_sql RPC is not exposed):
+> 1. `CREATE EXTENSION pg_trgm`
+> 2. Adds `search_norm` column + INSERT/UPDATE triggers + GIN(trgm_ops) index to `printer_listings` and `paper_listings` (the two tables that didn't have it). Backfills existing rows in the same script.
+> 3. Adds GIN(trgm_ops) indexes to the three tables that already had `search_norm` (`listings`, `consumable_listings`, `scanner_listings`).
+> 4. Creates the `tonerscart_fuzzy_search(tbl, needle, threshold, max_rows)` RPC that wraps `similarity() >= threshold` with a `% operator` short-circuit for speed. Grants EXECUTE to anon / authenticated / service_role.
+>
+> ### Verification
+> `/app/backend/tests/test_wave99_fuzzy_search.py` — **6/6 pass** on the live preview URL:
+>  · envelope has all 5 categories
+>  · empty query returns zero envelope
+>  · partial `M404` finds `HP LaserJet Pro M404dn`
+>  · `HP` vs `hp` returns the same result count (case-insensitive)
+>  · fuzzy RPC missing → endpoint returns 200 with empty arrays (no 500)
+>  · no suspended dealer leaks into results
+>
+> ### User action required
+> Run `/app/backend/migrations/2026_06_29_wave99_fuzzy_search.sql` once in Supabase SQL Editor to enable pg_trgm + the trgm indexes + the fuzzy RPC. Until then partial / normalised search works for the 3 tables that already had `search_norm`; printer and paper tables fall back to multi-field ILIKE.
+
+
+
+> **Latest (2026-06-29 Wave 98):** **Compact 4/5-col dealer grid, clickable cards → detail+edit, Phase-1/Phase-2 seller split, admin bulk-dealer onboarding with magic-link emails.**
+>
+> ### 1) Compact dealer dashboard grid
+> All 5 product category grids (Toners in `SupplierDashboard.jsx`, Printers / Papers / Inks / Scanners in their respective components) changed from `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3` to **`grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5`**. Reduced card padding `p-4`→`p-2.5`, image height `h-? `→ `h-32`, body font `text-[16px]`→`text-[13px]`, action buttons `text-[12px]`→`text-[11px]` with `size={10}` icons. **Removed the Compatible-printer line** from toner cards (saved ~24 px vertical).
+>
+> ### 2) Clickable cards → product detail page + edit
+> Each card is now `onClick={() => navigate('/{kind}/{id}')}` (toner / printer / paper / consumable / scanner). The public `ProductDetail.jsx` page already detects the owning dealer (Wave 77) and renders an "Edit my listing" button, so reusing the same route gives free dealer-side preview. Inline pencil price/stock + Edit/Duplicate/Remove buttons + D2DRow wrap in `onClick={e=>e.stopPropagation()}` so they don't trigger navigation.
+>
+> ### 3) Phase-1 / Phase-2 seller split
+> Public `/sell` form now only **3 steps**:
+> Step 1 — contact (unchanged) · Step 2 — **only** business name + GSTIN + PAN · Step 3 — what you sell.
+> Removed from Step 2: business address, annual turnover, years in business, all bank fields. Removed entirely: Step 4 (document uploads).
+> Backend: `SellerApplication.business_address` now `Optional[str] = ""`.
+> Inside the dealer dashboard, new **`Phase2Banner.jsx`** is mounted for approved dealers (between the pending banner and the dashboard body). It shows two CTAs: **Add bank details** (5 fields validated client-side) and **Upload documents** (GST, PAN, ID, address, cancelled cheque + brand authorisation for OEM). Banner auto-dismisses once both groups are complete. Backend endpoint **`POST /api/auth/supplier-phase2`** writes onto the live `suppliers` row (or `suppliers_pending` if not yet approved). `/auth/me` extended to return the bank + doc paths so the banner can compute completeness. Phase 2 never blocks listing or selling — payouts are gated by it (existing wave logic preserved).
+>
+> ### 4) Admin bulk-dealer onboarding with magic-link welcome
+> Backend `POST /api/admin/dealers/bulk-create` (in `routes/admin.py`) — takes `{rows: [{business_name, email, phone, city, gstin}]}`. For each row:
+> 1) Skip if email already exists in `users` (case-insensitive). 2) `sb_admin.auth.admin.create_user(email_confirm=True)` — no password. 3) `users` upsert with `role=supplier`. 4) `suppliers_pending` row with status=`pending`. 5) `sb_admin.auth.admin.generate_link(type='magiclink', redirect_to={origin}/auth/callback?next=/supplier)` — 7-day TTL. 6) `email_dealer_welcome_magic(email, business_name, action_link)` via Resend with subject **"Your TonersCart seller account is ready — start listing for free"**, highlighting free listing until **15 Aug 2026** and a "Go to Dashboard →" button. Returns `{created, skipped_existing, skipped_duplicate_in_file, failed, emails_sent, *_rows[]}`.
+> Frontend `pages/admin/BulkDealerUpload.jsx` — parses .csv / .xlsx via the existing `xlsx` package, alias-tolerant header mapping (Business Name / Email / Phone / City / GSTIN), preview table with per-row validation (missing fields, invalid email, in-file duplicates), summary modal after submission with skipped/failed breakdowns. Wired into `DealersTab.jsx` via a "Bulk add dealers" CTA next to the search bar. **Existing dealers (Big C Technologies, DET, Zion Entr, Bios Computers, Verve IT Solutions, Ravi Marketing, Shree Infotech, Amman Gaming Origin, and every other email already in the users table) are NEVER overwritten — they show up under "skipped_rows" with reason "already exists — preserved".**
+>
+> ### Verification
+> 7/7 backend pytest cases in `/app/test_reports/iteration_73.json` covering all 4 endpoint variants (empty, single valid, new+existing mix, in-file duplicate, unauth=401) + the Phase-1 apply-seller without address (regression). All 5 frontend wiring layers verified via code review (testids: phase2-banner, phase2-bank-cta, phase2-docs-cta, bulk-add-dealers-btn, bulk-dealers-dialog, supplier-listing-{id}, printer/paper/consumable/scanner-listing-{id}).
+
+
+
+> **Latest (2026-06-29 Wave 97):** **Legal docs v2.4/v2.2 + Suitable-For auto-suggest (bidirectional, all 5 forms incl. bulk).**
+>
+> ### Legal
+> Terms of Service bumped to **v2.4** (`/app/frontend/src/pages/Terms.jsx`): §9 (Referral Fee) rewritten — "flat referral fee of 7% on order value excluding GST, **not** charged on delivery"; new **§9A Delivery Policy** inserted between §9 and §10 (default ₹0 intra-city, ₹350 printers / ₹100 others inter-city); §10 (Returns) replaced — only Wrong Model (verified against dealer dispatch photo) or DOA, within 48 h with photo proof; §11 + §15 terminology aligned to "referral fee of 7%". Privacy Policy bumped to **v2.2** (`/app/frontend/src/pages/Privacy.jsx`): §7 third-party processors gains a Logistics-partners line; §15 rewritten — "Delivery charges are passed through in full with no deduction".
+>
+> ### Suitable-For auto-suggest
+> Expanded `/app/backend/compatibility_db.py` (Wave 97 PRINTERS_RAW additions + TONER_META additions) — now covers all 38 India-market codes the user named (HP CF226A/CF230A/CF217A/CF244A/CF248A/CF258A/CF259A/Q2612A/CE285A/CC388A/CB435A/CB436A; Canon 303/925/337/057/057H/070/070H/071/071H/069/054/056; Brother TN-2280/2360/2380/660/730/760; Epson 001/003/008/664/532; Samsung MLT-D101S/D111S/D116S). Catalogue grew from 619→700 printers + 585→601 toners.
+> New endpoints in `/app/backend/routes/compat.py`: `GET /api/compat/lookup-by-toner?model=…` returns `{brand,type,printers[]}`; `GET /api/compat/lookup-by-printer?model=…` returns `{brand,toners[]}`. Both slug-tolerant ("tn 2280", "CF-226A", "HP LaserJet P1108" all resolve).
+> Wiring:
+> • `TonerModelSearchSelect.jsx` — new `lastAutoRef` effect: typing ≥ 3 chars debounce-fires `onSelect(model, printers[])` once per unique value; works without clicking a dropdown option. Used by the toner Add form and (now) the consumable Add form.
+> • `CompatibleModelsSelect.jsx` — new `onItemAdded(label, {isFirst})` callback for the **reverse** direction.
+> • `SupplierDashboard.jsx` toner form — `onItemAdded` calls `/lookup-by-printer` on the first printer add and auto-fills the toner model when empty.
+> • `ConsumableListings.jsx` — model_number swapped from plain `<Input>` to `<TonerModelSearchSelect>`; Suitable-For has bidirectional `onItemAdded`.
+> • `BulkUploadGeneric.jsx` — `updateCell` watches `model_number` edits, debounces 450 ms, calls `/lookup-by-toner`, fills `compatible_models` cell only when empty.
+>
+> ### Verification
+> 24/24 backend pytest in `/app/backend/tests/test_wave97_compat_autosuggest.py` (parametrised over all required codes + slug-tolerant + reverse + empty fallback + stats). 14/14 frontend `/terms` and `/privacy` text checks via Playwright on the live preview URL. 4 dealer-form UI flows confirmed by code review (testing agent had no shared dealer login).
+
+
+
+> **Latest (2026-06-29 Wave 96):** **Inline price/stock edit, per-listing delivery charges, terminology sweep finished.**
+>
+> ### 1) Inline price + stock edit on dealer All-Listings table
+> New `/app/frontend/src/components/InlineEditCell.jsx` — reusable pencil-icon → input → save/cancel cell. Wired into `SupplierDashboard.jsx` All-Listings table for both the **price** (`inline-price-{id}-edit/-input/-save/-cancel`) and **stock** (`inline-stock-{id}-…`) columns. Enter saves, Esc cancels, blur commits, invalid input keeps the editor open. `inlineUpdate` helper routes each kind to the correct `PUT /api/supplier/{listings|printers|papers|consumables|scanners}/{id}` and refreshes the All-Listings feed in place.
+>
+> ### 2) Per-listing delivery charges (Intra-city + Inter-city)
+> Added `intracity_delivery_charge` column to all 5 product tables (migration: `/app/backend/migrations/2026_06_28_wave96_delivery_charges.sql` — MUST be applied via Supabase SQL Editor; backend gracefully degrades until then). Existing `intercity_delivery_charge` now also has per-row UI inputs. Defaults: intra ₹0 everywhere; inter ₹350 for printers, ₹100 for toner/paper/consumable/scanner. UI inputs added to all 5 single-product forms (`{kind}-intracity-charge` / `{kind}-intercity-charge`). `_resolve_delivery_charge` in `server.py` now reads the listing's per-row values first, with category default as fallback. Mirrored frontend logic in `lib/delivery.js computeCartDelivery`. Buyer-side `DeliveryInfo` block on `ProductDetail.jsx` shows the per-listing intra/inter value (or "Free delivery" when intra is 0). Bulk-config `scalarPayload` for all 5 kinds also carries `intracity_delivery_charge`. **DELIVERY_RATES normalised** in both `server.py` and `lib/delivery.js`: paper 150→100, scanner 250→100.
+>
+> ### 3) Referral fee terminology — final sweep
+> Wave 95 implemented the flat 7% math. Wave 96 finished removing the user-facing word "Commission" from: seller-confirmation email (`email_service.py` lines 866, 869, 1045), Admin Orders tab (column + KV), Admin Finance tab (KPI + table columns), Admin Analytics tab (StatCard + Chart title), Admin DealerProfile, About page, D2DProductDetail, SupplierDashboard order-row breakdown. Internal data-testids and DB column names retain `commission` (no UI impact).
+>
+> ### Verification
+> Backend pytest `/app/backend/tests/test_wave96_referral_delivery.py` — **16 passed, 1 skipped, 0 failed** (covers `_commission_breakdown` flat 7%, `_resolve_delivery_charge` all 8 logical paths incl. per-listing overrides + missing-column graceful degradation, public product endpoints, supplier PUT acceptance). Frontend Playwright sweep (iteration_71) — **100% pass** on terminology + code-review of inline edit + delivery-charge UI on all 5 product forms.
+>
+> ### TODO for the user
+> Run `/app/backend/migrations/2026_06_28_wave96_delivery_charges.sql` once in Supabase SQL Editor so `intracity_delivery_charge` actually persists (today it is silently dropped on write; defaults still resolve correctly).
+
+
 > **Latest (2026-06-28 Wave 94):** **Scanner type list updated + bulk-upload defaults removed.**
 >
 > ### 1) Scanner types: "All-in-one" → "Book Scanner"

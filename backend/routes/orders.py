@@ -51,7 +51,7 @@ async def create_order(payload: OrderCreate, user: dict = Depends(require_user))
         _sup = sb_admin.table("suppliers").select("city").eq("id", L["supplier_id"]).maybe_single().execute()
         _dealer_city = (_sup.data or {}).get("city") if _sup else None
     delivery_charge = _resolve_delivery_charge(
-        "toner", _dealer_city, payload.order_city, bool(payload.charge_delivery)
+        "toner", _dealer_city, payload.order_city, bool(payload.charge_delivery), L
     )
 
     row = {

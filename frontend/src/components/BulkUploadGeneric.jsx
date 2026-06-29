@@ -601,6 +601,9 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
     const [failedRows, setFailedRows] = useState(null); // [{...row, _error}]
     const [showErrors, setShowErrors] = useState(false);
     const fileRef = useRef(null);
+    // Wave 97 — track which (rowIdx, typedModel) pairs have already triggered
+    // an auto-suggest so we don't re-hit the API on every keystroke.
+    const bulkAutoSuggestRef = useRef({});
 
     const updateCell = (idx, key, value) => {
         // Wave 71 — DO NOT flip `showErrors` off here. Red cells + yellow banner
@@ -612,6 +615,32 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
         setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
         if (result) setResult(null);
         if (failedRows) setFailedRows(null);
+
+        // Wave 97 — Suitable-For auto-population. When the dealer types a known
+        // toner/ink model number, look up the catalogue and pre-fill the
+        // `compatible_models` column on the same row IF still empty. Only
+        // applies to bulk configs that have BOTH columns (toner + consumable).
+        const hasCompat = COLUMNS.some((c) => c.key === "compatible_models");
+        if (hasCompat && key === "model_number" && typeof value === "string") {
+            const typed = value.trim();
+            if (typed.length >= 3) {
+                bulkAutoSuggestRef.current = (bulkAutoSuggestRef.current || {});
+                if (bulkAutoSuggestRef.current[`${idx}:${typed.toLowerCase()}`]) return;
+                bulkAutoSuggestRef.current[`${idx}:${typed.toLowerCase()}`] = true;
+                setTimeout(async () => {
+                    try {
+                        const { data } = await api.get(`/compat/lookup-by-toner?model=${encodeURIComponent(typed)}`);
+                        const printers = Array.isArray(data?.printers) ? data.printers : [];
+                        if (printers.length === 0) return;
+                        setRows((prev) => prev.map((r, i) => {
+                            if (i !== idx) return r;
+                            if ((r.compatible_models || "").trim()) return r; // never overwrite dealer edits
+                            return { ...r, compatible_models: printers.join(", ") };
+                        }));
+                    } catch { /* silent — free-text typed value remains */ }
+                }, 450);
+            }
+        }
     };
     const addRow = () => setRows((prev) => [...prev, config.emptyRow()]);
     const removeRow = (idx) => setRows((prev) => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx));

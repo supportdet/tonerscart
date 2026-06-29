@@ -38,7 +38,7 @@ export default function About() {
                         <div className="space-y-4 mt-5 text-[14.5px] text-[#3a3a40] leading-relaxed">
                             <p>India&apos;s printer-supplies market has been fragmented for decades — buyers chase calls and quotes, dealers waste days on price discovery, and inventory data lives nowhere except scattered chats and offline ledgers.</p>
                             <p>TonersCart brings that fragmented market online: real stock from <strong>verified suppliers</strong>, transparent prices, GST-compliant invoicing handled by the seller, and a clean dashboard for both sides of the transaction.</p>
-                            <p>We don&apos;t hold inventory. We don&apos;t mark up prices. We connect verified dealers with serious buyers — businesses and individuals alike — and take a transparent platform commission only on completed orders.</p>
+                            <p>We don&apos;t hold inventory. We don&apos;t mark up prices. We connect verified dealers with serious buyers — businesses and individuals alike — and take a transparent referral fee only on completed orders.</p>
                         </div>
                     </div>
 
@@ -49,7 +49,7 @@ export default function About() {
                         </h2>
                         <ul className="mt-5 space-y-4 text-[14.5px] text-[#3a3a40]">
                             {[
-                                { Icon: Target,   t: "Transparent pricing",  d: "No middlemen markup. Buyers see the dealer's price, the platform commission, and zero hidden fees." },
+                                { Icon: Target,   t: "Transparent pricing",  d: "No middlemen markup. Buyers see the dealer's price, the platform referral fee, and zero hidden fees." },
                                 { Icon: Shield,   t: "Verified suppliers",   d: "Every dealer is KYC-verified — GST, PAN, address proof, AI-checked business documents." },
                                 { Icon: Sparkles, t: "Real stock, real time", d: "Live inventory from dealers, not stale catalogues. Orders are placed against actual on-shelf stock." },
                                 { Icon: Users,    t: "Built for everyone",       d: "GST invoicing, bulk orders, MPS sourcing, fleet management — built for offices, businesses and homes alike." },
