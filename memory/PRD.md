@@ -1,9 +1,66 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-29 Wave 100):** **Seller onboarding overhaul + Phase-2 banner bug fix + Admin All-Users panel.**
+> **Latest (2026-06-29 Wave 101):** **Onboarding state machine (draft → pending → approved) + Procurement Phase 3 (credit summary widget, admin manual adjustment, tax-invoice PDF).**
 >
-> ### 1) Register — account-type cards
-> `Register.jsx` rewritten. 3 large selectable cards (Buyer / Dealer-Seller / Corporate) above the form with testids `account-type-personal`, `account-type-dealer`, `account-type-corporate`. Required-field error `register-account-type-error` blocks submit when nothing is picked. Dealer card calls `/api/auth/signup-supplier` (now with `business_address` Optional in `SignupSupplier`), then logs in, then navigates `/supplier`. Buyer → `/`. Corporate → `/procurement`. Persists `user_type` via the existing `/auth/user-type` endpoint.
+> ### 1) Strict Dealer Onboarding State Machine
+> Backend (`routes/auth.py`):
+>   * `POST /api/auth/apply-seller` now honours `submit_for_review: bool` — when False (default for the /sell form, Wave 101), it writes `suppliers_pending.status = 'draft'`; True keeps the legacy direct-to-pending behaviour.
+>   * New `POST /api/auth/submit-for-review` flips a draft row to `pending` (and emails the admin). Idempotent on already-pending rows. 404 if no draft row exists.
+>   * `GET /api/auth/me` now also returns bank + doc fields from `suppliers_pending` for non-supplier users so the Phase2Banner can correctly compute completeness while in draft state.
+>   * Graceful fallback in `apply_seller` — if the DB CHECK constraint hasn't been migrated yet (Wave 101 SQL), draft writes silently fall back to pending so dealers are never blocked.
+>
+> Frontend:
+>   * `DealerOnboarding.jsx` now recognises stage `"draft"` — Step 2 shows as done, Step 3 becomes the active CTA "Add bank details & upload documents".
+>   * `Phase2Banner.jsx` accepts new `showSubmitForReview` prop — adds a "Submit for verification" CTA inside the DocsDialog (enabled only when bank + all mandatory docs are populated). Clicking it POSTs `/auth/submit-for-review` and refreshes the dashboard.
+>   * `SellerApplicationForm.jsx` submits with `submit_for_review: false`, so the application lives as a draft inside the dealer dashboard until they hit Submit.
+>
+> ### 2) Procurement Phase 3 — Buyer credit summary widget
+> New `GET /api/procurement/credit/summary` returns `{credit_limit, credit_used, credit_available, outstanding, next_due_date, overdue_count, ledger[]}`. Outstanding = sum(unpaid debits) − sum(credits). Next-due picks the earliest unpaid debit's `due_date`.
+>
+> Frontend: new `components/procurement/CreditSummaryWidget.jsx` renders below the existing limit/used/available KPIs on `/procurement` → Credit Account. Shows two card row (outstanding + next due, with overdue-aware border colour) + a 20-row ledger table with date / note / amount / status pills.
+>
+> ### 3) Procurement Phase 3 — Tax-invoice PDF
+> New `proc_invoice_pdf.py` builds a formal ReportLab invoice (A4, INK/TEAL palette, identical brand band to the quotation PDF):
+>   * Buyer block (GSTIN for corporate, ministry/state for govt)
+>   * Supplier snapshot (name + rank)
+>   * Line-items table with HSN/SAC + GST breakup
+>   * Subtotal / GST / Total payable totals
+>   * Payment instructions (net-30, NEFT/RTGS, cheque, quote ref)
+>   * Standard procurement T&C
+>
+> Endpoints:
+>   * `GET /api/procurement/orders/{oid}/invoice.pdf` — buyer downloads their own.
+>   * `GET /api/admin/procurement/orders/{oid}/invoice.pdf` — admin downloads any.
+>
+> Email: `email_proc_order_placed` now accepts an `invoice_pdf` kwarg. `create_proc_order` generates the PDF on confirmation and attaches it to the buyer's confirmation email via Resend.
+>
+> Frontend wiring:
+>   * `components/procurement/MyOrders.jsx` shows a "Tax invoice" download button per order row.
+>   * `pages/admin/ProcurementTab.jsx` order table has a new "Payment" column (Paid/Unpaid pill) + "Invoice" download button.
+>
+> ### 4) Procurement Phase 3 — Admin manual credit adjustment
+> New endpoints:
+>   * `GET /api/admin/procurement/{uid}/credit` — full credit panel (user summary + last 200 ledger rows + unpaid debits list).
+>   * `POST /api/admin/procurement/{uid}/credit/adjust` — body `{type, amount, note, order_id?}`. Type is `payment` / `waiver` / `writeoff`. Effects: inserts a `credit_ledger` row with `type='credit'` + `paid_at`, decrements `procurement_users.credit_used` by amount (floor 0), and — if `order_id` is given AND the new total credits cover the debit — flips `procurement_orders.payment_status='paid'` AND marks the original debit ledger row's `paid_at`.
+>
+> Frontend: new `pages/admin/CreditAdjustDialog.jsx` mounted from the OrdersSection. Per-row "Adjust" pill (visible for Unpaid orders) opens the dialog pre-filled with the order total. Shows buyer summary, type pills (Payment / Waiver / Write-off), amount + note inputs, and a peek at the last 8 ledger entries for context.
+>
+> ### 5) QA cleanup
+> 10 leftover QA accounts (`qa-bulk-wave98-*`, `qa-cust-wave98-*`) deleted from the live DB via the new `backend/scripts/wave101_delete_qa_accounts.py` script. Pattern-based — only emails matching explicit QA prefixes are touched; all 13 approved suppliers + admin + 19 real users left intact.
+>
+> ### SQL migration required (user action)
+> Run `/app/backend/migrations/2026_06_29_wave101_draft_status.sql` once in Supabase SQL Editor — extends `suppliers_pending.status` CHECK to include 'draft'. Until applied, draft writes silently degrade to pending (warning logged) so the dealer is never blocked.
+>
+> ### Verification
+> Backend pytest:
+>   * `/app/backend/tests/test_wave101_onboarding_state.py` — covers draft → pending → approved transitions, idempotent submit-for-review, /auth/me bank + doc field exposure, admin pending queue filtering.
+>   * `/app/backend/tests/test_wave101_phase3_credit_invoice.py` — 8/8 pass: auth shape on /credit/summary, /invoice.pdf, /admin/credit panel; 400 on bad type / amount; 404 on unknown buyer / order; live `build_invoice_pdf` produces a valid (%PDF…) byte stream from sample data.
+> Frontend lint clean (only pre-existing warnings in unmodified files).
+
+
+
+
+> **Prev (2026-06-29 Wave 100):** **Seller onboarding overhaul + Phase-2 banner bug fix + Admin All-Users panel.**
 >
 > ### 2) Locked dealer onboarding (4-step)
 > New `components/DealerOnboarding.jsx` — full-screen replacement for the supplier dashboard when the dealer isn't fully verified. Steps: ① Account created (always ✅) · ② Business details (CTA → `/sell`) · ③ Bank + KYC documents (current/locked) · ④ Go live (locked). Status badges = ✅ green tick / pulse-cyan current / grey padlock. **All listing CTAs are completely hidden until stage=null.** Stage logic in `SupplierDashboard.jsx`:

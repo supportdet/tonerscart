@@ -760,22 +760,26 @@ export default function SupplierDashboard() {
         }
     }
 
-    // Wave 100 — Dealer onboarding gateway. Show the locked 4-step checklist
-    // (NOT the product dashboard) until the dealer is fully verified.
+    // Wave 100/101 — Dealer onboarding gateway. Show the locked 4-step
+    // checklist (NOT the product dashboard) until the dealer is fully
+    // verified.
     //   stage = "no_app"           — no application yet, fill business details
-    //          "pending"           — Step 2 submitted, under review
-    //          "approved_phase2"   — Step 2 approved, fill bank + KYC
-    //          "phase2_review"     — Step 3 submitted, listing unlock pending
+    //          "draft"             — business details saved, Step 3 active
+    //          "pending"           — Step 3 submitted, under admin review
+    //          "approved_phase2"   — admin approved but bank/docs missing
+    //                                (legacy state for older approved rows)
     //          null                — fully ready → normal dashboard
     const supp = user?.supplier || {};
     const bankOK = !!(supp.account_number && supp.ifsc_code);
-    const mandatoryDocs = ["doc_gst", "doc_pan", "doc_id_proof", "doc_bank_proof"];
+    const mandatoryDocs = ["doc_gst", "doc_pan", "doc_id_proof"];
     const docsOK = mandatoryDocs.every((k) => !!supp[k]);
     const sellerTypes = Array.isArray(supp.seller_types) ? supp.seller_types : [];
     const oemNeedsBrandLetter = sellerTypes.includes("Original") && !supp.doc_brand_authorization;
     let stage = null;
     if (!isApproved) {
-        stage = applicationStatus === "pending" ? "pending" : "no_app";
+        if (applicationStatus === "pending") stage = "pending";
+        else if (applicationStatus === "draft") stage = "draft";
+        else stage = "no_app";
     } else if (!bankOK || !docsOK || oemNeedsBrandLetter) {
         stage = "approved_phase2";
     }
@@ -791,13 +795,14 @@ export default function SupplierDashboard() {
                 {/* Mounting Phase2Banner with banner hidden — only its dialogs
                     are used here. The dealer triggers them from the
                     onboarding step card; the banner UI never renders. */}
-                {stage === "approved_phase2" && (
+                {(stage === "approved_phase2" || stage === "draft") && (
                     <Phase2Banner
-                        supplier={supp}
+                        supplier={stage === "draft" ? (user?.application || {}) : supp}
                         onUpdated={refresh}
                         externalOpen={onboardingPhase2Open}
                         onExternalClose={() => setOnboardingPhase2Open(false)}
                         hideBanner
+                        showSubmitForReview={stage === "draft"}
                     />
                 )}
             </>

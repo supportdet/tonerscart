@@ -1565,21 +1565,33 @@ async def admin_bulk_create_dealers(payload: BulkDealerPayload, _: dict = Depend
         seen_in_file.add(e)
         deduped.append(r)
 
-    # Fetch already-existing emails in one shot (case-insensitive).
+    # Fetch already-existing emails (case-insensitive) — Wave 101 robust path:
+    # iterate Supabase Auth pages instead of touching public.users twice.
+    # This catches OAuth-only users (who have no public.users row) and avoids
+    # over-eager false positives that mark new emails as "already exists".
     existing_emails: set = set()
+    auth_email_map: dict = {}  # lowered → original Supabase Auth email
     if deduped:
-        chunk = [r.email.lower() for r in deduped]
-        try:
-            res = sb_admin.table("users").select("email").in_("email", chunk).execute()
-            existing_emails = {(u.get("email") or "").lower() for u in (res.data or [])}
-        except Exception:
-            existing_emails = set()
-        # Also check capitalised variants (some legacy rows are mixed-case).
-        try:
-            res2 = sb_admin.table("users").select("email").execute()
-            existing_emails |= {(u.get("email") or "").lower() for u in (res2.data or [])}
-        except Exception:
-            pass
+        page = 1
+        while page <= 50:
+            try:
+                res = sb_admin.auth.admin.list_users(page=page, per_page=1000)
+            except Exception as ex:
+                logger.warning("bulk-create: auth list_users page %s failed: %s", page, ex)
+                break
+            users = getattr(res, "users", None) or (res.get("users") if isinstance(res, dict) else None) or []
+            if not users:
+                break
+            for u in users:
+                em = (getattr(u, "email", None) or u.get("email") or "").strip().lower()
+                if em:
+                    existing_emails.add(em)
+                    auth_email_map[em] = u
+            if len(users) < 1000:
+                break
+            page += 1
+        # Sanity log so we can diagnose any false-positive skip claims.
+        logger.info("bulk-create: collected %d existing auth emails for dedupe check", len(existing_emails))
 
     origin = _frontend_origin()
     redirect_to = f"{origin}/auth/callback?next=/supplier"
@@ -1592,6 +1604,7 @@ async def admin_bulk_create_dealers(payload: BulkDealerPayload, _: dict = Depend
     for r in deduped:
         e = r.email.strip().lower()
         if e in existing_emails:
+            logger.info("bulk-create: SKIP %s — already in Supabase Auth (auth id=%s)", e, getattr(auth_email_map.get(e), "id", "?"))
             skipped_existing.append({"email": e, "business_name": r.business_name, "reason": "already exists — preserved"})
             continue
         # Step 1 — create the Supabase auth user (no password).
@@ -1692,21 +1705,60 @@ async def admin_bulk_create_dealers(payload: BulkDealerPayload, _: dict = Depend
 
 @router.get("/admin/users")
 def admin_list_users(_: dict = Depends(require_role("admin"))):
-    """List every public.users row + protection flags.
+    """List EVERY account that has ever been created on TonersCart, including
+    Google-OAuth signups that may not yet have a `public.users` row.
 
-    Returns each user enriched with:
-      * `supplier_status`: 'approved' if a row exists in `suppliers`,
-                           'pending'/'rejected' if a row exists in
-                           `suppliers_pending`, else null.
-      * `is_protected`: True when the user has an APPROVED supplier row —
-        the admin UI hides the Delete button so the existing dealer base
-        (Big C, DET, Zion, Bios, Verve, Ravi, Shree, Amman, etc.) is
-        future-proofed without any hard-coded email list.
+    For each entry we attach:
+      * `supplier_status` — 'approved' / 'pending' / 'rejected' / null
+      * `is_protected`   — True iff the user has an APPROVED dealer row
+      * `auth_method`    — 'google' / 'email' (Wave 101)
+      * `phone`          — from public.users OR auth.users metadata
+      * `last_sign_in_at`/`created_at` from Supabase Auth
 
-    Sorted by created_at desc."""
-    users = sb_admin.table("users").select(
+    Sorted newest-first."""
+    # 1) Pull public.users rows (preferred — has role + custom fields).
+    rows = sb_admin.table("users").select(
         "id,email,name,role,user_type,phone,city,created_at"
-    ).order("created_at", desc=True).limit(2000).execute().data or []
+    ).order("created_at", desc=True).limit(5000).execute().data or []
+    pub_by_id = {r["id"]: r for r in rows}
+
+    # 2) Walk Supabase Auth users (page through). Merge anyone NOT in
+    #    public.users — OAuth-only users land here.
+    auth_users_by_id: dict = {}
+    page = 1
+    while page <= 50:  # hard cap; 50 pages * 1000 = 50k users
+        try:
+            res = sb_admin.auth.admin.list_users(page=page, per_page=1000)
+        except Exception as ex:
+            logger.warning("admin_list_users: auth.list_users page %s failed: %s", page, ex)
+            break
+        users = getattr(res, "users", None) or (res.get("users") if isinstance(res, dict) else None) or []
+        if not users:
+            break
+        for u in users:
+            uid = getattr(u, "id", None) or u.get("id")
+            email = getattr(u, "email", None) or u.get("email")
+            providers = []
+            identities = getattr(u, "identities", None) or u.get("identities") or []
+            for ident in identities:
+                p = getattr(ident, "provider", None) or (ident.get("provider") if isinstance(ident, dict) else None)
+                if p:
+                    providers.append(p)
+            metadata = getattr(u, "user_metadata", None) or u.get("user_metadata") or {}
+            phone = getattr(u, "phone", None) or u.get("phone") or metadata.get("phone")
+            auth_users_by_id[uid] = {
+                "email": email,
+                "providers": providers,
+                "phone": phone,
+                "name": metadata.get("name") or metadata.get("full_name"),
+                "created_at": getattr(u, "created_at", None) or u.get("created_at"),
+                "last_sign_in_at": getattr(u, "last_sign_in_at", None) or u.get("last_sign_in_at"),
+            }
+        if len(users) < 1000:
+            break
+        page += 1
+
+    # 3) Supplier status maps.
     try:
         suppliers = sb_admin.table("suppliers").select("user_id").execute().data or []
     except Exception:
@@ -1718,33 +1770,67 @@ def admin_list_users(_: dict = Depends(require_role("admin"))):
         pending = []
     pending_map = {p["user_id"]: p.get("status", "pending") for p in pending}
 
+    def _auth_method(providers):
+        provs = set(providers or [])
+        if "google" in provs:
+            return "google"
+        if "email" in provs:
+            return "email"
+        # supabase generic email/password = no 'identity' row in some setups
+        return "email"
+
     out = []
-    for u in users:
-        uid = u["id"]
+    seen_ids = set()
+    # 3a) Hydrate the public.users rows with auth info.
+    for r in rows:
+        uid = r["id"]
+        seen_ids.add(uid)
+        au = auth_users_by_id.get(uid, {})
+        r["auth_method"] = _auth_method(au.get("providers", []))
+        r["last_sign_in_at"] = au.get("last_sign_in_at")
+        # Prefer public.users.phone, fall back to auth metadata.
+        if not r.get("phone"):
+            r["phone"] = au.get("phone")
         if uid in approved_uids:
-            ss = "approved"
+            r["supplier_status"] = "approved"
         elif uid in pending_map:
-            ss = pending_map[uid] or "pending"
+            r["supplier_status"] = pending_map[uid] or "pending"
         else:
-            ss = None
-        u["supplier_status"] = ss
-        u["is_protected"] = ss == "approved"
-        out.append(u)
+            r["supplier_status"] = None
+        r["is_protected"] = r["supplier_status"] == "approved"
+        out.append(r)
+    # 3b) Auth-only users (e.g. Google OAuth signups whose public.users
+    # row was never created OR was deleted but auth.users still exists).
+    for uid, au in auth_users_by_id.items():
+        if uid in seen_ids:
+            continue
+        out.append({
+            "id": uid,
+            "email": au.get("email"),
+            "name": au.get("name"),
+            "role": "customer",
+            "user_type": None,
+            "phone": au.get("phone"),
+            "city": None,
+            "created_at": au.get("created_at"),
+            "last_sign_in_at": au.get("last_sign_in_at"),
+            "auth_method": _auth_method(au.get("providers", [])),
+            "supplier_status": None,
+            "is_protected": False,
+            "_auth_only": True,  # flag for the UI to mark as "Google-only"
+        })
+
+    # Sort: newest first.
+    def _ts(r):
+        v = r.get("created_at") or ""
+        return v if isinstance(v, str) else ""
+    out.sort(key=_ts, reverse=True)
+
     return {"users": out, "count": len(out)}
 
 
 @router.delete("/admin/users/{user_id}")
 def admin_delete_user(user_id: str, _: dict = Depends(require_role("admin"))):
-    """Permanently delete a user account.
-
-    Protection: refuses to delete any user whose id appears in `suppliers`
-    (approved dealer). The error code mirrors the UI's hidden-button state.
-
-    Side effects:
-      * users row removed
-      * suppliers_pending row removed (if any)
-      * Supabase Auth user removed → email becomes free to re-register
-    """
     try:
         sup = sb_admin.table("suppliers").select("id").eq("user_id", user_id).maybe_single().execute()
     except Exception:
@@ -1770,3 +1856,47 @@ def admin_delete_user(user_id: str, _: dict = Depends(require_role("admin"))):
         raise HTTPException(500, f"Auth deletion failed: {ex}") from ex
     return {"ok": True, "user_id": user_id}
 
+
+
+
+class BulkDeletePayload(BaseModel):
+    user_ids: List[str] = Field(default_factory=list)
+
+
+@router.post("/admin/users/bulk-delete")
+def admin_bulk_delete_users(payload: BulkDeletePayload, _: dict = Depends(require_role("admin"))):
+    """Wave 101 — delete N user accounts in one call. Each id goes through
+    the same approved-dealer protection as the single-delete endpoint."""
+    deleted: List[str] = []
+    protected: List[str] = []
+    failed: List[dict] = []
+    for uid in payload.user_ids:
+        try:
+            sup = sb_admin.table("suppliers").select("id").eq("user_id", uid).maybe_single().execute()
+        except Exception:
+            sup = None
+        if sup and getattr(sup, "data", None):
+            protected.append(uid)
+            continue
+        for tbl in ("suppliers_pending", "user_agreements", "saved_addresses"):
+            try:
+                sb_admin.table(tbl).delete().eq("user_id", uid).execute()
+            except Exception as ex:
+                logger.warning("bulk-delete: %s cleanup failed for %s: %s", tbl, uid, ex)
+        try:
+            sb_admin.table("users").delete().eq("id", uid).execute()
+        except Exception as ex:
+            logger.warning("bulk-delete: users cleanup failed for %s: %s", uid, ex)
+        try:
+            sb_admin.auth.admin.delete_user(uid)
+            deleted.append(uid)
+        except Exception as ex:
+            failed.append({"user_id": uid, "reason": str(ex)})
+    return {
+        "deleted": len(deleted),
+        "protected": len(protected),
+        "failed": len(failed),
+        "deleted_ids": deleted,
+        "protected_ids": protected,
+        "failed_rows": failed,
+    }

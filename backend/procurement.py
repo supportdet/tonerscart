@@ -647,7 +647,15 @@ async def create_proc_order(payload: ProcOrderCreate, user: dict = Depends(requi
             logger.warning("credit ledger debit skipped: %s", e)
 
     try:
-        await email_proc_order_placed(user, order)
+        # Phase 3 — generate the tax invoice PDF and attach it to the
+        # order-confirmation email. Failure here never blocks the order.
+        invoice_pdf = None
+        try:
+            from proc_invoice_pdf import build_invoice_pdf
+            invoice_pdf = build_invoice_pdf(order, user)
+        except Exception as e:
+            logger.warning("invoice PDF generation skipped: %s", e)
+        await email_proc_order_placed(user, order, invoice_pdf=invoice_pdf)
     except Exception as e:
         logger.warning("proc order email skipped: %s", e)
     return {"id": order.get("id"), "ref_number": row["ref_number"], "status": "confirmed", "total_amount": total}
@@ -764,3 +772,256 @@ def admin_po_document_url(oid: str, admin: dict = Depends(require_admin)):
     if not path:
         raise HTTPException(404, "No PO document uploaded")
     return {"url": _po_signed_url(path)}
+
+
+
+# =============================================================================
+# PHASE 3 — Credit summary widget · Invoice PDF · Admin manual adjustments
+# =============================================================================
+
+# ----- Buyer-side: credit summary --------------------------------------------
+
+@proc_router.get("/credit/summary")
+def proc_credit_summary(user: dict = Depends(require_proc_user)):
+    """Aggregated credit-health snapshot for the corporate/govt dashboard.
+
+    Returns:
+      credit_limit, credit_used, credit_available    — from procurement_users
+      outstanding         — sum(unpaid debits) − sum(credits)  (₹ still owed)
+      next_due_date       — earliest unpaid debit's due_date
+      overdue_count       — debits past due with no paid_at
+      ledger              — last 20 entries (debits + credits, newest first)
+    """
+    uid = user["id"]
+    limit = float(user.get("credit_limit") or 0)
+    used = float(user.get("credit_used") or 0)
+    available = max(0.0, limit - used)
+
+    # Pull recent ledger entries.
+    try:
+        ledger = sb_admin.table("credit_ledger").select("*").eq(
+            "user_id", uid
+        ).order("created_at", desc=True).limit(20).execute().data or []
+    except Exception as e:
+        if "credit_ledger" in str(e):
+            ledger = []
+        else:
+            raise
+
+    # Outstanding = sum of unpaid debits MINUS sum of all credits (payments / waivers / writeoffs).
+    debits_unpaid = []
+    credits_total = 0.0
+    debits_unpaid_total = 0.0
+    for row in ledger:
+        amt = float(row.get("amount") or 0)
+        if row.get("type") == "debit":
+            if not row.get("paid_at"):
+                debits_unpaid.append(row)
+                debits_unpaid_total += amt
+        elif row.get("type") == "credit":
+            credits_total += amt
+    outstanding = max(0.0, debits_unpaid_total - credits_total)
+
+    # Next due = earliest due_date among unpaid debits (skip nulls).
+    next_due = None
+    overdue_count = 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for d in debits_unpaid:
+        due = d.get("due_date")
+        if not due:
+            continue
+        if next_due is None or due < next_due:
+            next_due = due
+        if due < now_iso:
+            overdue_count += 1
+
+    return {
+        "credit_limit": limit,
+        "credit_used": used,
+        "credit_available": available,
+        "outstanding": round(outstanding, 2),
+        "next_due_date": next_due,
+        "overdue_count": overdue_count,
+        "ledger": ledger,
+    }
+
+
+# ----- Buyer-side: invoice PDF download --------------------------------------
+
+@proc_router.get("/orders/{oid}/invoice.pdf")
+def proc_order_invoice_pdf(oid: str, user: dict = Depends(require_proc_user)):
+    """Download the formal tax-invoice PDF for one of YOUR own orders."""
+    r = sb_admin.table("procurement_orders").select("*").eq(
+        "id", oid
+    ).eq("user_id", user["id"]).maybe_single().execute()
+    if not r or not r.data:
+        raise HTTPException(404, "Order not found")
+    from proc_invoice_pdf import build_invoice_pdf
+    pdf = build_invoice_pdf(r.data, user)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{r.data.get("ref_number") or oid}.pdf"'},
+    )
+
+
+# ----- Admin-side: invoice PDF download (any order) --------------------------
+
+@proc_admin_router.get("/orders/{oid}/invoice.pdf")
+def admin_proc_order_invoice_pdf(oid: str, admin: dict = Depends(require_admin)):
+    r = sb_admin.table("procurement_orders").select("*").eq("id", oid).maybe_single().execute()
+    if not r or not r.data:
+        raise HTTPException(404, "Order not found")
+    order = r.data
+    u_row = sb_admin.table("procurement_users").select("*").eq("id", order["user_id"]).maybe_single().execute()
+    if not u_row or not u_row.data:
+        raise HTTPException(404, "Buyer account not found")
+    from proc_invoice_pdf import build_invoice_pdf
+    pdf = build_invoice_pdf(order, u_row.data)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{order.get("ref_number") or oid}.pdf"'},
+    )
+
+
+# ----- Admin-side: credit panel ----------------------------------------------
+
+@proc_admin_router.get("/{uid}/credit")
+def admin_proc_credit_view(uid: str, admin: dict = Depends(require_admin)):
+    """Full credit panel for a single procurement buyer.
+    Used by the admin UI to render the ledger + Adjust-credit form."""
+    u = sb_admin.table("procurement_users").select("*").eq("id", uid).maybe_single().execute()
+    if not u or not u.data:
+        raise HTTPException(404, "Buyer not found")
+    user = u.data
+    try:
+        ledger = sb_admin.table("credit_ledger").select("*").eq(
+            "user_id", uid
+        ).order("created_at", desc=True).limit(200).execute().data or []
+    except Exception as e:
+        if "credit_ledger" in str(e):
+            ledger = []
+        else:
+            raise
+
+    # Unpaid debits, for the Apply-to-order dropdown.
+    debits_unpaid = [r for r in ledger if r.get("type") == "debit" and not r.get("paid_at")]
+    return {
+        "user": {
+            "id": user["id"],
+            "type": user.get("type"),
+            "org_name": user.get("org_name"),
+            "email": user.get("email"),
+            "credit_limit": float(user.get("credit_limit") or 0),
+            "credit_used": float(user.get("credit_used") or 0),
+        },
+        "ledger": ledger,
+        "unpaid_debits": debits_unpaid,
+    }
+
+
+class CreditAdjustment(BaseModel):
+    type: str            # 'payment' | 'waiver' | 'writeoff'
+    amount: float
+    note: str | None = None
+    order_id: str | None = None   # optional — apply to a specific debit
+
+
+_ADJ_TYPES = ("payment", "waiver", "writeoff")
+
+
+@proc_admin_router.post("/{uid}/credit/adjust")
+async def admin_proc_credit_adjust(uid: str, payload: CreditAdjustment,
+                                    admin: dict = Depends(require_admin)):
+    """Admin records a manual credit-side ledger entry (payment / waiver / write-off).
+
+    Effects:
+      * inserts a `credit_ledger` row with type='credit'
+      * decrements `procurement_users.credit_used` by the amount (floor 0)
+      * if `order_id` is provided AND the new total credits cover the debit,
+        marks both the ledger debit row's paid_at AND `procurement_orders.payment_status='paid'`
+    """
+    if payload.type not in _ADJ_TYPES:
+        raise HTTPException(400, f"type must be one of: {', '.join(_ADJ_TYPES)}")
+    amount = round(float(payload.amount or 0), 2)
+    if amount <= 0:
+        raise HTTPException(400, "Amount must be > 0")
+
+    u = sb_admin.table("procurement_users").select("*").eq("id", uid).maybe_single().execute()
+    if not u or not u.data:
+        raise HTTPException(404, "Buyer not found")
+    user = u.data
+
+    # If an order_id is given, cap the amount to that debit's remaining balance.
+    target_order = None
+    if payload.order_id:
+        r = sb_admin.table("procurement_orders").select("*").eq(
+            "id", payload.order_id
+        ).eq("user_id", uid).maybe_single().execute()
+        if not r or not r.data:
+            raise HTTPException(404, "Target order not found for this buyer")
+        target_order = r.data
+        if target_order.get("payment_status") == "paid":
+            raise HTTPException(400, "Order is already paid")
+
+    now = datetime.now(timezone.utc)
+    label = {"payment": "Payment received", "waiver": "Credit waived", "writeoff": "Write-off"}[payload.type]
+    note = (payload.note or "").strip() or label
+
+    # 1) Insert ledger entry.
+    ledger_row = {
+        "user_id": uid,
+        "order_id": payload.order_id,
+        "amount": amount,
+        "type": "credit",
+        "paid_at": now.isoformat(),
+        "note": f"[{label}] {note}",
+    }
+    try:
+        sb_admin.table("credit_ledger").insert(ledger_row).execute()
+    except Exception as e:
+        if "credit_ledger" in str(e):
+            raise HTTPException(503, "credit_ledger table not migrated — run supabase_schema_procurement_orders.sql") from e
+        raise
+
+    # 2) Decrement credit_used (floor at 0).
+    new_used = max(0.0, float(user.get("credit_used") or 0) - amount)
+    sb_admin.table("procurement_users").update({
+        "credit_used": round(new_used, 2)
+    }).eq("id", uid).execute()
+
+    # 3) If applied to a specific order AND it's now fully paid, mark it.
+    fully_paid = False
+    if target_order:
+        # Sum all credits for this order (excluding the row we just inserted —
+        # PostgREST will return it via re-query).
+        try:
+            all_credits = sb_admin.table("credit_ledger").select("amount").eq(
+                "order_id", payload.order_id
+            ).eq("type", "credit").execute().data or []
+            total_credit = sum(float(c.get("amount") or 0) for c in all_credits)
+        except Exception:
+            total_credit = amount
+        order_total = float(target_order.get("total_amount") or 0)
+        if total_credit + 1e-2 >= order_total:
+            sb_admin.table("procurement_orders").update({
+                "payment_status": "paid",
+                "paid_at": now.isoformat(),
+            }).eq("id", payload.order_id).execute()
+            # Mark the original debit ledger row as paid.
+            try:
+                sb_admin.table("credit_ledger").update({
+                    "paid_at": now.isoformat()
+                }).eq("order_id", payload.order_id).eq("type", "debit").execute()
+            except Exception:
+                pass
+            fully_paid = True
+
+    return {
+        "ok": True,
+        "type": payload.type,
+        "amount": amount,
+        "new_credit_used": round(new_used, 2),
+        "order_marked_paid": fully_paid,
+    }

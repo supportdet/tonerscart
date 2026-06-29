@@ -251,6 +251,10 @@ class SellerApplication(BaseModel):
     bank_name: Optional[str] = ""
     bank_branch: Optional[str] = ""
     agreed_to_terms: bool = False
+    # Wave 101 — draft mode. When False the application is saved as
+    # status='draft' (admin doesn't see it yet); the dealer submits for
+    # verification only after Step 3 is filled inside the dashboard.
+    submit_for_review: bool = True
 
 
 class SignupSupplier(BaseModel):

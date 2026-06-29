@@ -290,24 +290,39 @@ async def apply_seller(payload: SellerApplication, user: dict = Depends(require_
         "ifsc_code": payload.ifsc_code or None,
         "bank_name": payload.bank_name or None,
         "bank_branch": payload.bank_branch or None,
-        "status": "pending",
+        # Wave 101 — draft until dealer clicks Submit-for-verification.
+        "status": "pending" if payload.submit_for_review else "draft",
         "rejection_reason": None,
     }
-    _exec_dropping_cols(lambda a: sb_admin.table("suppliers_pending").upsert(a, on_conflict="user_id").execute(), application)
+    try:
+        _exec_dropping_cols(lambda a: sb_admin.table("suppliers_pending").upsert(a, on_conflict="user_id").execute(), application)
+    except Exception as e:
+        # If the suppliers_pending.status CHECK constraint hasn't been
+        # extended yet (Wave 101 migration), gracefully fall back to
+        # status='pending' so the dealer is never blocked at signup.
+        msg = str(e).lower()
+        if ("suppliers_pending_status_check" in msg or "check constraint" in msg) and application["status"] == "draft":
+            logger.warning("draft status rejected by DB; falling back to 'pending'. Run migration 2026_06_29_wave101_draft_status.sql.")
+            application["status"] = "pending"
+            _exec_dropping_cols(lambda a: sb_admin.table("suppliers_pending").upsert(a, on_conflict="user_id").execute(), application)
+        else:
+            raise
 
     async def _bg_ai():
         try:
             await _run_ai_check(user["id"], application)
         except Exception as e:
             logger.warning("background AI check (apply) skipped: %s", e)
-    asyncio.create_task(_bg_ai())
+    if payload.submit_for_review:
+        asyncio.create_task(_bg_ai())
 
-    try:
-        await email_application_received(application)
-    except Exception as e:
-        logger.warning("application email skipped: %s", e)
+    if payload.submit_for_review:
+        try:
+            await email_application_received(application)
+        except Exception as e:
+            logger.warning("application email skipped: %s", e)
 
-    return {"ok": True, "status": "pending"}
+    return {"ok": True, "status": application["status"]}
 
 
 @router.post("/auth/supplier-documents")
@@ -379,6 +394,35 @@ class SupplierProfilePhase2(BaseModel):
     doc_bank_proof: Optional[str] = None
     doc_id_proof: Optional[str] = None
     doc_address_proof: Optional[str] = None
+
+
+@router.post("/auth/submit-for-review")
+async def submit_for_review(user: dict = Depends(require_user)):
+    """Wave 101 — dealer clicks "Submit for verification" at the end of Step 3.
+    Flips the dealer's `suppliers_pending` row from `draft` → `pending` so the
+    admin queue picks it up. Idempotent on already-pending rows."""
+    try:
+        row = sb_admin.table("suppliers_pending").select("id,status,user_id").eq("user_id", user["id"]).maybe_single().execute()
+    except Exception:
+        row = None
+    if not row or not row.data:
+        raise HTTPException(404, "No application draft found — please fill business details first.")
+    current = row.data.get("status")
+    if current == "pending":
+        return {"ok": True, "status": "pending"}
+    if current not in ("draft", None):
+        raise HTTPException(400, f"Cannot submit from status='{current}'")
+    sb_admin.table("suppliers_pending").update({
+        "status": "pending",
+        "submitted_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", row.data["id"]).execute()
+    try:
+        full = sb_admin.table("suppliers_pending").select("*").eq("id", row.data["id"]).maybe_single().execute()
+        if full and full.data:
+            await email_application_received(full.data)
+    except Exception as e:
+        logger.warning("submit-for-review email skipped: %s", e)
+    return {"ok": True, "status": "pending"}
 
 
 @router.post("/auth/supplier-phase2")
@@ -529,12 +573,22 @@ def me(user: dict = Depends(require_user)):
         out["application_status"] = "pending"
         return out
 
-    # For non-suppliers, look up any pending/rejected application
-    p = sb_admin.table("suppliers_pending").select(
-        "id,business_name,status,rejection_reason,submitted_at"
-    ).eq("user_id", user["id"]).maybe_single().execute()
+    # For non-suppliers, look up any pending/rejected/draft application
+    _PEND_COLS = (
+        "id,business_name,status,rejection_reason,submitted_at,"
+        "account_holder_name,account_number,ifsc_code,bank_name,bank_branch,"
+        "doc_gst,doc_pan,doc_id_proof,doc_address_proof,doc_bank_proof,"
+        "doc_brand_authorization,seller_types"
+    )
+    try:
+        p = sb_admin.table("suppliers_pending").select(_PEND_COLS).eq("user_id", user["id"]).maybe_single().execute()
+    except Exception:
+        # Graceful degradation if any column doesn't exist yet.
+        p = sb_admin.table("suppliers_pending").select(
+            "id,business_name,status,rejection_reason,submitted_at"
+        ).eq("user_id", user["id"]).maybe_single().execute()
     if p and p.data:
-        out["application_status"] = p.data["status"]  # pending | approved | rejected
+        out["application_status"] = p.data["status"]  # pending | approved | rejected | draft
         out["application"] = p.data
     else:
         out["application_status"] = None

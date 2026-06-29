@@ -332,6 +332,9 @@ export default function SellerApplicationForm() {
         setProgress(20);
         setProgressLabel("Submitting your application…");
         try {
+            // Wave 101 — save as draft. Admin queue picks it up only after
+            // the dealer clicks "Submit for verification" at the end of Step 3
+            // (inside the dashboard's Phase 2 dialog).
             await api.post("/auth/apply-seller", {
                 ...s,
                 gst_number: s.gst_number.trim().toUpperCase(),
@@ -347,11 +350,12 @@ export default function SellerApplicationForm() {
                 doc_id_proof: "",
                 doc_address_proof: "",
                 agreed_to_terms: agreed,
+                submit_for_review: false,
             });
             setProgress(100);
             await refresh();
-            toast.success("Application submitted — pending admin approval");
-            navigate("/sell");
+            toast.success("Business details saved — next, add your bank details and KYC documents to submit for verification.");
+            navigate("/supplier");
         } catch (err) {
             const msg = formatApiError(err);
             toast.error(msg && msg !== "Something went wrong" ? msg : (err?.message || "Submission failed"));
