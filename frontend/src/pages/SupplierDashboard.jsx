@@ -33,6 +33,7 @@ import CompatibleModelsSelect from "../components/CompatibleModelsSelect";
 import MissingModelLink from "../components/MissingModelLink";
 import InlineEditCell from "../components/InlineEditCell";
 import Phase2Banner from "../components/Phase2Banner";
+import DealerOnboarding from "../components/DealerOnboarding";
 
 const colorSwatchHex = (name) => {
     const v = _colorSwatch(name);
@@ -264,6 +265,9 @@ export default function SupplierDashboard() {
     const [orderFilter, setOrderFilter] = useState("all"); // 'all' | 'pending' — orders
     const [bulkOpen, setBulkOpen] = useState(false);
     const [editBulkOpen, setEditBulkOpen] = useState(false);
+    // Wave 100 — controls the Phase 2 dialog opened from the DealerOnboarding
+    // step-3 CTA (banner UI itself is hidden in onboarding mode).
+    const [onboardingPhase2Open, setOnboardingPhase2Open] = useState(false);
     // Edit business / company name
     const [nameDialogOpen, setNameDialogOpen] = useState(false);
     const [nameInput, setNameInput] = useState("");
@@ -746,8 +750,58 @@ export default function SupplierDashboard() {
     );
 
     if (!isApproved && !isPending) {
-        // Rejected (or otherwise non-pending) — keep the hard-block screen.
-        return <PendingScreen application={user?.application} />;
+        // Rejected (or otherwise non-pending) — keep the hard-block screen
+        // ONLY when an application exists with status='rejected'. Brand-new
+        // dealers who signed up via /register but haven't filled the seller
+        // form yet (no application row, no role yet) should see the Wave 100
+        // onboarding flow instead.
+        if (user?.application?.status === "rejected") {
+            return <PendingScreen application={user.application} />;
+        }
+    }
+
+    // Wave 100 — Dealer onboarding gateway. Show the locked 4-step checklist
+    // (NOT the product dashboard) until the dealer is fully verified.
+    //   stage = "no_app"           — no application yet, fill business details
+    //          "pending"           — Step 2 submitted, under review
+    //          "approved_phase2"   — Step 2 approved, fill bank + KYC
+    //          "phase2_review"     — Step 3 submitted, listing unlock pending
+    //          null                — fully ready → normal dashboard
+    const supp = user?.supplier || {};
+    const bankOK = !!(supp.account_number && supp.ifsc_code);
+    const mandatoryDocs = ["doc_gst", "doc_pan", "doc_id_proof", "doc_bank_proof"];
+    const docsOK = mandatoryDocs.every((k) => !!supp[k]);
+    const sellerTypes = Array.isArray(supp.seller_types) ? supp.seller_types : [];
+    const oemNeedsBrandLetter = sellerTypes.includes("Original") && !supp.doc_brand_authorization;
+    let stage = null;
+    if (!isApproved) {
+        stage = applicationStatus === "pending" ? "pending" : "no_app";
+    } else if (!bankOK || !docsOK || oemNeedsBrandLetter) {
+        stage = "approved_phase2";
+    }
+    if (stage) {
+        return (
+            <>
+                <DealerOnboarding
+                    stage={stage}
+                    user={user}
+                    onStartStep2={() => navigate("/sell")}
+                    onOpenPhase2={() => setOnboardingPhase2Open(true)}
+                />
+                {/* Mounting Phase2Banner with banner hidden — only its dialogs
+                    are used here. The dealer triggers them from the
+                    onboarding step card; the banner UI never renders. */}
+                {stage === "approved_phase2" && (
+                    <Phase2Banner
+                        supplier={supp}
+                        onUpdated={refresh}
+                        externalOpen={onboardingPhase2Open}
+                        onExternalClose={() => setOnboardingPhase2Open(false)}
+                        hideBanner
+                    />
+                )}
+            </>
+        );
     }
 
     return (

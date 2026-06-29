@@ -19,6 +19,7 @@ import CustomersTab from "./admin/CustomersTab";
 import DisputesTab from "./admin/DisputesTab";
 import ActivityLogTab from "./admin/ActivityLogTab";
 import MessagesTab from "./admin/MessagesTab";
+import UsersTab from "./admin/UsersTab";
 
 function aiSummary(application) {
     const ai = application?.ai_check || {};
@@ -61,6 +62,7 @@ const TAB_META = {
     pending:     { label: "Pending Dealers",icon: UserPlus,     live: "#EA580C", dim: "#FFF1E6", text: "#9A3412" }, // orange
     dealers:     { label: "Dealers",        icon: Building2,    live: "#0F766E", dim: "#E6F6F4", text: "#115E59" }, // teal
     customers:   { label: "Customers",      icon: Users,        live: "#0E7490", dim: "#E1F5F9", text: "#0E7490" }, // cyan-teal
+    users:       { label: "All Users",       icon: Users,        live: "#0F172A", dim: "#E2E8F0", text: "#0F172A" }, // slate-black
     orders:      { label: "Orders",         icon: ShoppingBag,  live: "#4338CA", dim: "#EEF0FF", text: "#3730A3" }, // indigo
     disputes:    { label: "Disputes",       icon: ShieldAlert,  live: "#DC2626", dim: "#FEECEC", text: "#991B1B" }, // red
     finance:     { label: "Finance",        icon: Wallet,       live: "#16A34A", dim: "#E8F7EC", text: "#15803D" }, // green
@@ -266,6 +268,7 @@ export default function AdminDashboard() {
                         { value: "pending", badge: pending.length || 0 },
                         { value: "dealers" },
                         { value: "customers" },
+                        { value: "users" },
                         { value: "orders" },
                         { value: "disputes" },
                         { value: "finance" },
@@ -304,6 +307,10 @@ export default function AdminDashboard() {
 
                 <TabsContent value="customers">
                     {tab === "customers" && <CustomersTab />}
+                </TabsContent>
+
+                <TabsContent value="users">
+                    {tab === "users" && <UsersTab />}
                 </TabsContent>
 
                 <TabsContent value="orders">

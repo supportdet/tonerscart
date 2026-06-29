@@ -15,78 +15,104 @@ import api, { formatApiError } from "../lib/api";
  * before first payout but does NOT block listing/selling.
  *
  * Props:
- *   supplier  – user.supplier object from /auth/me (includes bank fields +
- *               doc_* paths)
- *   onUpdated – called after a successful save so the parent can refresh()
+ *   supplier         – user.supplier object from /auth/me (includes bank fields +
+ *                      doc_* paths)
+ *   onUpdated        – called after a successful save so the parent can refresh()
+ *   externalOpen     – when true, opens the docs dialog from outside (Wave 100,
+ *                      used by DealerOnboarding step-3 CTA)
+ *   onExternalClose  – external close handler for externalOpen
+ *   hideBanner       – when true, the inline banner UI is suppressed and only
+ *                      the dialogs are mounted (used by DealerOnboarding)
  */
-const REQUIRED_DOCS = [
+// Wave 100 — only TRULY required documents block the green check. Address proof
+// and brand-authorization (latter only for OEM/Original sellers) are NEVER in
+// this list — they are optional reminders surfaced inside the docs dialog.
+const MANDATORY_DOCS = [
     { key: "doc_gst", label: "GST certificate" },
     { key: "doc_pan", label: "PAN card" },
     { key: "doc_id_proof", label: "ID proof (Aadhaar / Passport)" },
-    { key: "doc_address_proof", label: "Address proof" },
     { key: "doc_bank_proof", label: "Cancelled cheque" },
+];
+const OPTIONAL_DOCS = [
+    { key: "doc_address_proof", label: "Address proof" },
 ];
 
 function bankComplete(s) {
-    return !!(s?.account_holder_name && s?.account_number && s?.ifsc_code && s?.bank_name && s?.bank_branch);
+    // Wave 100 — match the user-spec: bank is "complete" the moment the
+    // account number and IFSC are populated. Holder name / bank name /
+    // branch are gentle nudges inside the dialog, not gating fields.
+    return !!(s?.account_number && s?.ifsc_code);
 }
 function docsComplete(s) {
     if (!s) return false;
-    const allReq = REQUIRED_DOCS.every((d) => !!s[d.key]);
+    const allReq = MANDATORY_DOCS.every((d) => !!s[d.key]);
     const isOriginal = Array.isArray(s.seller_types) && s.seller_types.includes("Original");
     if (isOriginal && !s.doc_brand_authorization) return false;
     return allReq;
 }
 
-export default function Phase2Banner({ supplier, onUpdated }) {
+export default function Phase2Banner({ supplier, onUpdated, externalOpen = false, onExternalClose, hideBanner = false }) {
     const [openBank, setOpenBank] = useState(false);
     const [openDocs, setOpenDocs] = useState(false);
     const [dismissed, setDismissed] = useState(false);
 
+    // When DealerOnboarding flips externalOpen=true, surface the docs dialog
+    // (which also contains the bank-details entry inline at the top).
+    React.useEffect(() => {
+        if (externalOpen) setOpenDocs(true);
+    }, [externalOpen]);
+
     if (!supplier) return null;
     const bankOK = bankComplete(supplier);
     const docsOK = docsComplete(supplier);
-    if ((bankOK && docsOK) || dismissed) return null;
+    // When both are complete OR dismissed, render nothing (banner + dialogs).
+    if ((bankOK && docsOK) || dismissed) {
+        if (externalOpen && onExternalClose) onExternalClose();
+        return null;
+    }
 
-    const missingDocs = REQUIRED_DOCS.filter((d) => !supplier[d.key]).map((d) => d.label);
+    // Wave 100 — only count documents that are GENUINELY missing.
+    const missingDocs = MANDATORY_DOCS.filter((d) => !supplier[d.key]).map((d) => d.label);
     const isOriginal = Array.isArray(supplier.seller_types) && supplier.seller_types.includes("Original");
     if (isOriginal && !supplier.doc_brand_authorization) missingDocs.push("Brand authorization letter");
 
     return (
         <>
-            <div className="bg-[#ECFBFD] border-b border-[#C2EFF5]" data-testid="phase2-banner">
-                <div className="tc-container py-3.5 flex items-start gap-3">
-                    <ShieldCheck size={18} className="text-[#00838f] mt-0.5 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                        <div className="text-[14px] font-semibold text-[#0A4A50]" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-                            Complete your profile to get paid
+            {!hideBanner && (
+                <div className="bg-[#ECFBFD] border-b border-[#C2EFF5]" data-testid="phase2-banner">
+                    <div className="tc-container py-3.5 flex items-start gap-3">
+                        <ShieldCheck size={18} className="text-[#00838f] mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <div className="text-[14px] font-semibold text-[#0A4A50]" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                                Complete your profile to get paid
+                            </div>
+                            <div className="text-[12.5px] text-[#0A4A50]/85 mt-0.5">
+                                {bankOK ? null : <span><strong>Bank details</strong> are required before your first payout. </span>}
+                                {missingDocs.length > 0 ? <span><strong>{missingDocs.length} document{missingDocs.length > 1 ? "s" : ""}</strong> still missing: {missingDocs.slice(0, 3).join(", ")}{missingDocs.length > 3 ? `, +${missingDocs.length - 3} more` : ""}.</span> : null}
+                                <span className="block mt-0.5 text-[#0A4A50]/65 text-[11.5px]">You can keep listing products — payouts will be released once this is complete.</span>
+                            </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                                {!bankOK && (
+                                    <button onClick={() => setOpenBank(true)} className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full bg-[#0A0A0B] text-white text-[12px] font-semibold hover:bg-[#23252B]" data-testid="phase2-bank-cta">
+                                        <Building2 size={12} /> Add bank details <ChevronRight size={12} />
+                                    </button>
+                                )}
+                                {!docsOK && (
+                                    <button onClick={() => setOpenDocs(true)} className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full bg-white border border-[#0A0A0B] text-[#0A0A0B] text-[12px] font-semibold hover:bg-[#F4F4F6]" data-testid="phase2-docs-cta">
+                                        <FileText size={12} /> Upload documents <ChevronRight size={12} />
+                                    </button>
+                                )}
+                            </div>
                         </div>
-                        <div className="text-[12.5px] text-[#0A4A50]/85 mt-0.5">
-                            {bankOK ? null : <span><strong>Bank details</strong> are required before your first payout. </span>}
-                            {missingDocs.length > 0 ? <span><strong>{missingDocs.length} document{missingDocs.length > 1 ? "s" : ""}</strong> still missing: {missingDocs.slice(0, 3).join(", ")}{missingDocs.length > 3 ? `, +${missingDocs.length - 3} more` : ""}.</span> : null}
-                            <span className="block mt-0.5 text-[#0A4A50]/65 text-[11.5px]">You can keep listing products — payouts will be released once this is complete.</span>
-                        </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                            {!bankOK && (
-                                <button onClick={() => setOpenBank(true)} className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full bg-[#0A0A0B] text-white text-[12px] font-semibold hover:bg-[#23252B]" data-testid="phase2-bank-cta">
-                                    <Building2 size={12} /> Add bank details <ChevronRight size={12} />
-                                </button>
-                            )}
-                            {!docsOK && (
-                                <button onClick={() => setOpenDocs(true)} className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full bg-white border border-[#0A0A0B] text-[#0A0A0B] text-[12px] font-semibold hover:bg-[#F4F4F6]" data-testid="phase2-docs-cta">
-                                    <FileText size={12} /> Upload documents <ChevronRight size={12} />
-                                </button>
-                            )}
-                        </div>
+                        <button onClick={() => setDismissed(true)} aria-label="Dismiss for this session" className="text-[#0A4A50]/60 hover:text-[#0A4A50] -mt-1" data-testid="phase2-dismiss">
+                            <XIcon size={16} />
+                        </button>
                     </div>
-                    <button onClick={() => setDismissed(true)} aria-label="Dismiss for this session" className="text-[#0A4A50]/60 hover:text-[#0A4A50] -mt-1" data-testid="phase2-dismiss">
-                        <XIcon size={16} />
-                    </button>
                 </div>
-            </div>
+            )}
 
             <BankDialog open={openBank} onClose={() => setOpenBank(false)} supplier={supplier} onSaved={onUpdated} />
-            <DocsDialog open={openDocs} onClose={() => setOpenDocs(false)} supplier={supplier} onSaved={onUpdated} />
+            <DocsDialog open={openDocs} onClose={() => { setOpenDocs(false); if (onExternalClose) onExternalClose(); }} supplier={supplier} onSaved={onUpdated} optionalDocs={OPTIONAL_DOCS} />
         </>
     );
 }

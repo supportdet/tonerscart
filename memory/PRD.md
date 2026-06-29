@@ -1,5 +1,42 @@
 # TonersCart — Product Requirements (Supabase edition)
 
+> **Latest (2026-06-29 Wave 100):** **Seller onboarding overhaul + Phase-2 banner bug fix + Admin All-Users panel.**
+>
+> ### 1) Register — account-type cards
+> `Register.jsx` rewritten. 3 large selectable cards (Buyer / Dealer-Seller / Corporate) above the form with testids `account-type-personal`, `account-type-dealer`, `account-type-corporate`. Required-field error `register-account-type-error` blocks submit when nothing is picked. Dealer card calls `/api/auth/signup-supplier` (now with `business_address` Optional in `SignupSupplier`), then logs in, then navigates `/supplier`. Buyer → `/`. Corporate → `/procurement`. Persists `user_type` via the existing `/auth/user-type` endpoint.
+>
+> ### 2) Locked dealer onboarding (4-step)
+> New `components/DealerOnboarding.jsx` — full-screen replacement for the supplier dashboard when the dealer isn't fully verified. Steps: ① Account created (always ✅) · ② Business details (CTA → `/sell`) · ③ Bank + KYC documents (current/locked) · ④ Go live (locked). Status badges = ✅ green tick / pulse-cyan current / grey padlock. **All listing CTAs are completely hidden until stage=null.** Stage logic in `SupplierDashboard.jsx`:
+>   * `no_app` — role=supplier OR pending row missing → Step 2 current
+>   * `pending` — application status `pending` → Step 2 done with "under review" banner
+>   * `approved_phase2` — isApproved AND (no bank OR mandatory docs missing) → Step 3 current
+>   * `null` — fully ready → normal dashboard renders
+> Phase 2 dialog opens from the onboarding Step 3 CTA via the new `externalOpen` / `hideBanner` props on `Phase2Banner`.
+>
+> ### 3) Phase 2 banner — only TRULY missing items
+> Refactor in `Phase2Banner.jsx`:
+>   * **Mandatory docs** (block the green check): `doc_gst`, `doc_pan`, `doc_id_proof`, `doc_bank_proof`
+>   * **Optional docs** (never block, soft reminders): `doc_address_proof`, `doc_brand_authorization` (latter conditionally required only when seller_types includes `Original`)
+>   * **Bank** is considered complete the moment `account_number` + `ifsc_code` are populated (holder name / bank name / branch are soft nudges, not gates).
+>   * The "missing documents" string now lists ONLY documents that are genuinely null in the database, fixing the bug where uploaded docs still showed as missing.
+>
+> ### 4) Magic-link consistency
+> Wave 98 bulk-created dealers already log in via Supabase magic-link with `redirect_to=/auth/callback?next=/supplier`. With Wave 100's stage logic they now land on the same `no_app` onboarding state (Step 2 CTA → `/sell` to fill business details) instead of a blank dashboard.
+>
+> ### 5) Bulk-upload Skipped vs Failed
+> `routes/admin.py` — `admin_bulk_create_dealers` now catches the Supabase Auth "user already registered" exception explicitly and re-classifies it into `skipped_existing` with reason "already registered (Supabase Auth) — preserved". `failed` is reserved for genuine errors (network, validation). Verified with `support@tonerscart.com` admin email as a row → created=0, skipped_existing=1, failed=0.
+>
+> ### 6) Admin → All Users panel
+> Backend: new endpoints in `routes/admin.py`.
+>   * `GET /api/admin/users` — returns every `public.users` row enriched with `supplier_status` (`approved` / `pending` / `rejected` / null) and `is_protected` (True ⇔ approved-dealer row exists). Sorted newest-first.
+>   * `DELETE /api/admin/users/{user_id}` — refuses (403) when the user has a `suppliers` row (auto-protection for Big C, DET, Zion, Bios, Verve, Ravi, Shree, Amman + every future approved dealer — no hardcoded email list). Cascades cleanup across `suppliers_pending`, `user_agreements`, `saved_addresses`, `users` and finally `sb_admin.auth.admin.delete_user` so the email is free to re-register.
+> Frontend: new `pages/admin/UsersTab.jsx` mounted via a new "All Users" pill in `AdminDashboard.jsx`. Search by email/name/phone/city, type-badge per row, per-row Delete (hidden + "Protected" badge for approved-dealer rows), confirmation dialog with red "Yes, delete" CTA.
+>
+> ### Verification
+> Iteration_74 — **6/6 backend pytest pass** (admin/users unauth, list payload shape, approved-dealer DELETE blocked 403, buyer-delete-then-re-signup roundtrip, bulk-upload re-classification, signup-supplier without address). **Register form Playwright pass** (3 cards visible, error on submit without selection, active ring on click). Screenshot confirms dealer card visual state (cyan ring + check icon).
+
+
+
 > **Latest (2026-06-29 Wave 99):** **Universal + fuzzy search across all 5 categories.**
 >
 > ### What changed
