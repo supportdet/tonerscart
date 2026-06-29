@@ -1,6 +1,29 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-29 Wave 101):** **Onboarding state machine (draft → pending → approved) + Procurement Phase 3 (credit summary widget, admin manual adjustment, tax-invoice PDF).**
+> **Latest (2026-06-29 Wave 101 HOTFIX):** **Critical signup-supplier bug fixed — fresh dealer registration no longer auto-creates a pending application or sends the admin email.**
+>
+> ### What was broken
+> `/auth/signup-supplier` was creating a `suppliers_pending` row with `status='pending'` AND firing `email_application_received` AND running the AI document check on the empty payload — so the moment a dealer registered with just name/email/phone/password, the admin saw a fake "application received" email, the admin queue showed a phantom row, and the DealerOnboarding component rendered Step 2 as "submitted under review" instead of letting the dealer fill business details.
+>
+> A secondary bug: `/auth/apply-seller` then refused with `400 You are already a seller` because the registered user already had `role='supplier'`.
+>
+> ### Fixes
+> 1. **`/auth/signup-supplier`** now ONLY creates the Supabase Auth user + the public.users row (role=supplier). No `suppliers_pending` write, no AI check, no email. Returns `{"ok":true,"user_id":..., "status":"no_app"}`.
+> 2. **`/auth/apply-seller`** guard relaxed: only blocks if there is already an APPROVED row in `suppliers`. Pending/draft/rejected/no-app dealers can keep editing.
+> 3. **`/auth/me`** stops returning a hard-coded `application_status='pending'` for role=supplier users with no rows in either table. Now it correctly looks up `suppliers_pending` (including draft/rejected/approved) and falls through to `application_status=None` for truly fresh dealers — so the DealerOnboarding component receives `stage='no_app'` and shows Step 2 as the active step (Step 3 locked, no banner).
+>
+> ### Verification
+> `/app/backend/tests/test_wave101_signup_hotfix.py` — **3/3 pytest pass against the live preview URL:**
+>   * signup-supplier creates no pending row + does not leak into `/admin/suppliers/pending`
+>   * role=supplier user can apply-seller → draft → submit-for-review → pending
+>   * bulk-create with 2 fresh emails creates both with 0 skipped (regression for "always already exists" reported bug — backend always worked correctly; user-perceived issue was reusing previously-created QA emails).
+>
+> No admin queue email leak. No phantom pending rows. Step 2 of DealerOnboarding correctly active after fresh signup.
+
+
+
+
+> **Prev (2026-06-29 Wave 101):** **Onboarding state machine (draft → pending → approved) + Procurement Phase 3 (credit summary widget, admin manual adjustment, tax-invoice PDF).**
 >
 > ### 1) Strict Dealer Onboarding State Machine
 > Backend (`routes/auth.py`):

@@ -141,9 +141,12 @@ def signup_customer(payload: SignupCustomer):
 
 @router.post("/auth/signup-supplier")
 async def signup_supplier(payload: SignupSupplier):
-    """Supplier signup — creates auth user, profile (role=supplier), AND a
-    suppliers_pending row. The user can sign in but listings are blocked
-    until an admin moves their pending row into the suppliers table."""
+    """Wave 101 — dealer signup creates ONLY the auth user + the public.users
+    row (role=supplier). No `suppliers_pending` row, no AI check, and no
+    admin application-received email at this stage. The dealer must log in,
+    fill business details inside the dashboard (status='draft'), upload
+    documents, then explicitly click "Submit for verification" to flip the
+    row to status='pending' and notify the admin."""
     try:
         created = sb_admin.auth.admin.create_user({
             "email": payload.email,
@@ -168,52 +171,11 @@ async def signup_supplier(payload: SignupSupplier):
         "city": payload.city,
     }, on_conflict="id").execute()
 
-    application = {
-        "user_id": uid,
-        "business_name": payload.business_name,
-        "contact_person": payload.contact_person,
-        "phone": payload.phone,
-        "email": payload.email,
-        "city": payload.city,
-        "state": payload.state or None,
-        "pincode": payload.pincode or None,
-        "cities_served": payload.cities_served or [],
-        "gst_number": payload.gst_number or None,
-        "pan_number": payload.pan_number or None,
-        "annual_turnover": payload.annual_turnover or None,
-        "years_in_business": payload.years_in_business,
-        "business_address": payload.business_address,
-        "seller_types": payload.seller_types or [],
-        "compatible_brands": payload.compatible_brands or [],
-        "testing_before_delivery": payload.testing_before_delivery,
-        "doc_brand_authorization": payload.doc_brand_authorization or None,
-        "doc_shop_photo": payload.doc_shop_photo or None,
-        "doc_gst": payload.doc_gst or None,
-        "doc_pan": payload.doc_pan or None,
-        "doc_bank_proof": payload.doc_bank_proof or None,
-        "doc_id_proof": payload.doc_id_proof or None,
-        "doc_address_proof": payload.doc_address_proof or None,
-        "account_holder_name": payload.account_holder_name or None,
-        "account_number": payload.account_number or None,
-        "ifsc_code": payload.ifsc_code or None,
-        "bank_name": payload.bank_name or None,
-        "bank_branch": payload.bank_branch or None,
-        "status": "pending",
-    }
-    _exec_dropping_cols(lambda a: sb_admin.table("suppliers_pending").upsert(a, on_conflict="user_id").execute(), application)
-
-    # Fire-and-forget AI document check (best effort) + email notifications
-    try:
-        await _run_ai_check(uid, application)
-    except Exception as e:
-        logger.warning("AI check skipped: %s", e)
-
-    try:
-        await email_application_received(application)
-    except Exception as e:
-        logger.warning("application email skipped: %s", e)
-
-    return {"ok": True, "user_id": uid, "status": "pending"}
+    # Wave 101 — NO suppliers_pending row, NO AI check, NO admin email yet.
+    # Onboarding Step 2 (business details) is what creates the pending row
+    # via /auth/apply-seller (submit_for_review=False → status='draft').
+    # /auth/submit-for-review is the only path that fires the admin email.
+    return {"ok": True, "user_id": uid, "status": "no_app"}
 
 
 class SupplierDocPaths(BaseModel):
@@ -229,11 +191,21 @@ class SupplierDocPaths(BaseModel):
 @router.post("/auth/apply-seller")
 async def apply_seller(payload: SellerApplication, user: dict = Depends(require_user)):
     """Logged-in user submits an application to become a seller.
-    users.role is NOT changed — only admin approval flips it to 'supplier'."""
-    if user.get("role") == "supplier":
-        raise HTTPException(400, "You are already a seller")
+    Wave 101 — role=supplier alone no longer blocks this endpoint (dealers
+    sign up with role=supplier but no application). Only APPROVED dealers
+    (row in `suppliers`) are blocked."""
     if user.get("role") == "admin":
         raise HTTPException(400, "Admins cannot apply as sellers")
+    # Only an existing APPROVED dealer (suppliers row) is blocked from
+    # re-applying. Pending/draft/rejected dealers can keep editing.
+    try:
+        approved_row = sb_admin.table("suppliers").select("id").eq("user_id", user["id"]).maybe_single().execute()
+        if approved_row and getattr(approved_row, "data", None):
+            raise HTTPException(400, "You are already an approved seller")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
     if not payload.agreed_to_terms:
         raise HTTPException(400, "You must accept the TonersCart Seller Terms to apply")
 
@@ -568,9 +540,30 @@ def me(user: dict = Depends(require_user)):
                 sd["business_logo_url"] = None
             out["supplier"] = sd
             return out
-        # Edge case: role=supplier but no row in suppliers (shouldn't normally happen)
-        out["supplier_status"] = "pending"
-        out["application_status"] = "pending"
+        # Wave 101 — role=supplier but no approved row yet. Look up the
+        # pending row to surface the real onboarding state (draft / pending /
+        # rejected). If neither exists, this is a fresh dealer who just
+        # registered and has not filled their business details yet — return
+        # application_status=None so the dashboard shows Step 2 as active.
+        _PEND_COLS = (
+            "id,business_name,status,rejection_reason,submitted_at,"
+            "account_holder_name,account_number,ifsc_code,bank_name,bank_branch,"
+            "doc_gst,doc_pan,doc_id_proof,doc_address_proof,doc_bank_proof,"
+            "doc_brand_authorization,seller_types"
+        )
+        try:
+            p = sb_admin.table("suppliers_pending").select(_PEND_COLS).eq("user_id", user["id"]).maybe_single().execute()
+        except Exception:
+            p = sb_admin.table("suppliers_pending").select(
+                "id,business_name,status,rejection_reason,submitted_at"
+            ).eq("user_id", user["id"]).maybe_single().execute()
+        if p and p.data:
+            out["supplier_status"] = p.data.get("status")  # draft | pending | rejected | approved
+            out["application_status"] = p.data.get("status")
+            out["application"] = p.data
+        else:
+            out["supplier_status"] = None
+            out["application_status"] = None
         return out
 
     # For non-suppliers, look up any pending/rejected/draft application
