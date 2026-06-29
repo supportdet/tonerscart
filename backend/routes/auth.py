@@ -294,7 +294,19 @@ async def apply_seller(payload: SellerApplication, user: dict = Depends(require_
         "status": "pending" if payload.submit_for_review else "draft",
         "rejection_reason": None,
     }
-    _exec_dropping_cols(lambda a: sb_admin.table("suppliers_pending").upsert(a, on_conflict="user_id").execute(), application)
+    try:
+        _exec_dropping_cols(lambda a: sb_admin.table("suppliers_pending").upsert(a, on_conflict="user_id").execute(), application)
+    except Exception as e:
+        # If the suppliers_pending.status CHECK constraint hasn't been
+        # extended yet (Wave 101 migration), gracefully fall back to
+        # status='pending' so the dealer is never blocked at signup.
+        msg = str(e).lower()
+        if ("suppliers_pending_status_check" in msg or "check constraint" in msg) and application["status"] == "draft":
+            logger.warning("draft status rejected by DB; falling back to 'pending'. Run migration 2026_06_29_wave101_draft_status.sql.")
+            application["status"] = "pending"
+            _exec_dropping_cols(lambda a: sb_admin.table("suppliers_pending").upsert(a, on_conflict="user_id").execute(), application)
+        else:
+            raise
 
     async def _bg_ai():
         try:
@@ -561,12 +573,22 @@ def me(user: dict = Depends(require_user)):
         out["application_status"] = "pending"
         return out
 
-    # For non-suppliers, look up any pending/rejected application
-    p = sb_admin.table("suppliers_pending").select(
-        "id,business_name,status,rejection_reason,submitted_at"
-    ).eq("user_id", user["id"]).maybe_single().execute()
+    # For non-suppliers, look up any pending/rejected/draft application
+    _PEND_COLS = (
+        "id,business_name,status,rejection_reason,submitted_at,"
+        "account_holder_name,account_number,ifsc_code,bank_name,bank_branch,"
+        "doc_gst,doc_pan,doc_id_proof,doc_address_proof,doc_bank_proof,"
+        "doc_brand_authorization,seller_types"
+    )
+    try:
+        p = sb_admin.table("suppliers_pending").select(_PEND_COLS).eq("user_id", user["id"]).maybe_single().execute()
+    except Exception:
+        # Graceful degradation if any column doesn't exist yet.
+        p = sb_admin.table("suppliers_pending").select(
+            "id,business_name,status,rejection_reason,submitted_at"
+        ).eq("user_id", user["id"]).maybe_single().execute()
     if p and p.data:
-        out["application_status"] = p.data["status"]  # pending | approved | rejected
+        out["application_status"] = p.data["status"]  # pending | approved | rejected | draft
         out["application"] = p.data
     else:
         out["application_status"] = None

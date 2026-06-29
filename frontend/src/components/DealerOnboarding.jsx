@@ -4,7 +4,7 @@ import { Check, Lock, ArrowRight, ShieldCheck, FileText, Building2, Rocket, Mail
 import { Button } from "./ui/button";
 
 /**
- * Wave 100 — Dealer onboarding gateway.
+ * Wave 100/101 — Dealer onboarding gateway.
  *
  * Shown in place of the normal supplier dashboard until the dealer is fully
  * verified. All "Add product / Bulk upload / Edit listings" CTAs are HIDDEN
@@ -13,17 +13,31 @@ import { Button } from "./ui/button";
  * 4 steps:
  *   1. Account created          — auto (always ✅ on this page)
  *   2. Business details         — fill via the existing /sell form
- *   3. Bank details + documents — unlocks after Step 2 approval
- *   4. Go live                  — unlocks after Step 3 approved
+ *   3. Bank details + documents — unlocks after Step 2 saved (status=draft)
+ *   4. Go live                  — unlocks after admin approves
+ *
+ * Stages:
+ *   no_app           — no application row yet → Step 2 current
+ *   draft            — business details saved, bank/docs still incomplete
+ *                      → Step 3 current with "Add bank + upload docs" CTA
+ *   pending          — dealer hit Submit-for-verification → Step 3 done,
+ *                      Step 4 locked with under-review banner
+ *   approved_phase2  — admin approved but bank/docs still missing (legacy)
+ *                      → Step 3 current with same CTA
+ *   phase2_review    — docs submitted post-approval (legacy)
  *
  * Props:
- *   stage     – "no_app" | "pending" | "approved_phase2" | "phase2_review"
+ *   stage     – see above
  *   user      – /auth/me payload (for the email + name in headings)
  *   onStartStep2 – fired when "Fill business details" is clicked
  *                  (parent opens the SellerApplicationForm dialog)
  *   onOpenPhase2 – fired when "Add bank details / Upload documents" is clicked
  */
 export default function DealerOnboarding({ stage, user, onStartStep2, onOpenPhase2 }) {
+    const step3Current = stage === "approved_phase2" || stage === "draft";
+    const step3CtaLabel = stage === "draft"
+        ? "Add bank details & upload documents"
+        : "Add bank details & upload documents";
     const steps = [
         {
             id: 1,
@@ -37,7 +51,9 @@ export default function DealerOnboarding({ stage, user, onStartStep2, onOpenPhas
             title: "Business details",
             body: stage === "pending"
                 ? "Submitted — under review. We'll email you in 1–2 business days."
-                : "Add your GSTIN, PAN, what you sell, and the cities you serve.",
+                : stage === "no_app"
+                ? "Add your GSTIN, PAN, what you sell, and the cities you serve."
+                : "Saved. You can edit anytime from your profile.",
             Icon: Building2,
             status: stage === "no_app" ? "current" : "done",
             cta: stage === "no_app" ? { label: "Fill business details", onClick: onStartStep2 } : null,
@@ -45,22 +61,24 @@ export default function DealerOnboarding({ stage, user, onStartStep2, onOpenPhas
         {
             id: 3,
             title: "Bank details + KYC documents",
-            body: stage === "approved_phase2"
-                ? "Bank account + GST, PAN, ID & cancelled-cheque uploads."
+            body: step3Current
+                ? "Add your bank account and upload GST, PAN, ID proof & cancelled cheque. Submit for verification when done."
+                : stage === "pending"
+                ? "Submitted — under review. We'll email you the moment it's approved (usually 1–2 business days)."
                 : stage === "phase2_review"
                 ? "Documents submitted — under review. Your listings will go live once verified."
-                : "Unlocks after your business details are approved.",
+                : "Unlocks after you save your business details.",
             Icon: FileText,
             status:
-                stage === "approved_phase2" ? "current"
-                : stage === "phase2_review" ? "done"
+                step3Current ? "current"
+                : (stage === "phase2_review" || stage === "pending") ? "done"
                 : "locked",
-            cta: stage === "approved_phase2" ? { label: "Add bank details & upload documents", onClick: onOpenPhase2 } : null,
+            cta: step3Current ? { label: step3CtaLabel, onClick: onOpenPhase2 } : null,
         },
         {
             id: 4,
             title: "Go live",
-            body: stage === "phase2_review"
+            body: stage === "phase2_review" || stage === "pending"
                 ? "Pending final verification — usually within one business day."
                 : "Once verified you can list products and start selling.",
             Icon: Rocket,
@@ -80,20 +98,22 @@ export default function DealerOnboarding({ stage, user, onStartStep2, onOpenPhas
                 </h1>
                 <p className="mt-2 text-[14px] text-[#6E6E73]">
                     {stage === "pending"
-                        ? "Your business details are being reviewed. We'll email you the moment they're approved."
+                        ? "Your application is under review. We'll email you the moment it's approved."
                         : stage === "phase2_review"
                         ? "Documents submitted — pending final verification. We'll unlock listing as soon as it's done."
                         : stage === "approved_phase2"
                         ? "Business details approved! Complete bank details + documents to go live."
+                        : stage === "draft"
+                        ? "Business details saved. Add your bank account & KYC documents, then submit for verification."
                         : "Three quick steps and you're live. Most dealers complete this in 5 minutes."}
                 </p>
 
-                {/* Pending banner — Step 2 review */}
+                {/* Pending banner — application submitted, under admin review */}
                 {stage === "pending" && (
                     <div className="mt-5 rounded-xl bg-[#FFFBEB] border border-[#F5C400]/40 p-4 text-[13.5px] text-[#5C4A00] flex items-start gap-3" data-testid="onboarding-pending-step2">
                         <Mail size={16} className="mt-0.5 shrink-0" />
                         <div>
-                            <strong>Business details submitted — under review.</strong> You&apos;ll get an email once approved (usually 1–2 business days). Bank details and documents will unlock after approval.
+                            <strong>Application submitted — under review.</strong> You&apos;ll get an email once approved (usually 1–2 business days). Listings unlock immediately after admin approval.
                         </div>
                     </div>
                 )}

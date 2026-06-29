@@ -51,7 +51,7 @@ function docsComplete(s) {
     return allReq;
 }
 
-export default function Phase2Banner({ supplier, onUpdated, externalOpen = false, onExternalClose, hideBanner = false }) {
+export default function Phase2Banner({ supplier, onUpdated, externalOpen = false, onExternalClose, hideBanner = false, showSubmitForReview = false }) {
     const [openBank, setOpenBank] = useState(false);
     const [openDocs, setOpenDocs] = useState(false);
     const [dismissed, setDismissed] = useState(false);
@@ -65,8 +65,10 @@ export default function Phase2Banner({ supplier, onUpdated, externalOpen = false
     if (!supplier) return null;
     const bankOK = bankComplete(supplier);
     const docsOK = docsComplete(supplier);
-    // When both are complete OR dismissed, render nothing (banner + dialogs).
-    if ((bankOK && docsOK) || dismissed) {
+    // When both are complete OR dismissed, render nothing (banner + dialogs)
+    // UNLESS we are in draft mode and still need to surface the "Submit
+    // for verification" CTA inside the docs dialog.
+    if (((bankOK && docsOK) || dismissed) && !showSubmitForReview) {
         if (externalOpen && onExternalClose) onExternalClose();
         return null;
     }
@@ -112,7 +114,15 @@ export default function Phase2Banner({ supplier, onUpdated, externalOpen = false
             )}
 
             <BankDialog open={openBank} onClose={() => setOpenBank(false)} supplier={supplier} onSaved={onUpdated} />
-            <DocsDialog open={openDocs} onClose={() => { setOpenDocs(false); if (onExternalClose) onExternalClose(); }} supplier={supplier} onSaved={onUpdated} optionalDocs={OPTIONAL_DOCS} />
+            <DocsDialog
+                open={openDocs}
+                onClose={() => { setOpenDocs(false); if (onExternalClose) onExternalClose(); }}
+                supplier={supplier}
+                onSaved={onUpdated}
+                optionalDocs={OPTIONAL_DOCS}
+                showSubmitForReview={showSubmitForReview}
+                onOpenBank={() => setOpenBank(true)}
+            />
         </>
     );
 }
@@ -223,10 +233,31 @@ function DocSlot({ label, hint, fieldKey, alreadyUploaded, onUploaded }) {
     );
 }
 
-function DocsDialog({ open, onClose, supplier, onSaved }) {
+function DocsDialog({ open, onClose, supplier, onSaved, showSubmitForReview = false, onOpenBank }) {
     const [local, setLocal] = useState(supplier || {});
+    const [submitting, setSubmitting] = useState(false);
+    React.useEffect(() => { setLocal(supplier || {}); }, [supplier]);
     const isOriginal = Array.isArray(supplier?.seller_types) && supplier.seller_types.includes("Original");
     const onUploaded = (k, v) => { setLocal((prev) => ({ ...prev, [k]: v })); onSaved && onSaved(); };
+
+    const allMandatoryDocsUploaded = MANDATORY_DOCS.every((d) => !!local[d.key])
+        && (!isOriginal || !!local.doc_brand_authorization);
+    const bankOK = !!(local.account_number && local.ifsc_code);
+    const readyToSubmit = allMandatoryDocsUploaded && bankOK;
+
+    const submit = async () => {
+        if (!readyToSubmit) return;
+        try {
+            setSubmitting(true);
+            await api.post("/auth/submit-for-review");
+            toast.success("Submitted for verification — we'll email you once approved.");
+            onSaved && onSaved();
+            onClose();
+        } catch (e) {
+            toast.error(formatApiError(e));
+        } finally { setSubmitting(false); }
+    };
+
     return (
         <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
             <DialogContent className="max-w-[640px] max-h-[88vh] overflow-y-auto p-6 rounded-[18px]" data-testid="phase2-docs-dialog">
@@ -234,11 +265,25 @@ function DocsDialog({ open, onClose, supplier, onSaved }) {
                     <DialogTitle className="text-[20px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>Upload KYC documents</DialogTitle>
                 </DialogHeader>
                 <div className="text-[12.5px] text-[#6E6E73] mt-1">All files are stored privately — only TonersCart admins can view them via short-lived signed links. PDF or image, up to 5 MB.</div>
+
+                {showSubmitForReview && (
+                    <div className="mt-4 rounded-lg border border-[#E5E5EA] bg-[#F8F9FB] p-3 flex items-start gap-3" data-testid="phase2-bank-summary">
+                        <Building2 size={16} className="text-[#0A0A0B] mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <div className="text-[13px] font-semibold text-[#0A0A0B]">Bank details {bankOK ? <span className="ml-2 text-[10.5px] tracking-[0.12em] uppercase text-emerald-600">Saved</span> : <span className="ml-2 text-[10.5px] tracking-[0.12em] uppercase text-amber-600">Pending</span>}</div>
+                            <div className="text-[11.5px] text-[#6E6E73] mt-0.5">Required to receive payouts.</div>
+                        </div>
+                        <Button type="button" variant="outline" onClick={onOpenBank} className="h-8 px-3 text-[11.5px]" data-testid="phase2-open-bank-from-docs">
+                            {bankOK ? "Edit" : "Add bank"}
+                        </Button>
+                    </div>
+                )}
+
                 <div className="space-y-2 mt-4">
                     <DocSlot label="GST certificate" fieldKey="doc_gst" alreadyUploaded={!!local.doc_gst} onUploaded={onUploaded} />
                     <DocSlot label="PAN card" fieldKey="doc_pan" alreadyUploaded={!!local.doc_pan} onUploaded={onUploaded} />
                     <DocSlot label="ID proof — Aadhaar / Passport" fieldKey="doc_id_proof" alreadyUploaded={!!local.doc_id_proof} onUploaded={onUploaded} />
-                    <DocSlot label="Address proof" hint="Utility bill / rent agreement" fieldKey="doc_address_proof" alreadyUploaded={!!local.doc_address_proof} onUploaded={onUploaded} />
+                    <DocSlot label="Address proof" hint="Utility bill / rent agreement (optional)" fieldKey="doc_address_proof" alreadyUploaded={!!local.doc_address_proof} onUploaded={onUploaded} />
                     <DocSlot label="Cancelled cheque" hint="Required before first payout" fieldKey="doc_bank_proof" alreadyUploaded={!!local.doc_bank_proof} onUploaded={onUploaded} />
                     <DocSlot
                         label={isOriginal ? "Brand authorization letter (required)" : "Brand authorization letter (optional)"}
@@ -248,9 +293,29 @@ function DocsDialog({ open, onClose, supplier, onSaved }) {
                         onUploaded={onUploaded}
                     />
                 </div>
-                <div className="flex justify-end gap-2 pt-4">
+                <div className="flex flex-wrap justify-end gap-2 pt-4">
                     <Button type="button" variant="outline" onClick={onClose} data-testid="phase2-docs-close">Done</Button>
+                    {showSubmitForReview && (
+                        <Button
+                            type="button"
+                            disabled={!readyToSubmit || submitting}
+                            onClick={submit}
+                            className="btn-cta"
+                            data-testid="phase2-submit-for-review"
+                            title={readyToSubmit ? "" : "Upload all mandatory documents + add bank details first"}
+                        >
+                            {submitting ? <Loader2 size={14} className="animate-spin mr-1" /> : <Check size={14} className="mr-1" />}
+                            Submit for verification
+                        </Button>
+                    )}
                 </div>
+                {showSubmitForReview && !readyToSubmit && (
+                    <div className="text-[11.5px] text-[#6E6E73] mt-2 text-right">
+                        {!bankOK && <>Add bank details · </>}
+                        {!allMandatoryDocsUploaded && <>Upload all mandatory documents (GST, PAN, ID proof, cancelled cheque{isOriginal ? ", brand authorization" : ""}) </>}
+                        before submitting.
+                    </div>
+                )}
             </DialogContent>
         </Dialog>
     );
