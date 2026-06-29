@@ -2,6 +2,7 @@
 # ruff: noqa: F403, F405  (names provided by the shared-kernel star import from server)
 from typing import List, Optional, Dict, Any
 import os
+import re
 import json
 import uuid
 import asyncio
@@ -246,44 +247,111 @@ def d2d_listing_detail(kind: str, listing_id: str, user: dict = Depends(require_
 
 @router.get("/search/universal")
 def search_universal(q: str, limit_per_type: int = 12):
-    """Wave 9 — universal fuzzy search across toners, printers and papers.
-    Matches brand / model_number / description (ilike %q%). Returns three lists.
-    Results are sorted with exact brand matches first, then partial."""
+    """Universal fuzzy search across all 5 product categories + OEM showcase.
+
+    Wave 99 — three-tier matching:
+      1) **Normalised** — `search_norm ILIKE %<norm>%` (alphanum-only, lower-cased).
+         This makes 'LBP6030W', 'LBP 6030W', 'LBP-6030W', 'lbp_6030w' all match,
+         and powers prefix/partial matching like 'M404' → 'M404dn'.
+      2) **Multi-field ILIKE** — brand / model / description / compatible_models
+         with the original query (preserves human-readable matches when
+         search_norm wasn't indexed for that row yet).
+      3) **pg_trgm fuzzy** — RPC `tonerscart_fuzzy_search` returns ids with
+         a similarity score ≥ 0.2 for typo tolerance ("Lasejet" → "LaserJet",
+         "Epsen" → "Epson"). Requires the Wave-99 SQL migration; silently
+         skipped on installs that haven't applied it.
+
+    Results are deduped, ranked (exact > prefix > partial > fuzzy), and
+    suspended dealers are filtered out."""
     q_norm = (q or "").strip()
     if not q_norm:
-        return {"q": "", "toners": [], "printers": [], "papers": [], "counts": {"toners": 0, "printers": 0, "papers": 0}}
+        return {
+            "q": "", "toners": [], "printers": [], "papers": [],
+            "consumables": [], "scanners": [], "oem": [],
+            "counts": {"toners": 0, "printers": 0, "papers": 0, "consumables": 0, "scanners": 0, "oem": 0},
+        }
     needle = q_norm.lower()
+    norm_needle = re.sub(r"[^a-z0-9]", "", needle)
+    # pg_trgm requires at least 3 chars to be meaningful; otherwise skip it.
+    enable_fuzzy = len(norm_needle) >= 3
 
     def _rank(rows, brand_key="brand", model_key="model_number"):
-        """Exact-brand matches first, then partial-brand, then model/description."""
         ranked = []
         for r in rows:
             b = (r.get(brand_key) or "").lower()
             m = (r.get(model_key) or "").lower()
             d = (r.get("description") or "").lower()
-            if b == needle:
+            sn = (r.get("search_norm") or re.sub(r"[^a-z0-9]", "", (b + m))).lower()
+            # 0 exact brand/model; 1 prefix brand; 2 contains brand;
+            # 3 contains model; 4 normalised contains; 5 description; 6 fuzzy only
+            if b == needle or m == needle:
                 score = 0
-            elif b.startswith(needle):
+            elif b.startswith(needle) or m.startswith(needle):
                 score = 1
             elif needle in b:
                 score = 2
             elif needle in m:
                 score = 3
-            elif needle in d:
+            elif norm_needle and norm_needle in sn:
                 score = 4
-            else:
+            elif needle in d:
                 score = 5
+            else:
+                score = 6 - min(r.get("_fuzzy_score", 0), 1.0)  # higher trgm sim = lower score
             ranked.append((score, r))
         ranked.sort(key=lambda x: x[0])
         return [r for _, r in ranked]
 
-    # --- Toners ---
+    def _try_fuzzy(tbl: str, max_rows: int = 30):
+        """Call the Wave-99 RPC. Returns {} when the migration hasn't been
+        applied or the RPC is not yet visible to PostgREST. Never raises."""
+        if not enable_fuzzy:
+            return {}
+        try:
+            res = sb_admin.rpc("tonerscart_fuzzy_search", {
+                "tbl": tbl, "needle": norm_needle, "threshold": 0.22, "max_rows": max_rows,
+            }).execute()
+            out = {}
+            for r in (res.data or []):
+                out[r["id"]] = float(r.get("score") or 0)
+            return out
+        except Exception:
+            return {}
+
+    def _hydrate(tbl: str, ids: list, select: str, supplier_join: str = "suppliers!inner"):
+        """Fetch full rows by id and attach supplier_name/city (filtering
+        suspended dealers). Used for fuzzy-only hits that ILIKE missed."""
+        if not ids:
+            return []
+        try:
+            rows = sb_admin.table(tbl).select(f"{select},{supplier_join}(business_name,city,is_suspended)").in_("id", ids).execute().data or []
+        except Exception:
+            try:
+                rows = sb_admin.table(tbl).select(f"{select},{supplier_join}(business_name,city)").in_("id", ids).execute().data or []
+            except Exception:
+                return []
+        out = []
+        for r in rows:
+            sup_key = supplier_join.split("!")[0]
+            sup = r.pop(sup_key, None) or r.pop("supplier", None) or {}
+            if isinstance(sup, list):
+                sup = sup[0] if sup else {}
+            if sup.get("is_suspended"):
+                continue
+            r["supplier_name"] = sup.get("business_name") or ""
+            r["city"] = sup.get("city") or ""
+            out.append(r)
+        return out
+
+    # ── Toners ─────────────────────────────────────────────────────────────
     toners: list = []
     try:
-        sel_t = "id,brand,model_number,toner_type,color,price,stock,image_url,image_urls,gst_rate,intercity_delivery_charge,supplier_id,suppliers!inner(business_name,city,is_suspended)"
+        sel_t = ("id,brand,model_number,toner_type,color,price,stock,image_url,image_urls,"
+                 "compatible_models,search_norm,gst_rate,intercity_delivery_charge,supplier_id,"
+                 "suppliers!inner(business_name,city,is_suspended)")
         def _run_toners(sel):
             return sb_admin.table("listings").select(sel).or_(
-                f"brand.ilike.%{q_norm}%,model_number.ilike.%{q_norm}%,compatible_models.ilike.%{q_norm}%"
+                f"brand.ilike.%{q_norm}%,model_number.ilike.%{q_norm}%,compatible_models.ilike.%{q_norm}%,search_norm.ilike.%{norm_needle}%"
             ).gt("stock", 0).limit(200).execute().data or []
         t_rows = []
         for _ in range(6):
@@ -293,13 +361,22 @@ def search_universal(q: str, limit_per_type: int = 12):
             except Exception as e:
                 msg = str(e)
                 dropped = False
-                # Drop the offending column from select string
-                for k in ("gst_rate", "intercity_delivery_charge", "image_urls", "is_suspended"):
+                for k in ("gst_rate", "intercity_delivery_charge", "image_urls", "is_suspended", "search_norm"):
                     if k in msg and k in sel_t:
                         sel_t = sel_t.replace(f",{k}", "").replace(f"{k},", "")
                         dropped = True
                         break
-                if not dropped and "compatible_models" in msg:
+                if not dropped and "search_norm" in msg:
+                    # fallback OR clause without search_norm
+                    try:
+                        t_rows = sb_admin.table("listings").select(sel_t).or_(
+                            f"brand.ilike.%{q_norm}%,model_number.ilike.%{q_norm}%,compatible_models.ilike.%{q_norm}%"
+                        ).gt("stock", 0).limit(200).execute().data or []
+                        break
+                    except Exception:
+                        t_rows = []
+                        break
+                elif not dropped and "compatible_models" in msg:
                     try:
                         t_rows = sb_admin.table("listings").select(sel_t).or_(
                             f"brand.ilike.%{q_norm}%,model_number.ilike.%{q_norm}%"
@@ -310,24 +387,37 @@ def search_universal(q: str, limit_per_type: int = 12):
                         break
                 elif not dropped:
                     raise
+        seen_t = set()
         for r in t_rows:
             sup = r.pop("suppliers", None) or {}
             if sup.get("is_suspended"):
                 continue
             r["supplier_name"] = sup.get("business_name") or ""
             r["city"] = sup.get("city") or ""
+            seen_t.add(r["id"])
             toners.append(r)
+        # Fuzzy fallback — pull IDs we haven't seen yet.
+        fz = _try_fuzzy("listings", max_rows=30)
+        missing_ids = [i for i in fz if i not in seen_t]
+        if missing_ids:
+            sel_fb = sel_t.split(",suppliers")[0]
+            extra = _hydrate("listings", missing_ids, sel_fb)
+            for r in extra:
+                r["_fuzzy_score"] = fz.get(r["id"], 0)
+            toners.extend(extra)
         toners = _rank(toners)[:limit_per_type]
     except Exception as e:
         logger.warning("universal search toners failed: %s", e)
 
-    # --- Printers ---
+    # ── Printers ───────────────────────────────────────────────────────────
     printers: list = []
     try:
-        sel_p = "id,brand,model_number,description,price,stock,image_url,image_urls,condition,usage_type,category,color,gst_rate,intercity_delivery_charge,supplier_id,supplier:suppliers!inner(business_name,city,is_suspended)"
+        sel_p = ("id,brand,model_number,description,price,stock,image_url,image_urls,"
+                 "condition,usage_type,category,color,search_norm,gst_rate,intercity_delivery_charge,supplier_id,"
+                 "supplier:suppliers!inner(business_name,city,is_suspended)")
         def _run_printers(sel):
             return sb_admin.table("printer_listings").select(sel).or_(
-                f"brand.ilike.%{q_norm}%,model_number.ilike.%{q_norm}%,description.ilike.%{q_norm}%"
+                f"brand.ilike.%{q_norm}%,model_number.ilike.%{q_norm}%,description.ilike.%{q_norm}%,search_norm.ilike.%{norm_needle}%"
             ).gt("stock", 0).limit(200).execute().data or []
         p_rows = []
         for _ in range(6):
@@ -337,31 +427,52 @@ def search_universal(q: str, limit_per_type: int = 12):
             except Exception as e:
                 msg = str(e)
                 dropped = False
-                for k in ("gst_rate", "intercity_delivery_charge", "image_urls", "is_suspended"):
+                for k in ("gst_rate", "intercity_delivery_charge", "image_urls", "is_suspended", "search_norm"):
                     if k in msg and k in sel_p:
                         sel_p = sel_p.replace(f",{k}", "").replace(f"{k},", "")
                         dropped = True
                         break
-                if not dropped:
+                if not dropped and "search_norm" in msg:
+                    try:
+                        p_rows = sb_admin.table("printer_listings").select(sel_p).or_(
+                            f"brand.ilike.%{q_norm}%,model_number.ilike.%{q_norm}%,description.ilike.%{q_norm}%"
+                        ).gt("stock", 0).limit(200).execute().data or []
+                        break
+                    except Exception:
+                        p_rows = []
+                        break
+                elif not dropped:
                     raise
+        seen_p = set()
         for r in p_rows:
             sup = r.pop("supplier", None) or {}
             if sup.get("is_suspended"):
                 continue
             r["supplier_name"] = sup.get("business_name") or ""
             r["city"] = sup.get("city") or ""
+            seen_p.add(r["id"])
             printers.append(r)
+        fz = _try_fuzzy("printer_listings", max_rows=30)
+        missing_ids = [i for i in fz if i not in seen_p]
+        if missing_ids:
+            sel_fb = sel_p.split(",supplier:")[0]
+            extra = _hydrate("printer_listings", missing_ids, sel_fb, supplier_join="supplier:suppliers!inner")
+            for r in extra:
+                r["_fuzzy_score"] = fz.get(r["id"], 0)
+            printers.extend(extra)
         printers = _rank(printers)[:limit_per_type]
     except Exception as e:
         logger.warning("universal search printers failed: %s", e)
 
-    # --- Papers ---
+    # ── Papers ─────────────────────────────────────────────────────────────
     papers: list = []
     try:
-        sel_pp = "id,brand,size,gsm,reams_per_box,price_per_ream,stock,image_url,image_urls,gst_rate,intercity_delivery_charge,supplier_id,suppliers!inner(business_name,city,is_suspended)"
+        sel_pp = ("id,brand,size,gsm,reams_per_box,price_per_ream,stock,image_url,image_urls,"
+                  "search_norm,gst_rate,intercity_delivery_charge,supplier_id,"
+                  "suppliers!inner(business_name,city,is_suspended)")
         def _run_papers(sel):
             return sb_admin.table("paper_listings").select(sel).or_(
-                f"brand.ilike.%{q_norm}%,size.ilike.%{q_norm}%"
+                f"brand.ilike.%{q_norm}%,size.ilike.%{q_norm}%,search_norm.ilike.%{norm_needle}%"
             ).gt("stock", 0).limit(200).execute().data or []
         pp_rows = []
         for _ in range(6):
@@ -374,59 +485,96 @@ def search_universal(q: str, limit_per_type: int = 12):
                     pp_rows = []
                     break
                 dropped = False
-                for k in ("gst_rate", "intercity_delivery_charge", "image_urls", "is_suspended"):
+                for k in ("gst_rate", "intercity_delivery_charge", "image_urls", "is_suspended", "search_norm"):
                     if k in msg and k in sel_pp:
                         sel_pp = sel_pp.replace(f",{k}", "").replace(f"{k},", "")
                         dropped = True
                         break
-                if not dropped:
+                if not dropped and "search_norm" in msg:
+                    try:
+                        pp_rows = sb_admin.table("paper_listings").select(sel_pp).or_(
+                            f"brand.ilike.%{q_norm}%,size.ilike.%{q_norm}%"
+                        ).gt("stock", 0).limit(200).execute().data or []
+                        break
+                    except Exception:
+                        pp_rows = []
+                        break
+                elif not dropped:
                     raise
+        seen_pp = set()
         for r in pp_rows:
             sup = r.pop("suppliers", None) or {}
             if sup.get("is_suspended"):
                 continue
             r["supplier_name"] = sup.get("business_name") or ""
             r["city"] = sup.get("city") or ""
+            seen_pp.add(r["id"])
             papers.append(r)
+        fz = _try_fuzzy("paper_listings", max_rows=30)
+        missing_ids = [i for i in fz if i not in seen_pp]
+        if missing_ids:
+            sel_fb = sel_pp.split(",suppliers")[0]
+            extra = _hydrate("paper_listings", missing_ids, sel_fb)
+            for r in extra:
+                r["_fuzzy_score"] = fz.get(r["id"], 0)
+            papers.extend(extra)
         papers = _rank(papers, brand_key="brand", model_key="size")[:limit_per_type]
     except Exception as e:
         logger.warning("universal search papers failed: %s", e)
 
-    # --- Consumables ---
+    # ── Consumables ────────────────────────────────────────────────────────
     consumables: list = []
     try:
         c_rows = sb_admin.table("consumable_listings").select(
             "*,suppliers(business_name,city,is_suspended)"
         ).or_(
-            f"brand.ilike.%{q_norm}%,model_number.ilike.%{q_norm}%,compatible_models.ilike.%{q_norm}%"
+            f"brand.ilike.%{q_norm}%,model_number.ilike.%{q_norm}%,compatible_models.ilike.%{q_norm}%,search_norm.ilike.%{norm_needle}%"
         ).gt("stock", 0).limit(200).execute().data or []
+        seen_c = set()
         for r in c_rows:
             sup = r.pop("suppliers", None) or {}
             if sup.get("is_suspended"):
                 continue
             r["supplier_name"] = sup.get("business_name") or ""
             r["city"] = sup.get("city") or ""
+            seen_c.add(r["id"])
             consumables.append(r)
+        fz = _try_fuzzy("consumable_listings", max_rows=30)
+        missing_ids = [i for i in fz if i not in seen_c]
+        if missing_ids:
+            extra = _hydrate("consumable_listings", missing_ids, "*", supplier_join="suppliers")
+            for r in extra:
+                r["_fuzzy_score"] = fz.get(r["id"], 0)
+            consumables.extend(extra)
         consumables = _rank(consumables)[:limit_per_type]
     except Exception as e:
         if "consumable_listings" not in str(e):
             logger.warning("universal search consumables failed: %s", e)
 
-    # --- Scanners ---
+    # ── Scanners ───────────────────────────────────────────────────────────
     scanners: list = []
     try:
         s_rows = sb_admin.table("scanner_listings").select(
             "*,suppliers(business_name,city,is_suspended)"
         ).or_(
-            f"brand.ilike.%{q_norm}%,model_number.ilike.%{q_norm}%"
+            f"brand.ilike.%{q_norm}%,model_number.ilike.%{q_norm}%,search_norm.ilike.%{norm_needle}%"
         ).gt("stock", 0).limit(200).execute().data or []
+        seen_s = set()
         for r in s_rows:
             sup = r.pop("suppliers", None) or {}
             if sup.get("is_suspended"):
                 continue
             r["supplier_name"] = sup.get("business_name") or ""
             r["city"] = sup.get("city") or ""
+            seen_s.add(r["id"])
             scanners.append(r)
+        fz = _try_fuzzy("scanner_listings", max_rows=30)
+        missing_ids = [i for i in fz if i not in seen_s]
+        if missing_ids:
+            extra = _hydrate("scanner_listings", missing_ids, "*", supplier_join="suppliers")
+            for r in extra:
+                r["_fuzzy_score"] = fz.get(r["id"], 0)
+            scanners.extend(extra)
         scanners = _rank(scanners)[:limit_per_type]
     except Exception as e:
         if "scanner_listings" not in str(e):

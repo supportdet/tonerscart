@@ -1,5 +1,39 @@
 # TonersCart — Product Requirements (Supabase edition)
 
+> **Latest (2026-06-29 Wave 99):** **Universal + fuzzy search across all 5 categories.**
+>
+> ### What changed
+> `/api/search/universal` rewritten in `backend/routes/search.py` to use a **three-tier matching strategy** per category:
+> 1. **Normalised** — `search_norm ILIKE %<alphanum-lowercased>%` so `LBP6030W`, `LBP 6030W`, `LBP-6030W`, `lbp_6030w` all match. Powers partial matching too (`M404` → `M404dn`).
+> 2. **Multi-field ILIKE** — `brand / model_number / description / compatible_models / size` with the original query for human-readable matches.
+> 3. **pg_trgm fuzzy** — calls new RPC `tonerscart_fuzzy_search(tbl, needle, threshold, max_rows)` to catch typos (`Lasejet` → `LaserJet`, `Epsen` → `Epson`). Threshold = 0.22. Gracefully degrades when the migration isn't applied yet.
+> Final ranking: exact brand/model = 0 · prefix = 1 · contains brand = 2 · contains model = 3 · normalised contains = 4 · description contains = 5 · fuzzy-only = 6 minus trigram-similarity.
+> All 5 product tables + OEM showcase searched in one round-trip. Suspended dealers filtered out. `compatible_models` (toners + consumables) included.
+>
+> ### Frontend
+> No code changes needed — `/search` page already mounts `UniversalSearch` + universal-category-tabs (All / Toners / Printers / Papers / Inks / Scanners / OEM), defaults to "all" when a query is active. Submit on the home-page search bar already navigates to `/search?q=…`. The toner-only browse below is hidden when `q` is set and `cat ≠ 'toners'`.
+>
+> ### SQL migration
+> `/app/backend/migrations/2026_06_29_wave99_fuzzy_search.sql` (must be applied in Supabase SQL Editor — exec_sql RPC is not exposed):
+> 1. `CREATE EXTENSION pg_trgm`
+> 2. Adds `search_norm` column + INSERT/UPDATE triggers + GIN(trgm_ops) index to `printer_listings` and `paper_listings` (the two tables that didn't have it). Backfills existing rows in the same script.
+> 3. Adds GIN(trgm_ops) indexes to the three tables that already had `search_norm` (`listings`, `consumable_listings`, `scanner_listings`).
+> 4. Creates the `tonerscart_fuzzy_search(tbl, needle, threshold, max_rows)` RPC that wraps `similarity() >= threshold` with a `% operator` short-circuit for speed. Grants EXECUTE to anon / authenticated / service_role.
+>
+> ### Verification
+> `/app/backend/tests/test_wave99_fuzzy_search.py` — **6/6 pass** on the live preview URL:
+>  · envelope has all 5 categories
+>  · empty query returns zero envelope
+>  · partial `M404` finds `HP LaserJet Pro M404dn`
+>  · `HP` vs `hp` returns the same result count (case-insensitive)
+>  · fuzzy RPC missing → endpoint returns 200 with empty arrays (no 500)
+>  · no suspended dealer leaks into results
+>
+> ### User action required
+> Run `/app/backend/migrations/2026_06_29_wave99_fuzzy_search.sql` once in Supabase SQL Editor to enable pg_trgm + the trgm indexes + the fuzzy RPC. Until then partial / normalised search works for the 3 tables that already had `search_norm`; printer and paper tables fall back to multi-field ILIKE.
+
+
+
 > **Latest (2026-06-29 Wave 98):** **Compact 4/5-col dealer grid, clickable cards → detail+edit, Phase-1/Phase-2 seller split, admin bulk-dealer onboarding with magic-link emails.**
 >
 > ### 1) Compact dealer dashboard grid
