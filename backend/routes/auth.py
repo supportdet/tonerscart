@@ -553,7 +553,9 @@ def me(user: dict = Depends(require_user)):
         _SUPP_COLS = ("id,business_name,city,approved_at,business_logo,seller_id,"
                       "account_holder_name,account_number,ifsc_code,bank_name,bank_branch,"
                       "doc_gst,doc_pan,doc_id_proof,doc_address_proof,doc_bank_proof,"
-                      "doc_brand_authorization,seller_types")
+                      "doc_brand_authorization,seller_types,cheque_uploaded,"
+                      "contact_person,email,phone,state,pincode,gst_number,pan_number,"
+                      "business_address")
         try:
             s = sb_admin.table("suppliers").select(_SUPP_COLS).eq("user_id", user["id"]).maybe_single().execute()
         except Exception:

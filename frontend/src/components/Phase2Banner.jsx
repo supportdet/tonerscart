@@ -40,6 +40,19 @@ const OPTIONAL_DOCS = [
     { key: "doc_address_proof", label: "Address proof", hint: "Optional — GST certificate counts as address proof" },
 ];
 
+// Wave 102 — a doc is "uploaded" if either the path is set OR (for cancelled
+// cheque only) the legacy `cheque_uploaded` boolean is true. Treating these
+// inputs together keeps the dealer banner in lock-step with the admin
+// Dealers table, which uses the boolean as source of truth.
+function docUploaded(s, key) {
+    if (!s) return false;
+    if (key === "doc_bank_proof") {
+        if (s.cheque_uploaded === false) return false;
+        return !!s[key] || s.cheque_uploaded === true;
+    }
+    return !!s[key];
+}
+
 function bankComplete(s) {
     // Wave 100 — match the user-spec: bank is "complete" the moment the
     // account number and IFSC are populated. Holder name / bank name /
@@ -48,9 +61,9 @@ function bankComplete(s) {
 }
 function docsComplete(s) {
     if (!s) return false;
-    const allReq = MANDATORY_DOCS.every((d) => !!s[d.key]);
+    const allReq = MANDATORY_DOCS.every((d) => docUploaded(s, d.key));
     const isOriginal = Array.isArray(s.seller_types) && s.seller_types.includes("Original");
-    if (isOriginal && !s.doc_brand_authorization) return false;
+    if (isOriginal && !docUploaded(s, "doc_brand_authorization")) return false;
     return allReq;
 }
 
@@ -65,6 +78,22 @@ export default function Phase2Banner({ supplier, onUpdated, externalOpen = false
         if (externalOpen) setOpenDocs(true);
     }, [externalOpen]);
 
+    // Wave 102 — when externally-opened but there's nothing to nudge, ask
+    // the parent to close the dialog (via an effect, not during render).
+    // We compute hasAnyGap inline here because the value derived below is
+    // not yet in scope at the top — recompute via the helpers.
+    const _hasAnyGap = !!supplier && (
+        !bankComplete(supplier)
+        || MANDATORY_DOCS.some((d) => !docUploaded(supplier, d.key))
+        || OPTIONAL_DOCS.some((d) => !docUploaded(supplier, d.key))
+        || ((Array.isArray(supplier.seller_types) && supplier.seller_types.includes("Original")) && !docUploaded(supplier, "doc_brand_authorization"))
+    );
+    React.useEffect(() => {
+        if (!_hasAnyGap && externalOpen && onExternalClose) {
+            onExternalClose();
+        }
+    }, [_hasAnyGap, externalOpen, onExternalClose]);
+
     if (!supplier) return null;
     const bankOK = bankComplete(supplier);
     const docsOK = docsComplete(supplier);
@@ -78,14 +107,14 @@ export default function Phase2Banner({ supplier, onUpdated, externalOpen = false
     // who are missing only their cancelled cheque still see a friendly nudge.
     // Mandatory docs in red counter; optional ones listed separately as
     // "Recommended" nudges, never gating.
-    const missingDocs = MANDATORY_DOCS.filter((d) => !supplier[d.key]).map((d) => d.label);
+    const missingDocs = MANDATORY_DOCS.filter((d) => !docUploaded(supplier, d.key)).map((d) => d.label);
     const isOriginal = Array.isArray(supplier.seller_types) && supplier.seller_types.includes("Original");
-    if (isOriginal && !supplier.doc_brand_authorization) missingDocs.push("Brand authorization letter");
-    const missingOptional = OPTIONAL_DOCS.filter((d) => !supplier[d.key]).map((d) => d.label);
+    if (isOriginal && !docUploaded(supplier, "doc_brand_authorization")) missingDocs.push("Brand authorization letter");
+    const missingOptional = OPTIONAL_DOCS.filter((d) => !docUploaded(supplier, d.key)).map((d) => d.label);
     // Show banner if bank missing OR any mandatory missing OR any optional missing.
     const hasAnyGap = !bankOK || missingDocs.length > 0 || missingOptional.length > 0;
+
     if (!hasAnyGap || dismissed) {
-        if (externalOpen && onExternalClose) onExternalClose();
         if (!showSubmitForReview) return null;
     }
 
@@ -359,9 +388,9 @@ function DocsDialog({ open, onClose, supplier, onSaved, showSubmitForReview = fa
     // Optional docs are only shown if the dealer asked for them (we still
     // surface cancelled cheque + address proof as nudges when missing —
     // they're explicitly marked optional in the UI).
-    const missingMandatoryKeys = MANDATORY_DOCS.filter((d) => !docs[d.key]).map((d) => d.key);
-    const missingBrandAuth = isOriginal && !docs.doc_brand_authorization;
-    const missingOptionalKeys = OPTIONAL_DOCS.filter((d) => !docs[d.key]).map((d) => d.key);
+    const missingMandatoryKeys = MANDATORY_DOCS.filter((d) => !docUploaded(docs, d.key)).map((d) => d.key);
+    const missingBrandAuth = isOriginal && !docUploaded(docs, "doc_brand_authorization");
+    const missingOptionalKeys = OPTIONAL_DOCS.filter((d) => !docUploaded(docs, d.key)).map((d) => d.key);
 
     const saveBank = async () => {
         if (!bank.account_number || !/^[A-Z]{4}0[A-Z0-9]{6}$/.test((bank.ifsc_code || "").trim().toUpperCase())) {

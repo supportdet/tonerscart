@@ -188,21 +188,45 @@ function SubmittedDocsDialog({ open, onClose, supplier }) {
 }
 
 function MissingDocsDialog({ open, onClose, supplier, onRefresh }) {
-    // Reuse the Phase2Banner DocsDialog in approved-dealer mode by mounting
-    // Phase2Banner with externalOpen + hideBanner. That dialog already lists
-    // ONLY missing docs and handles auto-upload on file select.
+    // Wave 102 — figure out missing docs the SAME way Phase2Banner does so
+    // we can short-circuit when there's nothing missing (Big C etc.) and
+    // present a friendly "all submitted" state instead of mounting an empty
+    // Phase2Banner dialog.
+    const cheque = supplier?.cheque_uploaded !== false && (!!supplier?.doc_bank_proof || supplier?.cheque_uploaded === true);
+    const missing = [
+        ...MANDATORY.filter((k) => !supplier?.[k]),
+        ...OPTIONAL.filter((k) => k === "doc_bank_proof" ? !cheque : !supplier?.[k]),
+    ];
+    if (!open) return null;
+    if (missing.length === 0) {
+        return (
+            <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+                <DialogContent className="max-w-[480px] p-6 rounded-[18px]" data-testid="profile-missing-docs-dialog">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-[19px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
+                            <ShieldAlert size={17} /> Missing Documents
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="py-6 text-center text-[#0A4A50]" data-testid="missing-docs-empty">
+                        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-50 mb-3">
+                            <Check size={22} className="text-emerald-600" />
+                        </div>
+                        <div className="text-[14px] font-semibold">All documents submitted</div>
+                        <div className="text-[12px] text-[#6E6E73] mt-1">You&apos;re all caught up. We&apos;ll let you know if anything new is needed.</div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        );
+    }
+    // Otherwise, mount Phase2Banner in hidden mode so its docs dialog opens.
     return (
-        <>
-            {open && (
-                <Phase2Banner
-                    supplier={supplier}
-                    onUpdated={onRefresh}
-                    externalOpen={true}
-                    onExternalClose={onClose}
-                    hideBanner={true}
-                />
-            )}
-        </>
+        <Phase2Banner
+            supplier={supplier}
+            onUpdated={onRefresh}
+            externalOpen={true}
+            onExternalClose={onClose}
+            hideBanner={true}
+        />
     );
 }
 

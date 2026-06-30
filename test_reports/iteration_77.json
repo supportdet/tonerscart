@@ -1,0 +1,38 @@
+{
+  "summary": "Wave 102 retest (iteration 77) — both iteration_76 HIGH-priority bugs are FIXED. (1) Phase2Banner now renders for Amman Gaming Origin under admin impersonation with the heading 'Complete your profile to get paid'. (2) Clicking profile-menu-missing-docs for Amman opens phase2-docs-dialog and the body contains 'Cancelled cheque' with a working Replace button — exactly matching admin's source-of-truth (cheque_uploaded=false). Big C regression confirmed clean: Phase2Banner does NOT render, profile-menu-missing-docs opens profile-missing-docs-dialog showing the 'All documents submitted' empty state (missing-docs-empty). React 'Cannot update a component while rendering' warning is GONE (0 occurrences across both flows). Backend pytest /app/backend/tests/test_wave102_outreach_query.py 6/6 PASS after the auth.py _SUPP_COLS expansion. Only remaining minor: Radix DialogContent a11y warning ('Missing Description or aria-describedby') still emitted on a couple of dialogs — accessibility nit, not blocking.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "phase2-docs-dialog, profile-missing-docs-dialog (and a few others noted in iter 76)",
+        "issues": ["Radix Dialog console warning 'Missing Description or aria-describedby={undefined}' still present — add a DialogDescription or aria-describedby for a11y."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave102_outreach_query.py",
+    "/app/test_reports/pytest/iteration_77_wave102.xml"
+  ],
+  "action_items": [
+    "Optional a11y polish: add DialogDescription / aria-describedby to phase2-docs-dialog, profile-missing-docs-dialog, profile-details-dialog, profile-submitted-docs-dialog, raise-query-dialog, outreach-analytics-dialog to silence the Radix warning.",
+    "Optional cleanup: 2 stale test rows from earlier curl runs (wave102-test-1782819778@tonerscart-test.com, wave102-final-1782819857@tonerscart-test.com) still exist in the outreach funnel — delete via DELETE /api/admin/users/{id}."
+  ],
+  "critical_code_review_comments": [
+    "Phase2Banner.jsx now has TWO React.useEffect calls above the early `if (!supplier) return null;` return, which is correctly placed for rules-of-hooks. Good.",
+    "DealerProfileMenu.MissingDocsDialog and Phase2Banner.docUploaded() both encode the same cheque_uploaded logic — these two helpers should be consolidated into a single shared utility to avoid future drift.",
+    "/api/auth/me supplier payload now includes cheque_uploaded + contact_person + email + phone + state + pincode + gst_number + pan_number + business_address — confirmed via UI behaviour (banner + docs dialog both rely on cheque_uploaded and rendered as expected for Amman)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (6/6 pytest)", "frontend": "100% on the 4 fix-verifications + Big C regression"},
+  "test_credentials": "Admin: support@tonerscart.com / Bangara1@# (from /app/memory/test_credentials.md). Impersonated dealers: Amman Gaming Origin (d3220fde-8ac6-4de6-88ef-2b4b00444bfa, cheque_uploaded=false), Big C (afcfde52-d6a8-4822-93bc-272cfd9fcc14).",
+  "seed_data_creation": "None this iteration — fix-verification only. No test users created.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both HIGH-priority bugs from iteration_76 are now resolved. If another iteration runs, focus areas: (a) silence Radix DialogContent aria-describedby warnings across dealer dialogs, (b) consolidate the cheque_uploaded/docUploaded logic between DealerProfileMenu and Phase2Banner so they cannot diverge in future. Backend Wave 102 regression file /app/backend/tests/test_wave102_outreach_query.py remains the canonical regression — 6/6 pass.",
+  "rca of the issue": "Iteration 76's two HIGH bugs both stemmed from /auth/me's supplier payload missing the cheque_uploaded boolean (admin's source of truth for the bank-proof slot). Without it, Phase2Banner's hasAnyGap() returned false for Amman (path was set, banner suppressed) and DealerProfileMenu's missing-docs computation didn't surface the gap either. Iteration 77 fix: _SUPP_COLS in /app/backend/routes/auth.py:553-558 now selects cheque_uploaded (plus contact_person/email/phone/state/pincode/gst_number/pan_number/business_address for the My Details dialog). Phase2Banner.jsx introduced docUploaded(s,key) which treats cheque_uploaded===false as 'missing' regardless of doc_bank_proof path, matching admin Dealers table. The React useEffect for externalOpen auto-close was moved above the early `if (!supplier) return null;` return to honour rules-of-hooks (preventing the 'Cannot update a component while rendering' warning). DealerProfileMenu.MissingDocsDialog now computes its own missing-list and short-circuits to the empty-state dialog when nothing is missing, so Phase2Banner never has to no-op-render inside it."
+}
