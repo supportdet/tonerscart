@@ -2,11 +2,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { formatApiError } from "../../lib/api";
 import { toast } from "sonner";
-import { Search, Loader2, Trash2, PauseCircle, PlayCircle, Pencil, Check, X, AlertTriangle, ExternalLink, UserPlus } from "lucide-react";
+import { Search, Loader2, Trash2, PauseCircle, PlayCircle, Pencil, Check, X, AlertTriangle, ExternalLink, UserPlus, History } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import BulkDealerUpload from "./BulkDealerUpload";
+import BulkDealerHistory from "./BulkDealerHistory";
 
 const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
 
@@ -20,6 +21,7 @@ export default function DealersTab() {
     const [confirming, setConfirming] = useState(null); // {dealer, action: 'suspend' | 'unsuspend'}
     const [busyConfirm, setBusyConfirm] = useState(false);
     const [bulkOpen, setBulkOpen] = useState(false);
+    const [historyOpen, setHistoryOpen] = useState(false);
 
     const load = async () => {
         setLoading(true);
@@ -93,9 +95,13 @@ export default function DealersTab() {
                 <Button type="button" onClick={() => setBulkOpen(true)} className="btn-cta inline-flex items-center gap-1.5 h-9" data-testid="bulk-add-dealers-btn">
                     <UserPlus size={14} /> Bulk add dealers
                 </Button>
+                <Button type="button" variant="outline" onClick={() => setHistoryOpen(true)} className="inline-flex items-center gap-1.5 h-9" data-testid="bulk-history-btn">
+                    <History size={14} /> Bulk history
+                </Button>
             </div>
 
             <BulkDealerUpload open={bulkOpen} onClose={() => setBulkOpen(false)} onCreated={load} />
+            <BulkDealerHistory open={historyOpen} onClose={() => setHistoryOpen(false)} />
 
             {loading ? (
                 <div className="py-16 text-center text-[#6E6E73] flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Loading dealers…</div>

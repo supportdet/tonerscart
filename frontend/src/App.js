@@ -131,11 +131,23 @@ function AuthGate({ children }) {
 
 // Mounts the blocking agreement modal for logged-in Supabase users
 // (customer / supplier / oem). Procurement users are gated separately.
+//
+// Wave 101 hotfix-5 — the full T&C/Seller Agreement popup must only appear
+// for APPROVED dealers (their last gate before listing). Fresh dealers in
+// the middle of onboarding (role=supplier but supplier_status != "approved")
+// must NOT see this popup — the inline consent checkboxes in Steps 2 + 3
+// cover their interim acknowledgements.
 function SupabaseAgreementGate() {
     const { user, loading } = useAuth();
     const statusFn = useCallback(() => api.get("/agreements/status").then((r) => r.data), []);
     const acceptFn = useCallback(() => api.post("/agreements/accept").then(() => {}), []);
-    const ready = !loading && !!user && ["customer", "supplier", "oem"].includes(user.role);
+    const isSupplierAndNotApproved =
+        user?.role === "supplier" && user?.supplier_status !== "approved";
+    const ready =
+        !loading
+        && !!user
+        && ["customer", "supplier", "oem"].includes(user.role)
+        && !isSupplierAndNotApproved;
     return <AgreementGate ready={ready} statusFn={statusFn} acceptFn={acceptFn} />;
 }
 

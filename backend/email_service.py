@@ -97,28 +97,42 @@ async def email_password_reset(to: str, reset_link: str) -> bool:
 
 
 async def email_dealer_welcome_magic(to: str, business_name: str, dashboard_link: str) -> bool:
-    """Wave 98 — branded welcome email for admin bulk-created dealers.
-    Contains a one-click "Go to Dashboard" magic-login link (Supabase magic
-    link via generate_link, valid for 7 days). Free-listing promise until
-    15 August 2026 is highlighted in the copy."""
+    """Wave 101 hotfix-5 — branded welcome email for admin bulk-created dealers.
+    Sends a one-click magic-login link (Supabase magic link via generate_link,
+    valid for 7 days) that drops the dealer directly on the seller onboarding
+    flow (Step 2 — fill business details).
+
+    Copy rules (per stakeholder spec):
+      • No mention of 7% referral fee.
+      • One-line opener about TonersCart's scale + pan-India bulk orders.
+      • Keep "Listing is FREE" but no fee mention.
+      • Magic link lands on /supplier (onboarding), not the homepage.
+      • Explain why we collect business details + how the process works.
+    """
     if not to or not dashboard_link:
         return False
     safe_name = (business_name or "there").strip() or "there"
     body = f"""
       <h2 style="margin:0 0 12px 0;font-size:20px;color:#0A0A0B;font-family:'Montserrat',sans-serif;">Welcome to TonersCart, {safe_name}!</h2>
-      <p style="margin:0 0 14px 0;color:#0A0A0B;font-size:14px;">Your seller account is ready. TonersCart is India&rsquo;s marketplace for printer toners, printers, papers, consumables and scanners — connecting verified dealers like you to businesses, governments and home buyers across the country.</p>
+      <p style="margin:0 0 14px 0;color:#0A0A0B;font-size:14.5px;">TonersCart is building India&rsquo;s largest network of verified printer and toner dealers — and pan-India bulk orders are already coming in. We need vendors like you on board now.</p>
       <div style="margin:18px 0;padding:14px 16px;background:#FFFBEB;border:1px solid #F5C400;border-radius:10px;color:#5C4A00;font-size:13.5px;">
-        <strong>🎉 Listing is FREE until 15&nbsp;August&nbsp;2026.</strong><br/>
-        No setup fees, no monthly charges. After your first sale we charge a flat <strong>7% referral fee</strong> — that&rsquo;s it.
+        <strong>🎉 Listing is FREE right now.</strong><br/>
+        No setup fees, no monthly charges. Just create your storefront and start selling.
       </div>
-      <p style="margin:0 0 22px 0;font-size:14px;color:#0A0A0B;">Click below to access your dashboard. The link logs you in directly — no password needed for now.</p>
-      <p style="margin:0 0 22px 0;">
+      <p style="margin:0 0 12px 0;font-size:14px;color:#0A0A0B;">Here&rsquo;s how it works:</p>
+      <ol style="margin:0 0 22px 18px;padding:0;color:#0A0A0B;font-size:13.5px;line-height:1.55;">
+        <li><strong>Submit business details</strong> — GSTIN, PAN, cities you serve, and what you sell.</li>
+        <li><strong>Upload KYC documents</strong> — GST certificate, PAN, ID proof. Takes 2 minutes.</li>
+        <li><strong>Get approved</strong> — usually within 1 business day.</li>
+        <li><strong>Start listing</strong> — pan-India buyers are already searching for the products you stock.</li>
+      </ol>
+      <p style="margin:0 0 14px 0;font-size:14px;color:#0A0A0B;">Click below — it logs you in and takes you straight to your onboarding dashboard.</p>
+      <p style="margin:0 0 18px 0;">
         <a href="{dashboard_link}" style="display:inline-block;background:#0A0A0B;color:#fff;text-decoration:none;padding:14px 26px;border-radius:10px;font-weight:700;font-size:14px;font-family:'Montserrat',sans-serif;">Go to Dashboard →</a>
       </p>
-      <p style="margin:0 0 8px 0;font-size:12.5px;color:#6E6E73;">This one-time login link is valid for <strong>7 days</strong>. After using it (or once it expires) you can set your password via the <strong>Forgot Password</strong> link on the sign-in page.</p>
+      <p style="margin:0 0 6px 0;font-size:12.5px;color:#6E6E73;">This one-time login link is valid for <strong>7 days</strong>. After it expires you can set your password via the <strong>Forgot Password</strong> link on the sign-in page.</p>
       <p style="margin:0 0 18px 0;font-size:12px;word-break:break-all;color:#0A6E78;">{dashboard_link}</p>
       <hr style="border:none;border-top:1px solid #E5E5EA;margin:18px 0;" />
-      <p style="margin:0 0 6px 0;font-size:12.5px;color:#6E6E73;">Inside the dashboard we&rsquo;ll ask for your bank account and a few KYC documents (GST, PAN, ID proof, address proof, cancelled cheque) — only required <em>before</em> your first payout. You can start listing right away.</p>
       <p style="margin:0;font-size:12.5px;color:#6E6E73;">Questions? Reply to this email or write to <a href="mailto:{SUPPORT_INBOX}" style="color:#0A6E78;">{SUPPORT_INBOX}</a>.</p>
     """
     return await _send(to, "Your TonersCart seller account is ready — start listing for free", body)

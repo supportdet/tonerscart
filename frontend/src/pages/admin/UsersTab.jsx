@@ -57,7 +57,10 @@ export default function UsersTab() {
         );
     }, [users, filter]);
 
-    const selectableVisible = useMemo(() => visible.filter((u) => !u.is_protected), [visible]);
+    // Wave 101 hotfix-5 — admin can delete ANY account (including approved
+    // dealers). The Protected badge / disabled checkbox were removed —
+    // confirmation dialog with a stronger warning is the only safety net.
+    const selectableVisible = visible;
     const allChecked = selectableVisible.length > 0 && selectableVisible.every((u) => selected.has(u.id));
     const someChecked = selectableVisible.some((u) => selected.has(u.id)) && !allChecked;
 
@@ -71,7 +74,6 @@ export default function UsersTab() {
         setSelected(next);
     };
     const toggleOne = (u) => {
-        if (u.is_protected) return;
         const next = new Set(selected);
         if (next.has(u.id)) next.delete(u.id); else next.add(u.id);
         setSelected(next);
@@ -156,8 +158,6 @@ export default function UsersTab() {
                                                 type="checkbox"
                                                 checked={selected.has(u.id)}
                                                 onChange={() => toggleOne(u)}
-                                                disabled={u.is_protected}
-                                                title={u.is_protected ? "Protected — approved dealer" : "Select"}
                                                 data-testid={`admin-users-check-${u.id}`}
                                             />
                                         </td>
@@ -173,13 +173,9 @@ export default function UsersTab() {
                                         <td className="p-3 text-[#6E6E73]">{fmtDate(u.created_at)}</td>
                                         <td className="p-3 text-[#6E6E73]">{fmtDate(u.last_sign_in_at)}</td>
                                         <td className="p-3 text-right">
-                                            {u.is_protected ? (
-                                                <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700" title="Approved dealer — protected"><ShieldCheck size={11} /> Protected</span>
-                                            ) : (
-                                                <button onClick={() => setConfirm({ kind: "single", users: [u] })} className="text-red-600 hover:text-red-700 inline-flex items-center gap-1 text-[12px] font-semibold" data-testid={`admin-users-delete-${u.id}`}>
-                                                    <Trash2 size={12} /> Delete
-                                                </button>
-                                            )}
+                                            <button onClick={() => setConfirm({ kind: "single", users: [u] })} className="text-red-600 hover:text-red-700 inline-flex items-center gap-1 text-[12px] font-semibold" data-testid={`admin-users-delete-${u.id}`}>
+                                                <Trash2 size={12} /> Delete
+                                            </button>
                                         </td>
                                     </tr>
                                 );
@@ -201,8 +197,23 @@ export default function UsersTab() {
                     </DialogHeader>
                     {confirm && (
                         <div className="mt-2 space-y-3 text-[13px] text-[#0A0A0B] max-h-[260px] overflow-y-auto">
+                            {(() => {
+                                const approvedInBatch = confirm.users.filter((u) => u.supplier_status === "approved");
+                                if (approvedInBatch.length > 0) {
+                                    return (
+                                        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-[12.5px] text-red-800" data-testid="admin-users-approved-warning">
+                                            <strong>⚠️ {approvedInBatch.length} approved dealer{approvedInBatch.length > 1 ? "s" : ""} in this batch.</strong> Deleting these removes their live storefront, listings, and order history. This cannot be undone.
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
                             {confirm.users.slice(0, 20).map((u) => (
-                                <div key={u.id} className="flex items-center gap-2"><Mail size={12} className="text-[#86868B]" /><span className="font-mono text-[11.5px]">{u.email}</span></div>
+                                <div key={u.id} className="flex items-center gap-2">
+                                    <Mail size={12} className="text-[#86868B]" />
+                                    <span className="font-mono text-[11.5px]">{u.email}</span>
+                                    {u.supplier_status === "approved" && <span className="ml-auto text-[10.5px] uppercase tracking-wide text-red-700 font-semibold">Approved dealer</span>}
+                                </div>
                             ))}
                             {confirm.users.length > 20 && <div className="text-[12px] text-[#86868B]">…and {confirm.users.length - 20} more.</div>}
                             <p className="text-[12px] text-[#6E6E73] pt-2 border-t border-black/[0.05]">Removes the user from <strong>Supabase Auth</strong> + related tables. Emails become free to re-register. <em>Cannot be undone.</em></p>
