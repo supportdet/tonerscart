@@ -1,6 +1,53 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-30 Wave 101 HOTFIX-4):** **Step 3 document upload reactivity + auto-upload + per-dealer "only missing docs" + the showstopper supplier-phase2 routing bug fixed.**
+> **Latest (2026-06-30 Wave 101 HOTFIX-5):** **5 production bugs fixed in one go — approved-dealer banner accuracy, admin-can-delete-anyone, T&C popup placement, bulk-dealer history, welcome-email rewrite.**
+>
+> ### Bug #1 — Approved dealers stuck seeing "3 docs missing" banner (FIXED + BACKFILLED)
+> Root cause: `admin_approve` only copied `doc_id_proof` (1 of 7 doc fields) from `suppliers_pending` → `suppliers`. Approved dealers like ZION, VERVE, RAVI, BIOS had their `doc_gst`, `doc_pan`, etc. stranded in `suppliers_pending` and showed up as missing in the dashboard banner.
+> **Fix #1a (forward):** `admin_approve` now copies ALL 7 doc fields (`doc_gst`, `doc_pan`, `doc_id_proof`, `doc_address_proof`, `doc_bank_proof`, `doc_brand_authorization`, `doc_shop_photo`).
+> **Fix #1b (backfill):** ran `scripts/wave101_hotfix5_backfill_supplier_docs.py` → **7 already-approved dealers fixed** (ZION, VERVE, RAVI, BIOS, Amman, ROHITTT all had docs in pending that we patched into `suppliers`).
+>
+> ### Bug #2 — "Protected" approved dealers couldn't be deleted (FIXED)
+> Removed the `is_protected` guard entirely from the Admin Users panel:
+>   * Frontend: `UsersTab.jsx` shows a Delete button on every row (no Protected badge). The confirmation dialog now shows a red warning banner listing how many approved dealers are in the deletion batch + an "Approved dealer" tag per row.
+>   * Backend: `DELETE /admin/users/{id}` and `POST /admin/users/bulk-delete` no longer 403 when the target is an approved dealer. They now also cascade-delete the `suppliers` row alongside the auth user, suppliers_pending, user_agreements, saved_addresses.
+>
+> ### Bug #3 — T&C popup was firing during onboarding (FIXED)
+> `SupabaseAgreementGate` in `App.js` now only mounts for **APPROVED** dealers (`role === "supplier" && supplier_status === "approved"`). Fresh dealers in mid-onboarding never see the full T&C popup. The Step 3 inline consent checkboxes in `SellerApplicationForm` cover interim acknowledgements. The full Seller Agreement appears only on the first login AFTER approval — exactly the final gate before listing as the user wanted.
+>
+> ### Bug #4 — No history view of past bulk-dealer uploads (FIXED)
+> New endpoint `GET /admin/dealers/bulk-history` reads `audit_log` rows with `action='bulk_dealer_create'`. Each batch is logged on success with the full email list + per-row delivery status. New frontend dialog `BulkDealerHistory.jsx` is wired into `DealersTab` next to the Bulk Add button — admin sees timestamp, admin email, created/skipped/failed counts, and (on expand) every single email with sent/not-sent indicator.
+>
+> ### Bug #5 — Welcome email + magic-link destination rewritten (FIXED)
+> `email_dealer_welcome_magic` rewritten per stakeholder copy spec:
+>   * **No 7% referral fee mention** anywhere.
+>   * **New opener:** "TonersCart is building India's largest network of verified printer and toner dealers — and pan-India bulk orders are already coming in. We need vendors like you on board now."
+>   * **Keeps "Listing is FREE right now"** without fee mention.
+>   * **4-step process explainer** before the CTA: submit business details → upload KYC → get approved → start listing.
+>   * **Keeps the 7-day expiry note** + Forgot Password fallback + support@ contact.
+>   * Magic link `redirect_to` already pointed at `/auth/callback?next=/supplier`. OAuthCallback already honors `next=` parameter AND defaults role=supplier users to `/supplier`. Dealers now land directly on the onboarding dashboard.
+>
+> ### Files modified
+>   * `backend/routes/admin.py` — `admin_approve` doc-field copy, DELETE/bulk-delete guards removed, new `bulk-history` endpoint with audit_log write.
+>   * `backend/email_service.py` — welcome email template rewritten.
+>   * `backend/scripts/wave101_hotfix5_backfill_supplier_docs.py` (NEW) — already executed, 7 approved dealers fixed.
+>   * `frontend/src/App.js` — `SupabaseAgreementGate` only fires for approved suppliers.
+>   * `frontend/src/pages/admin/UsersTab.jsx` — Protected badge removed, stronger confirmation dialog when approved dealers are selected.
+>   * `frontend/src/pages/admin/BulkDealerHistory.jsx` (NEW) — full history viewer with expand-per-batch.
+>   * `frontend/src/pages/admin/DealersTab.jsx` — wires the new history button next to Bulk Add.
+>
+> ### Verification
+> Backend pytest — **3/3 pass on live preview:**
+>   * `test_admin_users_no_longer_marks_approved_dealers_protected`
+>   * `test_bulk_history_endpoint_returns_batches`
+>   * `test_approve_endpoint_copies_all_docs` — full integration: creates pending row with 5 docs, approves, asserts all 5 land in `suppliers`.
+>
+> Regression — all prior tests still pass (8 across hotfix-2/4/signup).
+> Frontend lint clean.
+
+
+
+
 >
 > ### Bug #1 — Auto-upload on file select (no separate "Upload" button)
 > `DocSlot` rewritten. `onChange={handleFile}` immediately POSTs to `/auth/supplier-document-upload` and then `/auth/supplier-phase2` to persist the path — no extra click. While the upload is in flight, the icon flips to a spinner with "Uploading…" label; on success it turns to a green check with "Uploaded" label. A small **Replace** affordance under the slot lets the dealer swap the file later.

@@ -106,7 +106,16 @@ async def admin_approve(pending_id: str, user: dict = Depends(require_role("admi
         "ifsc_code": P.get("ifsc_code"),
         "bank_name": P.get("bank_name"),
         "bank_branch": P.get("bank_branch"),
+        # Wave 101 hotfix-5 — copy ALL documents from suppliers_pending → suppliers
+        # (previously only doc_id_proof was carried over, so approved dealers
+        # appeared to be "missing" the docs they had already uploaded).
+        "doc_gst": P.get("doc_gst"),
+        "doc_pan": P.get("doc_pan"),
         "doc_id_proof": P.get("doc_id_proof"),
+        "doc_address_proof": P.get("doc_address_proof"),
+        "doc_bank_proof": P.get("doc_bank_proof"),
+        "doc_brand_authorization": P.get("doc_brand_authorization"),
+        "doc_shop_photo": P.get("doc_shop_photo"),
         "seller_id": seller_id,
         "approved_by": user["id"],
         "approved_at": datetime.now(timezone.utc).isoformat(),
@@ -1693,6 +1702,26 @@ async def admin_bulk_create_dealers(payload: BulkDealerPayload, _: dict = Depend
 
         created.append({"email": e, "business_name": r.business_name, "user_id": uid, "magic_link_sent": bool(action_link)})
 
+    # Wave 101 hotfix-5 — log this bulk batch so admin can review history.
+    try:
+        sb_admin.table("audit_log").insert({
+            "actor_id": user["id"],
+            "action": "bulk_dealer_create",
+            "target_type": "bulk_batch",
+            "target_id": None,
+            "details": {
+                "created": len(created),
+                "skipped_existing": len(skipped_existing),
+                "failed": len(failed),
+                "emails_sent": email_sent_count,
+                "created_rows": [{"email": r["email"], "business_name": r["business_name"], "user_id": r.get("user_id"), "sent": r.get("welcome_email_sent")} for r in created],
+                "skipped_rows": [{"email": r["email"], "reason": r.get("reason")} for r in skipped_existing],
+                "failed_rows": [{"email": r["email"], "reason": r.get("reason")} for r in failed],
+            },
+        }).execute()
+    except Exception as e:
+        logger.warning("bulk-dealer audit_log insert failed: %s", e)
+
     return {
         "created": len(created),
         "skipped_existing": len(skipped_existing),
@@ -1703,6 +1732,54 @@ async def admin_bulk_create_dealers(payload: BulkDealerPayload, _: dict = Depend
         "skipped_rows": skipped_existing,
         "failed_rows": failed,
     }
+
+
+@router.get("/admin/dealers/bulk-history")
+def admin_bulk_dealer_history(_: dict = Depends(require_role("admin"))):
+    """Wave 101 hotfix-5 — admin history of every bulk-dealer upload batch.
+    Reads `audit_log` rows with action='bulk_dealer_create'."""
+    try:
+        rows = sb_admin.table("audit_log").select("id,actor_id,created_at,details").eq(
+            "action", "bulk_dealer_create"
+        ).order("created_at", desc=True).limit(200).execute().data or []
+    except Exception as e:
+        # audit_log table may not exist — return empty list cleanly.
+        logger.warning("bulk-dealer history fetch failed: %s", e)
+        return {"batches": []}
+
+    # Hydrate actor email from public.users for display.
+    actor_ids = {r["actor_id"] for r in rows if r.get("actor_id")}
+    actors = {}
+    if actor_ids:
+        try:
+            for u in (sb_admin.table("users").select("id,email,name").in_("id", list(actor_ids)).execute().data or []):
+                actors[u["id"]] = {"email": u.get("email"), "name": u.get("name")}
+        except Exception:
+            pass
+
+    batches = []
+    for r in rows:
+        d = r.get("details") or {}
+        if isinstance(d, str):
+            try:
+                import json
+                d = json.loads(d)
+            except Exception:
+                d = {}
+        batches.append({
+            "id": r["id"],
+            "created_at": r.get("created_at"),
+            "actor_email": actors.get(r.get("actor_id"), {}).get("email"),
+            "actor_name": actors.get(r.get("actor_id"), {}).get("name"),
+            "created": d.get("created", 0),
+            "skipped_existing": d.get("skipped_existing", 0),
+            "failed": d.get("failed", 0),
+            "emails_sent": d.get("emails_sent", 0),
+            "created_rows": d.get("created_rows") or [],
+            "skipped_rows": d.get("skipped_rows") or [],
+            "failed_rows": d.get("failed_rows") or [],
+        })
+    return {"batches": batches}
 
 
 
@@ -1863,15 +1940,13 @@ def admin_list_users(_: dict = Depends(require_role("admin"))):
 
 @router.delete("/admin/users/{user_id}")
 def admin_delete_user(user_id: str, _: dict = Depends(require_role("admin"))):
-    try:
-        sup = sb_admin.table("suppliers").select("id").eq("user_id", user_id).maybe_single().execute()
-    except Exception:
-        sup = None
-    if sup and getattr(sup, "data", None):
-        raise HTTPException(403, "This account belongs to an approved dealer and cannot be deleted from this panel. Suspend or move to inactive instead.")
+    """Wave 101 hotfix-5 — admin can delete ANY account including approved
+    dealers. The previous "approved dealer protected" guard was removed.
+    Also drops the live `suppliers` row so the dealer's storefront, listings
+    and orders are cleanly removed."""
     # Best-effort cleanup of related rows. Wrap each in try/except so a
     # missing/already-clean row doesn't abort the cascade.
-    for tbl in ("suppliers_pending", "user_agreements", "saved_addresses"):
+    for tbl in ("suppliers", "suppliers_pending", "user_agreements", "saved_addresses"):
         try:
             sb_admin.table(tbl).delete().eq("user_id", user_id).execute()
         except Exception as ex:
@@ -1897,20 +1972,14 @@ class BulkDeletePayload(BaseModel):
 
 @router.post("/admin/users/bulk-delete")
 def admin_bulk_delete_users(payload: BulkDeletePayload, _: dict = Depends(require_role("admin"))):
-    """Wave 101 — delete N user accounts in one call. Each id goes through
-    the same approved-dealer protection as the single-delete endpoint."""
+    """Wave 101 hotfix-5 — delete N user accounts (including approved
+    dealers) in one call. No protection — relies on the frontend
+    confirmation dialog as the safety net."""
     deleted: List[str] = []
-    protected: List[str] = []
+    protected: List[str] = []  # kept in response shape for backwards-compat — always 0
     failed: List[dict] = []
     for uid in payload.user_ids:
-        try:
-            sup = sb_admin.table("suppliers").select("id").eq("user_id", uid).maybe_single().execute()
-        except Exception:
-            sup = None
-        if sup and getattr(sup, "data", None):
-            protected.append(uid)
-            continue
-        for tbl in ("suppliers_pending", "user_agreements", "saved_addresses"):
+        for tbl in ("suppliers", "suppliers_pending", "user_agreements", "saved_addresses"):
             try:
                 sb_admin.table(tbl).delete().eq("user_id", uid).execute()
             except Exception as ex:
