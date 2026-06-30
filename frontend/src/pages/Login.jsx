@@ -19,7 +19,7 @@ const GoogleIcon = (props) => (
 );
 
 export default function Login() {
-    const { login, signInWithGoogle } = useAuth();
+    const { login, signInWithGoogle, user, loading: authLoading } = useAuth();
     const navigate = useNavigate();
     const [params] = useSearchParams();
     const next = params.get("next");
@@ -31,6 +31,26 @@ export default function Login() {
     const [errors, setErrors] = useState({}); // { email, password, form }
 
     const clearErrors = () => setErrors({});
+
+    // Wave 101 hotfix-6 — auto-redirect when the user is ALREADY authenticated
+    // (e.g. they landed here via the Supabase magic-link `redirect_to=/login`
+    // for bulk-invited dealers). The supabase-js detectSessionInUrl flag
+    // catches the auth hash, /auth/me hydrates, and we route them to the
+    // intended `next` path or the default by-role page. Without this, they
+    // sat staring at the login form despite being signed in.
+    React.useEffect(() => {
+        if (authLoading || !user) return;
+        if (next && next.startsWith("/")) {
+            navigate(next, { replace: true });
+            return;
+        }
+        const role = user?.role;
+        const path = role === "admin" ? "/admin"
+            : role === "supplier" ? "/supplier"
+            : role === "oem" ? "/oem-dashboard"
+            : "/customer";
+        navigate(path, { replace: true });
+    }, [authLoading, user, next, navigate]);
 
     React.useEffect(() => {
         if (!loading && !googleLoading) { setSlowHint(false); return; }

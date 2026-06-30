@@ -2,14 +2,25 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { formatApiError } from "../../lib/api";
 import { toast } from "sonner";
-import { Search, Loader2, Trash2, PauseCircle, PlayCircle, Pencil, Check, X, AlertTriangle, ExternalLink, UserPlus, History } from "lucide-react";
+import { Search, Loader2, Trash2, PauseCircle, PlayCircle, Pencil, Check, X, AlertTriangle, ExternalLink, UserPlus, BarChart3 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import BulkDealerUpload from "./BulkDealerUpload";
-import BulkDealerHistory from "./BulkDealerHistory";
+import DealerOutreachAnalytics from "./DealerOutreachAnalytics";
 
 const fmtMoney = (n) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
+
+// Wave 102 — exact human-readable labels for the doc_* fields admin sees.
+const DOC_FIELD_LABELS = {
+    doc_gst: "GST certificate",
+    doc_pan: "PAN card",
+    doc_id_proof: "ID proof",
+    doc_address_proof: "Address proof",
+    doc_bank_proof: "Cancelled cheque",
+    doc_brand_authorization: "Brand authorization",
+    doc_shop_photo: "Shop photo",
+};
 
 export default function DealersTab() {
     const navigate = useNavigate();
@@ -22,6 +33,7 @@ export default function DealersTab() {
     const [busyConfirm, setBusyConfirm] = useState(false);
     const [bulkOpen, setBulkOpen] = useState(false);
     const [historyOpen, setHistoryOpen] = useState(false);
+    const [statusTab, setStatusTab] = useState("active"); // "active" | "suspended"
 
     const load = async () => {
         setLoading(true);
@@ -51,13 +63,18 @@ export default function DealersTab() {
     }, [orders]);
 
     const visible = useMemo(() => {
+        // Wave 102 — Active vs Suspended sub-tab split first, then text filter.
+        const statusFiltered = dealers.filter((d) => (statusTab === "suspended" ? !!d.is_suspended : !d.is_suspended));
         const f = filter.trim().toLowerCase();
-        if (!f) return dealers;
-        return dealers.filter((d) =>
+        if (!f) return statusFiltered;
+        return statusFiltered.filter((d) =>
             (d.business_name || "").toLowerCase().includes(f)
             || (d.city || "").toLowerCase().includes(f)
         );
-    }, [dealers, filter]);
+    }, [dealers, filter, statusTab]);
+
+    const activeCount = useMemo(() => dealers.filter((d) => !d.is_suspended).length, [dealers]);
+    const suspendedCount = useMemo(() => dealers.filter((d) => !!d.is_suspended).length, [dealers]);
 
     const toggleSuspend = (d) => {
         setConfirming({ dealer: d, action: d.is_suspended ? "unsuspend" : "suspend" });
@@ -78,6 +95,28 @@ export default function DealersTab() {
 
     return (
         <div className="space-y-4" data-testid="dealers-tab">
+            {/* Wave 102 — Active vs Suspended sub-tab pill switcher */}
+            <div className="flex items-center gap-1 p-1 bg-[#F4F4F6] rounded-full w-fit" data-testid="dealers-status-tabs">
+                {[
+                    { key: "active", label: "Active", count: activeCount },
+                    { key: "suspended", label: "Suspended", count: suspendedCount },
+                ].map((t) => (
+                    <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => setStatusTab(t.key)}
+                        className={`px-3.5 h-8 rounded-full text-[12.5px] font-semibold transition ${
+                            statusTab === t.key
+                                ? "bg-white text-[#0A0A0B] shadow-sm"
+                                : "text-[#6E6E73] hover:text-[#0A0A0B]"
+                        }`}
+                        data-testid={`dealers-status-tab-${t.key}`}
+                    >
+                        {t.label} <span className="ml-1 text-[11px] opacity-70">({t.count})</span>
+                    </button>
+                ))}
+            </div>
+
             <div className="flex items-center gap-3">
                 <div className="relative flex-1 max-w-md">
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B]" />
@@ -90,18 +129,18 @@ export default function DealersTab() {
                     />
                 </div>
                 <div className="text-[12px] text-[#6E6E73]" data-testid="dealers-count">
-                    {visible.length} of {dealers.length}
+                    {visible.length} of {statusTab === "suspended" ? suspendedCount : activeCount}
                 </div>
                 <Button type="button" onClick={() => setBulkOpen(true)} className="btn-cta inline-flex items-center gap-1.5 h-9" data-testid="bulk-add-dealers-btn">
                     <UserPlus size={14} /> Bulk add dealers
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setHistoryOpen(true)} className="inline-flex items-center gap-1.5 h-9" data-testid="bulk-history-btn">
-                    <History size={14} /> Bulk history
+                <Button type="button" variant="outline" onClick={() => setHistoryOpen(true)} className="inline-flex items-center gap-1.5 h-9" data-testid="outreach-analytics-btn">
+                    <BarChart3 size={14} /> Outreach Analytics
                 </Button>
             </div>
 
             <BulkDealerUpload open={bulkOpen} onClose={() => setBulkOpen(false)} onCreated={load} />
-            <BulkDealerHistory open={historyOpen} onClose={() => setHistoryOpen(false)} />
+            <DealerOutreachAnalytics open={historyOpen} onClose={() => setHistoryOpen(false)} />
 
             {loading ? (
                 <div className="py-16 text-center text-[#6E6E73] flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Loading dealers…</div>
@@ -148,11 +187,14 @@ export default function DealersTab() {
                                                 )}
                                                 {Array.isArray(d.pending_docs) && d.pending_docs.length > 0 && (
                                                     <span
-                                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-semibold"
-                                                        title={`Missing: ${d.pending_docs.map((f) => f.replace("doc_", "").replace(/_/g, " ")).join(", ")}`}
+                                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-semibold max-w-[260px] truncate"
+                                                        title={`Missing: ${d.pending_docs.map((f) => DOC_FIELD_LABELS[f] || f.replace("doc_", "").replace(/_/g, " ")).join(", ")}`}
                                                         data-testid={`dealer-pending-docs-${d.id}`}
                                                     >
-                                                        <AlertTriangle size={10} /> {d.pending_docs.length} doc{d.pending_docs.length === 1 ? "" : "s"} pending
+                                                        <AlertTriangle size={10} className="shrink-0" />
+                                                        <span className="truncate">
+                                                            Missing: {d.pending_docs.map((f) => DOC_FIELD_LABELS[f] || f.replace("doc_", "").replace(/_/g, " ")).join(", ")}
+                                                        </span>
                                                     </span>
                                                 )}
                                             </div>

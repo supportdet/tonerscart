@@ -1544,7 +1544,7 @@ def _frontend_origin() -> str:
 
 
 @router.post("/admin/dealers/bulk-create")
-async def admin_bulk_create_dealers(payload: BulkDealerPayload, _: dict = Depends(require_role("admin"))):
+async def admin_bulk_create_dealers(payload: BulkDealerPayload, user: dict = Depends(require_role("admin"))):
     """Wave 98 — bulk dealer onboarding.
 
     For each input row (business_name, email, phone, city, gstin):
@@ -1610,7 +1610,14 @@ async def admin_bulk_create_dealers(payload: BulkDealerPayload, _: dict = Depend
         logger.info("bulk-create: collected %d existing auth emails for dedupe check", len(existing_emails))
 
     origin = _frontend_origin()
-    redirect_to = f"{origin}/auth/callback?next=/supplier"
+    # Wave 101 hotfix-6 — Supabase magic links only honour a `redirect_to`
+    # that is in the project's Redirect URLs allow-list. Custom paths like
+    # /auth/callback?next=/supplier sometimes fall through to the project's
+    # default Site URL (homepage) — which is exactly what dealers reported.
+    # Use /login?next=/supplier instead: /login is universally allow-listed
+    # as a default URL, AND Login.jsx already honours the `next` param to
+    # bounce role=supplier users straight to /supplier after auth.
+    redirect_to = f"{origin}/login?next=/supplier"
 
     created: List[dict] = []
     skipped_existing: List[dict] = []
@@ -1657,23 +1664,12 @@ async def admin_bulk_create_dealers(payload: BulkDealerPayload, _: dict = Depend
             failed.append({"email": e, "business_name": r.business_name, "reason": f"profile insert failed: {ex}"})
             continue
 
-        # Step 3 — suppliers_pending Phase 1 row. Status = 'pending' so admin
-        # still has to approve before the dealer can publish listings. The
-        # imported batch is treated like a regular application.
-        try:
-            sb_admin.table("suppliers_pending").upsert({
-                "user_id": uid,
-                "business_name": r.business_name,
-                "contact_person": r.business_name,
-                "phone": (r.phone or None),
-                "city": (r.city or None),
-                "gst_number": (r.gstin or "").strip().upper() or None,
-                "status": "pending",
-                "submitted_at": datetime.now(timezone.utc).isoformat(),
-            }, on_conflict="user_id").execute()
-        except Exception as ex:
-            logger.warning("bulk-dealer pending row insert failed for %s: %s", e, ex)
-            # Don't abort — user already created. Admin can patch later.
+        # Wave 102 — DO NOT pre-create a suppliers_pending row. Many of its
+        # columns are NOT NULL (phone, business_address, ...) and the dealer
+        # creates this row themselves when they fill the Phase-1 onboarding
+        # form. The outreach funnel works fine without a pre-created row —
+        # invited dealers will sit at stage="invited" until they sign in and
+        # start filling out their application.
 
         # Step 4 — generate magic-link (Supabase) and send branded email.
         action_link = ""
@@ -1703,18 +1699,21 @@ async def admin_bulk_create_dealers(payload: BulkDealerPayload, _: dict = Depend
         created.append({"email": e, "business_name": r.business_name, "user_id": uid, "magic_link_sent": bool(action_link)})
 
     # Wave 101 hotfix-5 — log this bulk batch so admin can review history.
+    # Wave 102 fix — use the actual audit_log columns (actor_email + metadata),
+    # no target_type column exists.
     try:
         sb_admin.table("audit_log").insert({
             "actor_id": user["id"],
+            "actor_email": user.get("email"),
             "action": "bulk_dealer_create",
-            "target_type": "bulk_batch",
             "target_id": None,
-            "details": {
+            "target_email": None,
+            "metadata": {
                 "created": len(created),
                 "skipped_existing": len(skipped_existing),
                 "failed": len(failed),
                 "emails_sent": email_sent_count,
-                "created_rows": [{"email": r["email"], "business_name": r["business_name"], "user_id": r.get("user_id"), "sent": r.get("welcome_email_sent")} for r in created],
+                "created_rows": [{"email": r["email"], "business_name": r["business_name"], "user_id": r.get("user_id"), "sent": r.get("magic_link_sent")} for r in created],
                 "skipped_rows": [{"email": r["email"], "reason": r.get("reason")} for r in skipped_existing],
                 "failed_rows": [{"email": r["email"], "reason": r.get("reason")} for r in failed],
             },
@@ -2000,4 +1999,246 @@ def admin_bulk_delete_users(payload: BulkDeletePayload, _: dict = Depends(requir
         "deleted_ids": deleted,
         "protected_ids": protected,
         "failed_rows": failed,
+    }
+
+
+
+# ============================================================================
+# Wave 102 — Dealer Outreach Analytics funnel
+# ============================================================================
+
+@router.get("/admin/dealers/outreach-funnel")
+def admin_outreach_funnel(_: dict = Depends(require_role("admin"))):
+    """Aggregated funnel of every dealer EVER invited via the bulk import path.
+
+    Stages (each is a strict superset of the next):
+       1. invited              — email created + magic link sent (in audit_log)
+       2. signed_in            — user has at least one sign-in in Supabase Auth
+       3. business_details     — suppliers_pending has business_address OR contact_person filled
+       4. docs_uploaded        — any KYC doc (doc_gst / doc_pan / doc_id_proof) uploaded
+       5. submitted_for_review — suppliers_pending.status='pending' AND business_address set
+       6. approved             — row in suppliers (status approved)
+
+    Returns aggregate counts + a per-dealer drill-down so admins can chase
+    individual drop-offs.
+    """
+    # Pull every bulk_dealer_create batch — that's our "invited" list.
+    try:
+        batches = sb_admin.table("audit_log").select("id,created_at,metadata").eq(
+            "action", "bulk_dealer_create"
+        ).order("created_at", desc=True).limit(500).execute().data or []
+    except Exception as ex:
+        logger.warning("outreach-funnel: audit_log fetch failed: %s", ex)
+        batches = []
+
+    invited: Dict[str, Dict[str, Any]] = {}  # email-lower -> {email, business_name, invited_at, batch_id}
+    for b in batches:
+        d = b.get("metadata") or {}
+        if isinstance(d, str):
+            try:
+                d = json.loads(d)
+            except Exception:
+                d = {}
+        for r in (d.get("created_rows") or []):
+            em = (r.get("email") or "").strip().lower()
+            if not em:
+                continue
+            # First batch wins (oldest invite time)
+            if em not in invited or (b.get("created_at") or "") < (invited[em].get("invited_at") or ""):
+                invited[em] = {
+                    "email": em,
+                    "business_name": r.get("business_name") or "—",
+                    "user_id": r.get("user_id"),
+                    "invited_at": b.get("created_at"),
+                    "batch_id": b.get("id"),
+                    "email_delivered": bool(r.get("sent")),
+                }
+
+    if not invited:
+        return {
+            "stages": [
+                {"key": "invited", "label": "Invited", "count": 0},
+                {"key": "signed_in", "label": "Signed in", "count": 0},
+                {"key": "business_details", "label": "Business details filled", "count": 0},
+                {"key": "docs_uploaded", "label": "Docs uploaded", "count": 0},
+                {"key": "submitted_for_review", "label": "Submitted for review", "count": 0},
+                {"key": "approved", "label": "Approved", "count": 0},
+            ],
+            "dealers": [],
+            "total_batches": 0,
+        }
+
+    emails_lower = list(invited.keys())
+
+    # Look up public.users for these emails — we need user_id + supplier role.
+    users_by_email: Dict[str, dict] = {}
+    try:
+        # Supabase doesn't have a case-insensitive `in_`; fetch by email batches.
+        # Emails coming from the audit log are already lowercase; users.email
+        # should likewise be lowercase from bulk-create.
+        BATCH = 200
+        for i in range(0, len(emails_lower), BATCH):
+            chunk = emails_lower[i:i + BATCH]
+            try:
+                rows = sb_admin.table("users").select(
+                    "id,email,role,created_at"
+                ).in_("email", chunk).execute().data or []
+                for u in rows:
+                    em = (u.get("email") or "").strip().lower()
+                    if em:
+                        users_by_email[em] = u
+            except Exception as ex:
+                logger.warning("outreach-funnel: users lookup chunk failed: %s", ex)
+    except Exception as ex:
+        logger.warning("outreach-funnel: users lookup failed: %s", ex)
+
+    # Pull suppliers_pending for those user_ids in one shot.
+    user_ids = [u["id"] for u in users_by_email.values() if u.get("id")]
+    pending_by_uid: Dict[str, dict] = {}
+    if user_ids:
+        BATCH = 200
+        for i in range(0, len(user_ids), BATCH):
+            chunk = user_ids[i:i + BATCH]
+            try:
+                rows = sb_admin.table("suppliers_pending").select(
+                    "user_id,status,business_address,contact_person,gst_number,"
+                    "doc_gst,doc_pan,doc_id_proof,doc_address_proof,doc_bank_proof,"
+                    "account_number,ifsc_code,submitted_at,reviewed_at"
+                ).in_("user_id", chunk).execute().data or []
+                for p in rows:
+                    if p.get("user_id"):
+                        pending_by_uid[p["user_id"]] = p
+            except Exception as ex:
+                logger.warning("outreach-funnel: pending lookup chunk failed: %s", ex)
+
+    # Approved suppliers.
+    approved_by_uid: Dict[str, dict] = {}
+    if user_ids:
+        BATCH = 200
+        for i in range(0, len(user_ids), BATCH):
+            chunk = user_ids[i:i + BATCH]
+            try:
+                rows = sb_admin.table("suppliers").select(
+                    "user_id,business_name,approved_at,seller_id"
+                ).in_("user_id", chunk).execute().data or []
+                for s in rows:
+                    if s.get("user_id"):
+                        approved_by_uid[s["user_id"]] = s
+            except Exception as ex:
+                logger.warning("outreach-funnel: suppliers lookup chunk failed: %s", ex)
+
+    # Supabase Auth sign-in info (last_sign_in_at). Paginate through auth.
+    auth_signin_by_email: Dict[str, Optional[str]] = {}
+    page = 1
+    while page <= 50:
+        try:
+            res = sb_admin.auth.admin.list_users(page=page, per_page=1000)
+        except Exception as ex:
+            logger.warning("outreach-funnel: auth list_users page %s failed: %s", page, ex)
+            break
+        if isinstance(res, list):
+            users = res
+        else:
+            users = getattr(res, "users", None) or (res.get("users") if isinstance(res, dict) else None) or []
+        if not users:
+            break
+        for u in users:
+            em = (getattr(u, "email", None) or (u.get("email") if isinstance(u, dict) else None) or "").strip().lower()
+            if not em or em not in invited:
+                continue
+            last = getattr(u, "last_sign_in_at", None) or (u.get("last_sign_in_at") if isinstance(u, dict) else None)
+            auth_signin_by_email[em] = last
+        if len(users) < 1000:
+            break
+        page += 1
+
+    # Build per-dealer stage record.
+    dealers: List[dict] = []
+    counts = {
+        "invited": 0,
+        "signed_in": 0,
+        "business_details": 0,
+        "docs_uploaded": 0,
+        "submitted_for_review": 0,
+        "approved": 0,
+    }
+    for em, inv in invited.items():
+        u = users_by_email.get(em) or {}
+        uid = u.get("id") or inv.get("user_id")
+        p = pending_by_uid.get(uid) if uid else None
+        ap = approved_by_uid.get(uid) if uid else None
+
+        signed_in = bool(auth_signin_by_email.get(em))
+        business_details = bool(p and (p.get("business_address") or p.get("contact_person")) and p.get("contact_person") != inv["business_name"])
+        # Looser definition: any KYC field uploaded counts as "docs uploaded".
+        any_doc = bool(p and (p.get("doc_gst") or p.get("doc_pan") or p.get("doc_id_proof")
+                              or p.get("doc_address_proof") or p.get("doc_bank_proof")))
+        submitted = bool(p and (p.get("status") == "pending") and (p.get("business_address") or p.get("account_number")))
+        approved = bool(ap)
+
+        # Furthest stage reached (highest index they cleared).
+        if approved:
+            furthest = "approved"
+        elif submitted:
+            furthest = "submitted_for_review"
+        elif any_doc:
+            furthest = "docs_uploaded"
+        elif business_details:
+            furthest = "business_details"
+        elif signed_in:
+            furthest = "signed_in"
+        else:
+            furthest = "invited"
+
+        # Cumulative counts.
+        counts["invited"] += 1
+        if signed_in or business_details or any_doc or submitted or approved:
+            counts["signed_in"] += 1
+        if business_details or any_doc or submitted or approved:
+            counts["business_details"] += 1
+        if any_doc or submitted or approved:
+            counts["docs_uploaded"] += 1
+        if submitted or approved:
+            counts["submitted_for_review"] += 1
+        if approved:
+            counts["approved"] += 1
+
+        dealers.append({
+            "email": em,
+            "business_name": inv.get("business_name") or (ap.get("business_name") if ap else None) or "—",
+            "invited_at": inv.get("invited_at"),
+            "email_delivered": inv.get("email_delivered", False),
+            "signed_in_at": auth_signin_by_email.get(em),
+            "submitted_at": (p or {}).get("submitted_at"),
+            "approved_at": (ap or {}).get("approved_at"),
+            "seller_id": (ap or {}).get("seller_id"),
+            "user_id": uid,
+            "furthest_stage": furthest,
+            "stages": {
+                "invited": True,
+                "signed_in": signed_in,
+                "business_details": business_details,
+                "docs_uploaded": any_doc,
+                "submitted_for_review": submitted,
+                "approved": approved,
+            },
+        })
+
+    # Sort: dealers stuck earliest in funnel first, then by oldest invite.
+    STAGE_ORDER = ["invited", "signed_in", "business_details", "docs_uploaded", "submitted_for_review", "approved"]
+    dealers.sort(key=lambda d: (STAGE_ORDER.index(d["furthest_stage"]), d.get("invited_at") or ""))
+
+    stages = [
+        {"key": "invited", "label": "Invited", "count": counts["invited"]},
+        {"key": "signed_in", "label": "Signed in", "count": counts["signed_in"]},
+        {"key": "business_details", "label": "Business details", "count": counts["business_details"]},
+        {"key": "docs_uploaded", "label": "Docs uploaded", "count": counts["docs_uploaded"]},
+        {"key": "submitted_for_review", "label": "Submitted for review", "count": counts["submitted_for_review"]},
+        {"key": "approved", "label": "Approved", "count": counts["approved"]},
+    ]
+
+    return {
+        "stages": stages,
+        "dealers": dealers,
+        "total_batches": len(batches),
     }

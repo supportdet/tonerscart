@@ -1,0 +1,57 @@
+{
+  "summary": "Wave 102 backend testing — 5 of 6 tests pass. CRITICAL: the audit_log table is missing the 'details' column in the live Supabase schema, so the bulk_dealer_create insert AND the outreach-funnel read both fail with PGRST204 / 42703. This breaks two of the headline Wave-102 features end-to-end: (a) the new Dealer Outreach Analytics dialog will always render the empty-state ('No bulk-dealer outreach batches yet…') even after admins run a bulk import; (b) bulk-imported dealers never get a row in the outreach funnel drill-down. Separately, suppliers_pending inserts during bulk-create fail with a NOT NULL constraint on `email` (the upsert payload omits email). Outreach funnel returns the correct 6-stage skeleton, raise-query endpoint works for any authed user, and supplier_raise_query body validation is correct.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/admin/dealers/bulk-create + GET /api/admin/dealers/outreach-funnel",
+        "issue": "audit_log table has NO 'details' column in Supabase. The insert in admin.py:1714-1728 writes {'details': {...}} but Supabase returns PGRST204 'Could not find the details column of audit_log in the schema cache'. The funnel read in admin.py:2035 selects 'id,created_at,details' and returns 400 (42703 column does not exist). Net effect: outreach funnel ALWAYS returns dealers=[] and stages all 0, regardless of how many bulk batches an admin runs. The parameter-rename fix (_ -> user) is correct but insufficient — a schema migration is missing.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "POST /api/admin/dealers/bulk-create",
+        "issue": "suppliers_pending insert fails with '23502 null value in column email of relation suppliers_pending violates not-null constraint'. admin.py:1671-1680 upserts user_id/business_name/contact_person/phone/city/gst_number/status/submitted_at but omits `email`. Failure is logged + swallowed so the endpoint still returns 200, but bulk-created dealers never get a Phase-1 application row, which breaks the onboarding stage transitions (business_details, docs_uploaded, submitted_for_review) of the new funnel.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/supplier/raise-query",
+        "issue": "Endpoint accepts the request from a logged-in admin (no role gate). Acceptable for now because admins shouldn't be calling it, but consider gating to role='supplier' if you want strict separation."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Admin → Dealers tab → Outreach Analytics",
+        "issue": "Even though the dialog component data-testid='outreach-analytics-dialog' and the new button are wired up correctly, the panel will permanently sit on the empty-state copy because the underlying funnel endpoint returns dealers=[] (see backend critical #1). User-visible regression.",
+        "affected_selectors": ["outreach-analytics-dialog", "outreach-analytics-btn"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave102_outreach_query.py",
+    "/app/test_reports/pytest/iteration_wave102.xml"
+  ],
+  "action_items": [
+    "RUN A SCHEMA MIGRATION on Supabase audit_log: add a JSONB column named `details` (or change admin.py:1714+1728 + admin.py:2035+2050 to use the existing `metadata` column — note impersonate_start at admin.py:740-747 already uses `metadata`, so the codebase is inconsistent).",
+    "Add `email: e` to the suppliers_pending.upsert payload in admin.py:1671-1680 so the NOT NULL constraint is satisfied and bulk-imported dealers progress through funnel stages.",
+    "Once audit_log is fixed, re-run /app/backend/tests/test_wave102_outreach_query.py — the previously failing test will pass.",
+    "Frontend UI tests (profile dropdown, Phase2Banner per-dealer impersonation, magic-link /login?next=/supplier redirect) were NOT executed in this iteration; main agent can self-test after the schema fix or call testing agent again."
+  ],
+  "critical_code_review_comments": [
+    "Inconsistent audit_log columns: admin.py:740-747 (impersonate_start) writes to `metadata`, but admin.py:1714-1728 (bulk_dealer_create) and admin.py:2035 (outreach-funnel) reference `details`. Pick one and use it everywhere.",
+    "bulk-create endpoint silently swallows the suppliers_pending failure (admin.py:1683) — should at least surface this in the response `failed` list, otherwise admins have no way to know the imported dealers are stuck.",
+    "outreach-funnel uses Supabase Auth list_users with up to 50 pages * 1000 users = 50k row scan PER request. Will get slow as the auth user count grows; consider caching last_sign_in_at or using a per-email lookup."
+  ],
+  "updated_files": ["/app/backend/tests/test_wave102_outreach_query.py"],
+  "success_rate": {"backend": "83% (5/6 pytest tests)", "frontend": "not_tested"},
+  "test_credentials": "Admin: support@tonerscart.com / Bangara1@# (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Tests create one TEST_W102 dealer per run (uuid-suffixed email) — auto-cleaned via /api/admin/users/{id} delete when user_id is returned. Note: because suppliers_pending insert fails, the row only exists in users + auth.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend test file: /app/backend/tests/test_wave102_outreach_query.py. Once main agent fixes (1) audit_log column mismatch and (2) suppliers_pending email NOT NULL, all 6 tests should pass. Frontend Playwright coverage for Wave 102 (dealer profile menu, raise-query dialog, outreach analytics dialog, Phase2Banner per-dealer impersonation, magic-link /login?next=/supplier redirect) is still pending — run those after backend is green.",
+  "rca of the issue": "The Wave 102 'fix' renamed the function parameter from `_` to `user` so admin.py:1715 could reference `user['id']` instead of crashing on NameError. That fix is correctly in place. However, the audit_log.details column referenced by both the writer (admin.py:1714-1728) and the new outreach-funnel reader (admin.py:2035) does NOT exist in the current Supabase schema — the existing audit_log rows (e.g. impersonate_start) use a `metadata` column. So the underlying insert/read still fail with PGRST204 / 42703. Reproduction: 1) admin login. 2) POST /api/admin/dealers/bulk-create with {rows:[{email:'x@y.z', business_name:'X'}]} → returns 200 with created>=1 but backend logs show 'bulk-dealer audit_log insert failed'. 3) GET /api/admin/dealers/outreach-funnel → returns 200 with dealers=[] and all stage counts 0. Mitigation: either run a migration to add `details JSONB` to audit_log, or change both code sites to use the existing `metadata` column."
+}

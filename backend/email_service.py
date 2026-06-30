@@ -197,6 +197,30 @@ async def email_admin_reply(to: str, subject: str, message: str, name: str | Non
     return await _send(to, subject or "Re: your message to TonersCart", html, reply_to=SUPPORT_INBOX)
 
 
+async def email_dealer_raise_query(dealer: dict, subject: str, message: str) -> bool:
+    """Approved dealer submits a query/support request from their dashboard.
+    Goes to the admin support inbox with reply_to set to the dealer's email."""
+    to = SUPPORT_INBOX
+    biz = (dealer or {}).get("business_name") or "—"
+    email = (dealer or {}).get("email") or ""
+    seller_id = (dealer or {}).get("seller_id") or "—"
+    phone = (dealer or {}).get("phone") or "—"
+    safe = (message or "").strip().replace("\n", "<br>")
+    html = f"""
+    <h2 style="margin:0 0 12px 0;font-size:18px;">Dealer query — {biz}</h2>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px;">
+      <tr><td style="padding:4px 0;color:#86868B;width:130px;">Business</td><td><strong>{biz}</strong></td></tr>
+      <tr><td style="padding:4px 0;color:#86868B;">Seller ID</td><td>{seller_id}</td></tr>
+      <tr><td style="padding:4px 0;color:#86868B;">Email</td><td>{email}</td></tr>
+      <tr><td style="padding:4px 0;color:#86868B;">Phone</td><td>{phone}</td></tr>
+    </table>
+    <div style="font-size:14px;color:#1d1d1f;line-height:1.65;padding:12px;background:#F8F9FB;border-left:3px solid #00B7C7;border-radius:6px;">{safe}</div>
+    <p style="margin-top:14px;color:#6E6E73;font-size:12px;">Reply directly to this email — it will go straight to the dealer.</p>
+    """
+    return await _send(to, f"[TonersCart] Dealer query — {biz} — {subject or 'No subject'}", html, reply_to=email or None)
+
+
+
 # ===== Public helpers ===========================================================
 
 # Public app base for links inside emails (matches the rest of this module).
