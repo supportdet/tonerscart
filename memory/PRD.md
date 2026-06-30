@@ -1,6 +1,47 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-30 Wave 101 HOTFIX-3):** **Step 3 onboarding UX fixed (bank + docs inline) + Submit validation corrected + per-dealer accurate Phase 2 banner.**
+> **Latest (2026-06-30 Wave 101 HOTFIX-4):** **Step 3 document upload reactivity + auto-upload + per-dealer "only missing docs" + the showstopper supplier-phase2 routing bug fixed.**
+>
+> ### Bug #1 — Auto-upload on file select (no separate "Upload" button)
+> `DocSlot` rewritten. `onChange={handleFile}` immediately POSTs to `/auth/supplier-document-upload` and then `/auth/supplier-phase2` to persist the path — no extra click. While the upload is in flight, the icon flips to a spinner with "Uploading…" label; on success it turns to a green check with "Uploaded" label. A small **Replace** affordance under the slot lets the dealer swap the file later.
+>
+> ### Bug #2 — Submit reactivity (THE SHOWSTOPPER WAS IN THE BACKEND)
+> Symptom: dealers uploaded 3 mandatory docs, filled bank details, but the Submit button stayed disabled.
+>
+> **Root cause was NOT the frontend** — it was `/auth/supplier-phase2` in `routes/auth.py`. The endpoint routed writes based on `if user.role != "supplier": → suppliers_pending`. But after Wave 101 the signup-supplier endpoint sets `role='supplier'` for FRESH dealers (before any application row exists). So every upload silently went to `UPDATE suppliers WHERE user_id=...` which affected 0 rows because no suppliers row existed yet. `/auth/me` then found nothing in `suppliers_pending` either → frontend Submit gate saw empty docs → stayed disabled.
+>
+> **Fix:** route the write based on actual data, not role:
+>   1. If a row exists in `suppliers` → write to `suppliers`.
+>   2. Otherwise → upsert into `suppliers_pending` (bootstrap a `status='draft'` row if none exists), then UPDATE it.
+>
+> Frontend defensive fix on top — replaced the `local` state pattern with an `uploadedPatch` state: the merged view `{...supplier, ...uploadedPatch}` ALWAYS keeps newly-uploaded paths even after a /auth/me re-fetch. This prevents a stale supplier-prop refresh from clobbering an in-progress upload.
+>
+> ### Bug #3 — Approved-dealer banner: show ONLY the missing docs
+> `DocsDialog` (showSubmitForReview=false mode) now renders a per-dealer view:
+>   * Computes `missingMandatoryKeys = MANDATORY_DOCS.filter(d => !docs[d.key])` against the live supplier object.
+>   * Only renders `DocSlot` for the missing items (mandatory first, then brand-auth if Original/OEM, then optional nudges that are still empty).
+>   * If nothing is missing → shows a "All your documents are in" success card.
+>
+> A dealer missing only their cancelled cheque sees ONLY the cancelled cheque field. Big C (missing 1 — Brand auth) sees ONLY the Brand auth slot.
+>
+> ### Bug #4 — Banner refresh after upload
+> The auto-upload flow now fires `onSaved && onSaved()` after every successful upload — this calls the parent `refresh` which re-fetches `/auth/me`. With Bug #2's root-cause fixed, `/auth/me` now returns the just-uploaded doc paths, so the banner instantly recomputes `missingDocs` (or dismisses itself entirely if nothing's left).
+>
+> ### Files modified
+>   * `backend/routes/auth.py` — supplier-phase2 routing logic rewritten (the showstopper). Also bootstraps a draft row if the dealer skipped /auth/apply-seller.
+>   * `frontend/src/components/Phase2Banner.jsx` — DocSlot auto-upload; DocsDialog uploadedPatch state pattern; approved-dealer mode only renders missing docs.
+>
+> ### Verification
+> Backend pytest — **5/5 across 3 test files pass:**
+>   * `test_wave101_hotfix4_upload_flow.py` — **NEW** — full flow signup → apply → upload 3 docs → save bank → /auth/me returns ALL paths → submit → pending. Also: approved dealer uploads missing doc → /auth/me reflects it for banner refresh.
+>   * `test_wave101_signup_hotfix.py` — 3/3 regression.
+>   * `test_wave101_hotfix2.py` — 4/4 regression (Admin Users, Google OAuth, approved-dealer routing).
+>
+> Frontend lint clean (only pre-existing warnings in unrelated files).
+
+
+
+
 >
 > ### Bug #1 — Bank details were a separate hidden dialog (FIXED)
 > Previously the Step 3 "Submit-for-verification" dialog showed only document uploads + a small "Add bank" button that opened ANOTHER dialog. Per user requirement, bank and docs must both be fully expanded inline in a single scrollable dialog.
