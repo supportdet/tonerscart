@@ -1579,11 +1579,18 @@ async def admin_bulk_create_dealers(payload: BulkDealerPayload, _: dict = Depend
             except Exception as ex:
                 logger.warning("bulk-create: auth list_users page %s failed: %s", page, ex)
                 break
-            users = getattr(res, "users", None) or (res.get("users") if isinstance(res, dict) else None) or []
+            # Wave 101 hotfix — list_users() may return a plain list (not an
+            # object with .users). Handle all return shapes so we don't
+            # silently skip every existing-email check.
+            if isinstance(res, list):
+                users = res
+            else:
+                users = getattr(res, "users", None) or (res.get("users") if isinstance(res, dict) else None) or []
             if not users:
                 break
             for u in users:
-                em = (getattr(u, "email", None) or u.get("email") or "").strip().lower()
+                em_raw = getattr(u, "email", None) or (u.get("email") if isinstance(u, dict) else None) or ""
+                em = em_raw.strip().lower()
                 if em:
                     existing_emails.add(em)
                     auth_email_map[em] = u
@@ -1732,27 +1739,52 @@ def admin_list_users(_: dict = Depends(require_role("admin"))):
         except Exception as ex:
             logger.warning("admin_list_users: auth.list_users page %s failed: %s", page, ex)
             break
-        users = getattr(res, "users", None) or (res.get("users") if isinstance(res, dict) else None) or []
+        if isinstance(res, list):
+            users = res
+        else:
+            users = getattr(res, "users", None) or (res.get("users") if isinstance(res, dict) else None) or []
         if not users:
             break
         for u in users:
             uid = getattr(u, "id", None) or u.get("id")
             email = getattr(u, "email", None) or u.get("email")
             providers = []
-            identities = getattr(u, "identities", None) or u.get("identities") or []
+            # 1) identities[].provider — the primary Supabase source
+            identities = getattr(u, "identities", None) or (u.get("identities") if isinstance(u, dict) else None) or []
             for ident in identities:
                 p = getattr(ident, "provider", None) or (ident.get("provider") if isinstance(ident, dict) else None)
                 if p:
                     providers.append(p)
-            metadata = getattr(u, "user_metadata", None) or u.get("user_metadata") or {}
-            phone = getattr(u, "phone", None) or u.get("phone") or metadata.get("phone")
+            # 2) Wave 101 hotfix — also read app_metadata.provider /
+            # app_metadata.providers (where Supabase actually stores the
+            # provider when identities[] is empty, e.g. for Google OAuth
+            # signups). This was the missing source for the Admin Users panel.
+            app_meta = getattr(u, "app_metadata", None)
+            if app_meta is not None and not isinstance(app_meta, dict):
+                try:
+                    app_meta = app_meta.model_dump()
+                except Exception:
+                    app_meta = getattr(app_meta, "__dict__", None) or {}
+            if isinstance(app_meta, dict):
+                if app_meta.get("provider"):
+                    providers.append(app_meta["provider"])
+                for p in (app_meta.get("providers") or []):
+                    if p:
+                        providers.append(p)
+            metadata = getattr(u, "user_metadata", None) or (u.get("user_metadata") if isinstance(u, dict) else None) or {}
+            if not isinstance(metadata, dict):
+                try:
+                    metadata = metadata.model_dump()
+                except Exception:
+                    metadata = getattr(metadata, "__dict__", None) or {}
+            phone = getattr(u, "phone", None) or (u.get("phone") if isinstance(u, dict) else None) or metadata.get("phone")
             auth_users_by_id[uid] = {
                 "email": email,
                 "providers": providers,
                 "phone": phone,
                 "name": metadata.get("name") or metadata.get("full_name"),
-                "created_at": getattr(u, "created_at", None) or u.get("created_at"),
-                "last_sign_in_at": getattr(u, "last_sign_in_at", None) or u.get("last_sign_in_at"),
+                "created_at": getattr(u, "created_at", None) or (u.get("created_at") if isinstance(u, dict) else None),
+                "last_sign_in_at": getattr(u, "last_sign_in_at", None) or (u.get("last_sign_in_at") if isinstance(u, dict) else None),
             }
         if len(users) < 1000:
             break

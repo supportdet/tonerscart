@@ -12,9 +12,15 @@ export default function Sell() {
     const [showResubmit, setShowResubmit] = useState(false);
     const formRef = useRef(null);
 
-    // Approved sellers go straight to the dashboard
+    // Wave 101 hotfix — only bounce APPROVED dealers (or those mid-application)
+    // back to the dashboard. Fresh dealers (role=supplier with no
+    // suppliers/suppliers_pending row) MUST be allowed to fill out the
+    // business-details form here.
     useEffect(() => {
-        if (!loading && user?.role === "supplier") {
+        if (loading) return;
+        if (!user) return;
+        const isApproved = user.supplier_status === "approved";
+        if (isApproved) {
             navigate("/supplier", { replace: true });
         }
     }, [user, loading, navigate]);

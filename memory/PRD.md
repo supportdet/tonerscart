@@ -1,6 +1,41 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-29 Wave 101 HOTFIX):** **Critical signup-supplier bug fixed — fresh dealer registration no longer auto-creates a pending application or sends the admin email.**
+> **Latest (2026-06-30 Wave 101 HOTFIX-2):** **Four critical bugs blocking live dealers fixed.**
+>
+> ### Bug #1 — Approved dealers misrouted to onboarding (CRITICAL, FIXED)
+> `SupplierDashboard.jsx` had a stage check: `if isApproved AND (any KYC doc missing) → stage = "approved_phase2"` which kicked already-approved dealers (Big C, DET, Verve IT, Bios, ZION, RAVI, Amman, Digital Edge) into the locked DealerOnboarding screen because most of them never uploaded `doc_gst` / `doc_pan` / `doc_id_proof`. **Fix:** removed the `approved_phase2` stage entirely. Approved dealers (row in `suppliers`) ALWAYS render the normal dashboard — the existing `Phase2Banner` (already mounted inside the normal dashboard) handles gentle "complete your KYC" nudges inline.
+>
+> ### Bug #2 — Step 2 "Fill business details" button did nothing
+> `Sell.jsx` had a redirect: `if user.role === "supplier" → navigate("/supplier")` — which bounced every fresh dealer back into the onboarding loop. **Fix:** only redirect if `supplier_status === "approved"`. Fresh dealers (role=supplier with no application row) can now reach the `SellerApplicationForm`.
+>
+> ### Bug #3 — Step 3 flow integrity confirmed
+> The Step 3 → Submit-for-verification flow was already correct (covered by `test_wave101_signup_hotfix.py`). Re-verified end-to-end via pytest after the Bug #1/#2 fixes.
+>
+> ### Bug #4 — Admin Users panel missed Google OAuth signups (FIXED)
+> Two compounding root causes in `admin.py`:
+>   1. `sb_admin.auth.admin.list_users()` returns a **plain Python list** in the current supabase-py version — NOT an object with a `.users` attribute and NOT a dict. The code `getattr(res, "users", None) or (res.get("users") if isinstance(res, dict) else None) or []` silently fell through to an empty list. The auth-only user merge loop never ran.
+>   2. Google OAuth users have an empty `identities` array — their provider lives in `app_metadata.provider` / `app_metadata.providers`. The code was only reading `identities[].provider`.
+>
+> **Fix:** added an `isinstance(res, list)` shortcut so the plain-list return shape works, and extended the provider detection to also read `app_metadata`. Same dual fix applied to `admin_bulk_create_dealers` so the existing-email pre-check works for OAuth users.
+>
+> **Result:** Admin Users panel now shows **38 users (was 23)**, including **20 Google OAuth sign-ins (was 0)** and **15 auth-only OAuth accounts** that were previously invisible. UsersTab already had the auth_method badge wired (Google = rose, Email = grey).
+>
+> ### Verification
+> `/app/backend/tests/test_wave101_hotfix2.py` — **4/4 pass:**
+>   * Admin Users surfaces Google OAuth signups (20 detected on live DB)
+>   * Admin Users includes auth-only OAuth accounts (15 detected)
+>   * 13 approved dealers all carry `supplier_status="approved"` → frontend renders normal dashboard
+>   * Fresh dealer signup → `supplier_status=null, application_status=null` → `/sell` form is accessible
+> `/app/backend/tests/test_wave101_signup_hotfix.py` — 3/3 pass (regression).
+>
+> Files touched:
+>   * `frontend/src/pages/SupplierDashboard.jsx` — removed `approved_phase2` stage and its Phase2Banner mount block.
+>   * `frontend/src/pages/Sell.jsx` — relaxed redirect to only fire for `supplier_status === "approved"`.
+>   * `backend/routes/admin.py` — list_users plain-list handling + app_metadata.provider parsing in both `admin_list_users` and `admin_bulk_create_dealers`.
+
+
+
+
 >
 > ### What was broken
 > `/auth/signup-supplier` was creating a `suppliers_pending` row with `status='pending'` AND firing `email_application_received` AND running the AI document check on the empty payload — so the moment a dealer registered with just name/email/phone/password, the admin saw a fake "application received" email, the admin queue showed a phantom row, and the DealerOnboarding component rendered Step 2 as "submitted under review" instead of letting the dealer fill business details.
@@ -23,9 +58,7 @@
 
 
 
-> **Prev (2026-06-29 Wave 101):** **Onboarding state machine (draft → pending → approved) + Procurement Phase 3 (credit summary widget, admin manual adjustment, tax-invoice PDF).**
->
-> ### 1) Strict Dealer Onboarding State Machine
+> **Prev (2026-06-29 Wave 101 HOTFIX):** **Critical signup-supplier bug fixed — fresh dealer registration no longer auto-creates a pending application or sends the admin email.**
 > Backend (`routes/auth.py`):
 >   * `POST /api/auth/apply-seller` now honours `submit_for_review: bool` — when False (default for the /sell form, Wave 101), it writes `suppliers_pending.status = 'draft'`; True keeps the legacy direct-to-pending behaviour.
 >   * New `POST /api/auth/submit-for-review` flips a draft row to `pending` (and emails the admin). Idempotent on already-pending rows. 404 if no draft row exists.
