@@ -7,7 +7,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "./ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Button } from "./ui/button";
@@ -76,7 +76,7 @@ export default function DealerProfileMenu({ supplier, onRefresh }) {
                 {open && (
                     <div
                         role="menu"
-                        className="absolute right-0 mt-2 w-60 bg-white text-[#0A0A0B] rounded-xl shadow-xl border border-black/[0.06] py-1.5 z-[200]"
+                        className="absolute right-0 mt-2 w-60 bg-white text-[#0A0A0B] rounded-xl shadow-xl border border-black/[0.06] py-1.5 z-[1100]"
                         data-testid="dealer-profile-dropdown"
                     >
                         <MenuItem icon={UserIcon} label="My Details" onClick={() => { setOpen(false); setDetailsOpen(true); }} testId="profile-menu-details" />
@@ -113,44 +113,74 @@ function MenuItem({ icon: Icon, label, onClick, testId, danger = false }) {
 }
 
 function MyDetailsDialog({ open, onClose, supplier }) {
-    const rows = [
-        ["Business name", supplier.business_name],
-        ["Seller ID", supplier.seller_id],
-        ["Contact person", supplier.contact_person],
-        ["Email", supplier.email],
-        ["Phone", supplier.phone],
-        ["City", supplier.city],
-        ["State", supplier.state],
-        ["Pincode", supplier.pincode],
-        ["GST number", supplier.gst_number],
-        ["PAN number", supplier.pan_number],
-        ["Business address", supplier.business_address],
-        ["Bank account holder", supplier.account_holder_name],
-        ["Bank account no.", supplier.account_number ? `••••${String(supplier.account_number).slice(-4)}` : ""],
-        ["IFSC", supplier.ifsc_code],
-        ["Bank name", supplier.bank_name],
-        ["Bank branch", supplier.bank_branch],
-    ].filter(([, v]) => !!v);
+    // Wave 102 v2 — show ALL canonical fields with em-dash placeholders so
+    // the dealer can see at a glance what's still blank, not just an empty
+    // dialog. Group by section for legibility.
+    const sections = [
+        {
+            title: "Business",
+            rows: [
+                ["Business name", supplier.business_name],
+                ["Seller ID", supplier.seller_id],
+                ["Contact person", supplier.contact_person],
+                ["Email", supplier.email],
+                ["Phone", supplier.phone],
+            ],
+        },
+        {
+            title: "Address",
+            rows: [
+                ["Address", supplier.business_address],
+                ["City", supplier.city],
+                ["State", supplier.state],
+                ["Pincode", supplier.pincode],
+            ],
+        },
+        {
+            title: "Tax",
+            rows: [
+                ["GST number", supplier.gst_number],
+                ["PAN number", supplier.pan_number],
+            ],
+        },
+        {
+            title: "Bank (for payouts)",
+            rows: [
+                ["Account holder", supplier.account_holder_name],
+                ["Account number", supplier.account_number ? `••••${String(supplier.account_number).slice(-4)}` : null],
+                ["IFSC", supplier.ifsc_code],
+                ["Bank", supplier.bank_name],
+                ["Branch", supplier.bank_branch],
+            ],
+        },
+    ];
     return (
         <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-            <DialogContent className="max-w-[560px] max-h-[80vh] overflow-y-auto p-6 rounded-[18px]" data-testid="profile-details-dialog">
+            <DialogContent className="max-w-[620px] max-h-[80vh] overflow-y-auto p-6 rounded-[18px]" data-testid="profile-details-dialog">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-[19px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
                         <UserIcon size={17} /> My Details
                     </DialogTitle>
+                    <DialogDescription className="text-[12px] text-[#6E6E73]">
+                        Everything we have on file for your business. Missing fields show — em-dash. Raise a query to update any of these.
+                    </DialogDescription>
                 </DialogHeader>
-                <div className="mt-2 divide-y divide-black/[0.05]">
-                    {rows.length === 0 ? (
-                        <div className="py-6 text-center text-[#86868B] text-[13px]">No details on file yet.</div>
-                    ) : rows.map(([k, v]) => (
-                        <div key={k} className="flex items-start gap-3 py-2 text-[13px]" data-testid={`profile-detail-${k.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
-                            <div className="w-[160px] text-[#6E6E73] shrink-0 text-[12px]">{k}</div>
-                            <div className="flex-1 font-medium text-[#0A0A0B] break-words">{v}</div>
-                        </div>
+                <div className="mt-2 space-y-5">
+                    {sections.map((s) => (
+                        <section key={s.title} data-testid={`profile-section-${s.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
+                            <div className="text-[10.5px] uppercase tracking-[0.16em] font-semibold text-[#6E6E73] mb-1.5">{s.title}</div>
+                            <div className="divide-y divide-black/[0.05] border border-black/[0.06] rounded-lg">
+                                {s.rows.map(([k, v]) => (
+                                    <div key={k} className="flex items-start gap-3 py-2 px-3 text-[13px]" data-testid={`profile-detail-${k.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
+                                        <div className="w-[150px] text-[#6E6E73] shrink-0 text-[12px]">{k}</div>
+                                        <div className={`flex-1 font-medium break-words ${v ? "text-[#0A0A0B]" : "text-[#86868B]"}`}>
+                                            {v || "—"}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
                     ))}
-                </div>
-                <div className="mt-4 text-[11.5px] text-[#86868B]">
-                    To update any of these details, please raise a query — our team will help you.
                 </div>
             </DialogContent>
         </Dialog>
@@ -168,9 +198,12 @@ function SubmittedDocsDialog({ open, onClose, supplier }) {
                     <DialogTitle className="flex items-center gap-2 text-[19px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
                         <FileCheck2 size={17} /> Submitted Documents
                     </DialogTitle>
+                    <DialogDescription className="text-[12px] text-[#6E6E73]">
+                        KYC documents you&apos;ve already uploaded. To upload anything still missing, use the Missing Documents tab.
+                    </DialogDescription>
                 </DialogHeader>
                 {submitted.length === 0 ? (
-                    <div className="py-6 text-center text-[#86868B] text-[13px]">No documents uploaded yet.</div>
+                    <div className="py-6 text-center text-[#86868B] text-[13px]" data-testid="submitted-docs-empty">No documents uploaded yet.</div>
                 ) : (
                     <ul className="mt-2 space-y-1.5">
                         {submitted.map((d) => (
@@ -206,6 +239,9 @@ function MissingDocsDialog({ open, onClose, supplier, onRefresh }) {
                         <DialogTitle className="flex items-center gap-2 text-[19px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
                             <ShieldAlert size={17} /> Missing Documents
                         </DialogTitle>
+                        <DialogDescription className="text-[12px] text-[#6E6E73]">
+                            Track any KYC documents still required. Auto-uploads on file select.
+                        </DialogDescription>
                     </DialogHeader>
                     <div className="py-6 text-center text-[#0A4A50]" data-testid="missing-docs-empty">
                         <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-50 mb-3">
@@ -264,6 +300,9 @@ function RaiseQueryDialog({ open, onClose }) {
                     <DialogTitle className="flex items-center gap-2 text-[19px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
                         <MessageSquare size={17} /> Raise a Query
                     </DialogTitle>
+                    <DialogDescription className="text-[12px] text-[#6E6E73]">
+                        Reach the TonersCart team directly — replies come to your registered email.
+                    </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 mt-2">
                     <div>

@@ -1,6 +1,19 @@
 # TonersCart — Product Requirements (Supabase edition)
 
 
+> **Latest (2026-06-30 — Wave 102 HOTFIX-1):** 4 dealer-experience fixes, all verified live:
+> 1. 🔴 **Magic link finally lands dealers INSIDE the dashboard (not /login).** Root cause: Supabase silently ignored every `redirect_to` URL not in its project allow-list and fell back to the bare Site URL (`https://www.tonerscart.com`), stranding dealers on the homepage with auth tokens trapped in the URL hash. Probed Supabase live: only `https://www.tonerscart.com/auth/callback?next=/supplier` is honored. Backend `admin.py` now hard-routes magic links to `MAGIC_LINK_BASE_URL` (defaults to `https://www.tonerscart.com`) + `/auth/callback?next=/supplier`. End-to-end verified by simulating the EXACT Supabase redirect URL `/auth/callback?next=/supplier#access_token=...&type=magiclink` — Playwright trace: T+0s callback page loaded → T+0.5s hash consumed → T+4.5s auto-redirect to `/supplier`. Dealer lands authenticated on dashboard. **0 login screens.**
+> 2. **Profile dropdown sections now show ALL fields** with em-dash placeholders (Business, Address, Tax, Bank section headers). No more sparse / empty-looking dialogs. Account number is masked (`••••7890`).
+> 3. **Dropdown z-index bumped to `z-[1100]`** (was `z-[200]`) so it always renders above the Phase2Banner and the "Set your location" notification.
+> 4. **Missing-docs dialog already had auto-upload DocSlot** (spinner + green check on success) — confirmed working live for the QA dealer (Cancelled cheque + Address proof slots with Choose File buttons).
+> 5. **Radix `aria-describedby` warning silenced** by adding `DialogDescription` to My Details, Submitted Docs, Missing Docs, and Raise a Query dialogs.
+>
+> ### Files modified
+> - `/app/backend/routes/admin.py` (`MAGIC_LINK_BASE_URL` env + redirect_to → `/auth/callback?next=/supplier`)
+> - `/app/frontend/src/components/DealerProfileMenu.jsx` (section-grouped My Details, z-[1100] dropdown, DialogDescription on all 4 dialogs)
+
+
+
 > **Latest (2026-06-30 — Wave 102):** Wave 102 ships 6 requested items end-to-end (100% backend tests, 100% frontend verified):
 > 1. **Bulk magic-link redirect** now lands invited dealers on `/supplier` after sign-in (`admin.py` `redirect_to` → `/login?next=/supplier`; `Login.jsx` honors `next`).
 > 2. **Dealer Outreach Analytics funnel** replaces Bulk History. New endpoint `GET /admin/dealers/outreach-funnel` returns a 6-stage funnel (`invited → signed_in → business_details → docs_uploaded → submitted_for_review → approved`) derived from `audit_log` batches + `users` + `suppliers_pending` + `suppliers` + Supabase Auth `last_sign_in_at`. New UI: `DealerOutreachAnalytics.jsx` (summary cards + per-stage bars with drop-off counts + per-dealer drill-down).

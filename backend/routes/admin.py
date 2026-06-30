@@ -1610,14 +1610,17 @@ async def admin_bulk_create_dealers(payload: BulkDealerPayload, user: dict = Dep
         logger.info("bulk-create: collected %d existing auth emails for dedupe check", len(existing_emails))
 
     origin = _frontend_origin()
-    # Wave 101 hotfix-6 — Supabase magic links only honour a `redirect_to`
-    # that is in the project's Redirect URLs allow-list. Custom paths like
-    # /auth/callback?next=/supplier sometimes fall through to the project's
-    # default Site URL (homepage) — which is exactly what dealers reported.
-    # Use /login?next=/supplier instead: /login is universally allow-listed
-    # as a default URL, AND Login.jsx already honours the `next` param to
-    # bounce role=supplier users straight to /supplier after auth.
-    redirect_to = f"{origin}/login?next=/supplier"
+    # Wave 102 hotfix — Supabase ignores any `redirect_to` not in the project
+    # allow-list, silently falling back to the bare Site URL
+    # (https://www.tonerscart.com) — which lands invited dealers on the public
+    # homepage with the auth tokens stranded in the URL hash. The ONLY URLs
+    # Supabase currently honours are paths under https://www.tonerscart.com.
+    # So we hard-route the magic link to the production /auth/callback page,
+    # which polls supabase.auth.getSession() and forwards to ?next=. This
+    # works regardless of which environment originated the invite — dealers
+    # always land authenticated on /supplier in production.
+    magic_link_base = os.environ.get("MAGIC_LINK_BASE_URL", "https://www.tonerscart.com").rstrip("/")
+    redirect_to = f"{magic_link_base}/auth/callback?next=/supplier"
 
     created: List[dict] = []
     skipped_existing: List[dict] = []
@@ -1687,8 +1690,8 @@ async def admin_bulk_create_dealers(payload: BulkDealerPayload, user: dict = Dep
         except Exception as ex:
             logger.warning("bulk-dealer magic-link generation failed for %s: %s", e, ex)
 
-        # Fallback link → forgot-password flow.
-        dashboard_link = action_link or f"{origin}/forgot-password?email={e}"
+        # Fallback link → forgot-password flow on production domain.
+        dashboard_link = action_link or f"{magic_link_base}/forgot-password?email={e}"
         try:
             sent = await email_dealer_welcome_magic(e, r.business_name, dashboard_link)
             if sent:
