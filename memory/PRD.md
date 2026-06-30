@@ -1,5 +1,33 @@
 # TonersCart — Product Requirements (Supabase edition)
 
+
+> **Latest (2026-06-30 — Wave 102):** Wave 102 ships 6 requested items end-to-end (100% backend tests, 100% frontend verified):
+> 1. **Bulk magic-link redirect** now lands invited dealers on `/supplier` after sign-in (`admin.py` `redirect_to` → `/login?next=/supplier`; `Login.jsx` honors `next`).
+> 2. **Dealer Outreach Analytics funnel** replaces Bulk History. New endpoint `GET /admin/dealers/outreach-funnel` returns a 6-stage funnel (`invited → signed_in → business_details → docs_uploaded → submitted_for_review → approved`) derived from `audit_log` batches + `users` + `suppliers_pending` + `suppliers` + Supabase Auth `last_sign_in_at`. New UI: `DealerOutreachAnalytics.jsx` (summary cards + per-stage bars with drop-off counts + per-dealer drill-down).
+> 3. **Approved dealer profile dropdown** (`DealerProfileMenu.jsx`) in supplier dashboard hero: My Details · Submitted Documents · Missing Documents · Raise a Query · Logout. Raise-a-Query posts to `POST /supplier/raise-query` → Resend email to `support@tonerscart.com` with `reply_to=dealer.email` (gated to approved suppliers only — admins get 403).
+> 4. **Missing-docs banner now accurate for ALL dealers** (Big C, ZION, VERVE, RAVI, Amman, BIOS, Shree). `auth.py /auth/me` supplier payload expanded to include `cheque_uploaded` (admin's source of truth) + `contact_person, email, phone, state, pincode, gst_number, pan_number, business_address` (for My Details). New `docUploaded(s,key)` helper in `Phase2Banner.jsx` treats `cheque_uploaded===false` as "missing" regardless of `doc_bank_proof` path.
+> 5. **Admin Dealers tab — Active/Suspended sub-tabs** with counts (`statusTab` state in `DealersTab.jsx`).
+> 6. **Admin Dealers tab — exact missing doc names** ("Missing: Cancelled cheque" / "Missing: GST certificate, PAN card, ID proof, Cancelled cheque") with full-tooltip on hover (`DOC_FIELD_LABELS` map).
+>
+> ### Wave 102 backend fixes
+> - `admin_bulk_create_dealers` — parameter renamed `_` → `user` (fixed silent NameError on `user["id"]`).
+> - Audit log writer + outreach-funnel reader switched from non-existent `details`/`target_type` columns to the actual `metadata` + `actor_email`/`target_email` columns (consistent with `impersonate_start`).
+> - Removed the `suppliers_pending` pre-insert from bulk-create (it was failing on NOT-NULL constraints) — the dealer creates that row themselves when they fill the Phase-1 onboarding form.
+>
+> ### Files modified
+> - `/app/backend/routes/admin.py` (bulk-create fixes + new `/admin/dealers/outreach-funnel`)
+> - `/app/backend/routes/auth.py` (`/auth/me` `_SUPP_COLS` expanded)
+> - `/app/backend/routes/suppliers.py` (new `POST /supplier/raise-query`, role-gated)
+> - `/app/backend/email_service.py` (new `email_dealer_raise_query`)
+> - `/app/backend/server.py` (export new email function)
+> - `/app/frontend/src/components/Phase2Banner.jsx` (`docUploaded` helper; rules-of-hooks fix)
+> - `/app/frontend/src/components/DealerProfileMenu.jsx` (NEW — dropdown + 4 dialogs)
+> - `/app/frontend/src/pages/SupplierDashboard.jsx` (mounts DealerProfileMenu in approved-dealer hero)
+> - `/app/frontend/src/pages/admin/DealersTab.jsx` (Active/Suspended tabs + exact doc labels)
+> - `/app/frontend/src/pages/admin/DealerOutreachAnalytics.jsx` (NEW — funnel dialog)
+> - `/app/frontend/src/pages/admin/BulkDealerHistory.jsx` (DELETED — replaced)
+
+
 > **Latest (2026-06-30 Wave 101 HOTFIX-5):** **5 production bugs fixed in one go — approved-dealer banner accuracy, admin-can-delete-anyone, T&C popup placement, bulk-dealer history, welcome-email rewrite.**
 >
 > ### Bug #1 — Approved dealers stuck seeing "3 docs missing" banner (FIXED + BACKFILLED)
