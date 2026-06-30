@@ -1664,23 +1664,12 @@ async def admin_bulk_create_dealers(payload: BulkDealerPayload, user: dict = Dep
             failed.append({"email": e, "business_name": r.business_name, "reason": f"profile insert failed: {ex}"})
             continue
 
-        # Step 3 — suppliers_pending Phase 1 row. Status = 'pending' so admin
-        # still has to approve before the dealer can publish listings. The
-        # imported batch is treated like a regular application.
-        try:
-            sb_admin.table("suppliers_pending").upsert({
-                "user_id": uid,
-                "business_name": r.business_name,
-                "contact_person": r.business_name,
-                "phone": (r.phone or None),
-                "city": (r.city or None),
-                "gst_number": (r.gstin or "").strip().upper() or None,
-                "status": "pending",
-                "submitted_at": datetime.now(timezone.utc).isoformat(),
-            }, on_conflict="user_id").execute()
-        except Exception as ex:
-            logger.warning("bulk-dealer pending row insert failed for %s: %s", e, ex)
-            # Don't abort — user already created. Admin can patch later.
+        # Wave 102 — DO NOT pre-create a suppliers_pending row. Many of its
+        # columns are NOT NULL (phone, business_address, ...) and the dealer
+        # creates this row themselves when they fill the Phase-1 onboarding
+        # form. The outreach funnel works fine without a pre-created row —
+        # invited dealers will sit at stage="invited" until they sign in and
+        # start filling out their application.
 
         # Step 4 — generate magic-link (Supabase) and send branded email.
         action_link = ""
@@ -1710,13 +1699,16 @@ async def admin_bulk_create_dealers(payload: BulkDealerPayload, user: dict = Dep
         created.append({"email": e, "business_name": r.business_name, "user_id": uid, "magic_link_sent": bool(action_link)})
 
     # Wave 101 hotfix-5 — log this bulk batch so admin can review history.
+    # Wave 102 fix — use the actual audit_log columns (actor_email + metadata),
+    # no target_type column exists.
     try:
         sb_admin.table("audit_log").insert({
             "actor_id": user["id"],
+            "actor_email": user.get("email"),
             "action": "bulk_dealer_create",
-            "target_type": "bulk_batch",
             "target_id": None,
-            "details": {
+            "target_email": None,
+            "metadata": {
                 "created": len(created),
                 "skipped_existing": len(skipped_existing),
                 "failed": len(failed),
@@ -2032,7 +2024,7 @@ def admin_outreach_funnel(_: dict = Depends(require_role("admin"))):
     """
     # Pull every bulk_dealer_create batch — that's our "invited" list.
     try:
-        batches = sb_admin.table("audit_log").select("id,created_at,details").eq(
+        batches = sb_admin.table("audit_log").select("id,created_at,metadata").eq(
             "action", "bulk_dealer_create"
         ).order("created_at", desc=True).limit(500).execute().data or []
     except Exception as ex:
@@ -2041,7 +2033,7 @@ def admin_outreach_funnel(_: dict = Depends(require_role("admin"))):
 
     invited: Dict[str, Dict[str, Any]] = {}  # email-lower -> {email, business_name, invited_at, batch_id}
     for b in batches:
-        d = b.get("details") or {}
+        d = b.get("metadata") or {}
         if isinstance(d, str):
             try:
                 d = json.loads(d)

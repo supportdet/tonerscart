@@ -105,15 +105,14 @@ def test_raise_query_validates_empty_payload(admin_headers):
     assert r.status_code in (400, 422), r.text[:200]
 
 
-def test_raise_query_returns_ok_with_valid_body(admin_headers):
-    """Endpoint should succeed for any authed user (suppliers row may be empty - that's allowed since it falls back to user.email)."""
+def test_raise_query_rejects_admin_non_supplier(admin_headers):
+    """Wave 102 added role gating: only approved suppliers can raise a query. Admin must get 403."""
     r = requests.post(
         f"{BASE_URL}/api/supplier/raise-query",
         headers=admin_headers,
         json={"subject": "TEST_W102 ping", "message": "Automated wave102 regression test - please ignore."},
         timeout=60,
     )
-    assert r.status_code == 200, r.text[:300]
+    assert r.status_code == 403, r.text[:300]
     body = r.json()
-    assert body.get("ok") is True
-    assert "sent" in body and isinstance(body["sent"], bool)
+    assert "approved dealers" in (body.get("detail") or "").lower()

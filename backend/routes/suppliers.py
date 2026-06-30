@@ -410,10 +410,13 @@ async def supplier_raise_query(payload: _SupplierQueryPayload, user: dict = Depe
     """Approved dealer fires a support query from the dealer dashboard profile
     dropdown. Email goes to the TonersCart support inbox with reply_to set to
     the dealer's email so admins can reply directly."""
+    # Require an approved supplier row — only sellers should be using this.
     sup_row = sb_admin.table("suppliers").select(
         "business_name,seller_id,email,phone,city,user_id"
     ).eq("user_id", user["id"]).maybe_single().execute()
-    sup = (sup_row.data if sup_row and sup_row.data else {}) or {}
+    sup = (sup_row.data if sup_row and sup_row.data else None)
+    if not sup:
+        raise HTTPException(status_code=403, detail="Only approved dealers can raise a query from the dashboard.")
     if not sup.get("email"):
         sup["email"] = user.get("email")
     sent = await email_dealer_raise_query(sup, payload.subject.strip(), payload.message.strip())

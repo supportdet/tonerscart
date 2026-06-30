@@ -1,0 +1,53 @@
+{
+  "summary": "Wave 102 retest — backend now fully green (6/6 pytest pass after audit_log + suppliers_pending fixes). Frontend mostly green: Active/Suspended sub-tabs, exact missing-doc names in admin Dealers table, Outreach Analytics dialog with funnel chart + drill-down, /login?next=/supplier magic-link redirect, and 4 of 5 dealer profile dropdown menu items (details, submitted-docs, raise-query with email send + toast, logout) all working. TWO real issues found: (1) profile-menu-missing-docs does NOT open phase2-docs-dialog for impersonated dealers; (2) Phase2Banner does NOT render under impersonation for Amman Gaming Origin even though admin Dealers table correctly shows 'Missing: Cancelled cheque' for the same dealer — likely impersonation pathway is not surfacing the supplier row fields the banner reads.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "DealerProfileMenu / Phase2Banner",
+        "issue": "Clicking dropdown item profile-menu-missing-docs does not open phase2-docs-dialog under impersonation (tested for both Big C and Amman). For Big C this is arguably acceptable since they have no missing docs, but for Amman (missing Cancelled cheque per admin table) the Phase2 docs dialog must open. React also logs 'Cannot update a component while rendering a different component' when this item is clicked.",
+        "selector": "[data-testid=\"profile-menu-missing-docs\"] -> [data-testid=\"phase2-docs-dialog\"]",
+        "priority": "HIGH"
+      },
+      {
+        "component": "Phase2Banner (SupplierDashboard)",
+        "issue": "Phase2Banner does NOT render on /supplier for Amman Gaming Origin under impersonation, despite admin Dealers table correctly listing 'Missing: Cancelled cheque' for the same dealer. body text contains no 'Cancelled cheque' nudge. Probable root cause: impersonation pathway returns a `user.supplier` payload whose OPTIONAL_DOCS keys (doc_bank_proof etc.) are already populated/null in a way that bypasses the `hasAnyGap` check in Phase2Banner.jsx:86, OR the impersonation user fetch does not return the supplier object the banner expects. Net effect: dealers logging in to their own dashboard get no nudge for the same missing docs admin sees.",
+        "selector": "[data-testid=\"phase2-banner\"]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "All dialogs (outreach-analytics-dialog, profile-details-dialog, profile-submitted-docs-dialog, raise-query-dialog)",
+        "issues": ["Radix Dialog console warning 'Missing Description or aria-describedby={undefined}' — accessibility nit, add a DialogDescription or aria-describedby."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave102_outreach_query.py",
+    "/app/test_reports/pytest/iteration_76_wave102.xml"
+  ],
+  "action_items": [
+    "Fix Phase2Banner not rendering under impersonation. Check whether impersonate fetch in /api/auth/me (or whatever powers user.supplier) returns the same row admin Dealers uses. Reproduction: admin login -> sessionStorage tc_impersonate_user_id='d3220fde-8ac6-4de6-88ef-2b4b00444bfa' -> /supplier -> banner is absent.",
+    "Fix profile-menu-missing-docs click handler so it opens phase2-docs-dialog for dealers with missing docs (Amman should see it). Also fix the React setState-during-render warning emitted when the dropdown item is clicked.",
+    "Add DialogDescription / aria-describedby to outreach-analytics-dialog, profile-details-dialog, profile-submitted-docs-dialog, raise-query-dialog for a11y.",
+    "Optional cleanup: 2 stale test rows from the previous curl run (wave102-test-1782819778@tonerscart-test.com, wave102-final-1782819857@tonerscart-test.com) still sit in the outreach funnel — delete via DELETE /api/admin/users/{id} or via the admin UI."
+  ],
+  "critical_code_review_comments": [
+    "DealerProfileMenu triggers 'Cannot update a component while rendering a different component' — likely a setState in an effect/render path that fires when a sibling dialog mounts. Wrap state updates in setTimeout/queueMicrotask or move into onClick of the menu item.",
+    "Outreach funnel currently iterates Supabase Auth list_users with up to 50 pages * 1000 users per request — flagged in iteration 75 and still present. Consider caching last_sign_in_at or per-email lookup as scale grows.",
+    "Phase2Banner & admin DealersTab compute 'missing docs' independently from the same supplier row — extract a shared util so the two views never diverge."
+  ],
+  "updated_files": ["/app/backend/tests/test_wave102_outreach_query.py"],
+  "success_rate": {"backend": "100% (6/6 pytest)", "frontend": "~80% (8 of 10 sub-flows fully working; 2 high-priority bugs)"},
+  "test_credentials": "Admin: support@tonerscart.com / Bangara1@# (from /app/memory/test_credentials.md). Impersonated dealers: Big C (afcfde52-d6a8-4822-93bc-272cfd9fcc14), Amman (d3220fde-8ac6-4de6-88ef-2b4b00444bfa).",
+  "seed_data_creation": "Test suite created 2 TEST_W102_Dealer users via /api/admin/dealers/bulk-create; both were auto-deleted via DELETE /api/admin/users/{id} at end of test. 2 older test rows (wave102-test-*, wave102-final-*) from a previous iteration remain in funnel.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend test file /app/backend/tests/test_wave102_outreach_query.py now has 6/6 passing — the raise-query-200 test was rewritten to expect 403 for admin (matches new role gate). UI sub-tabs, missing-doc labels, outreach analytics dialog, and 4 of 5 profile dropdown items verified working. After main agent fixes Phase2Banner-under-impersonation and missing-docs dialog open behaviour, re-run the same Playwright impersonation flow for Amman + Big C. Watch for the React setState-during-render warning when clicking profile-menu-missing-docs.",
+  "rca of the issue": "Backend audit_log mismatch is fully resolved (insert + read both use `metadata` column; non-existent `target_type` removed). suppliers_pending NOT-NULL bug is also resolved (admin.py no longer pre-inserts a suppliers_pending row in bulk-create — dealer creates it via Phase-1 form). The remaining frontend bugs appear to be in the impersonation render path: SupplierDashboard.jsx:912 conditionally renders Phase2Banner on `isApproved && user?.supplier`. Under impersonation either `isApproved` is false or `user.supplier` is missing the optional-doc keys it needs. DealerProfileMenu's missing-docs click likely toggles state on a Phase2Banner instance that isn't mounted (line 793 banner has hideBanner=true and may not own the dialog state)."
+}
