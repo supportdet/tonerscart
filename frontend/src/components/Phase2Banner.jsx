@@ -24,17 +24,20 @@ import api, { formatApiError } from "../lib/api";
  *   hideBanner       – when true, the inline banner UI is suppressed and only
  *                      the dialogs are mounted (used by DealerOnboarding)
  */
-// Wave 100 — only TRULY required documents block the green check. Address proof
-// and brand-authorization (latter only for OEM/Original sellers) are NEVER in
-// this list — they are optional reminders surfaced inside the docs dialog.
+// Wave 101 hotfix-3 — per user requirements:
+//   Mandatory: GST, PAN, ID proof, plus bank details (account + IFSC).
+//   Optional: cancelled cheque (doc_bank_proof), address proof
+//   (doc_address_proof — satisfied if GST is present since GST certificate
+//   doubles as address proof in India), brand authorization
+//   (doc_brand_authorization — only required for Original/OEM sellers).
 const MANDATORY_DOCS = [
     { key: "doc_gst", label: "GST certificate" },
     { key: "doc_pan", label: "PAN card" },
     { key: "doc_id_proof", label: "ID proof (Aadhaar / Passport)" },
-    { key: "doc_bank_proof", label: "Cancelled cheque" },
 ];
 const OPTIONAL_DOCS = [
-    { key: "doc_address_proof", label: "Address proof" },
+    { key: "doc_bank_proof", label: "Cancelled cheque", hint: "Recommended before first payout — optional now" },
+    { key: "doc_address_proof", label: "Address proof", hint: "Optional — GST certificate counts as address proof" },
 ];
 
 function bankComplete(s) {
@@ -191,7 +194,7 @@ function BankDialog({ open, onClose, supplier, onSaved }) {
     );
 }
 
-function DocSlot({ label, hint, fieldKey, alreadyUploaded, onUploaded }) {
+function DocSlot({ label, hint, fieldKey, alreadyUploaded, onUploaded, required = false }) {
     const [file, setFile] = useState(null);
     const [uploading, setUploading] = useState(false);
     const upload = async () => {
@@ -216,7 +219,7 @@ function DocSlot({ label, hint, fieldKey, alreadyUploaded, onUploaded }) {
                 {status === "uploaded" ? <Check size={14} /> : <FileText size={14} />}
             </div>
             <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-semibold text-[#0A0A0B]">{label}{status === "uploaded" && <span className="ml-2 text-[10.5px] tracking-[0.12em] uppercase text-emerald-600">Uploaded</span>}</div>
+                <div className="text-[13px] font-semibold text-[#0A0A0B]">{label}{required && !alreadyUploaded && <span className="ml-1 text-red-500">*</span>}{status === "uploaded" && <span className="ml-2 text-[10.5px] tracking-[0.12em] uppercase text-emerald-600">Uploaded</span>}</div>
                 {hint && <div className="text-[11.5px] text-[#6E6E73] mt-0.5">{hint}</div>}
                 {!alreadyUploaded && (
                     <div className="mt-2 flex items-center gap-2">
@@ -236,19 +239,84 @@ function DocSlot({ label, hint, fieldKey, alreadyUploaded, onUploaded }) {
 function DocsDialog({ open, onClose, supplier, onSaved, showSubmitForReview = false, onOpenBank }) {
     const [local, setLocal] = useState(supplier || {});
     const [submitting, setSubmitting] = useState(false);
-    React.useEffect(() => { setLocal(supplier || {}); }, [supplier]);
+    // Inline bank form state — only used when showSubmitForReview is true so
+    // the dealer sees both bank fields and document uploads side-by-side
+    // (no collapsed sections, no extra dialog hops).
+    const [bank, setBank] = useState({
+        account_holder_name: supplier?.account_holder_name || "",
+        account_number: supplier?.account_number || "",
+        ifsc_code: supplier?.ifsc_code || "",
+        bank_name: supplier?.bank_name || "",
+        bank_branch: supplier?.bank_branch || "",
+    });
+    const [savingBank, setSavingBank] = useState(false);
+    React.useEffect(() => {
+        setLocal(supplier || {});
+        setBank({
+            account_holder_name: supplier?.account_holder_name || "",
+            account_number: supplier?.account_number || "",
+            ifsc_code: supplier?.ifsc_code || "",
+            bank_name: supplier?.bank_name || "",
+            bank_branch: supplier?.bank_branch || "",
+        });
+    }, [supplier]);
     const isOriginal = Array.isArray(supplier?.seller_types) && supplier.seller_types.includes("Original");
     const onUploaded = (k, v) => { setLocal((prev) => ({ ...prev, [k]: v })); onSaved && onSaved(); };
 
+    // Wave 101 hotfix-3 — only the 3 mandatory docs (+ brand auth for OEM)
+    // gate the Submit button. Cancelled cheque + address proof are optional.
     const allMandatoryDocsUploaded = MANDATORY_DOCS.every((d) => !!local[d.key])
         && (!isOriginal || !!local.doc_brand_authorization);
-    const bankOK = !!(local.account_number && local.ifsc_code);
+    // Bank "complete enough to submit" — account number + IFSC are the
+    // hard floor (matches bankComplete()). Holder name / bank name / branch
+    // are nudges, NOT gates, but we DO require holder name on submit to
+    // keep payout integrity.
+    const bankOK = !!(bank.account_number && /^[A-Z]{4}0[A-Z0-9]{6}$/.test((bank.ifsc_code || "").trim().toUpperCase()));
     const readyToSubmit = allMandatoryDocsUploaded && bankOK;
+
+    const saveBank = async () => {
+        // Soft validation — account number and IFSC are the minimum.
+        if (!bank.account_number || !/^[A-Z]{4}0[A-Z0-9]{6}$/.test((bank.ifsc_code || "").trim().toUpperCase())) {
+            toast.error("Account number and valid IFSC code are required");
+            return;
+        }
+        try {
+            setSavingBank(true);
+            await api.post("/auth/supplier-phase2", {
+                account_holder_name: bank.account_holder_name.trim() || null,
+                account_number: bank.account_number.trim(),
+                ifsc_code: bank.ifsc_code.trim().toUpperCase(),
+                bank_name: bank.bank_name.trim() || null,
+                bank_branch: bank.bank_branch.trim() || null,
+            });
+            toast.success("Bank details saved");
+            setLocal((prev) => ({ ...prev, ...bank }));
+            onSaved && onSaved();
+        } catch (e) {
+            toast.error(formatApiError(e));
+        } finally { setSavingBank(false); }
+    };
 
     const submit = async () => {
         if (!readyToSubmit) return;
         try {
             setSubmitting(true);
+            // Auto-save bank if it differs from server-side snapshot.
+            const bankChanged =
+                (bank.account_number || "") !== (supplier?.account_number || "") ||
+                (bank.ifsc_code || "") !== (supplier?.ifsc_code || "") ||
+                (bank.account_holder_name || "") !== (supplier?.account_holder_name || "") ||
+                (bank.bank_name || "") !== (supplier?.bank_name || "") ||
+                (bank.bank_branch || "") !== (supplier?.bank_branch || "");
+            if (bankChanged) {
+                await api.post("/auth/supplier-phase2", {
+                    account_holder_name: bank.account_holder_name.trim() || null,
+                    account_number: bank.account_number.trim(),
+                    ifsc_code: bank.ifsc_code.trim().toUpperCase(),
+                    bank_name: bank.bank_name.trim() || null,
+                    bank_branch: bank.bank_branch.trim() || null,
+                });
+            }
             await api.post("/auth/submit-for-review");
             toast.success("Submitted for verification — we'll email you once approved.");
             onSaved && onSaved();
@@ -260,61 +328,146 @@ function DocsDialog({ open, onClose, supplier, onSaved, showSubmitForReview = fa
 
     return (
         <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-            <DialogContent className="max-w-[640px] max-h-[88vh] overflow-y-auto p-6 rounded-[18px]" data-testid="phase2-docs-dialog">
+            <DialogContent className="max-w-[720px] max-h-[88vh] overflow-y-auto p-6 rounded-[18px]" data-testid="phase2-docs-dialog">
                 <DialogHeader>
-                    <DialogTitle className="text-[20px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>Upload KYC documents</DialogTitle>
+                    <DialogTitle className="text-[20px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
+                        {showSubmitForReview ? "Bank details + KYC documents" : "Upload KYC documents"}
+                    </DialogTitle>
                 </DialogHeader>
-                <div className="text-[12.5px] text-[#6E6E73] mt-1">All files are stored privately — only TonersCart admins can view them via short-lived signed links. PDF or image, up to 5 MB.</div>
 
-                {showSubmitForReview && (
-                    <div className="mt-4 rounded-lg border border-[#E5E5EA] bg-[#F8F9FB] p-3 flex items-start gap-3" data-testid="phase2-bank-summary">
-                        <Building2 size={16} className="text-[#0A0A0B] mt-0.5 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                            <div className="text-[13px] font-semibold text-[#0A0A0B]">Bank details {bankOK ? <span className="ml-2 text-[10.5px] tracking-[0.12em] uppercase text-emerald-600">Saved</span> : <span className="ml-2 text-[10.5px] tracking-[0.12em] uppercase text-amber-600">Pending</span>}</div>
-                            <div className="text-[11.5px] text-[#6E6E73] mt-0.5">Required to receive payouts.</div>
+                {showSubmitForReview ? (
+                    <>
+                        {/* === Bank section, visible inline === */}
+                        <div className="mt-3" data-testid="phase2-bank-inline">
+                            <div className="flex items-center gap-2 text-[11px] tracking-[0.16em] uppercase font-semibold text-[#86868B] mb-2">
+                                <Building2 size={12} /> Bank account for payouts
+                            </div>
+                            <div className="rounded-xl border border-[#E5E5EA] bg-white p-4 space-y-3">
+                                <div>
+                                    <Label className="text-[12.5px]">Account holder name</Label>
+                                    <Input
+                                        value={bank.account_holder_name}
+                                        onChange={(e) => setBank({ ...bank, account_holder_name: e.target.value })}
+                                        placeholder="Match your registered business name"
+                                        data-testid="phase2-acct-holder"
+                                        className="mt-1"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <Label className="text-[12.5px]">Account number <span className="text-red-500">*</span></Label>
+                                        <Input
+                                            value={bank.account_number}
+                                            onChange={(e) => setBank({ ...bank, account_number: e.target.value.replace(/\D/g, "").slice(0, 18) })}
+                                            inputMode="numeric"
+                                            placeholder="6–18 digits"
+                                            data-testid="phase2-acct-number"
+                                            className="mt-1"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[12.5px]">IFSC code <span className="text-red-500">*</span></Label>
+                                        <Input
+                                            value={bank.ifsc_code}
+                                            onChange={(e) => setBank({ ...bank, ifsc_code: e.target.value.toUpperCase().slice(0, 11) })}
+                                            maxLength={11}
+                                            placeholder="HDFC0001234"
+                                            data-testid="phase2-ifsc"
+                                            className="mt-1"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <Label className="text-[12.5px]">Bank name</Label>
+                                        <Input value={bank.bank_name} onChange={(e) => setBank({ ...bank, bank_name: e.target.value })} placeholder="HDFC Bank" data-testid="phase2-bank-name" className="mt-1" />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[12.5px]">Branch</Label>
+                                        <Input value={bank.bank_branch} onChange={(e) => setBank({ ...bank, bank_branch: e.target.value })} placeholder="MG Road, Bangalore" data-testid="phase2-bank-branch" className="mt-1" />
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between pt-1">
+                                    <span className="text-[11.5px] text-[#6E6E73]">
+                                        {bankOK ? <span className="text-emerald-600 inline-flex items-center gap-1"><Check size={11} /> Bank details look good</span> : "Account number + IFSC are required to submit."}
+                                    </span>
+                                    <Button type="button" variant="outline" onClick={saveBank} disabled={savingBank} className="h-8 px-3 text-[11.5px]" data-testid="phase2-bank-save-inline">
+                                        {savingBank ? <Loader2 size={12} className="animate-spin mr-1" /> : null}
+                                        Save bank
+                                    </Button>
+                                </div>
+                            </div>
                         </div>
-                        <Button type="button" variant="outline" onClick={onOpenBank} className="h-8 px-3 text-[11.5px]" data-testid="phase2-open-bank-from-docs">
-                            {bankOK ? "Edit" : "Add bank"}
-                        </Button>
-                    </div>
-                )}
 
-                <div className="space-y-2 mt-4">
-                    <DocSlot label="GST certificate" fieldKey="doc_gst" alreadyUploaded={!!local.doc_gst} onUploaded={onUploaded} />
-                    <DocSlot label="PAN card" fieldKey="doc_pan" alreadyUploaded={!!local.doc_pan} onUploaded={onUploaded} />
-                    <DocSlot label="ID proof — Aadhaar / Passport" fieldKey="doc_id_proof" alreadyUploaded={!!local.doc_id_proof} onUploaded={onUploaded} />
-                    <DocSlot label="Address proof" hint="Utility bill / rent agreement (optional)" fieldKey="doc_address_proof" alreadyUploaded={!!local.doc_address_proof} onUploaded={onUploaded} />
-                    <DocSlot label="Cancelled cheque" hint="Required before first payout" fieldKey="doc_bank_proof" alreadyUploaded={!!local.doc_bank_proof} onUploaded={onUploaded} />
-                    <DocSlot
-                        label={isOriginal ? "Brand authorization letter (required)" : "Brand authorization letter (optional)"}
-                        hint={isOriginal ? "Required for Original / OEM sellers" : "Only if you sell original OEM cartridges"}
-                        fieldKey="doc_brand_authorization"
-                        alreadyUploaded={!!local.doc_brand_authorization}
-                        onUploaded={onUploaded}
-                    />
-                </div>
-                <div className="flex flex-wrap justify-end gap-2 pt-4">
-                    <Button type="button" variant="outline" onClick={onClose} data-testid="phase2-docs-close">Done</Button>
-                    {showSubmitForReview && (
-                        <Button
-                            type="button"
-                            disabled={!readyToSubmit || submitting}
-                            onClick={submit}
-                            className="btn-cta"
-                            data-testid="phase2-submit-for-review"
-                            title={readyToSubmit ? "" : "Upload all mandatory documents + add bank details first"}
-                        >
-                            {submitting ? <Loader2 size={14} className="animate-spin mr-1" /> : <Check size={14} className="mr-1" />}
-                            Submit for verification
-                        </Button>
-                    )}
-                </div>
-                {showSubmitForReview && !readyToSubmit && (
-                    <div className="text-[11.5px] text-[#6E6E73] mt-2 text-right">
-                        {!bankOK && <>Add bank details · </>}
-                        {!allMandatoryDocsUploaded && <>Upload all mandatory documents (GST, PAN, ID proof, cancelled cheque{isOriginal ? ", brand authorization" : ""}) </>}
-                        before submitting.
-                    </div>
+                        {/* === KYC documents, visible inline === */}
+                        <div className="mt-5">
+                            <div className="flex items-center gap-2 text-[11px] tracking-[0.16em] uppercase font-semibold text-[#86868B] mb-2">
+                                <FileText size={12} /> KYC documents
+                            </div>
+                            <div className="text-[11.5px] text-[#6E6E73] mb-2">PDF or image, up to 5 MB each. Stored privately — only TonersCart admins can view them via short-lived signed links.</div>
+                            <div className="space-y-2">
+                                <DocSlot label="GST certificate" required fieldKey="doc_gst" alreadyUploaded={!!local.doc_gst} onUploaded={onUploaded} />
+                                <DocSlot label="PAN card" required fieldKey="doc_pan" alreadyUploaded={!!local.doc_pan} onUploaded={onUploaded} />
+                                <DocSlot label="ID proof — Aadhaar / Passport" required fieldKey="doc_id_proof" alreadyUploaded={!!local.doc_id_proof} onUploaded={onUploaded} />
+                                <DocSlot label="Cancelled cheque" hint="Optional — recommended before first payout" fieldKey="doc_bank_proof" alreadyUploaded={!!local.doc_bank_proof} onUploaded={onUploaded} />
+                                <DocSlot label="Address proof" hint="Optional — GST certificate counts as address proof" fieldKey="doc_address_proof" alreadyUploaded={!!local.doc_address_proof} onUploaded={onUploaded} />
+                                <DocSlot
+                                    label={isOriginal ? "Brand authorization letter" : "Brand authorization letter (optional)"}
+                                    required={isOriginal}
+                                    hint={isOriginal ? "Required for Original / OEM sellers" : "Only if you sell original OEM cartridges"}
+                                    fieldKey="doc_brand_authorization"
+                                    alreadyUploaded={!!local.doc_brand_authorization}
+                                    onUploaded={onUploaded}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap justify-end gap-2 pt-5 sticky bottom-0 bg-white">
+                            <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Close</Button>
+                            <Button
+                                type="button"
+                                disabled={!readyToSubmit || submitting}
+                                onClick={submit}
+                                className="btn-cta"
+                                data-testid="phase2-submit-for-review"
+                                title={readyToSubmit ? "" : "Upload mandatory documents + add bank details first"}
+                            >
+                                {submitting ? <Loader2 size={14} className="animate-spin mr-1" /> : <Check size={14} className="mr-1" />}
+                                Submit for verification
+                            </Button>
+                        </div>
+                        {!readyToSubmit && (
+                            <div className="text-[11.5px] text-[#6E6E73] text-right" data-testid="phase2-submit-hint">
+                                {!bankOK && <>Add account number + valid IFSC · </>}
+                                {!allMandatoryDocsUploaded && <>Upload GST, PAN, and ID proof{isOriginal ? ", and brand authorization" : ""} </>}
+                                to enable Submit.
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <>
+                        {/* Approved-dealer mode — just the docs grid, no inline bank
+                            (they use the separate Edit-bank entry from the banner). */}
+                        <div className="text-[12.5px] text-[#6E6E73] mt-1">All files are stored privately — only TonersCart admins can view them via short-lived signed links. PDF or image, up to 5 MB.</div>
+                        <div className="space-y-2 mt-4">
+                            <DocSlot label="GST certificate" required fieldKey="doc_gst" alreadyUploaded={!!local.doc_gst} onUploaded={onUploaded} />
+                            <DocSlot label="PAN card" required fieldKey="doc_pan" alreadyUploaded={!!local.doc_pan} onUploaded={onUploaded} />
+                            <DocSlot label="ID proof — Aadhaar / Passport" required fieldKey="doc_id_proof" alreadyUploaded={!!local.doc_id_proof} onUploaded={onUploaded} />
+                            <DocSlot label="Address proof" hint="Optional — GST certificate counts as address proof" fieldKey="doc_address_proof" alreadyUploaded={!!local.doc_address_proof} onUploaded={onUploaded} />
+                            <DocSlot label="Cancelled cheque" hint="Optional — recommended before first payout" fieldKey="doc_bank_proof" alreadyUploaded={!!local.doc_bank_proof} onUploaded={onUploaded} />
+                            <DocSlot
+                                label={isOriginal ? "Brand authorization letter" : "Brand authorization letter (optional)"}
+                                required={isOriginal}
+                                hint={isOriginal ? "Required for Original / OEM sellers" : "Only if you sell original OEM cartridges"}
+                                fieldKey="doc_brand_authorization"
+                                alreadyUploaded={!!local.doc_brand_authorization}
+                                onUploaded={onUploaded}
+                            />
+                        </div>
+                        <div className="flex justify-end gap-2 pt-4">
+                            <Button type="button" variant="outline" onClick={onClose} data-testid="phase2-docs-close">Done</Button>
+                        </div>
+                    </>
                 )}
             </DialogContent>
         </Dialog>

@@ -1,6 +1,52 @@
 # TonersCart — Product Requirements (Supabase edition)
 
-> **Latest (2026-06-30 Wave 101 HOTFIX-2):** **Four critical bugs blocking live dealers fixed.**
+> **Latest (2026-06-30 Wave 101 HOTFIX-3):** **Step 3 onboarding UX fixed (bank + docs inline) + Submit validation corrected + per-dealer accurate Phase 2 banner.**
+>
+> ### Bug #1 — Bank details were a separate hidden dialog (FIXED)
+> Previously the Step 3 "Submit-for-verification" dialog showed only document uploads + a small "Add bank" button that opened ANOTHER dialog. Per user requirement, bank and docs must both be fully expanded inline in a single scrollable dialog.
+> **Fix:** `Phase2Banner.jsx` → `DocsDialog` now renders an inline bank section (account holder name, account number, IFSC, bank name, branch) at the top, followed by all document slots, with a sticky Submit button at the bottom — all on one scroll. The separate `BankDialog` remains only for approved dealers who use the "Edit bank" entry from the banner.
+>
+> ### Bug #2 — Submit button stayed disabled even with mandatory docs uploaded (FIXED)
+> Root cause: `MANDATORY_DOCS` included `doc_bank_proof` (cancelled cheque). Even though the user spec calls cheque optional, the gate required it.
+> **Fix:** `MANDATORY_DOCS` reduced to **exactly 3 documents — GST, PAN, ID proof** (plus brand-authorization only for Original/OEM sellers). `doc_bank_proof` and `doc_address_proof` moved into `OPTIONAL_DOCS` (rendered but never gate the Submit button). `readyToSubmit = allMandatoryDocsUploaded && bankOK` where bankOK now requires `account_number` + a valid IFSC regex. Submit activates as soon as the 3 mandatory docs are uploaded + bank fields valid.
+>
+> Also: Submit now auto-saves any dirty bank state before calling `/auth/submit-for-review` so dealers don't lose typed-but-unsaved bank details.
+>
+> ### Bug #3 — Phase 2 banner showed generic "4 docs missing" for every approved dealer (FIXED)
+> The `MANDATORY_DOCS` change cascades here — `missingDocs = MANDATORY_DOCS.filter(d => !supplier[d.key])` now returns the EXACT per-dealer missing list (max 3 mandatory + brand auth for OEM). Confirmed against the live DB:
+>
+> | Dealer | Missing |
+> |--------|---------|
+> | BIG C TECHNOLOGIES | 1 (Brand auth — OEM) |
+> | DET | 3 (GST, PAN, ID proof) |
+> | VERVE IT SOLUTIONS | 4 (GST, PAN, ID proof, Brand auth) |
+> | BIOS COMPUTERS | 2 (GST, PAN) |
+> | ZION ENTR | 3 (GST, PAN, Brand auth) |
+> | RAVI MARKETING | 3 (GST, PAN, Brand auth) |
+> | XYZ enterprises | 1 (Brand auth) |
+> | Amman Gaming Origin | 3 (GST, PAN, Brand auth) |
+>
+> `doc_address_proof` correctly never appears as "missing" since GST certificate doubles as address proof in India (it's in `OPTIONAL_DOCS`).
+>
+> ### Files modified
+> Single file: `frontend/src/components/Phase2Banner.jsx`:
+>   * `MANDATORY_DOCS` slimmed to 3 entries.
+>   * `OPTIONAL_DOCS` expanded to include `doc_bank_proof` and `doc_address_proof`.
+>   * `DocSlot` accepts a new `required` prop showing red `*` indicator.
+>   * `DocsDialog` split into two render modes based on `showSubmitForReview`:
+>     - `true` (onboarding submit) — inline bank form + docs + sticky Submit.
+>     - `false` (approved-dealer edit) — docs only (existing behaviour).
+>
+> ### Verification
+> Backend pytest passing (regression):
+>   * `test_wave101_signup_hotfix.py` — 3/3
+>   * `test_wave101_hotfix2.py` — 4/4 (38 → 31 total users after dev cleanup, 14 Google sign-ins visible)
+> Live-DB per-dealer missing-docs calculation — 8 approved dealers all show their REAL missing count (varies 1 to 4, NOT a generic "4 documents missing").
+> Frontend lint clean.
+
+
+
+
 >
 > ### Bug #1 — Approved dealers misrouted to onboarding (CRITICAL, FIXED)
 > `SupplierDashboard.jsx` had a stage check: `if isApproved AND (any KYC doc missing) → stage = "approved_phase2"` which kicked already-approved dealers (Big C, DET, Verve IT, Bios, ZION, RAVI, Amman, Digital Edge) into the locked DealerOnboarding screen because most of them never uploaded `doc_gst` / `doc_pan` / `doc_id_proof`. **Fix:** removed the `approved_phase2` stage entirely. Approved dealers (row in `suppliers`) ALWAYS render the normal dashboard — the existing `Phase2Banner` (already mounted inside the normal dashboard) handles gentle "complete your KYC" nudges inline.
