@@ -34,6 +34,7 @@ import MissingModelLink from "../components/MissingModelLink";
 import InlineEditCell from "../components/InlineEditCell";
 import Phase2Banner from "../components/Phase2Banner";
 import DealerOnboarding from "../components/DealerOnboarding";
+import DealerProfileMenu from "../components/DealerProfileMenu";
 
 const colorSwatchHex = (name) => {
     const v = _colorSwatch(name);
@@ -876,6 +877,10 @@ export default function SupplierDashboard() {
                                     </span>
                                 </button>
                             ))}
+                            {/* Wave 102 — approved-dealer profile dropdown (top-right) */}
+                            {isApproved && user?.supplier && (
+                                <DealerProfileMenu supplier={user.supplier} onRefresh={refresh} />
+                            )}
                         </div>
                     </div>
                 </div>

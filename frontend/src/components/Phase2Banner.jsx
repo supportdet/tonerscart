@@ -68,18 +68,26 @@ export default function Phase2Banner({ supplier, onUpdated, externalOpen = false
     if (!supplier) return null;
     const bankOK = bankComplete(supplier);
     const docsOK = docsComplete(supplier);
-    // When both are complete OR dismissed, render nothing (banner + dialogs)
-    // UNLESS we are in draft mode and still need to surface the "Submit
-    // for verification" CTA inside the docs dialog.
-    if (((bankOK && docsOK) || dismissed) && !showSubmitForReview) {
-        if (externalOpen && onExternalClose) onExternalClose();
-        return null;
-    }
+    // Wave 101 hotfix-6 — early-exit only when in onboarding submit mode
+    // (where the dialog must remain open). For the regular approved-dealer
+    // banner mode we compute `hasAnyGap` below so optional missing items
+    // (cancelled cheque) still surface a friendly nudge.
 
-    // Wave 100 — only count documents that are GENUINELY missing.
+    // Wave 101 hotfix-6 — surface BOTH mandatory and optional missing docs
+    // in the banner so approved dealers (Big C / ZION / RAVI / VERVE etc.)
+    // who are missing only their cancelled cheque still see a friendly nudge.
+    // Mandatory docs in red counter; optional ones listed separately as
+    // "Recommended" nudges, never gating.
     const missingDocs = MANDATORY_DOCS.filter((d) => !supplier[d.key]).map((d) => d.label);
     const isOriginal = Array.isArray(supplier.seller_types) && supplier.seller_types.includes("Original");
     if (isOriginal && !supplier.doc_brand_authorization) missingDocs.push("Brand authorization letter");
+    const missingOptional = OPTIONAL_DOCS.filter((d) => !supplier[d.key]).map((d) => d.label);
+    // Show banner if bank missing OR any mandatory missing OR any optional missing.
+    const hasAnyGap = !bankOK || missingDocs.length > 0 || missingOptional.length > 0;
+    if (!hasAnyGap || dismissed) {
+        if (externalOpen && onExternalClose) onExternalClose();
+        if (!showSubmitForReview) return null;
+    }
 
     return (
         <>

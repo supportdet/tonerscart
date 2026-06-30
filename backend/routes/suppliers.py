@@ -393,3 +393,28 @@ def landing_data():
     _LANDING_CACHE["data"] = payload
     _LANDING_CACHE["ts"] = now
     return payload
+
+
+
+# ============================================================================
+# Approved-dealer "Raise a Query" — Wave 102
+# ============================================================================
+
+class _SupplierQueryPayload(BaseModel):
+    subject: str = Field(..., min_length=1, max_length=200)
+    message: str = Field(..., min_length=1, max_length=5000)
+
+
+@router.post("/supplier/raise-query")
+async def supplier_raise_query(payload: _SupplierQueryPayload, user: dict = Depends(require_user)):
+    """Approved dealer fires a support query from the dealer dashboard profile
+    dropdown. Email goes to the TonersCart support inbox with reply_to set to
+    the dealer's email so admins can reply directly."""
+    sup_row = sb_admin.table("suppliers").select(
+        "business_name,seller_id,email,phone,city,user_id"
+    ).eq("user_id", user["id"]).maybe_single().execute()
+    sup = (sup_row.data if sup_row and sup_row.data else {}) or {}
+    if not sup.get("email"):
+        sup["email"] = user.get("email")
+    sent = await email_dealer_raise_query(sup, payload.subject.strip(), payload.message.strip())
+    return {"ok": True, "sent": bool(sent)}

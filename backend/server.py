@@ -43,6 +43,7 @@ from email_service import (
     email_dealer_unsuspended,
     email_dealer_welcome_magic,
     email_admin_reply,
+    email_dealer_raise_query,
     _commission_breakdown,
 )
 from ai_check import check_documents
