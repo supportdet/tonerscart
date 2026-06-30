@@ -195,10 +195,19 @@ function BankDialog({ open, onClose, supplier, onSaved }) {
 }
 
 function DocSlot({ label, hint, fieldKey, alreadyUploaded, onUploaded, required = false }) {
-    const [file, setFile] = useState(null);
     const [uploading, setUploading] = useState(false);
-    const upload = async () => {
+    const inputRef = React.useRef(null);
+    // Wave 101 hotfix-4 — auto-upload the moment a file is selected. No
+    // intermediate "Upload" button click. Spinner replaces the file input
+    // while uploading; green check + "Uploaded" label appear on success.
+    const handleFile = async (e) => {
+        const file = e.target.files?.[0];
         if (!file) return;
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error(`${label} is too large (${(file.size / 1024 / 1024).toFixed(1)} MB) — max 5 MB`);
+            e.target.value = "";
+            return;
+        }
         try {
             setUploading(true);
             const fd = new FormData();
@@ -207,29 +216,59 @@ function DocSlot({ label, hint, fieldKey, alreadyUploaded, onUploaded, required 
             await api.post("/auth/supplier-phase2", { [fieldKey]: data.path });
             toast.success(`${label} uploaded`);
             onUploaded && onUploaded(fieldKey, data.path);
-            setFile(null);
-        } catch (e) {
-            toast.error(formatApiError(e));
-        } finally { setUploading(false); }
+        } catch (err) {
+            toast.error(formatApiError(err));
+        } finally {
+            setUploading(false);
+            if (inputRef.current) inputRef.current.value = "";
+        }
     };
-    const status = alreadyUploaded ? "uploaded" : (file ? "pending" : "missing");
+    const status = alreadyUploaded ? "uploaded" : uploading ? "pending" : "missing";
     return (
         <div className="flex items-start gap-3 p-3 rounded-lg border border-[#E5E5EA] bg-white" data-testid={`phase2-slot-${fieldKey}`}>
             <div className={`w-7 h-7 rounded-full grid place-items-center shrink-0 ${status === "uploaded" ? "bg-emerald-50 text-emerald-600" : status === "pending" ? "bg-amber-50 text-amber-600" : "bg-[#F4F4F6] text-[#86868B]"}`}>
-                {status === "uploaded" ? <Check size={14} /> : <FileText size={14} />}
+                {status === "uploaded" ? <Check size={14} /> : status === "pending" ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
             </div>
             <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-semibold text-[#0A0A0B]">{label}{required && !alreadyUploaded && <span className="ml-1 text-red-500">*</span>}{status === "uploaded" && <span className="ml-2 text-[10.5px] tracking-[0.12em] uppercase text-emerald-600">Uploaded</span>}</div>
+                <div className="text-[13px] font-semibold text-[#0A0A0B]">
+                    {label}
+                    {required && !alreadyUploaded && <span className="ml-1 text-red-500">*</span>}
+                    {status === "uploaded" && <span className="ml-2 text-[10.5px] tracking-[0.12em] uppercase text-emerald-600">Uploaded</span>}
+                    {status === "pending" && <span className="ml-2 text-[10.5px] tracking-[0.12em] uppercase text-amber-600">Uploading…</span>}
+                </div>
                 {hint && <div className="text-[11.5px] text-[#6E6E73] mt-0.5">{hint}</div>}
                 {!alreadyUploaded && (
-                    <div className="mt-2 flex items-center gap-2">
-                        <input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} className="text-[12px]" data-testid={`phase2-file-${fieldKey}`} />
-                        {file && (
-                            <Button type="button" onClick={upload} disabled={uploading} className="btn-cta h-8 px-3 text-[11.5px]" data-testid={`phase2-upload-${fieldKey}`}>
-                                {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                            </Button>
-                        )}
+                    <div className="mt-2">
+                        <input
+                            ref={inputRef}
+                            type="file"
+                            accept="image/*,application/pdf"
+                            onChange={handleFile}
+                            disabled={uploading}
+                            className="text-[12px] block w-full text-[#0A0A0B] file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-[11.5px] file:font-semibold file:bg-[#0A0A0B] file:text-white file:cursor-pointer hover:file:bg-[#23252B] disabled:opacity-50"
+                            data-testid={`phase2-file-${fieldKey}`}
+                        />
                     </div>
+                )}
+                {alreadyUploaded && (
+                    <button
+                        type="button"
+                        onClick={() => inputRef.current?.click()}
+                        className="mt-1.5 text-[11px] text-[#0A0A0B]/60 hover:text-[#0A0A0B] underline"
+                        data-testid={`phase2-replace-${fieldKey}`}
+                    >
+                        Replace
+                    </button>
+                )}
+                {alreadyUploaded && (
+                    <input
+                        ref={inputRef}
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={handleFile}
+                        disabled={uploading}
+                        className="hidden"
+                    />
                 )}
             </div>
         </div>
@@ -237,7 +276,13 @@ function DocSlot({ label, hint, fieldKey, alreadyUploaded, onUploaded, required 
 }
 
 function DocsDialog({ open, onClose, supplier, onSaved, showSubmitForReview = false, onOpenBank }) {
-    const [local, setLocal] = useState(supplier || {});
+    // Wave 101 hotfix-4 — reactivity fix.
+    // We keep ONLY a small "uploadedPatch" of doc-fields the user has just
+    // saved in this session. The merged view `{...supplier, ...uploadedPatch}`
+    // ALWAYS wins over the supplier prop, so a fresh re-fetch of /auth/me
+    // can't blow away an upload that just happened (the previous useEffect
+    // resetting local from supplier was the bug that broke Submit reactivity).
+    const [uploadedPatch, setUploadedPatch] = useState({});
     const [submitting, setSubmitting] = useState(false);
     // Inline bank form state — only used when showSubmitForReview is true so
     // the dealer sees both bank fields and document uploads side-by-side
@@ -249,33 +294,68 @@ function DocsDialog({ open, onClose, supplier, onSaved, showSubmitForReview = fa
         bank_name: supplier?.bank_name || "",
         bank_branch: supplier?.bank_branch || "",
     });
+    const [bankDirty, setBankDirty] = useState(false);
     const [savingBank, setSavingBank] = useState(false);
+    // Reset state when the dialog OPENS (not on every supplier refresh — that
+    // would clobber the uploadedPatch and the Submit button would flicker).
     React.useEffect(() => {
-        setLocal(supplier || {});
-        setBank({
-            account_holder_name: supplier?.account_holder_name || "",
-            account_number: supplier?.account_number || "",
-            ifsc_code: supplier?.ifsc_code || "",
-            bank_name: supplier?.bank_name || "",
-            bank_branch: supplier?.bank_branch || "",
-        });
-    }, [supplier]);
-    const isOriginal = Array.isArray(supplier?.seller_types) && supplier.seller_types.includes("Original");
-    const onUploaded = (k, v) => { setLocal((prev) => ({ ...prev, [k]: v })); onSaved && onSaved(); };
+        if (open) {
+            setUploadedPatch({});
+            setBankDirty(false);
+            setBank({
+                account_holder_name: supplier?.account_holder_name || "",
+                account_number: supplier?.account_number || "",
+                ifsc_code: supplier?.ifsc_code || "",
+                bank_name: supplier?.bank_name || "",
+                bank_branch: supplier?.bank_branch || "",
+            });
+        }
+    }, [open]);  // eslint-disable-line react-hooks/exhaustive-deps
+    // Pull through supplier-side bank values when supplier prop changes AND
+    // the user hasn't started editing the bank section yet.
+    React.useEffect(() => {
+        if (!bankDirty) {
+            setBank((b) => ({
+                account_holder_name: supplier?.account_holder_name || b.account_holder_name,
+                account_number: supplier?.account_number || b.account_number,
+                ifsc_code: supplier?.ifsc_code || b.ifsc_code,
+                bank_name: supplier?.bank_name || b.bank_name,
+                bank_branch: supplier?.bank_branch || b.bank_branch,
+            }));
+        }
+    }, [supplier, bankDirty]);
+
+    // Merged effective doc state — uploadedPatch wins over supplier prop.
+    const docs = { ...supplier, ...uploadedPatch };
+    const isOriginal = Array.isArray(docs.seller_types) && docs.seller_types.includes("Original");
+    const onUploaded = (k, v) => {
+        // Optimistic update — survives any subsequent /auth/me refresh.
+        setUploadedPatch((prev) => ({ ...prev, [k]: v }));
+        // Tell the parent to re-fetch so the banner/dashboard pick up the
+        // change too — but we never rely on this to update OUR Submit gate.
+        onSaved && onSaved();
+    };
 
     // Wave 101 hotfix-3 — only the 3 mandatory docs (+ brand auth for OEM)
     // gate the Submit button. Cancelled cheque + address proof are optional.
-    const allMandatoryDocsUploaded = MANDATORY_DOCS.every((d) => !!local[d.key])
-        && (!isOriginal || !!local.doc_brand_authorization);
+    const allMandatoryDocsUploaded = MANDATORY_DOCS.every((d) => !!docs[d.key])
+        && (!isOriginal || !!docs.doc_brand_authorization);
     // Bank "complete enough to submit" — account number + IFSC are the
-    // hard floor (matches bankComplete()). Holder name / bank name / branch
-    // are nudges, NOT gates, but we DO require holder name on submit to
-    // keep payout integrity.
+    // hard floor (matches bankComplete()).
     const bankOK = !!(bank.account_number && /^[A-Z]{4}0[A-Z0-9]{6}$/.test((bank.ifsc_code || "").trim().toUpperCase()));
     const readyToSubmit = allMandatoryDocsUploaded && bankOK;
 
+    // Wave 101 hotfix-4 — approved-dealer mode: only show the docs that are
+    // genuinely missing for THIS specific dealer. Mandatory docs first; if
+    // the dealer is Original/OEM and brand auth is missing, that's included.
+    // Optional docs are only shown if the dealer asked for them (we still
+    // surface cancelled cheque + address proof as nudges when missing —
+    // they're explicitly marked optional in the UI).
+    const missingMandatoryKeys = MANDATORY_DOCS.filter((d) => !docs[d.key]).map((d) => d.key);
+    const missingBrandAuth = isOriginal && !docs.doc_brand_authorization;
+    const missingOptionalKeys = OPTIONAL_DOCS.filter((d) => !docs[d.key]).map((d) => d.key);
+
     const saveBank = async () => {
-        // Soft validation — account number and IFSC are the minimum.
         if (!bank.account_number || !/^[A-Z]{4}0[A-Z0-9]{6}$/.test((bank.ifsc_code || "").trim().toUpperCase())) {
             toast.error("Account number and valid IFSC code are required");
             return;
@@ -290,7 +370,7 @@ function DocsDialog({ open, onClose, supplier, onSaved, showSubmitForReview = fa
                 bank_branch: bank.bank_branch.trim() || null,
             });
             toast.success("Bank details saved");
-            setLocal((prev) => ({ ...prev, ...bank }));
+            setBankDirty(false);
             onSaved && onSaved();
         } catch (e) {
             toast.error(formatApiError(e));
@@ -301,14 +381,7 @@ function DocsDialog({ open, onClose, supplier, onSaved, showSubmitForReview = fa
         if (!readyToSubmit) return;
         try {
             setSubmitting(true);
-            // Auto-save bank if it differs from server-side snapshot.
-            const bankChanged =
-                (bank.account_number || "") !== (supplier?.account_number || "") ||
-                (bank.ifsc_code || "") !== (supplier?.ifsc_code || "") ||
-                (bank.account_holder_name || "") !== (supplier?.account_holder_name || "") ||
-                (bank.bank_name || "") !== (supplier?.bank_name || "") ||
-                (bank.bank_branch || "") !== (supplier?.bank_branch || "");
-            if (bankChanged) {
+            if (bankDirty) {
                 await api.post("/auth/supplier-phase2", {
                     account_holder_name: bank.account_holder_name.trim() || null,
                     account_number: bank.account_number.trim(),
@@ -331,7 +404,7 @@ function DocsDialog({ open, onClose, supplier, onSaved, showSubmitForReview = fa
             <DialogContent className="max-w-[720px] max-h-[88vh] overflow-y-auto p-6 rounded-[18px]" data-testid="phase2-docs-dialog">
                 <DialogHeader>
                     <DialogTitle className="text-[20px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>
-                        {showSubmitForReview ? "Bank details + KYC documents" : "Upload KYC documents"}
+                        {showSubmitForReview ? "Bank details + KYC documents" : "Upload missing documents"}
                     </DialogTitle>
                 </DialogHeader>
 
@@ -347,7 +420,7 @@ function DocsDialog({ open, onClose, supplier, onSaved, showSubmitForReview = fa
                                     <Label className="text-[12.5px]">Account holder name</Label>
                                     <Input
                                         value={bank.account_holder_name}
-                                        onChange={(e) => setBank({ ...bank, account_holder_name: e.target.value })}
+                                        onChange={(e) => { setBank({ ...bank, account_holder_name: e.target.value }); setBankDirty(true); }}
                                         placeholder="Match your registered business name"
                                         data-testid="phase2-acct-holder"
                                         className="mt-1"
@@ -358,7 +431,7 @@ function DocsDialog({ open, onClose, supplier, onSaved, showSubmitForReview = fa
                                         <Label className="text-[12.5px]">Account number <span className="text-red-500">*</span></Label>
                                         <Input
                                             value={bank.account_number}
-                                            onChange={(e) => setBank({ ...bank, account_number: e.target.value.replace(/\D/g, "").slice(0, 18) })}
+                                            onChange={(e) => { setBank({ ...bank, account_number: e.target.value.replace(/\D/g, "").slice(0, 18) }); setBankDirty(true); }}
                                             inputMode="numeric"
                                             placeholder="6–18 digits"
                                             data-testid="phase2-acct-number"
@@ -369,7 +442,7 @@ function DocsDialog({ open, onClose, supplier, onSaved, showSubmitForReview = fa
                                         <Label className="text-[12.5px]">IFSC code <span className="text-red-500">*</span></Label>
                                         <Input
                                             value={bank.ifsc_code}
-                                            onChange={(e) => setBank({ ...bank, ifsc_code: e.target.value.toUpperCase().slice(0, 11) })}
+                                            onChange={(e) => { setBank({ ...bank, ifsc_code: e.target.value.toUpperCase().slice(0, 11) }); setBankDirty(true); }}
                                             maxLength={11}
                                             placeholder="HDFC0001234"
                                             data-testid="phase2-ifsc"
@@ -380,21 +453,23 @@ function DocsDialog({ open, onClose, supplier, onSaved, showSubmitForReview = fa
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <Label className="text-[12.5px]">Bank name</Label>
-                                        <Input value={bank.bank_name} onChange={(e) => setBank({ ...bank, bank_name: e.target.value })} placeholder="HDFC Bank" data-testid="phase2-bank-name" className="mt-1" />
+                                        <Input value={bank.bank_name} onChange={(e) => { setBank({ ...bank, bank_name: e.target.value }); setBankDirty(true); }} placeholder="HDFC Bank" data-testid="phase2-bank-name" className="mt-1" />
                                     </div>
                                     <div>
                                         <Label className="text-[12.5px]">Branch</Label>
-                                        <Input value={bank.bank_branch} onChange={(e) => setBank({ ...bank, bank_branch: e.target.value })} placeholder="MG Road, Bangalore" data-testid="phase2-bank-branch" className="mt-1" />
+                                        <Input value={bank.bank_branch} onChange={(e) => { setBank({ ...bank, bank_branch: e.target.value }); setBankDirty(true); }} placeholder="MG Road, Bangalore" data-testid="phase2-bank-branch" className="mt-1" />
                                     </div>
                                 </div>
                                 <div className="flex items-center justify-between pt-1">
                                     <span className="text-[11.5px] text-[#6E6E73]">
                                         {bankOK ? <span className="text-emerald-600 inline-flex items-center gap-1"><Check size={11} /> Bank details look good</span> : "Account number + IFSC are required to submit."}
                                     </span>
-                                    <Button type="button" variant="outline" onClick={saveBank} disabled={savingBank} className="h-8 px-3 text-[11.5px]" data-testid="phase2-bank-save-inline">
-                                        {savingBank ? <Loader2 size={12} className="animate-spin mr-1" /> : null}
-                                        Save bank
-                                    </Button>
+                                    {bankDirty && (
+                                        <Button type="button" variant="outline" onClick={saveBank} disabled={savingBank} className="h-8 px-3 text-[11.5px]" data-testid="phase2-bank-save-inline">
+                                            {savingBank ? <Loader2 size={12} className="animate-spin mr-1" /> : null}
+                                            Save bank
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -404,19 +479,19 @@ function DocsDialog({ open, onClose, supplier, onSaved, showSubmitForReview = fa
                             <div className="flex items-center gap-2 text-[11px] tracking-[0.16em] uppercase font-semibold text-[#86868B] mb-2">
                                 <FileText size={12} /> KYC documents
                             </div>
-                            <div className="text-[11.5px] text-[#6E6E73] mb-2">PDF or image, up to 5 MB each. Stored privately — only TonersCart admins can view them via short-lived signed links.</div>
+                            <div className="text-[11.5px] text-[#6E6E73] mb-2">PDF or image, up to 5 MB each. Files upload automatically the moment you pick them.</div>
                             <div className="space-y-2">
-                                <DocSlot label="GST certificate" required fieldKey="doc_gst" alreadyUploaded={!!local.doc_gst} onUploaded={onUploaded} />
-                                <DocSlot label="PAN card" required fieldKey="doc_pan" alreadyUploaded={!!local.doc_pan} onUploaded={onUploaded} />
-                                <DocSlot label="ID proof — Aadhaar / Passport" required fieldKey="doc_id_proof" alreadyUploaded={!!local.doc_id_proof} onUploaded={onUploaded} />
-                                <DocSlot label="Cancelled cheque" hint="Optional — recommended before first payout" fieldKey="doc_bank_proof" alreadyUploaded={!!local.doc_bank_proof} onUploaded={onUploaded} />
-                                <DocSlot label="Address proof" hint="Optional — GST certificate counts as address proof" fieldKey="doc_address_proof" alreadyUploaded={!!local.doc_address_proof} onUploaded={onUploaded} />
+                                <DocSlot label="GST certificate" required fieldKey="doc_gst" alreadyUploaded={!!docs.doc_gst} onUploaded={onUploaded} />
+                                <DocSlot label="PAN card" required fieldKey="doc_pan" alreadyUploaded={!!docs.doc_pan} onUploaded={onUploaded} />
+                                <DocSlot label="ID proof — Aadhaar / Passport" required fieldKey="doc_id_proof" alreadyUploaded={!!docs.doc_id_proof} onUploaded={onUploaded} />
+                                <DocSlot label="Cancelled cheque" hint="Optional — recommended before first payout" fieldKey="doc_bank_proof" alreadyUploaded={!!docs.doc_bank_proof} onUploaded={onUploaded} />
+                                <DocSlot label="Address proof" hint="Optional — GST certificate counts as address proof" fieldKey="doc_address_proof" alreadyUploaded={!!docs.doc_address_proof} onUploaded={onUploaded} />
                                 <DocSlot
                                     label={isOriginal ? "Brand authorization letter" : "Brand authorization letter (optional)"}
                                     required={isOriginal}
                                     hint={isOriginal ? "Required for Original / OEM sellers" : "Only if you sell original OEM cartridges"}
                                     fieldKey="doc_brand_authorization"
-                                    alreadyUploaded={!!local.doc_brand_authorization}
+                                    alreadyUploaded={!!docs.doc_brand_authorization}
                                     onUploaded={onUploaded}
                                 />
                             </div>
@@ -446,24 +521,54 @@ function DocsDialog({ open, onClose, supplier, onSaved, showSubmitForReview = fa
                     </>
                 ) : (
                     <>
-                        {/* Approved-dealer mode — just the docs grid, no inline bank
-                            (they use the separate Edit-bank entry from the banner). */}
-                        <div className="text-[12.5px] text-[#6E6E73] mt-1">All files are stored privately — only TonersCart admins can view them via short-lived signed links. PDF or image, up to 5 MB.</div>
-                        <div className="space-y-2 mt-4">
-                            <DocSlot label="GST certificate" required fieldKey="doc_gst" alreadyUploaded={!!local.doc_gst} onUploaded={onUploaded} />
-                            <DocSlot label="PAN card" required fieldKey="doc_pan" alreadyUploaded={!!local.doc_pan} onUploaded={onUploaded} />
-                            <DocSlot label="ID proof — Aadhaar / Passport" required fieldKey="doc_id_proof" alreadyUploaded={!!local.doc_id_proof} onUploaded={onUploaded} />
-                            <DocSlot label="Address proof" hint="Optional — GST certificate counts as address proof" fieldKey="doc_address_proof" alreadyUploaded={!!local.doc_address_proof} onUploaded={onUploaded} />
-                            <DocSlot label="Cancelled cheque" hint="Optional — recommended before first payout" fieldKey="doc_bank_proof" alreadyUploaded={!!local.doc_bank_proof} onUploaded={onUploaded} />
-                            <DocSlot
-                                label={isOriginal ? "Brand authorization letter" : "Brand authorization letter (optional)"}
-                                required={isOriginal}
-                                hint={isOriginal ? "Required for Original / OEM sellers" : "Only if you sell original OEM cartridges"}
-                                fieldKey="doc_brand_authorization"
-                                alreadyUploaded={!!local.doc_brand_authorization}
-                                onUploaded={onUploaded}
-                            />
-                        </div>
+                        {/* === Approved-dealer mode — only show the docs THIS dealer is missing. === */}
+                        {(missingMandatoryKeys.length + (missingBrandAuth ? 1 : 0) + missingOptionalKeys.length) === 0 ? (
+                            <div className="py-8 text-center" data-testid="phase2-docs-all-done">
+                                <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 grid place-items-center mx-auto mb-3">
+                                    <Check size={22} />
+                                </div>
+                                <div className="text-[14.5px] font-semibold text-[#0A0A0B]">All your documents are in</div>
+                                <div className="text-[12.5px] text-[#6E6E73] mt-1">Thanks — there&apos;s nothing left to upload.</div>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="text-[12.5px] text-[#6E6E73] mt-1">
+                                    These are the only documents you&apos;re missing — files upload automatically the moment you pick them.
+                                </div>
+                                <div className="space-y-2 mt-4">
+                                    {MANDATORY_DOCS.filter((d) => missingMandatoryKeys.includes(d.key)).map((d) => (
+                                        <DocSlot
+                                            key={d.key}
+                                            label={d.label}
+                                            required
+                                            fieldKey={d.key}
+                                            alreadyUploaded={!!docs[d.key]}
+                                            onUploaded={onUploaded}
+                                        />
+                                    ))}
+                                    {missingBrandAuth && (
+                                        <DocSlot
+                                            label="Brand authorization letter"
+                                            required
+                                            hint="Required for Original / OEM sellers"
+                                            fieldKey="doc_brand_authorization"
+                                            alreadyUploaded={!!docs.doc_brand_authorization}
+                                            onUploaded={onUploaded}
+                                        />
+                                    )}
+                                    {OPTIONAL_DOCS.filter((d) => missingOptionalKeys.includes(d.key)).map((d) => (
+                                        <DocSlot
+                                            key={d.key}
+                                            label={d.label}
+                                            hint={d.hint}
+                                            fieldKey={d.key}
+                                            alreadyUploaded={!!docs[d.key]}
+                                            onUploaded={onUploaded}
+                                        />
+                                    ))}
+                                </div>
+                            </>
+                        )}
                         <div className="flex justify-end gap-2 pt-4">
                             <Button type="button" variant="outline" onClick={onClose} data-testid="phase2-docs-close">Done</Button>
                         </div>
@@ -473,3 +578,4 @@ function DocsDialog({ open, onClose, supplier, onSaved, showSubmitForReview = fa
         </Dialog>
     );
 }
+

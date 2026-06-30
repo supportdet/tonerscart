@@ -399,20 +399,57 @@ async def submit_for_review(user: dict = Depends(require_user)):
 
 @router.post("/auth/supplier-phase2")
 def supplier_phase2_update(payload: SupplierProfilePhase2, user: dict = Depends(require_user)):
-    """Writes bank-detail and document-path updates onto the live `suppliers`
-    row for an approved dealer (or onto `suppliers_pending` if still pending —
-    so it carries over once approved). Wave 98."""
-    if user.get("role") != "supplier":
-        # Still applying — write to pending row.
-        upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v}
-        if upd:
-            _exec_dropping_cols(lambda a: sb_admin.table("suppliers_pending").update(a).eq("user_id", user["id"]).execute(), upd)
-        return {"ok": True, "target": "pending"}
+    """Writes bank-detail and document-path updates.
+
+    Wave 101 hotfix-4 — route the write to the correct table based on
+    whether the dealer is APPROVED (row in `suppliers`) or still applying
+    (row in `suppliers_pending`). Previously this only checked `role` —
+    but fresh dealers now sign up with `role='supplier'` even before any
+    application exists, so the UPDATE on `suppliers` silently affected
+    0 rows and the bank/docs never persisted. /auth/me then couldn't find
+    them in `suppliers_pending` either → the Submit gate never enabled.
+    """
+    if user.get("role") == "admin":
+        raise HTTPException(403, "Admins cannot update supplier profile")
     upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v}
     if not upd:
-        return {"ok": True, "target": "supplier", "updated": 0}
-    _exec_dropping_cols(lambda a: sb_admin.table("suppliers").update(a).eq("user_id", user["id"]).execute(), upd)
-    return {"ok": True, "target": "supplier", "updated": len(upd)}
+        return {"ok": True, "target": "noop", "updated": 0}
+
+    # Is the user APPROVED? Only then write to `suppliers`.
+    try:
+        approved = sb_admin.table("suppliers").select("id").eq("user_id", user["id"]).maybe_single().execute()
+        if approved and getattr(approved, "data", None):
+            _exec_dropping_cols(lambda a: sb_admin.table("suppliers").update(a).eq("user_id", user["id"]).execute(), upd)
+            return {"ok": True, "target": "supplier", "updated": len(upd)}
+    except Exception:
+        pass
+
+    # Otherwise the dealer is still applying (draft / pending / rejected /
+    # no-app). Make sure a `suppliers_pending` row exists, then UPDATE it.
+    try:
+        pending = sb_admin.table("suppliers_pending").select("id").eq("user_id", user["id"]).maybe_single().execute()
+        pending_data = getattr(pending, "data", None) if pending else None
+    except Exception:
+        pending_data = None
+    if not pending_data:
+        # Bootstrap a minimal draft row so the bank/doc UPDATE has somewhere
+        # to land. This covers the rare case where a fresh dealer skipped
+        # /auth/apply-seller and started uploading docs directly.
+        bootstrap = {
+            "user_id": user["id"],
+            "email": user.get("email"),
+            "business_name": user.get("company") or user.get("name") or "",
+            "contact_person": user.get("name") or "",
+            "phone": user.get("phone") or "",
+            "city": user.get("city") or "",
+            "status": "draft",
+        }
+        try:
+            _exec_dropping_cols(lambda a: sb_admin.table("suppliers_pending").upsert(a, on_conflict="user_id").execute(), bootstrap)
+        except Exception as e:
+            logger.warning("supplier-phase2 bootstrap failed: %s", e)
+    _exec_dropping_cols(lambda a: sb_admin.table("suppliers_pending").update(a).eq("user_id", user["id"]).execute(), upd)
+    return {"ok": True, "target": "pending", "updated": len(upd)}
 
 
 @router.post("/supplier/business-logo")
