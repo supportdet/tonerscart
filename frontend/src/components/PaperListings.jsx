@@ -214,7 +214,7 @@ export default function PaperListings() {
                     <div className="mt-1 text-[12.5px]">Tap <span className="font-semibold text-[#0A0A0B]">Add paper</span> to publish your first SKU.</div>
                 </div>
             ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3" data-testid="papers-grid">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5" data-testid="papers-grid">
                     {rows.map((p) => (
                         <div key={p.id} onClick={() => navigate(`/paper/${p.id}`)} className="tc-product-card p-2.5 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all" data-testid={`supplier-paper-${p.id}`}>
                             <div className="flex items-start justify-between gap-1">
