@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
     UserCircle2, ChevronDown, FileText, ShieldAlert, MessageSquare, LogOut,
@@ -36,16 +37,51 @@ export default function DealerProfileMenu({ supplier, onRefresh }) {
     const [submittedOpen, setSubmittedOpen] = useState(false);
     const [missingOpen, setMissingOpen] = useState(false);
     const [queryOpen, setQueryOpen] = useState(false);
+    const triggerRef = useRef(null);
     const menuRef = useRef(null);
+    // Wave 102 HOTFIX-2 — dropdown must escape the SupplierDashboard hero's
+    // `overflow: hidden` (which was silently clipping the menu, making it
+    // look like an empty rectangle sliding behind the Phase2 banner). Render
+    // it via createPortal into <body> and position it as fixed relative to
+    // the trigger's viewport rect.
+    const [coords, setCoords] = useState({ top: 0, right: 0 });
 
-    // Close on click outside
+    const updateCoords = () => {
+        if (!triggerRef.current) return;
+        const r = triggerRef.current.getBoundingClientRect();
+        setCoords({
+            top: r.bottom + 8,               // 8px = mt-2
+            right: Math.max(8, window.innerWidth - r.right),
+        });
+    };
+
+    useLayoutEffect(() => {
+        if (!open) return;
+        updateCoords();
+        window.addEventListener("resize", updateCoords);
+        window.addEventListener("scroll", updateCoords, true);
+        return () => {
+            window.removeEventListener("resize", updateCoords);
+            window.removeEventListener("scroll", updateCoords, true);
+        };
+    }, [open]);
+
+    // Close on click outside (allow clicks inside trigger OR portal menu)
     useEffect(() => {
         if (!open) return;
         const onClick = (e) => {
-            if (menuRef.current && !menuRef.current.contains(e.target)) setOpen(false);
+            const t = e.target;
+            if (triggerRef.current && triggerRef.current.contains(t)) return;
+            if (menuRef.current && menuRef.current.contains(t)) return;
+            setOpen(false);
         };
+        const onEsc = (e) => { if (e.key === "Escape") setOpen(false); };
         document.addEventListener("mousedown", onClick);
-        return () => document.removeEventListener("mousedown", onClick);
+        document.addEventListener("keydown", onEsc);
+        return () => {
+            document.removeEventListener("mousedown", onClick);
+            document.removeEventListener("keydown", onEsc);
+        };
     }, [open]);
 
     const doLogout = async () => {
@@ -60,8 +96,9 @@ export default function DealerProfileMenu({ supplier, onRefresh }) {
 
     return (
         <>
-            <div className="relative" ref={menuRef} data-testid="dealer-profile-menu">
+            <div className="relative inline-block" data-testid="dealer-profile-menu">
                 <button
+                    ref={triggerRef}
                     type="button"
                     onClick={() => setOpen((v) => !v)}
                     className="inline-flex items-center gap-2 h-9 px-3 rounded-full bg-white/10 hover:bg-white/15 border border-white/15 text-white text-[12.5px] font-semibold transition"
@@ -73,21 +110,25 @@ export default function DealerProfileMenu({ supplier, onRefresh }) {
                     <span className="hidden sm:inline max-w-[140px] truncate">{supplier.business_name || "Profile"}</span>
                     <ChevronDown size={13} className={`transition ${open ? "rotate-180" : ""}`} />
                 </button>
-                {open && (
-                    <div
-                        role="menu"
-                        className="absolute right-0 mt-2 w-60 bg-white text-[#0A0A0B] rounded-xl shadow-xl border border-black/[0.06] py-1.5 z-[1100]"
-                        data-testid="dealer-profile-dropdown"
-                    >
-                        <MenuItem icon={UserIcon} label="My Details" onClick={() => { setOpen(false); setDetailsOpen(true); }} testId="profile-menu-details" />
-                        <MenuItem icon={FileCheck2} label="Submitted Documents" onClick={() => { setOpen(false); setSubmittedOpen(true); }} testId="profile-menu-submitted-docs" />
-                        <MenuItem icon={ShieldAlert} label="Missing Documents" onClick={() => { setOpen(false); setMissingOpen(true); }} testId="profile-menu-missing-docs" />
-                        <MenuItem icon={MessageSquare} label="Raise a Query" onClick={() => { setOpen(false); setQueryOpen(true); }} testId="profile-menu-query" />
-                        <div className="my-1 border-t border-black/[0.06]" />
-                        <MenuItem icon={LogOut} label="Logout" onClick={() => { setOpen(false); doLogout(); }} testId="profile-menu-logout" danger />
-                    </div>
-                )}
             </div>
+
+            {open && typeof document !== "undefined" && createPortal(
+                <div
+                    ref={menuRef}
+                    role="menu"
+                    className="fixed w-60 bg-white text-[#0A0A0B] rounded-xl shadow-xl border border-black/[0.06] py-1.5 z-[10000]"
+                    style={{ top: coords.top, right: coords.right }}
+                    data-testid="dealer-profile-dropdown"
+                >
+                    <MenuItem icon={UserIcon} label="My Details" onClick={() => { setOpen(false); setDetailsOpen(true); }} testId="profile-menu-details" />
+                    <MenuItem icon={FileCheck2} label="Submitted Documents" onClick={() => { setOpen(false); setSubmittedOpen(true); }} testId="profile-menu-submitted-docs" />
+                    <MenuItem icon={ShieldAlert} label="Missing Documents" onClick={() => { setOpen(false); setMissingOpen(true); }} testId="profile-menu-missing-docs" />
+                    <MenuItem icon={MessageSquare} label="Raise a Query" onClick={() => { setOpen(false); setQueryOpen(true); }} testId="profile-menu-query" />
+                    <div className="my-1 border-t border-black/[0.06]" />
+                    <MenuItem icon={LogOut} label="Logout" onClick={() => { setOpen(false); doLogout(); }} testId="profile-menu-logout" danger />
+                </div>,
+                document.body
+            )}
 
             <MyDetailsDialog open={detailsOpen} onClose={() => setDetailsOpen(false)} supplier={supplier} />
             <SubmittedDocsDialog open={submittedOpen} onClose={() => setSubmittedOpen(false)} supplier={supplier} />
