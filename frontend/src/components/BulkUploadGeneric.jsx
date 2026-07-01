@@ -50,6 +50,7 @@ const HEADER_SYNONYMS = {
     paper_sizes:            ["papersizes", "supportedpapersizes", "papersize", "paper", "supportedpaper", "supportedsizes", "pagesize", "pagesizes", "papersizessupported", "papertype", "papertypes", "papersizecompatibility", "supportedpapertypes", "sizessupported", "papersizessupport"],
     max_resolution:         ["maxresolution", "maximumresolution", "maximumprintresolution", "maxprintresolution", "printresolution", "resolution", "dpi", "printingresolution"],
     mobile_printing:        ["mobileprinting", "mobileprintingsupport", "mobile", "mobileprint"],
+    functions:              ["functions", "function", "printerfunctions", "capability", "capabilities", "printcopyscan", "printscancopy", "aio", "multifunction"],
     special_features:       ["specialfeatures", "features", "features supported", "supportedfeatures", "extras", "highlights"],
     description:            ["description", "desc", "productdescription", "details", "about", "notes", "remarks"],
     size:                   ["size", "papersize"],
@@ -245,6 +246,50 @@ const CONNECTIVITY_VALUES = {
     airprint: "AirPrint",
 };
 
+// Wave 103 — canonical maps for the printer multi-select spec columns.
+// Every dealer-friendly variant of the value maps back to a dropdown
+// canonical so an Excel cell like "1200x1200 DPI" / "Air Print" /
+// "wifi direct" / "Print + Scan + Copy" attaches correctly.
+const RESOLUTION_VALUES = {
+    "203x203": "203x203", "203x203dpi": "203x203",
+    "300x300": "300x300", "300x300dpi": "300x300", "300dpi": "300x300",
+    "600x600": "600x600", "600x600dpi": "600x600", "600dpi": "600x600",
+    "1200x1200": "1200x1200", "1200x1200dpi": "1200x1200", "1200dpi": "1200x1200",
+    "1440x720": "1440x720", "1440x720dpi": "1440x720",
+    "2400x600": "2400x600", "2400x600dpi": "2400x600",
+    "2400x1200": "2400x1200", "2400x1200dpi": "2400x1200",
+    "2880x1440": "2880x1440", "2880x1440dpi": "2880x1440",
+    "4800x1200": "4800x1200", "4800x1200dpi": "4800x1200",
+    "5760x1440": "5760x1440", "5760x1440dpi": "5760x1440",
+    "9600x2400": "9600x2400", "9600x2400dpi": "9600x2400",
+};
+const MOBILE_VALUES = {
+    airprint: "AirPrint", appleairprint: "AirPrint",
+    mopria: "Mopria", mopriaprint: "Mopria", mopriaprintservice: "Mopria",
+    wifidirect: "Wi-Fi Direct", wifidir: "Wi-Fi Direct",
+    none: "None", na: "None", no: "None",
+};
+const SPECIAL_FEATURES_VALUES = {
+    duplex: "Duplex Printing", duplexprinting: "Duplex Printing", autoduplex: "Duplex Printing", twosided: "Duplex Printing",
+    adf: "Auto Document Feeder", autodocumentfeeder: "Auto Document Feeder", documentfeeder: "Auto Document Feeder",
+    touchscreen: "Touchscreen", touchpanel: "Touchscreen",
+    cloud: "Cloud Printing", cloudprinting: "Cloud Printing", googlecloudprint: "Cloud Printing",
+    mobileprinting: "Mobile Printing", mobileprint: "Mobile Printing",
+    secureprint: "Secure Print", securedprinting: "Secure Print", secure: "Secure Print",
+    highcapacitytray: "High Capacity Tray", hct: "High Capacity Tray", largepapertray: "High Capacity Tray",
+    fax: "Fax",
+    scanner: "Scanner", scan: "Scanner",
+    wireless: "Wireless", wifi: "Wireless",
+};
+const FUNCTIONS_VALUES = {
+    printonly: "print_only", print: "print_only", printer: "print_only",
+    printscan: "print_scan", printandscan: "print_scan", printplusscan: "print_scan",
+    allinone: "all_in_one", aio: "all_in_one", mfp: "all_in_one", multifunction: "all_in_one",
+    printscancopy: "all_in_one", printcopyscan: "all_in_one", printscanandcopy: "all_in_one",
+    printplusscanpluscopy: "all_in_one", printcopy: "all_in_one",
+    highvolume: "high_volume", highvol: "high_volume", productionvolume: "high_volume",
+};
+
 // Split a cell value on /, comma, &, pipe, semicolon. Used for multi-value
 // columns (usage_type, connectivity, paper_sizes, compatible_models).
 const _splitMulti = (v) => _strip(v).split(/\s*[\/,&|;]\s*/).map(_strip).filter(Boolean);
@@ -410,14 +455,40 @@ const _coerceCell = (key, value) => {
             const snapped = allowed.find((a) => Math.abs(a - n) < 0.5);
             return snapped != null ? String(snapped) : "";
         }
-        case "max_resolution":
-        case "mobile_printing":
-        case "special_features":
-            // Wave 77 — multi-value chip columns. Split, dedupe, and pass
-            // through. The cell renderer matches each token to the dropdown
-            // option list by value, so any unknown token still appears as a
-            // pass-through chip (dealer can correct it inline).
-            return Array.from(new Set(_splitMulti(raw))).join(", ");
+        case "max_resolution": {
+            // Wave 103 — canonicalise each token so "1200x1200 DPI",
+            // "1200 x 1200", "600dpi" etc. all map to the dropdown's
+            // canonical value (e.g. "1200x1200"). Unknown tokens pass
+            // through so the dealer sees them in the chip and can correct.
+            const parts = _splitMulti(raw).map((p) => _mapValue(p, RESOLUTION_VALUES) || p.trim());
+            return Array.from(new Set(parts)).filter(Boolean).join(", ");
+        }
+        case "mobile_printing": {
+            // Wave 103 — "Air Print" / "airprint" / "Apple AirPrint" →
+            // "AirPrint". "wifi direct" / "wi fi direct" → "Wi-Fi Direct".
+            const parts = _splitMulti(raw).map((p) => _mapValue(p, MOBILE_VALUES) || p.trim());
+            return Array.from(new Set(parts)).filter(Boolean).join(", ");
+        }
+        case "special_features": {
+            // Wave 103 — case-insensitive canonicalisation for the special-
+            // features chip column (Duplex Printing / ADF / Cloud Printing …).
+            const parts = _splitMulti(raw).map((p) => _mapValue(p, SPECIAL_FEATURES_VALUES) || p.trim());
+            return Array.from(new Set(parts)).filter(Boolean).join(", ");
+        }
+        case "functions": {
+            // Wave 103 — printer functions bulk column. Dealer variants like
+            // "Print + Scan + Copy" / "AIO" / "Multifunction" / "Print/Scan"
+            // all resolve to the single-add dropdown ids
+            // (print_only / print_scan / all_in_one / high_volume).
+            // 1) whole-string canonical (handles "Print + Scan + Copy" as one)
+            const wholeCanon = _strip(raw).toLowerCase().replace(/[\s_\-/+]+/g, "");
+            if (FUNCTIONS_VALUES[wholeCanon]) return FUNCTIONS_VALUES[wholeCanon];
+            // 2) token-wise fallback
+            const parts = _splitMulti(raw)
+                .map((p) => _mapValue(p, FUNCTIONS_VALUES))
+                .filter(Boolean);
+            return Array.from(new Set(parts)).join(", ");
+        }
         default:
             return raw;
     }
