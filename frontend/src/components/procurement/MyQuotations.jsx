@@ -142,10 +142,20 @@ export default function MyQuotations({ active, onOrdered }) {
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => { setOrdering(null); setSel(null); }}>Cancel</Button>
-                        <Button onClick={placeOrder} disabled={placing || !sel} className="btn-cta" data-testid="proc-order-confirm">
-                            {placing ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null} Confirm order
+                        <Button
+                            onClick={placeOrder}
+                            disabled
+                            aria-disabled="true"
+                            title="Orders will be enabled soon — we're onboarding more sellers to serve you better."
+                            className="btn-cta opacity-60 cursor-not-allowed"
+                            data-testid="proc-order-confirm"
+                        >
+                            Confirm order
                         </Button>
                     </DialogFooter>
+                    <div className="text-[11.5px] text-[#6E6E73] text-center px-2 pb-3" data-testid="proc-order-confirm-disabled-hint">
+                        Orders will be enabled soon — we&apos;re onboarding more sellers to serve you better.
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

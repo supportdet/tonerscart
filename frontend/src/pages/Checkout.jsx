@@ -345,12 +345,17 @@ export default function Checkout() {
                                 <Button
                                     type="button"
                                     onClick={placeOrder}
-                                    disabled={loading || !policyAgreed}
-                                    className="btn-cta w-full inline-flex items-center justify-center gap-2"
+                                    disabled
+                                    aria-disabled="true"
+                                    title="Orders will be enabled soon — we're onboarding more sellers to serve you better."
+                                    className="btn-cta w-full inline-flex items-center justify-center gap-2 opacity-60 cursor-not-allowed"
                                     data-testid="place-order-request-btn"
                                 >
-                                    {loading ? "Placing order…" : `Place Order — ₹${grandTotal.toLocaleString("en-IN")}`}
+                                    {`Place Order — ₹${grandTotal.toLocaleString("en-IN")}`}
                                 </Button>
+                                <div className="text-[11.5px] text-[#6E6E73] text-center mt-1.5" data-testid="place-order-disabled-hint">
+                                    Orders will be enabled soon — we&apos;re onboarding more sellers to serve you better.
+                                </div>
                             </div>
                         </div>
                     )}
