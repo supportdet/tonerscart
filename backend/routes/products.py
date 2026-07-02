@@ -5,6 +5,7 @@ import os
 import json
 import uuid
 import asyncio
+import jwt
 
 from fastapi import APIRouter, HTTPException, Depends, Request, UploadFile, File, Query
 from pydantic import BaseModel, EmailStr, Field
@@ -1752,3 +1753,87 @@ def related_products(kind: str, listing_id: str):
         logger.warning("related products lookup failed (%s/%s): %s", kind, listing_id, e)
 
     return {"items": items[:6]}
+
+
+
+# ============================================================================
+# Wave 104 — Compatible cartridge resolver (3-tier fallback)
+# ============================================================================
+
+class _WantedCartridgePayload(BaseModel):
+    query: str = Field(..., min_length=1, max_length=200)
+    context: Optional[str] = Field(None, max_length=100)
+
+
+@router.get("/compatible-resolve")
+def compatible_resolve(q: str = Query(..., min_length=1, max_length=200)):
+    """Given a cartridge/ink model number typed by a dealer in the printer's
+    'Compatible Toners' field, resolve to the best destination URL.
+
+    Tier 1 — exact/prefix match in `listings` or `consumable_listings`
+             (by model_number or oem_part_number). Prefer in-stock + cheapest.
+    Tier 2 — SEO slug page (currently only /compatible/{slug} exists, and
+             that page is PRINTER-focused, so we skip it for cartridge lookups).
+    Tier 3 — fallback to the universal search page with the model pre-filled.
+    """
+    query = (q or "").strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="query required")
+    # Tier 1a — toner listings
+    try:
+        rows = sb_admin.table("listings").select("id,brand,model_number,oem_part_number,stock,price").or_(
+            f"model_number.ilike.%{query}%,oem_part_number.ilike.%{query}%"
+        ).order("stock", desc=True).order("price").limit(1).execute().data or []
+        if rows:
+            return {"tier": 1, "kind": "toner", "url": f"/product/{rows[0]['id']}", "listing": rows[0]}
+    except Exception as e:
+        logger.warning("compatible-resolve tier1 toner failed: %s", e)
+    # Tier 1b — consumable listings (bottles, drums, etc.)
+    try:
+        rows = sb_admin.table("consumable_listings").select("id,brand,model_number,stock,price").ilike(
+            "model_number", f"%{query}%"
+        ).order("stock", desc=True).order("price").limit(1).execute().data or []
+        if rows:
+            return {"tier": 1, "kind": "consumable", "url": f"/product/consumable/{rows[0]['id']}", "listing": rows[0]}
+    except Exception as e:
+        logger.warning("compatible-resolve tier1 consumable failed: %s", e)
+    # Tier 3 — search fallback (Tier 2 SEO cartridge pages don't exist yet)
+    from urllib.parse import quote
+    return {"tier": 3, "kind": "search", "url": f"/search?q={quote(query)}", "listing": None}
+
+
+@router.post("/wanted-cartridge")
+def wanted_cartridge(payload: _WantedCartridgePayload, request: Request):
+    """Buyer-facing 'Notify me when available' saved to audit_log so admins
+    can pull procurement intelligence (which cartridge model numbers people
+    search for but no dealer has listed yet)."""
+    q = payload.query.strip()
+    if not q:
+        raise HTTPException(status_code=400, detail="query required")
+    # Best-effort user identification (may be anonymous)
+    actor_id, actor_email = None, None
+    try:
+        auth = request.headers.get("authorization", "")
+        if auth.lower().startswith("bearer "):
+            tok = auth.split(" ", 1)[1]
+            claims = jwt.decode(tok, options={"verify_signature": False})
+            actor_id = claims.get("sub")
+            actor_email = claims.get("email")
+    except Exception:
+        pass
+    try:
+        sb_admin.table("audit_log").insert({
+            "actor_id": actor_id,
+            "actor_email": actor_email,
+            "action": "wanted_cartridge",
+            "target_id": None,
+            "target_email": None,
+            "metadata": {
+                "query": q,
+                "context": payload.context or None,
+                "user_agent": request.headers.get("user-agent", "")[:200],
+            },
+        }).execute()
+    except Exception as e:
+        logger.warning("wanted_cartridge audit insert failed: %s", e)
+    return {"ok": True}
