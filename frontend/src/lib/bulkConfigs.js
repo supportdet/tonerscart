@@ -250,6 +250,15 @@ const PRINTER_CONDITIONS = [
     { value: "new", label: "Brand New" },
     { value: "refurbished", label: "Refurbished" },
 ];
+// Wave 103 — printer functions (Print / Scan / Copy) — matches
+// PrinterListings.jsx single-add FUNCTIONS ids so bulk-uploaded and single-
+// added printers share the exact same value shape in the DB.
+const PRINTER_FUNCTIONS = [
+    { value: "print_only", label: "Print only" },
+    { value: "print_scan", label: "Print + Scan" },
+    { value: "all_in_one", label: "Print + Copy + Scan" },
+    { value: "high_volume", label: "High-volume" },
+];
 const PRINTER_COLORS = [
     { value: "color", label: "Color" },
     { value: "bw", label: "B&W" },
@@ -271,6 +280,7 @@ const PRINTER_COLUMNS = [
     { key: "monthly_volume_max", label: "Vol. Max", required: false, type: "number", w: 100 },
     { key: "connectivity", label: "Connectivity", required: false, type: "select", multi: true, w: 240 },
     { key: "paper_sizes", label: "Paper Sizes", required: true, type: "select", multi: true, w: 200 },
+    { key: "functions", label: "Functions", required: false, type: "select", multi: true, w: 220 },
     { key: "max_resolution", label: "Max Resolution", required: false, type: "select", multi: true, w: 200 },
     { key: "mobile_printing", label: "Mobile Printing", required: false, type: "select", multi: true, w: 200 },
     { key: "special_features", label: "Special Features", required: false, type: "select", multi: true, w: 240 },
@@ -282,7 +292,7 @@ const printerEmptyRow = () => ({
     brand: "", model_number: "", category: "", condition: "new",
     usage_type: "", color: "", price: "", gst_rate: "", price_type: "incl", stock: "",
     print_speed_ppm: "", monthly_volume_min: "", monthly_volume_max: "",
-    connectivity: "", paper_sizes: "",
+    connectivity: "", paper_sizes: "", functions: "",
     max_resolution: "", mobile_printing: "", special_features: "",
     printer_warranty: "1 Year", description: "",
 });
@@ -335,6 +345,7 @@ export const printerBulkConfig = {
         color: PRINTER_COLORS,
         connectivity: PRINTER_CONNECTIVITY,
         paper_sizes: PRINTER_PAPER_SIZES,
+        functions: PRINTER_FUNCTIONS,
         max_resolution: PRINTER_RESOLUTIONS,
         mobile_printing: PRINTER_MOBILE,
         special_features: PRINTER_SPECIAL_FEATURES,
@@ -347,6 +358,7 @@ export const printerBulkConfig = {
         usage_type: "corporate", color: "bw", price: "33040", gst_rate: "18", price_type: "incl", stock: "5",
         print_speed_ppm: "38", monthly_volume_min: "750", monthly_volume_max: "4000",
         connectivity: "Wi-Fi, Ethernet, USB", paper_sizes: "A4, A5, Legal",
+        functions: "print_only",
         max_resolution: "1200x1200", mobile_printing: "AirPrint, Mopria",
         special_features: "Duplex Printing, Auto Document Feeder, Cloud Printing",
         printer_warranty: "1 Year",
@@ -374,6 +386,7 @@ export const printerBulkConfig = {
         monthly_volume_max: r.monthly_volume_max !== "" ? Number(r.monthly_volume_max) : 0,
         connectivity: splitList(r.connectivity),
         paper_sizes: splitList(r.paper_sizes),
+        functions: splitList(r.functions),
         max_resolution: (r.max_resolution || "").split(",").map((s) => s.trim()).filter(Boolean).join(", ") || null,
         mobile_printing: splitList(r.mobile_printing),
         special_features: splitList(r.special_features),
@@ -406,6 +419,7 @@ export const printerBulkConfig = {
             monthly_volume_max: l.monthly_volume_max ? String(l.monthly_volume_max) : "",
             connectivity: joinList(l.connectivity),
             paper_sizes: joinList(l.paper_sizes),
+            functions: joinList(l.functions),
             max_resolution: l.max_resolution || "",
             mobile_printing: joinList(l.mobile_printing),
             special_features: joinList(l.special_features),
@@ -430,6 +444,7 @@ export const printerBulkConfig = {
         monthly_volume_max: r.monthly_volume_max !== "" ? Number(r.monthly_volume_max) : 0,
         connectivity: splitList(r.connectivity),
         paper_sizes: splitList(r.paper_sizes),
+        functions: splitList(r.functions),
         max_resolution: (r.max_resolution || "").split(",").map((s) => s.trim()).filter(Boolean).join(", ") || null,
         mobile_printing: splitList(r.mobile_printing),
         special_features: splitList(r.special_features),

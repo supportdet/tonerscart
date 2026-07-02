@@ -1704,7 +1704,19 @@ def related_products(kind: str, listing_id: str):
 
     brand = (base.get("brand") or "").strip()
     model = (base.get("model_number") or "").strip()
+    _KIND_TO_TABLE = {"toner": "listings", "printer": "printer_listings", "consumable": "consumable_listings", "scanner": "scanner_listings"}
     try:
+        # Wave 103 hotfix — always surface SAME-KIND same-brand items first
+        # (e.g. suggested printers under a printer, suggested toners under a
+        # toner). This is what dealers/buyers actually expect. Cross-sell
+        # (toners under a printer, paper as universal cross-sell) still runs
+        # after to fill remaining slots.
+        if brand:
+            same_table = _KIND_TO_TABLE.get(kind)
+            if same_table:
+                rows = sb_admin.table(same_table).select("*").eq(
+                    "brand", brand).neq("id", listing_id).order("price").limit(8).execute().data
+                add(rows, kind)
         if kind == "printer" and model:
             # Toners compatible with this printer model
             rows = sb_admin.table("listings").select("*").ilike(
@@ -1723,6 +1735,14 @@ def related_products(kind: str, listing_id: str):
                 rows = sb_admin.table("scanner_listings").select("*").eq(
                     "brand", brand).neq("id", listing_id).order("price").limit(4).execute().data
                 add(rows, "scanner")
+        # Wave 103 — final fallback: if still <3 items, pull top in-stock
+        # items of the SAME kind (any brand) so the section is never empty.
+        if len(items) < 3:
+            same_table = _KIND_TO_TABLE.get(kind)
+            if same_table:
+                rows = sb_admin.table(same_table).select("*").neq(
+                    "id", listing_id).gt("stock", 0).order("price").limit(8).execute().data
+                add(rows, kind)
         # Universal cross-sell — cheapest in-stock papers
         if len(items) < 6:
             rows = sb_admin.table("paper_listings").select("*").gt(

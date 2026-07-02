@@ -57,7 +57,7 @@ const TECH_BY_USAGE = {
 };
 
 const CONNECTIVITY_OPTS = [
-    { id: "USB", label: "USB" }, { id: "WiFi", label: "WiFi" },
+    { id: "USB", label: "USB" }, { id: "Wi-Fi", label: "Wi-Fi" },
     { id: "Ethernet", label: "Ethernet" }, { id: "Bluetooth", label: "Bluetooth" },
     { id: "Wi-Fi Direct", label: "Wi-Fi Direct" }, { id: "NFC", label: "NFC" },
 ];
@@ -70,11 +70,37 @@ const MOBILE_PRINT_OPTS = [
     { id: "Wi-Fi Direct", label: "Wi-Fi Direct" }, { id: "None", label: "None" },
 ];
 
+// Wave 103 hotfix — resolution ID is the canonical "1200x1200" (matches
+// bulk-upload payload); the " DPI" suffix is only shown as UI label.
 const RESOLUTION_OPTS = [
-    "203x203 DPI", "300x300 DPI", "600x600 DPI", "1200x1200 DPI",
-    "1440x720 DPI", "2400x600 DPI", "2400x1200 DPI", "2880x1440 DPI",
-    "4800x1200 DPI", "5760x1440 DPI", "9600x2400 DPI",
+    { id: "203x203",   label: "203x203 DPI" },
+    { id: "300x300",   label: "300x300 DPI" },
+    { id: "600x600",   label: "600x600 DPI" },
+    { id: "1200x1200", label: "1200x1200 DPI" },
+    { id: "1440x720",  label: "1440x720 DPI" },
+    { id: "2400x600",  label: "2400x600 DPI" },
+    { id: "2400x1200", label: "2400x1200 DPI" },
+    { id: "2880x1440", label: "2880x1440 DPI" },
+    { id: "4800x1200", label: "4800x1200 DPI" },
+    { id: "5760x1440", label: "5760x1440 DPI" },
+    { id: "9600x2400", label: "9600x2400 DPI" },
 ];
+
+// Wave 103 hotfix — normalize legacy variants stored on old rows to the
+// canonical ids so the edit dialog's pills / dropdowns can pre-select them.
+const normalizeResolution = (v) => {
+    if (!v) return "";
+    const s = String(v).trim();
+    // Strip " DPI" suffix and normalize whitespace
+    return s.replace(/\s*dpi\s*$/i, "").replace(/\s+/g, "");
+};
+const normalizeConnectivityToken = (v) => {
+    const s = String(v || "").trim();
+    const canon = s.toLowerCase().replace(/[\s_\-]+/g, "");
+    if (canon === "wifi") return "Wi-Fi";
+    if (canon === "wifidirect") return "Wi-Fi Direct";
+    return s;
+};
 
 const PAPER_SIZES   = []; /* legacy — buyer-only */
 const CONNECTIVITY  = []; /* legacy — buyer-only */
@@ -210,13 +236,13 @@ export default function PrinterListings() {
                     No printers yet. Tap <span className="font-semibold text-[#0A0A0B]">Add printer</span> to publish your first printer.
                 </div>
             ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
                     {items.map((p) => (
                         <div key={p.id} onClick={() => navigate(`/printer/${p.id}`)} className="tc-listing-card cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all" data-testid={`printer-listing-${p.id}`}>
                             {p.image_url
-                                ? <img src={p.image_url} alt="" className="tc-listing-img h-32 object-contain" loading="lazy" />
-                                : <div className="tc-listing-img-ph h-32"><ImageIcon size={28} /></div>}
-                            <div className="p-2.5 space-y-1.5">
+                                ? <img src={p.image_url} alt="" className="tc-listing-img h-44 object-contain" loading="lazy" />
+                                : <div className="tc-listing-img-ph h-44"><ImageIcon size={28} /></div>}
+                            <div className="p-3.5 space-y-2">
                                 <div className="flex items-center justify-between gap-1">
                                     <span className={p.condition === "new" ? "tc-badge-new text-[9px]" : "tc-badge-refurb text-[9px]"}>
                                         {p.condition === "new" ? "New" : "Refurb"}
@@ -320,8 +346,8 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                 monthly_volume_recommended: editing.monthly_volume_recommended != null ? String(editing.monthly_volume_recommended) : "",
                 print_speed_ppm: editing.print_speed_ppm != null ? String(editing.print_speed_ppm) : "",
                 duty_cycle: editing.duty_cycle != null ? String(editing.duty_cycle) : "",
-                connectivity: Array.isArray(editing.connectivity) ? editing.connectivity : [],
-                max_resolution: editing.max_resolution || "",
+                connectivity: Array.isArray(editing.connectivity) ? editing.connectivity.map(normalizeConnectivityToken) : [],
+                max_resolution: normalizeResolution(editing.max_resolution),
                 paper_sizes: Array.isArray(editing.paper_sizes) ? editing.paper_sizes : [],
                 mobile_printing: Array.isArray(editing.mobile_printing) ? editing.mobile_printing : [],
                 intercity_delivery_charge: editing.intercity_delivery_charge != null ? String(editing.intercity_delivery_charge) : "350",
@@ -736,7 +762,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
                             <SpecGroup label="Maximum print resolution">
                                 <select value={f.max_resolution} onChange={upd("max_resolution")} className="tc-input-lg w-full" data-testid="wizard-max-resolution">
                                     <option value="">Select resolution…</option>
-                                    {RESOLUTION_OPTS.map((r) => <option key={r} value={r}>{r}</option>)}
+                                    {RESOLUTION_OPTS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
                                 </select>
                             </SpecGroup>
 

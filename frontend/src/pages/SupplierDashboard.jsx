@@ -1116,7 +1116,7 @@ export default function SupplierDashboard() {
                         : <>No listings yet. Tap <span className="font-semibold text-[#0A0A0B]">Add Toner</span> to publish your first toner.</>}
                 </div>
             ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3" data-testid="supplier-toner-grid">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5" data-testid="supplier-toner-grid">
                     {visibleListings.map((l) => {
                         const typeStyle = l.toner_type === "Original"
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200"
@@ -1132,7 +1132,7 @@ export default function SupplierDashboard() {
                         const openDetail = () => navigate(`/toner/${l.id}`);
                         return (
                             <div key={l.id} onClick={openDetail} className="tc-product-card cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all" data-testid={`supplier-listing-${l.id}`}>
-                                <div className="tc-product-img h-32">
+                                <div className="tc-product-img h-44">
                                     <span className="tc-product-img-label">{l.brand}</span>
                                     {l.image_url ? (
                                         <img src={l.image_url} alt="" className="w-full h-full object-contain" loading="lazy" />
@@ -1140,7 +1140,7 @@ export default function SupplierDashboard() {
                                         <TonerCartridge color={l.color || "Black"} brand={l.brand} model={l.model_number} type={l.toner_type} />
                                     )}
                                 </div>
-                                <div className="p-2.5 flex flex-col gap-1.5 flex-1">
+                                <div className="p-3.5 flex flex-col gap-2 flex-1">
                                     <div className="flex items-center justify-between gap-1">
                                         <div className="text-[13px] font-semibold text-[#0A0A0B] truncate" style={{ fontFamily: "'Montserrat', sans-serif" }}>{l.brand}</div>
                                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-[0.06em] shrink-0 ${typeStyle}`}>{l.toner_type}</span>

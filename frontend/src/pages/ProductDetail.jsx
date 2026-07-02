@@ -500,14 +500,38 @@ function DeliveryInfo({ data, kind = "toner" }) {
 }
 
 function SpecsBlock({ kind, data, selectedVariant }) {
+    // Wave 103 hotfix — display helpers so raw enum ids like "corporate" /
+    // "print_shop" / "all_in_one" / "new" render as human-readable strings,
+    // and every value's first letter is capitalised.
+    const PRETTY = {
+        corporate: "Corporate / Office", home: "Home",
+        commercial: "Commercial / Industrial", print_shop: "Print Shop / Copy Center",
+        color: "Color", bw: "Black & White", both: "Color + B&W",
+        new: "Brand New", refurbished: "Refurbished",
+        laser: "Laser", inkjet: "Inkjet", "ink-tank": "Ink Tank",
+        thermal: "Thermal", "dot-matrix": "Dot Matrix", led: "LED",
+        production: "Production", other: "Other",
+        print_only: "Print only", print_scan: "Print + Scan",
+        all_in_one: "Print + Copy + Scan", high_volume: "High-volume",
+    };
+    const cap = (s) => {
+        if (s == null) return s;
+        const str = String(s);
+        return str.charAt(0).toUpperCase() + str.slice(1);
+    };
+    const pretty = (v) => {
+        if (v == null || v === "") return v;
+        if (Array.isArray(v)) return v.map((x) => PRETTY[String(x).toLowerCase()] || cap(x)).join(" · ");
+        const key = String(v).toLowerCase().trim();
+        return PRETTY[key] || (typeof v === "string" ? cap(v) : v);
+    };
     const rows = [];
     if (kind === "toner") {
         rows.push(["Brand", data.brand]);
         if (data.model_number) rows.push(["Model number", data.model_number]);
-        // Page yield — always shown (key buying signal for toners)
         rows.push(["Page yield", data.page_yield ? `${Number(data.page_yield).toLocaleString("en-IN")} pages` : "—"]);
-        rows.push(["Type", data.toner_type]);
-        rows.push(["Colour", selectedVariant?.color || data.color]);
+        rows.push(["Type", pretty(data.toner_type)]);
+        rows.push(["Colour", pretty(selectedVariant?.color || data.color)]);
         if (data.compatible_models) rows.push(["Suitable for", data.compatible_models]);
         if (data.oem_part_number) rows.push(["OEM part number", data.oem_part_number]);
         if (data.cartridge_weight) rows.push(["Cartridge weight", `${data.cartridge_weight} g`]);
@@ -516,18 +540,19 @@ function SpecsBlock({ kind, data, selectedVariant }) {
     } else if (kind === "printer") {
         rows.push(["Brand", data.brand]);
         rows.push(["Model", data.model_number || data.name]);
-        if (data.condition) rows.push(["Condition", data.condition]);
-        if (data.color) rows.push(["Print colour", data.color]);
-        if (data.category) rows.push(["Category", data.category]);
+        if (data.condition) rows.push(["Condition", pretty(data.condition)]);
+        if (data.color) rows.push(["Print colour", pretty(data.color)]);
+        if (data.category) rows.push(["Category", pretty(data.category)]);
         const usages = Array.isArray(data.usage_types) && data.usage_types.length > 0
             ? data.usage_types
             : (data.usage_type ? [data.usage_type] : []);
-        if (usages.length) rows.push(["Best for", usages.join(" · ")]);
+        if (usages.length) rows.push(["Best for", pretty(usages)]);
+        if (Array.isArray(data.functions) && data.functions.length) rows.push(["Functions", pretty(data.functions)]);
         if (data.print_speed_ppm) rows.push(["Print speed", `${data.print_speed_ppm} PPM`]);
         if (data.duty_cycle) rows.push(["Monthly duty cycle", `${data.duty_cycle} pages`]);
         if (data.monthly_volume_recommended) rows.push(["Recommended volume", `Up to ${Number(data.monthly_volume_recommended).toLocaleString("en-IN")} pages`]);
-        if (data.monthly_volume_min || data.monthly_volume_max) rows.push(["Volume capacity", `${data.monthly_volume_min || 0} – ${data.monthly_volume_max || 0} pages / month`]);
-        if (data.max_resolution) rows.push(["Max print resolution", data.max_resolution]);
+        if (data.monthly_volume_min || data.monthly_volume_max) rows.push(["Volume capacity", `${Number(data.monthly_volume_min || 0).toLocaleString("en-IN")} – ${Number(data.monthly_volume_max || 0).toLocaleString("en-IN")} pages / month`]);
+        if (data.max_resolution) rows.push(["Max print resolution", `${String(data.max_resolution).replace(/\s*dpi\s*$/i, "")} DPI`]);
         if (data.connectivity?.length) rows.push(["Connectivity", (Array.isArray(data.connectivity) ? data.connectivity : [data.connectivity]).join(" · ")]);
         if (data.paper_sizes?.length) rows.push(["Paper sizes", (Array.isArray(data.paper_sizes) ? data.paper_sizes : [data.paper_sizes]).join(" · ")]);
         if (data.mobile_printing?.length) rows.push(["Mobile printing", (Array.isArray(data.mobile_printing) ? data.mobile_printing : [data.mobile_printing]).join(" · ")]);
@@ -540,17 +565,17 @@ function SpecsBlock({ kind, data, selectedVariant }) {
         rows.push(["Brand", data.brand]);
         rows.push(["Model number", data.model_number]);
         rows.push(["Type", data.subcategory === "Other" && data.subcategory_other ? data.subcategory_other : data.subcategory]);
-        if (data.condition) rows.push(["Condition", data.condition]);
+        if (data.condition) rows.push(["Condition", pretty(data.condition)]);
         if (data.compatible_models) rows.push(["Suitable for", data.compatible_models]);
         if (data.description) rows.push(["Description", data.description]);
     } else if (kind === "scanner") {
         rows.push(["Brand", data.brand]);
         rows.push(["Model number", data.model_number]);
-        if (data.scanner_type) rows.push(["Scanner type", data.scanner_type]);
-        if (data.condition) rows.push(["Condition", data.condition]);
+        if (data.scanner_type) rows.push(["Scanner type", pretty(data.scanner_type)]);
+        if (data.condition) rows.push(["Condition", pretty(data.condition)]);
         if (data.scan_resolution) rows.push(["Scanning resolution", data.scan_resolution]);
         if (data.scan_speed_ppm) rows.push(["Scanning speed", `${data.scan_speed_ppm} ppm`]);
-        if (data.color_mode) rows.push(["Color / Mono", data.color_mode]);
+        if (data.color_mode) rows.push(["Color / Mono", pretty(data.color_mode)]);
         if (data.connectivity?.length) rows.push(["Connectivity", (Array.isArray(data.connectivity) ? data.connectivity : [data.connectivity]).join(" · ")]);
         if (data.warranty) rows.push(["Warranty", data.warranty]);
         if (data.description) rows.push(["Description", data.description]);
@@ -568,13 +593,18 @@ function SpecsBlock({ kind, data, selectedVariant }) {
     if (!visible.length) return null;
     return (
         <section className="mt-10" data-testid="product-specs">
-            <h2 className="text-[#0A0A0B] text-[16px] mb-3" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 600 }}>Product specifications</h2>
-            <div className="bg-white border border-[#E8E8EC] rounded-[12px] overflow-hidden">
+            <h2 className="text-[#0A0A0B] text-[18px] mb-4" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 600, letterSpacing: "-0.01em" }}>Product specifications</h2>
+            <div className="bg-white border border-[#E8E8EC] rounded-[14px] overflow-hidden shadow-sm">
                 <dl>
                     {visible.map(([k, v], i) => (
-                        <div key={k} className={`grid grid-cols-12 px-4 py-3 ${i > 0 ? "border-t border-[#E8E8EC]" : ""}`} data-testid={`spec-row-${k.toLowerCase().replace(/\s+/g, "-")}`} style={{ fontFamily: "'Inter', sans-serif" }}>
-                            <dt className="col-span-5 sm:col-span-4 text-[13px] text-[#6E6E73]" style={{ fontWeight: 500 }}>{k}</dt>
-                            <dd className="col-span-7 sm:col-span-8 text-[13px] text-[#0A0A0B]" style={{ fontWeight: 600 }}>{v}</dd>
+                        <div
+                            key={k}
+                            className={`grid grid-cols-12 px-5 py-3.5 ${i > 0 ? "border-t border-[#E8E8EC]" : ""} ${i % 2 === 1 ? "bg-[#FAFAFB]" : ""}`}
+                            data-testid={`spec-row-${k.toLowerCase().replace(/\s+/g, "-")}`}
+                            style={{ fontFamily: "'Inter', sans-serif" }}
+                        >
+                            <dt className="col-span-5 sm:col-span-4 text-[13px] text-[#6E6E73] uppercase tracking-[0.04em]" style={{ fontWeight: 500 }}>{k}</dt>
+                            <dd className="col-span-7 sm:col-span-8 text-[14px] text-[#0A0A0B]" style={{ fontWeight: 700, letterSpacing: "-0.005em" }}>{v}</dd>
                         </div>
                     ))}
                 </dl>

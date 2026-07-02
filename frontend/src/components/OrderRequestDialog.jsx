@@ -224,9 +224,22 @@ export default function OrderRequestDialog({ product, initialQty = 1, onClose })
                     </div>
                     <div className="flex items-center gap-2">
                         <Button variant="outline" size="sm" onClick={onClose} data-testid="order-cancel-btn">Cancel</Button>
-                        <Button className="btn-cta" size="sm" onClick={submit} disabled={loading} data-testid="order-submit-btn">{loading ? "Placing…" : "Place order"}</Button>
+                        <Button
+                            className="btn-cta opacity-60 cursor-not-allowed"
+                            size="sm"
+                            onClick={submit}
+                            disabled
+                            aria-disabled="true"
+                            title="Orders will be enabled soon — we're onboarding more sellers to serve you better."
+                            data-testid="order-submit-btn"
+                        >
+                            Place order
+                        </Button>
                     </div>
                 </DialogFooter>
+                <div className="text-[11.5px] text-[#6E6E73] text-center px-4 pb-4" data-testid="order-submit-disabled-hint">
+                    Orders will be enabled soon — we&apos;re onboarding more sellers to serve you better.
+                </div>
             </DialogContent>
         </Dialog>
     );
