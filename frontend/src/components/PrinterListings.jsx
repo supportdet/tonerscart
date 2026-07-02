@@ -301,6 +301,13 @@ export default function PrinterListings() {
 
 function AddPrinterWizard({ open, editing, onClose, onSaved }) {
     const [step, setStep] = useState(1);
+    // Wave 104 — scroll the dialog body back to top on every step change so
+    // the dealer never lands mid-form (delivery-charges area was the sticky
+    // point). Ref attached to DialogContent below.
+    const dialogBodyRef = React.useRef(null);
+    React.useEffect(() => {
+        if (dialogBodyRef.current) dialogBodyRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    }, [step]);
     const [f, setF] = useState(EMPTY);
     const [imageFiles, setImageFiles] = useState([]);
     const [imagePreviews, setImagePreviews] = useState([]);
@@ -546,7 +553,7 @@ function AddPrinterWizard({ open, editing, onClose, onSaved }) {
 
     return (
         <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-            <DialogContent className="max-w-[680px] max-h-[92vh] overflow-y-auto p-8 rounded-[20px] tc-shadow-lg" data-testid="add-printer-dialog">
+            <DialogContent ref={dialogBodyRef} className="max-w-[680px] max-h-[92vh] overflow-y-auto p-8 rounded-[20px] tc-shadow-lg" data-testid="add-printer-dialog">
                 <DialogHeader>
                     <button
                         type="button"

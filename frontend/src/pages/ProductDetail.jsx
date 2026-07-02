@@ -351,6 +351,11 @@ export default function ProductDetail({ kind = "toner" }) {
                             </div>
                         )}
 
+                        {/* Wave 104 — Compatible Toners / Inks chips (printer detail) */}
+                        {kind === "printer" && data.compatible_models && (
+                            <CompatibleTonersRow models={splitCompatibleModels(data.compatible_models)} />
+                        )}
+
                         {/* Variant swatches */}
                         {data.variants && data.variants.length > 0 && (
                             <div className="mt-5" data-testid="variant-swatches">
@@ -608,6 +613,54 @@ function SpecsBlock({ kind, data, selectedVariant }) {
                         </div>
                     ))}
                 </dl>
+            </div>
+        </section>
+    );
+}
+
+
+// Wave 104 — Compatible Toners / Inks row (printer detail page)
+// Each chip is clickable; onClick calls /api/compatible-resolve which
+// returns a URL following the 3-tier fallback: live listing → SEO slug → search.
+function CompatibleTonersRow({ models }) {
+    const navigate = useNavigate();
+    const [busyId, setBusyId] = React.useState(null);
+    if (!models || models.length === 0) return null;
+    const onChipClick = async (m) => {
+        setBusyId(m);
+        try {
+            const { data } = await api.get(`/compatible-resolve?q=${encodeURIComponent(m)}`);
+            const url = data?.url || `/search?q=${encodeURIComponent(m)}`;
+            navigate(url);
+        } catch (e) {
+            navigate(`/search?q=${encodeURIComponent(m)}`);
+        } finally {
+            setBusyId(null);
+        }
+    };
+    return (
+        <section className="mt-5" data-testid="printer-compatible-toners">
+            <div className="inline-flex items-start gap-2 bg-[#EFF8FA] border border-[#C2EFF5] rounded-lg px-3.5 py-2.5 text-[12.5px] text-[#0A4A50] w-full sm:w-auto">
+                <CheckCircle2 size={14} className="mt-0.5 text-[#00838f] shrink-0" />
+                <div>
+                    <span className="font-semibold">Compatible toners / inks:</span>{" "}
+                    <span className="inline-flex flex-wrap gap-1.5 align-baseline mt-1">
+                        {models.map((m, idx) => (
+                            <button
+                                key={`${m}-${idx}`}
+                                type="button"
+                                onClick={() => onChipClick(m)}
+                                disabled={busyId === m}
+                                className={`inline-flex items-center bg-white/80 border border-[#B8E5EC] rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold text-[#0A4A50] hover:bg-white hover:text-[#00838f] hover:border-[#00B7C7] transition ${busyId === m ? "opacity-60 cursor-progress" : "cursor-pointer"}`}
+                                data-testid="printer-compatible-chip"
+                                title={`Find ${m} on TonersCart`}
+                            >
+                                {m}
+                                {busyId === m && <Loader2 size={11} className="ml-1 animate-spin" />}
+                            </button>
+                        ))}
+                    </span>
+                </div>
             </div>
         </section>
     );

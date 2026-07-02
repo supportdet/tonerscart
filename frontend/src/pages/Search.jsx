@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
-import { MapPin, Boxes, Sparkles } from "lucide-react";
+import { MapPin, Boxes, Sparkles, Bell, Check as CheckIcon } from "lucide-react";
 import { Skeleton } from "../components/ui/skeleton";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -469,7 +469,10 @@ export default function SearchPage() {
                             <Boxes className="mx-auto text-[#D2D2D7]" size={48} />
                             <div className="mt-4 text-[#0A0A0B] text-xl font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>No matching toners</div>
                             <div className="text-[#6E6E73] text-[14px] mt-1">Try a different model or clear filters.</div>
-                            <button className="btn-cta mt-6" onClick={clearAll} data-testid="empty-clear-btn">Clear filters</button>
+                            <div className="mt-6 flex items-center justify-center gap-3 flex-wrap">
+                                <button className="btn-cta" onClick={clearAll} data-testid="empty-clear-btn">Clear filters</button>
+                                {q && q.trim().length > 0 && <NotifyMeButton query={q.trim()} />}
+                            </div>
                         </div>
                     )}
 
@@ -503,8 +506,76 @@ export default function SearchPage() {
                 </div>
             )}
 
+            {/* Wave 104 — universal search empty state with "Notify me" CTA.
+                Shows when a query is set AND every kind returned zero results
+                (this is the common path when a buyer clicks a printer's
+                compatible-toner chip and no dealer has listed that model). */}
+            {universal && params.get("q") && !loading && (
+                (universal.counts?.toners || 0)
+                + (universal.counts?.printers || 0)
+                + (universal.counts?.papers || 0)
+                + (universal.counts?.consumables || 0)
+                + (universal.counts?.scanners || 0)
+                + (universal.counts?.oem || 0)
+            ) === 0 && (
+                <div className="tc-card p-8 sm:p-12 text-center mt-6" data-testid="search-empty-state">
+                    <Boxes className="mx-auto text-[#D2D2D7]" size={44} />
+                    <div className="mt-4 text-[#0A0A0B] text-[20px] font-semibold" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                        No dealer has listed &quot;{params.get("q")}&quot; yet
+                    </div>
+                    <div className="text-[#6E6E73] text-[13.5px] mt-1.5">
+                        We&apos;re actively onboarding more sellers. Let us know if you want this model — we&apos;ll email you when a verified dealer lists it.
+                    </div>
+                    <div className="mt-6 flex items-center justify-center gap-3 flex-wrap">
+                        <NotifyMeButton query={params.get("q").trim()} />
+                    </div>
+                </div>
+            )}
+
             <RefilledWarningDialog open={refilledWarn} onClose={() => setRefilledWarn(false)} />
             <ProductRequestForm category="toner" />
         </div>
+    );
+}
+
+
+// Wave 104 — "Notify me when available" button shown on the search empty
+// state. Saves the query to audit_log via /api/wanted-cartridge so admin
+// can pull procurement intelligence (which models are searched for but not
+// listed by any dealer).
+function NotifyMeButton({ query }) {
+    const [sent, setSent] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const submit = async () => {
+        if (busy || sent) return;
+        setBusy(true);
+        try {
+            await api.post("/wanted-cartridge", { query, context: "search-empty" });
+            setSent(true);
+            toast.success(`Got it — we'll notify you when "${query}" is listed.`);
+        } catch (e) {
+            toast.error("Could not save right now. Please try again in a moment.");
+        } finally {
+            setBusy(false);
+        }
+    };
+    if (sent) {
+        return (
+            <span className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[13px] font-semibold" data-testid="notify-me-sent">
+                <CheckIcon size={14} /> We&apos;ll notify you
+            </span>
+        );
+    }
+    return (
+        <button
+            type="button"
+            onClick={submit}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full border border-[#0A0A0B] text-[#0A0A0B] text-[13px] font-semibold hover:bg-[#0A0A0B] hover:text-white transition disabled:opacity-60"
+            data-testid="notify-me-btn"
+        >
+            <Bell size={14} />
+            {busy ? "Saving…" : `Notify me when "${query}" is available`}
+        </button>
     );
 }
