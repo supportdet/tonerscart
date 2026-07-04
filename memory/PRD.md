@@ -1,7 +1,51 @@
 # TonersCart — Product Requirements (Supabase edition)
 
 
-> **Latest (2026-02 — Wave 105 Security Hardening C):** Session security — server-side logout endpoint + audit of admin DB-level role checks.
+> **Latest (2026-02 — Wave 105 Security Hardening D — COMPLETE):** Supabase storage audit + dealer isolation on document paths + env-var leak audit. **All 4 security-hardening waves (A/B/C/D) now shipped. 51/51 pytest green.**
+>
+> ### What shipped
+> - **Supabase bucket privacy verified** — programmatic audit of Supabase buckets:
+>   - `supplier-documents` = **private** ✓ (sensitive KYC docs, correctly locked)
+>   - `product-images` = public (marketplace photos, intentionally public)
+>   - `printer-images` = public (marketplace photos, intentionally public)
+> - **Signed URL TTL fix** — `admin_upload_featured_image` (admin.py:1503) was signing with `60*60*24*365` = **1 YEAR** TTL. Reduced to **1 hour**. Path is persisted on the row, so callers re-sign on demand. All other signed URLs already at ≤ 60 min.
+> - **Dealer isolation on document paths** — added path-prefix guard to two write endpoints so a dealer cannot store another dealer's storage path on their own row (and then re-sign it via the read endpoint):
+>   - `POST /auth/supplier-documents` — every `doc_*` field must start with `{user.id}/`
+>   - `POST /auth/supplier-phase2` — same guard on all 7 `doc_*` fields
+>   Curl verified: injecting `"doc_gst": "some-other-uuid/leak.pdf"` now returns 400 "Invalid document path for doc_gst".
+> - **Env leak audit — clean** — grep of every server-only secret pattern (SERVICE_ROLE, RESEND_API_KEY, TWILIO_AUTH, STRIPE_SECRET, EMERGENT_LLM_KEY, JWT_SECRET, MONGO_URL, SMTP_PASS) across `/app/frontend/src` and `/app/frontend/public` returned zero hits. `frontend/.env` contains only REACT_APP_* keys + build-tool flags (WDS_SOCKET_PORT, ENABLE_HEALTH_CHECK). The `REACT_APP_SUPABASE_ANON_KEY` starts with `sb_publishable_` (Supabase's public key prefix — safe by design).
+>
+> ### Verification
+> - `/app/backend/tests/test_wave105_wave_d_storage.py` — **6/6 pytest pass**:
+>   - Bucket privacy audit
+>   - Signed-URL grep (fails if any `create_signed_url` TTL > 3600s appears anywhere in `backend/`)
+>   - Dealer isolation — foreign path 400, own path accepted
+>   - Env leak audit — frontend/.env only allowed keys, frontend/src grep for server secrets
+> - **Grand total: 51/51 Wave 105 tests green** (42 Wave B validators/magic-bytes + 3 Wave C session + 6 Wave D storage/env)
+>
+> ### Files modified
+> - `backend/routes/admin.py` — signed URL TTL reduced from 1 year to 1 hour
+> - `backend/routes/auth.py` — path-prefix guard on 2 endpoints
+> - `backend/tests/test_wave105_wave_d_storage.py` — 6 new tests
+>
+> ### Security hardening — DONE ✅
+> - Wave A: slowapi rate limiting on auth endpoints
+> - Wave B: strict Pydantic validators (GSTIN/PAN/IFSC/pincode/phone/account) + file magic-byte validation on 11 upload endpoints + order-price server-side (already correct)
+> - Wave C: backend `/auth/logout` with session revocation + audit log + frontend wiring; verified all 67 admin endpoints use DB-level role check
+> - Wave D: bucket privacy audit + 1-year TTL fix + dealer path isolation + env leak audit
+>
+> ### Ops tasks for user (Supabase Dashboard — cannot be set from code)
+> - **Auth → Email → OTP Expiration → set to 1800 (30 min)** — currently defaults to 1 hour
+>
+> ### Backlog after security work
+> - P1 — Re-enable Checkout "Place Order" buttons (currently disabled visually + functionally while onboarding more sellers)
+> - P2 — Twilio OTP phone login
+> - P2 — Supplier ratings / reviews
+> - P2 — Live Razorpay integration
+> - Nice-to-have — Admin Security Dashboard surfacing recent `audit_log` events (logouts, admin actions, rate-limit hits)
+
+
+> **Prev (2026-02 — Wave 105 Security Hardening C):** Session security — server-side logout endpoint + audit of admin DB-level role checks.
 >
 > ### What shipped
 > - **New `/api/auth/logout` endpoint** (`backend/routes/auth.py`) — revokes the caller's Supabase session (`sb_admin.auth.admin.sign_out(token)` → invalidates BOTH the refresh token AND the current access token globally, as confirmed by end-to-end curl: `/auth/me` returns 401 the very next call). Best-effort: returns 200 even when unauth / bad token so the UI can proceed with local cleanup. Writes an `auth_logout` row to `audit_log` when the caller is authenticated.

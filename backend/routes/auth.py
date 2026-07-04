@@ -338,6 +338,16 @@ async def supplier_documents_patch(payload: SupplierDocPaths, user: dict = Depen
     supplier-documents/<uid>/... — saves paths and queues the AI check in the background
     so the client gets an immediate response."""
     upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v}
+    # Wave 105-D — dealer isolation: every stored path must live under the
+    # caller's own {user.id}/ prefix, matching what /auth/supplier-document-upload
+    # writes. Blocks a malicious dealer from storing another dealer's path
+    # on their own row and then re-signing it via the read endpoint.
+    _uid = user["id"]
+    _doc_keys = {"doc_brand_authorization", "doc_shop_photo", "doc_gst",
+                 "doc_pan", "doc_bank_proof", "doc_id_proof", "doc_address_proof"}
+    for k, v in upd.items():
+        if k in _doc_keys and isinstance(v, str) and not v.startswith(f"{_uid}/"):
+            raise HTTPException(400, f"Invalid document path for {k}")
     if not upd:
         return {"ok": True}
     _exec_dropping_cols(lambda a: sb_admin.table("suppliers_pending").update(a).eq("user_id", user["id"]).execute(), upd)
@@ -461,6 +471,16 @@ def supplier_phase2_update(payload: SupplierProfilePhase2, user: dict = Depends(
     if user.get("role") == "admin":
         raise HTTPException(403, "Admins cannot update supplier profile")
     upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v}
+    # Wave 105-D — dealer isolation on document paths (same guard as
+    # /auth/supplier-documents). Every doc_* path must live under
+    # supplier-documents/{user.id}/... so a dealer can't inject another
+    # dealer's path onto their own row and re-sign it.
+    _uid = user["id"]
+    _doc_keys = {"doc_brand_authorization", "doc_shop_photo", "doc_gst",
+                 "doc_pan", "doc_bank_proof", "doc_id_proof", "doc_address_proof"}
+    for k, v in upd.items():
+        if k in _doc_keys and isinstance(v, str) and not v.startswith(f"{_uid}/"):
+            raise HTTPException(400, f"Invalid document path for {k}")
     if not upd:
         return {"ok": True, "target": "noop", "updated": 0}
 

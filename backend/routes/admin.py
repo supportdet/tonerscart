@@ -1500,7 +1500,9 @@ async def admin_upload_featured_image(supplier_id: str, file: UploadFile = File(
         ext = "jpg" if real_kind == "jpg" else real_kind
         path = f"{supplier_id}/featured-logo-{int(datetime.now(timezone.utc).timestamp())}.{ext}"
         sb_admin.storage.from_("supplier-documents").upload(path, raw, {"content-type": file.content_type or f"image/{ext}", "upsert": "true"})
-        signed = sb_admin.storage.from_("supplier-documents").create_signed_url(path, 60 * 60 * 24 * 365)
+        # Wave 105-D — 1-hour signed URL (was 1 year — dangerous long-lived link).
+        # The path is persisted on the row so callers can re-sign on demand.
+        signed = sb_admin.storage.from_("supplier-documents").create_signed_url(path, 60 * 60)
         url = signed.get("signedURL") or signed.get("signed_url")
         try:
             sb_admin.table("suppliers").update({"business_logo": path, "is_featured": True}).eq("id", supplier_id).execute()
