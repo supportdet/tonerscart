@@ -241,6 +241,8 @@ async def upload_printer_image(file: UploadFile = File(...), user: dict = Depend
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(400, "Max 5 MB")
+    # Wave 105-B — verify real image type via magic bytes
+    require_file_type(content, allowed=("jpg", "png", "webp"))
     ext = "jpg"
     path = f"{user['id']}/{uuid.uuid4().hex}.{ext}"
     # Compress / resize so storage stays cheap and pages load fast
@@ -267,6 +269,8 @@ async def upload_listing_image(file: UploadFile = File(...), user: dict = Depend
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(400, "Max 5 MB")
+    # Wave 105-B — verify real image type via magic bytes
+    require_file_type(content, allowed=("jpg", "png", "webp"))
     path = f"{user['id']}/{uuid.uuid4().hex}.jpg"
     content = compress_image(content, max_side=1200, quality=85, watermark=True)
     try:
@@ -609,6 +613,8 @@ async def upload_spec_pdf(file: UploadFile = File(...), user: dict = Depends(req
     content = await file.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(400, "Brochure must be under 10 MB")
+    # Wave 105-B — verify real PDF signature via magic bytes
+    require_file_type(content, allowed=("pdf",))
     path = f"{user['id']}/brochure-{uuid.uuid4().hex}.pdf"
     try:
         sb_admin.storage.from_("supplier-documents").upload(
@@ -1767,39 +1773,77 @@ class _WantedCartridgePayload(BaseModel):
 
 @router.get("/compatible-resolve")
 def compatible_resolve(q: str = Query(..., min_length=1, max_length=200)):
-    """Given a cartridge/ink model number typed by a dealer in the printer's
-    'Compatible Toners' field, resolve to the best destination URL.
+    """Resolve a cartridge/ink/printer model number typed by a dealer to the
+    correct product URL — STRICT normalize-then-exact-match (no fuzzy).
 
-    Tier 1 — exact/prefix match in `listings` or `consumable_listings`
-             (by model_number or oem_part_number). Prefer in-stock + cheapest.
-    Tier 2 — SEO slug page (currently only /compatible/{slug} exists, and
-             that page is PRINTER-focused, so we skip it for cartridge lookups).
-    Tier 3 — fallback to the universal search page with the model pre-filled.
+    Normalization rule: strip spaces, hyphens, underscores → uppercase.
+    Example: `BTD60BK` == `BT-D60BK` == `BTD60 BK` == `btd60bk`.
+    But `BTD60BK` != `BTD60` != `BTD65BK` (never matched).
+
+    Search order for the exact-normalized match:
+      - listings              (toners)
+      - consumable_listings   (bottles / drums)
+      - printer_listings
+      - scanner_listings
+      - paper_listings
+    Falls to Tier 3 `/search?q=<q>` only if no exact match anywhere.
     """
-    query = (q or "").strip()
-    if not query:
+    def _norm(s):
+        if not s:
+            return ""
+        # Uppercase; strip spaces, hyphens, underscores, and NBSP.
+        out = []
+        for ch in str(s).upper():
+            if ch in (" ", "-", "_", "\t", "\u00A0"):
+                continue
+            out.append(ch)
+        return "".join(out)
+
+    query_norm = _norm(q)
+    if not query_norm:
         raise HTTPException(status_code=400, detail="query required")
-    # Tier 1a — toner listings
-    try:
-        rows = sb_admin.table("listings").select("id,brand,model_number,oem_part_number,stock,price").or_(
-            f"model_number.ilike.%{query}%,oem_part_number.ilike.%{query}%"
-        ).order("stock", desc=True).order("price").limit(1).execute().data or []
-        if rows:
-            return {"tier": 1, "kind": "toner", "url": f"/product/{rows[0]['id']}", "listing": rows[0]}
-    except Exception as e:
-        logger.warning("compatible-resolve tier1 toner failed: %s", e)
-    # Tier 1b — consumable listings (bottles, drums, etc.)
-    try:
-        rows = sb_admin.table("consumable_listings").select("id,brand,model_number,stock,price").ilike(
-            "model_number", f"%{query}%"
-        ).order("stock", desc=True).order("price").limit(1).execute().data or []
-        if rows:
-            return {"tier": 1, "kind": "consumable", "url": f"/product/consumable/{rows[0]['id']}", "listing": rows[0]}
-    except Exception as e:
-        logger.warning("compatible-resolve tier1 consumable failed: %s", e)
-    # Tier 3 — search fallback (Tier 2 SEO cartridge pages don't exist yet)
+
+    # Broad DB pre-filter using the first 3 alphanumerics of the normalized
+    # query interleaved with wildcards — cheap way to shortlist candidate
+    # rows before doing the strict Python-side normalize-compare.
     from urllib.parse import quote
-    return {"tier": 3, "kind": "search", "url": f"/search?q={quote(query)}", "listing": None}
+    seed = query_norm[:6] if len(query_norm) >= 3 else query_norm
+    prefilter = "%" + "%".join(list(seed)) + "%"
+
+    _TABLE_CONFIG = [
+        # (table, model column(s), url builder, kind)
+        ("listings",            ["model_number", "oem_part_number"], lambda r: f"/toner/{r['id']}",      "toner"),
+        ("consumable_listings", ["model_number"],                    lambda r: f"/consumable/{r['id']}", "consumable"),
+        ("printer_listings",    ["model_number"],                    lambda r: f"/printer/{r['id']}",    "printer"),
+        ("scanner_listings",    ["model_number"],                    lambda r: f"/scanner/{r['id']}",    "scanner"),
+        ("paper_listings",      ["model_number"],                    lambda r: f"/paper/{r['id']}",      "paper"),
+    ]
+
+    for table, cols, url_fn, kind in _TABLE_CONFIG:
+        try:
+            or_parts = ",".join([f"{c}.ilike.{prefilter}" for c in cols])
+            select_cols = "id,brand," + ",".join(cols) + ",stock,price" if table == "listings" else "id,brand," + ",".join(cols)
+            rows = sb_admin.table(table).select(select_cols).or_(or_parts).limit(500).execute().data or []
+        except Exception as e:
+            logger.warning("compatible-resolve: %s prefilter failed: %s", table, e)
+            rows = []
+
+        # Strict normalize-then-exact match in Python
+        exact_matches = []
+        for r in rows:
+            for c in cols:
+                if _norm(r.get(c)) == query_norm:
+                    exact_matches.append(r)
+                    break
+
+        if exact_matches:
+            # Prefer in-stock, then cheapest (fields may not exist on non-toner tables)
+            exact_matches.sort(key=lambda r: (-(int(r.get("stock") or 0)), float(r.get("price") or 1e12)))
+            best = exact_matches[0]
+            return {"tier": 1, "kind": kind, "url": url_fn(best), "listing": best}
+
+    # Tier 3 — genuine miss across all tables; hand off to universal search
+    return {"tier": 3, "kind": "search", "url": f"/search?q={quote(q)}", "listing": None}
 
 
 @router.post("/wanted-cartridge")

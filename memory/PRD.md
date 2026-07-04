@@ -1,6 +1,110 @@
 # TonersCart — Product Requirements (Supabase edition)
 
 
+> **Latest (2026-02 — Wave 105 Security Hardening C):** Session security — server-side logout endpoint + audit of admin DB-level role checks.
+>
+> ### What shipped
+> - **New `/api/auth/logout` endpoint** (`backend/routes/auth.py`) — revokes the caller's Supabase session (`sb_admin.auth.admin.sign_out(token)` → invalidates BOTH the refresh token AND the current access token globally, as confirmed by end-to-end curl: `/auth/me` returns 401 the very next call). Best-effort: returns 200 even when unauth / bad token so the UI can proceed with local cleanup. Writes an `auth_logout` row to `audit_log` when the caller is authenticated.
+> - **Frontend `logout()` wired to the new endpoint** — `AuthContext.jsx` now calls `POST /api/auth/logout` (4s timeout, fire-and-forget) BEFORE the existing `supabase.auth.signOut()` local cleanup. Defense-in-depth: if a client-only bug or network hiccup ever skipped the Supabase-JS `signOut()`, the backend has already revoked the session.
+> - **Admin DB-level role check verified** — audited all 52 endpoints in `routes/admin.py` + 4 in `oem.py` + 10 in `procurement.py` + 1 in `agreements.py`. All 67 admin endpoints use either `require_role("admin")` or an inline DB `profile.get("role") != "admin"` check (both paths hit `get_user_from_token` which reads `users.role` from the DB — **not the JWT claim**). No changes needed.
+> - **`test_credentials.md` untouched** — no new auth accounts created.
+>
+> ### Password-reset link expiry — OPS TASK for user
+> Supabase controls the recovery-link JWT expiry via the project setting **Auth → Email → "OTP Expiration"** (default 3600s / 1h). The `generate_link` API does NOT accept an override, so this must be changed in the Supabase Dashboard. **Recommended value: 1800 (30 min).** Once you set it, `POST /api/auth/password-reset` produces a link that Supabase auto-rejects after 30 min.
+>
+> ### Verification
+> - `/app/backend/tests/test_wave105_wave_c_session.py` — **3/3 pytest pass**:
+>   - Unauth logout returns 200 (idempotent)
+>   - Garbage-token logout returns 200
+>   - Real admin session: login → /me:200 → logout → /me:401 (session actually revoked)
+> - `/app/backend/tests/test_wave105_wave_b_validation.py` — 42/42 regression pass.
+> - Grand total: **45/45 Wave 105 tests green.**
+>
+> ### Files modified
+> - `backend/routes/auth.py` — new `/auth/logout` endpoint
+> - `frontend/src/context/AuthContext.jsx` — logout now calls backend first
+> - `backend/tests/test_wave105_wave_c_session.py` — 3 new tests
+>
+> ### Still pending (Wave D)
+> - Supabase storage bucket privacy audit (confirm `supplier-documents` private, `printer-images` public)
+> - Signed URL TTL ≤ 60 min — **found a 1-year TTL** in `admin_upload_featured_image` that needs fixing
+> - Dealer isolation on doc paths (signed URL must include dealer's supplier_id in path)
+> - Frontend build grep for accidentally leaked SERVICE_ROLE / RESEND / etc.
+>
+> ### Ops tasks for user
+> - Supabase Auth → OTP Expiration → set to **1800** (30 min)
+
+
+> **Prev (2026-02 — Wave 105 Security Hardening B):** Input validation + file magic-byte enforcement. 42 pytest tests pass. Order-price server-side calculation audited & confirmed already correct across all order paths (uses `float(L["price"])` from DB, never trusts payload).
+>
+> ### What shipped
+> - **Centralised format validators** in `server.py`: `validate_gstin`, `validate_pan`, `validate_ifsc`, `validate_pincode`, `validate_phone`, `validate_account_number`. All normalise (uppercase / strip whitespace-dashes) and enforce canonical Indian government / RBI regex patterns. Empty strings pass (fields are Optional).
+> - **Pydantic `@field_validator`** applied on `SellerApplication` (GSTIN, PAN, IFSC, pincode, phone, account_number) and `SupplierProfilePhase2` (IFSC, account_number). Bad payloads → 422 with clear message (e.g. `"Invalid GSTIN — must be 15 chars, e.g. 22AAAAA0000A1Z5"`).
+> - **File magic-byte validation** — new `detect_file_type(content)` + `require_file_type(content, allowed)` helpers in `server.py`. Recognises PDF, JPG, PNG, WEBP, GIF from the first 8-16 bytes. Wired into every server-side file-upload endpoint:
+>   - `/auth/supplier-document-upload` (auth.py)
+>   - `/supplier/business-logo` (auth.py)
+>   - `/supplier/printer-image` (products.py)
+>   - `/supplier/listing-image` (products.py)
+>   - `/supplier/spec-pdf` (products.py)
+>   - `/oem/product-image` (oem.py)
+>   - `/oem/logo` (oem.py)
+>   - `/admin/suppliers/{id}/document` (admin.py)
+>   - `/admin/suppliers/{id}/featured-image` (admin.py)
+>   - `/featured/apply-image` (suppliers.py)
+>   - `/procurement/orders/{oid}/po` (procurement.py)
+> - **Order-price validation** — audited `create_order` (routes/orders.py), `_create_direct_order` (server.py) and `/quotation`: all three already use `float(L["price"])` / `float(L.get("price") or 0)` from the DB row, and `OrderCreate` has no `price` field. **No changes needed** — pricing is already server-authoritative. `gst_amount` on the payload is informational only (buyer receipt) and never affects the settled `total = unit_price * qty`.
+>
+> ### Verification
+> - `/app/backend/tests/test_wave105_wave_b_validation.py` — **42/42 pytest pass** covering all 6 validators (valid, normalised, empty, wrong length, wrong shape) + `SellerApplication` end-to-end validators + `detect_file_type` for PDF/JPG/PNG/WEBP/GIF + `require_file_type` rejection of spoofed extensions + correct type routing.
+> - **End-to-end curl on live preview URL**:
+>   - Admin login still works, `/auth/me` returns admin profile.
+>   - `/api/printers?limit=1` returns 60 listings (public feed unaffected).
+>   - `/auth/apply-seller` with `gst_number="BAD-GSTIN-HERE"` → 422 with the clear "Invalid GSTIN" message.
+>   - `/auth/supplier-document-upload?field=doc_gst` with a text file spoofed as `image/jpeg` → 400 "File type could not be detected (allowed: pdf, jpg, png, webp)".
+>
+> ### Files modified
+> - `backend/server.py` — validators + magic-byte helpers + `field_validator` import + SellerApplication validators
+> - `backend/routes/auth.py` — SupplierProfilePhase2 validators + magic-byte on doc/logo uploads
+> - `backend/routes/products.py` — magic-byte on printer/listing images + spec PDF
+> - `backend/routes/admin.py` — magic-byte on admin doc + featured-image uploads
+> - `backend/routes/suppliers.py` — magic-byte on featured/apply-image
+> - `backend/oem.py` — magic-byte on OEM product-image + logo (also new `from server import require_file_type`)
+> - `backend/procurement.py` — magic-byte on procurement PO upload (also new `from server import require_file_type`)
+> - `backend/tests/test_wave105_wave_b_validation.py` — 42 new tests
+>
+> ### Still pending (Waves C / D)
+> - **Wave C** — Admin endpoint DB-level role checks, session security (logout invalidation), password-reset link expiry ≤ 30 min.
+> - **Wave D** — Supabase storage bucket privacy audit, signed URL TTL ≤ 60 min (found a 1-year TTL on featured logo — needs fix), dealer isolation on doc paths, frontend env-var leak audit.
+
+
+> **Prev (2026-02 — Wave 105 Security Hardening A):** slowapi rate limiting installed and applied to sensitive auth endpoints. Wave A is one of four incremental waves (A/B/C/D) requested in the platform-wide security sweep — waves B/C/D still pending.
+>
+> ### What shipped
+> - `slowapi==0.1.9` added to `backend/requirements.txt`; `limits`, `Deprecated`, `wrapt` pulled in as transitive deps.
+> - `server.py` — Limiter initialised at app start with an XFF-aware key function (`_rl_key` reads `x-forwarded-for` so the real client IP is counted behind Kubernetes ingress). `headers_enabled=False` (endpoints return dict, not Response — required to avoid slowapi header-injection crash). `RateLimitExceeded` handler + `SlowAPIMiddleware` wired.
+> - `routes/auth.py` — `@limiter.limit(...)` decorators added on **login (10/min)**, **signup-customer (5/min)**, **signup-supplier (5/min)**, **password-reset (5/min)**, **oauth-bootstrap (20/min)**. `Request` parameter added where missing (required by slowapi's key-func introspection).
+> - Existing home-grown per-hour rate limiter (`_rate_limit_middleware` in server.py) left in place — the two now act as tiered defense: slowapi enforces short-window per-minute, the pre-existing middleware enforces longer per-hour ceilings on the same endpoints.
+> - Existing brute-force protection on `/auth/login` (in-memory `_LOGIN_FAILS`, 5 fails / IP / 10 min → 30-min block) preserved unchanged.
+>
+> ### Verification (curl on live preview URL)
+> - Admin login round-trip: 200 with access_token ✓
+> - `/api/auth/me` with token: returns admin profile ✓
+> - Public endpoints (search/universal, printers, papers, consumables): 15 rapid calls each returned 200 — **NOT rate-limited** ✓ (public browse unaffected)
+> - 12 rapid `/auth/login` w/ bad creds: 1x 401 → 429 from req2 onward ✓ (slowapi 10/min triggered; combined with existing brute-force logic)
+> - 8 rapid `/auth/signup-customer` with valid payloads (unique emails/passwords): all 429 ✓ (slowapi 5/min + pre-existing 10/hr both firing)
+> - Zero test accounts leaked into the DB (cleanup verified 0 rows).
+>
+> ### Files modified
+> - `backend/server.py` — slowapi Limiter setup + middleware
+> - `backend/routes/auth.py` — `@limiter.limit` decorators + Request params on 5 auth endpoints
+> - `backend/requirements.txt` — pip freeze after slowapi install
+>
+> ### Still pending (Waves B / C / D)
+> - **Wave B** — Input validation (strict GSTIN/PAN/IFSC/phone regex on all payloads), HTML sanitiser applied on free-text, file upload magic-byte validation, server-side order price recompute (never trust `unit_price` from frontend).
+> - **Wave C** — Admin endpoint DB-level role checks, session security (logout invalidation), password-reset link expiry ≤ 30 min.
+> - **Wave D** — Supabase storage bucket privacy audit, signed URL TTL ≤ 60 min, dealer isolation on doc paths, frontend env-var leak audit.
+
+
 > **Latest (2026-06-30 — Wave 102 HOTFIX-1):** 4 dealer-experience fixes, all verified live:
 > 1. 🔴 **Magic link finally lands dealers INSIDE the dashboard (not /login).** Root cause: Supabase silently ignored every `redirect_to` URL not in its project allow-list and fell back to the bare Site URL (`https://www.tonerscart.com`), stranding dealers on the homepage with auth tokens trapped in the URL hash. Probed Supabase live: only `https://www.tonerscart.com/auth/callback?next=/supplier` is honored. Backend `admin.py` now hard-routes magic links to `MAGIC_LINK_BASE_URL` (defaults to `https://www.tonerscart.com`) + `/auth/callback?next=/supplier`. End-to-end verified by simulating the EXACT Supabase redirect URL `/auth/callback?next=/supplier#access_token=...&type=magiclink` — Playwright trace: T+0s callback page loaded → T+0.5s hash consumed → T+4.5s auto-redirect to `/supplier`. Dealer lands authenticated on dashboard. **0 login screens.**
 > 2. **Profile dropdown sections now show ALL fields** with em-dash placeholders (Business, Address, Tax, Bank section headers). No more sparse / empty-looking dialogs. Account number is masked (`••••7890`).

@@ -24,7 +24,11 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, UploadFile, File
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr, Field, ValidationError
+from pydantic import BaseModel, EmailStr, Field, ValidationError, field_validator
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 
 from supabase_client import sb_admin, sb_anon, get_user_from_token
 from email_service import (
@@ -54,6 +58,23 @@ logger = logging.getLogger("tonerscart")
 
 app = FastAPI(title="TonersCart API (Supabase)")
 api = APIRouter(prefix="/api")
+
+
+# ===== Rate limiter (slowapi) =================================================
+# Wave 105 (Security Hardening A) — tiered per-IP rate limits applied via
+# decorators on sensitive endpoints. Uses x-forwarded-for (behind ingress) via
+# a small wrapper around get_remote_address so the real client IP is counted.
+def _rl_key(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=_rl_key, default_limits=[], headers_enabled=False)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 
 # ===== Helpers =================================================================
@@ -256,6 +277,37 @@ class SellerApplication(BaseModel):
     # status='draft' (admin doesn't see it yet); the dealer submits for
     # verification only after Step 3 is filled inside the dashboard.
     submit_for_review: bool = True
+
+    # Wave 105-B — strict format validators (empty strings pass through)
+    @field_validator("gst_number", mode="before")
+    @classmethod
+    def _v_gstin(cls, v):
+        return validate_gstin(v) if v else ""
+
+    @field_validator("pan_number", mode="before")
+    @classmethod
+    def _v_pan(cls, v):
+        return validate_pan(v) if v else ""
+
+    @field_validator("ifsc_code", mode="before")
+    @classmethod
+    def _v_ifsc(cls, v):
+        return validate_ifsc(v) if v else ""
+
+    @field_validator("pincode", mode="before")
+    @classmethod
+    def _v_pin(cls, v):
+        return validate_pincode(v) if v else ""
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def _v_phone(cls, v):
+        return validate_phone(v) if v else v  # phone is required, keep truthiness
+
+    @field_validator("account_number", mode="before")
+    @classmethod
+    def _v_acct(cls, v):
+        return validate_account_number(v) if v else ""
 
 
 class SignupSupplier(BaseModel):
@@ -1061,6 +1113,117 @@ def sanitize(s: Optional[str], max_len: int = 2000) -> str:
     return s[:max_len]
 
 
+# ---------- Wave 105-B — Strict format validators ----------
+# All accept empty strings (fields are typically Optional). Non-empty values
+# are normalized (upper-cased, whitespace-stripped) and validated against the
+# canonical Indian government / RBI patterns.
+_V_GSTIN_RE   = _re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$")
+_V_PAN_RE     = _re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
+_V_IFSC_RE    = _re.compile(r"^[A-Z]{4}0[A-Z0-9]{6}$")
+_V_PINCODE_RE = _re.compile(r"^[1-9][0-9]{5}$")
+# Indian phone: optional +91 / 0, then a 10-digit number starting 6-9.
+# Also accept a bare 10-15 digit international number.
+_V_PHONE_RE   = _re.compile(r"^(?:\+?\d{1,3}[-\s]?)?[6-9]\d{9}$|^\+?\d{10,15}$")
+_V_ACCOUNT_RE = _re.compile(r"^[0-9]{6,20}$")
+
+
+def _norm_upper(v):
+    return (v or "").strip().upper()
+
+
+def validate_gstin(v):
+    v = _norm_upper(v)
+    if not v:
+        return ""
+    if not _V_GSTIN_RE.match(v):
+        raise ValueError("Invalid GSTIN — must be 15 chars, e.g. 22AAAAA0000A1Z5")
+    return v
+
+
+def validate_pan(v):
+    v = _norm_upper(v)
+    if not v:
+        return ""
+    if not _V_PAN_RE.match(v):
+        raise ValueError("Invalid PAN — must be 10 chars, e.g. ABCDE1234F")
+    return v
+
+
+def validate_ifsc(v):
+    v = _norm_upper(v)
+    if not v:
+        return ""
+    if not _V_IFSC_RE.match(v):
+        raise ValueError("Invalid IFSC — must be 11 chars, e.g. SBIN0001234")
+    return v
+
+
+def validate_pincode(v):
+    v = (v or "").strip()
+    if not v:
+        return ""
+    if not _V_PINCODE_RE.match(v):
+        raise ValueError("Invalid pincode — must be 6 digits (100000-999999)")
+    return v
+
+
+def validate_phone(v):
+    v = _re.sub(r"[\s\-]", "", (v or "").strip())
+    if not v:
+        return ""
+    if not _V_PHONE_RE.match(v):
+        raise ValueError("Invalid phone number")
+    return v
+
+
+def validate_account_number(v):
+    v = _re.sub(r"[\s\-]", "", (v or "").strip())
+    if not v:
+        return ""
+    if not _V_ACCOUNT_RE.match(v):
+        raise ValueError("Invalid account number — 6-20 digits")
+    return v
+
+
+# ---------- Wave 105-B — File magic-byte validator ----------
+# Content-type headers are trivially spoofable; verify the first few bytes.
+_MAGIC_SIGNATURES = {
+    "pdf":  [b"%PDF-"],
+    "jpg":  [b"\xff\xd8\xff"],
+    "png":  [b"\x89PNG\r\n\x1a\n"],
+    "webp": [b"RIFF"],   # followed by size + "WEBP" at offset 8
+    "gif":  [b"GIF87a", b"GIF89a"],
+}
+
+
+def detect_file_type(content: bytes) -> Optional[str]:
+    """Return canonical short-name ('pdf' | 'jpg' | 'png' | 'webp' | 'gif')
+    based on the file's magic bytes. Returns None when nothing matches."""
+    if not content or len(content) < 8:
+        return None
+    head = content[:16]
+    for kind, sigs in _MAGIC_SIGNATURES.items():
+        for s in sigs:
+            if head.startswith(s):
+                if kind == "webp":
+                    if len(content) < 12 or content[8:12] != b"WEBP":
+                        continue
+                return kind
+    return None
+
+
+def require_file_type(content: bytes, allowed: tuple) -> str:
+    """Raise HTTPException(400) if the file's real type isn't in `allowed`.
+    Returns the detected kind on success."""
+    kind = detect_file_type(content)
+    if kind is None:
+        raise HTTPException(400, f"File type could not be detected (allowed: {', '.join(allowed)})")
+    if kind not in allowed:
+        raise HTTPException(400, f"File type '{kind}' not allowed (allowed: {', '.join(allowed)})")
+    return kind
+
+
+
 # ---------- Pillow image compression + watermarking ----------
 # Wave 91 — watermark re-enabled for NEW product-image uploads only.
 # Source: /app/frontend/public/TONERSCART-bg.png (RGBA, transparent bg).
@@ -1084,11 +1247,19 @@ def _load_watermark():
     return _WATERMARK_IMG
 
 
-def apply_watermark(im, *, opacity: float = 0.20, width_ratio: float = 0.20):
+def apply_watermark(im, *, opacity: float = 0.35, width_ratio: float = 0.22):
     """Composite the TonersCart logo onto the bottom-right corner of `im`.
-    Logo width = `width_ratio` × image width, opacity = `opacity` (20%).
+    Logo width = `width_ratio` × image width, opacity = `opacity` (final visible).
     Uses alpha channel as paste mask so ONLY the logo pixels blend onto
-    the photo — no background rectangle, no white box, no dark box."""
+    the photo — no background rectangle, no white box, no dark box.
+
+    Wave 105 fix — the source watermark PNG's alpha channel max was only
+    51/255 (already ~20% transparent by design). Multiplying by our 0.20
+    opacity gave a ~4% effective alpha → watermark invisible on new
+    uploads. We now NORMALIZE the alpha (rescale so max=255) BEFORE
+    applying opacity, so the watermark's visibility is controlled purely
+    by the `opacity` parameter regardless of how the source PNG is baked.
+    """
     try:
         from PIL import Image  # noqa: WPS433
         wm_src = _load_watermark()
@@ -1101,19 +1272,22 @@ def apply_watermark(im, *, opacity: float = 0.20, width_ratio: float = 0.20):
         scale = target_w / wm.width
         target_h = max(1, int(wm.height * scale))
         wm = wm.resize((target_w, target_h), Image.LANCZOS)
-        # Scale alpha by opacity so transparent stays transparent (0×k = 0)
-        # and opaque becomes opacity × 255.
-        alpha = wm.split()[3].point(lambda px: int(px * opacity))
+        # Normalize alpha so the source PNG's opacity level doesn't matter,
+        # then scale down by our opacity parameter.
+        alpha = wm.split()[3]
+        _min_a, max_a = alpha.getextrema()
+        if max_a and max_a < 255:
+            k = 255 / max_a
+            alpha = alpha.point(lambda px: min(255, int(px * k)))
+        alpha = alpha.point(lambda px: int(px * opacity))
         wm.putalpha(alpha)
         base = im.convert("RGBA")
         margin = max(8, int(im.width * 0.02))
         pos = (base.width - wm.width - margin, base.height - wm.height - margin)
-        # Use the watermark's alpha channel as the explicit mask — only the
-        # logo pixels are drawn, transparent regions are skipped.
         base.paste(wm, pos, mask=wm.split()[3])
         return base.convert("RGB")
     except Exception as e:
-        logger.debug("apply_watermark failed (%s) — returning un-watermarked", e)
+        logger.warning("apply_watermark failed (%s) — returning un-watermarked", e)
         return im
 
 

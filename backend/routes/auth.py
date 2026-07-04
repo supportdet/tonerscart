@@ -7,16 +7,18 @@ import asyncio
 import httpx
 
 from fastapi import APIRouter, HTTPException, Depends, Request, UploadFile, File
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from server import *  # noqa: F401,F403  shared kernel: clients, models, helpers, deps
 from server import _td, _re, _time, _dd  # noqa: F401  import-alias kernel helpers
 from server import _exec_dropping_cols, _run_ai_check, _client_ip  # underscore helpers
+from server import limiter  # slowapi limiter (Wave 105)
 
 router = APIRouter(prefix="/api")
 
 
 @router.post("/auth/oauth-bootstrap")
+@limiter.limit("20/minute")
 def oauth_bootstrap(payload: dict, request: Request):
     """Called after a Google OAuth redirect lands. Creates the public.users
     profile row if missing. Default role = customer."""
@@ -65,6 +67,7 @@ _LOGIN_BLOCK_SECS = 1800     # 30 minutes
 
 
 @router.post("/auth/login")
+@limiter.limit("10/minute")
 async def auth_login(payload: LoginRequest, request: Request):
     """Server-side Supabase password sign-in so login can be rate-limited.
     Only FAILED attempts count toward the limit: 5 fails / IP / 10 min → 30-min block.
@@ -109,8 +112,39 @@ async def auth_login(payload: LoginRequest, request: Request):
     raise HTTPException(401, "Incorrect email or password")
 
 
+@router.post("/auth/logout")
+async def auth_logout(request: Request):
+    """Wave 105-C — server-side logout. Revokes the caller's Supabase session
+    (invalidates its refresh token) so a stolen token cannot be silently used
+    to obtain new access tokens. Fire-and-forget — always returns 200 so the
+    UI can proceed with local cleanup even if revocation fails."""
+    token = get_token(request)
+    if not token:
+        return {"ok": True}
+    # Best-effort session revoke via Supabase Auth admin.
+    try:
+        sb_admin.auth.admin.sign_out(token)
+    except Exception as e:
+        logger.info("logout revoke skipped: %s", str(e)[:120])
+    # Best-effort audit trail
+    try:
+        uid, prof = get_user_from_token(token)
+        if uid:
+            sb_admin.table("audit_log").insert({
+                "actor_id": uid,
+                "actor_email": (prof or {}).get("email"),
+                "action": "auth_logout",
+                "path": "/api/auth/logout",
+                "method": "POST",
+            }).execute()
+    except Exception:
+        pass
+    return {"ok": True}
+
+
 @router.post("/auth/signup-customer")
-def signup_customer(payload: SignupCustomer):
+@limiter.limit("5/minute")
+def signup_customer(payload: SignupCustomer, request: Request):
     """Customer signup — creates Supabase Auth user + public.users row."""
     try:
         created = sb_admin.auth.admin.create_user({
@@ -140,7 +174,8 @@ def signup_customer(payload: SignupCustomer):
 
 
 @router.post("/auth/signup-supplier")
-async def signup_supplier(payload: SignupSupplier):
+@limiter.limit("5/minute")
+async def signup_supplier(payload: SignupSupplier, request: Request):
     """Wave 101 — dealer signup creates ONLY the auth user + the public.users
     row (role=supplier). No `suppliers_pending` row, no AI check, and no
     admin application-received email at this stage. The dealer must log in,
@@ -337,7 +372,10 @@ async def supplier_document_upload(
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(400, "Max 5 MB")
-    ext = (file.filename.split(".")[-1] if file.filename and "." in file.filename else "bin").lower()
+    # Wave 105-B — verify real file type via magic bytes (content-type is spoofable)
+    real_kind = require_file_type(content, allowed=("pdf", "jpg", "png", "webp"))
+    ext_map = {"pdf": "pdf", "jpg": "jpg", "png": "png", "webp": "webp"}
+    ext = ext_map[real_kind]
     path = f"{user['id']}/{field}-{uuid.uuid4().hex}.{ext}"
     try:
         sb_admin.storage.from_("supplier-documents").upload(
@@ -366,6 +404,17 @@ class SupplierProfilePhase2(BaseModel):
     doc_bank_proof: Optional[str] = None
     doc_id_proof: Optional[str] = None
     doc_address_proof: Optional[str] = None
+
+    # Wave 105-B — strict format validators
+    @field_validator("ifsc_code", mode="before")
+    @classmethod
+    def _v_ifsc(cls, v):
+        return validate_ifsc(v) if v else v
+
+    @field_validator("account_number", mode="before")
+    @classmethod
+    def _v_acct(cls, v):
+        return validate_account_number(v) if v else v
 
 
 @router.post("/auth/submit-for-review")
@@ -468,6 +517,8 @@ async def supplier_business_logo_upload(
     content = await file.read()
     if len(content) > 3 * 1024 * 1024:
         raise HTTPException(400, "Logo must be under 3 MB")
+    # Wave 105-B — verify real image type via magic bytes
+    require_file_type(content, allowed=("jpg", "png", "webp"))
     # Resize + JPEG re-encode for storage hygiene
     content = compress_image(content, max_side=600, quality=88)
 
@@ -677,7 +728,8 @@ class PasswordResetRequest(BaseModel):
 
 
 @router.post("/auth/password-reset")
-async def password_reset(payload: PasswordResetRequest):
+@limiter.limit("5/minute")
+async def password_reset(payload: PasswordResetRequest, request: Request):
     """Wave 59 — TonersCart-branded password-reset email. Uses Supabase's admin
     `generate_link` endpoint via raw httpx (the Python SDK wrapper currently
     swallows the email and returns 404 for valid users — known issue). Sends

@@ -658,6 +658,8 @@ async def admin_upload_supplier_document(
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(400, "Max 5 MB")
+    # Wave 105-B — verify real file type via magic bytes
+    real_kind = require_file_type(content, allowed=("pdf", "jpg", "png", "webp"))
 
     try:
         s = sb_admin.table("suppliers").select("user_id,business_name").eq("id", supplier_id).maybe_single().execute()
@@ -669,7 +671,7 @@ async def admin_upload_supplier_document(
     sup_user_id = s.data.get("user_id") or supplier_id
     business_name = s.data.get("business_name") or "dealer"
 
-    ext = (file.filename.split(".")[-1] if file.filename and "." in file.filename else "bin").lower()
+    ext = real_kind
     path = f"{sup_user_id}/{field}-{uuid.uuid4().hex}.{ext}"
     try:
         sb_admin.storage.from_("supplier-documents").upload(
@@ -1493,9 +1495,9 @@ async def admin_upload_featured_image(supplier_id: str, file: UploadFile = File(
         raw = await file.read()
         if len(raw) > 5 * 1024 * 1024:
             raise HTTPException(400, "Image too large (max 5 MB)")
-        ext = (file.filename or "logo.png").rsplit(".", 1)[-1].lower()
-        if ext not in ("png", "jpg", "jpeg", "webp"):
-            ext = "png"
+        # Wave 105-B — verify real image type via magic bytes
+        real_kind = require_file_type(raw, allowed=("jpg", "png", "webp"))
+        ext = "jpg" if real_kind == "jpg" else real_kind
         path = f"{supplier_id}/featured-logo-{int(datetime.now(timezone.utc).timestamp())}.{ext}"
         sb_admin.storage.from_("supplier-documents").upload(path, raw, {"content-type": file.content_type or f"image/{ext}", "upsert": "true"})
         signed = sb_admin.storage.from_("supplier-documents").create_signed_url(path, 60 * 60 * 24 * 365)
