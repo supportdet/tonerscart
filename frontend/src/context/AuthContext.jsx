@@ -84,6 +84,10 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = async () => {
+        // Wave 105-C — best-effort backend logout FIRST (revoke + audit trail).
+        // Fire-and-forget: if the backend call fails, still proceed with the
+        // local Supabase signOut so the UI is never stuck in a "half-logged-in" state.
+        try { await api.post("/auth/logout", {}, { timeout: 4000 }); } catch { /* ignore */ }
         await supabase.auth.signOut();
         setUser(null);
     };

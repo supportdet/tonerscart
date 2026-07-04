@@ -1,7 +1,41 @@
 # TonersCart — Product Requirements (Supabase edition)
 
 
-> **Latest (2026-02 — Wave 105 Security Hardening B):** Input validation + file magic-byte enforcement. 42 pytest tests pass. Order-price server-side calculation audited & confirmed already correct across all order paths (uses `float(L["price"])` from DB, never trusts payload).
+> **Latest (2026-02 — Wave 105 Security Hardening C):** Session security — server-side logout endpoint + audit of admin DB-level role checks.
+>
+> ### What shipped
+> - **New `/api/auth/logout` endpoint** (`backend/routes/auth.py`) — revokes the caller's Supabase session (`sb_admin.auth.admin.sign_out(token)` → invalidates BOTH the refresh token AND the current access token globally, as confirmed by end-to-end curl: `/auth/me` returns 401 the very next call). Best-effort: returns 200 even when unauth / bad token so the UI can proceed with local cleanup. Writes an `auth_logout` row to `audit_log` when the caller is authenticated.
+> - **Frontend `logout()` wired to the new endpoint** — `AuthContext.jsx` now calls `POST /api/auth/logout` (4s timeout, fire-and-forget) BEFORE the existing `supabase.auth.signOut()` local cleanup. Defense-in-depth: if a client-only bug or network hiccup ever skipped the Supabase-JS `signOut()`, the backend has already revoked the session.
+> - **Admin DB-level role check verified** — audited all 52 endpoints in `routes/admin.py` + 4 in `oem.py` + 10 in `procurement.py` + 1 in `agreements.py`. All 67 admin endpoints use either `require_role("admin")` or an inline DB `profile.get("role") != "admin"` check (both paths hit `get_user_from_token` which reads `users.role` from the DB — **not the JWT claim**). No changes needed.
+> - **`test_credentials.md` untouched** — no new auth accounts created.
+>
+> ### Password-reset link expiry — OPS TASK for user
+> Supabase controls the recovery-link JWT expiry via the project setting **Auth → Email → "OTP Expiration"** (default 3600s / 1h). The `generate_link` API does NOT accept an override, so this must be changed in the Supabase Dashboard. **Recommended value: 1800 (30 min).** Once you set it, `POST /api/auth/password-reset` produces a link that Supabase auto-rejects after 30 min.
+>
+> ### Verification
+> - `/app/backend/tests/test_wave105_wave_c_session.py` — **3/3 pytest pass**:
+>   - Unauth logout returns 200 (idempotent)
+>   - Garbage-token logout returns 200
+>   - Real admin session: login → /me:200 → logout → /me:401 (session actually revoked)
+> - `/app/backend/tests/test_wave105_wave_b_validation.py` — 42/42 regression pass.
+> - Grand total: **45/45 Wave 105 tests green.**
+>
+> ### Files modified
+> - `backend/routes/auth.py` — new `/auth/logout` endpoint
+> - `frontend/src/context/AuthContext.jsx` — logout now calls backend first
+> - `backend/tests/test_wave105_wave_c_session.py` — 3 new tests
+>
+> ### Still pending (Wave D)
+> - Supabase storage bucket privacy audit (confirm `supplier-documents` private, `printer-images` public)
+> - Signed URL TTL ≤ 60 min — **found a 1-year TTL** in `admin_upload_featured_image` that needs fixing
+> - Dealer isolation on doc paths (signed URL must include dealer's supplier_id in path)
+> - Frontend build grep for accidentally leaked SERVICE_ROLE / RESEND / etc.
+>
+> ### Ops tasks for user
+> - Supabase Auth → OTP Expiration → set to **1800** (30 min)
+
+
+> **Prev (2026-02 — Wave 105 Security Hardening B):** Input validation + file magic-byte enforcement. 42 pytest tests pass. Order-price server-side calculation audited & confirmed already correct across all order paths (uses `float(L["price"])` from DB, never trusts payload).
 >
 > ### What shipped
 > - **Centralised format validators** in `server.py`: `validate_gstin`, `validate_pan`, `validate_ifsc`, `validate_pincode`, `validate_phone`, `validate_account_number`. All normalise (uppercase / strip whitespace-dashes) and enforce canonical Indian government / RBI regex patterns. Empty strings pass (fields are Optional).

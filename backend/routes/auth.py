@@ -112,6 +112,36 @@ async def auth_login(payload: LoginRequest, request: Request):
     raise HTTPException(401, "Incorrect email or password")
 
 
+@router.post("/auth/logout")
+async def auth_logout(request: Request):
+    """Wave 105-C — server-side logout. Revokes the caller's Supabase session
+    (invalidates its refresh token) so a stolen token cannot be silently used
+    to obtain new access tokens. Fire-and-forget — always returns 200 so the
+    UI can proceed with local cleanup even if revocation fails."""
+    token = get_token(request)
+    if not token:
+        return {"ok": True}
+    # Best-effort session revoke via Supabase Auth admin.
+    try:
+        sb_admin.auth.admin.sign_out(token)
+    except Exception as e:
+        logger.info("logout revoke skipped: %s", str(e)[:120])
+    # Best-effort audit trail
+    try:
+        uid, prof = get_user_from_token(token)
+        if uid:
+            sb_admin.table("audit_log").insert({
+                "actor_id": uid,
+                "actor_email": (prof or {}).get("email"),
+                "action": "auth_logout",
+                "path": "/api/auth/logout",
+                "method": "POST",
+            }).execute()
+    except Exception:
+        pass
+    return {"ok": True}
+
+
 @router.post("/auth/signup-customer")
 @limiter.limit("5/minute")
 def signup_customer(payload: SignupCustomer, request: Request):
