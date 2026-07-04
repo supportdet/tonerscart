@@ -1,6 +1,34 @@
 # TonersCart — Product Requirements (Supabase edition)
 
 
+> **Latest (2026-02 — Wave 105 Security Hardening A):** slowapi rate limiting installed and applied to sensitive auth endpoints. Wave A is one of four incremental waves (A/B/C/D) requested in the platform-wide security sweep — waves B/C/D still pending.
+>
+> ### What shipped
+> - `slowapi==0.1.9` added to `backend/requirements.txt`; `limits`, `Deprecated`, `wrapt` pulled in as transitive deps.
+> - `server.py` — Limiter initialised at app start with an XFF-aware key function (`_rl_key` reads `x-forwarded-for` so the real client IP is counted behind Kubernetes ingress). `headers_enabled=False` (endpoints return dict, not Response — required to avoid slowapi header-injection crash). `RateLimitExceeded` handler + `SlowAPIMiddleware` wired.
+> - `routes/auth.py` — `@limiter.limit(...)` decorators added on **login (10/min)**, **signup-customer (5/min)**, **signup-supplier (5/min)**, **password-reset (5/min)**, **oauth-bootstrap (20/min)**. `Request` parameter added where missing (required by slowapi's key-func introspection).
+> - Existing home-grown per-hour rate limiter (`_rate_limit_middleware` in server.py) left in place — the two now act as tiered defense: slowapi enforces short-window per-minute, the pre-existing middleware enforces longer per-hour ceilings on the same endpoints.
+> - Existing brute-force protection on `/auth/login` (in-memory `_LOGIN_FAILS`, 5 fails / IP / 10 min → 30-min block) preserved unchanged.
+>
+> ### Verification (curl on live preview URL)
+> - Admin login round-trip: 200 with access_token ✓
+> - `/api/auth/me` with token: returns admin profile ✓
+> - Public endpoints (search/universal, printers, papers, consumables): 15 rapid calls each returned 200 — **NOT rate-limited** ✓ (public browse unaffected)
+> - 12 rapid `/auth/login` w/ bad creds: 1x 401 → 429 from req2 onward ✓ (slowapi 10/min triggered; combined with existing brute-force logic)
+> - 8 rapid `/auth/signup-customer` with valid payloads (unique emails/passwords): all 429 ✓ (slowapi 5/min + pre-existing 10/hr both firing)
+> - Zero test accounts leaked into the DB (cleanup verified 0 rows).
+>
+> ### Files modified
+> - `backend/server.py` — slowapi Limiter setup + middleware
+> - `backend/routes/auth.py` — `@limiter.limit` decorators + Request params on 5 auth endpoints
+> - `backend/requirements.txt` — pip freeze after slowapi install
+>
+> ### Still pending (Waves B / C / D)
+> - **Wave B** — Input validation (strict GSTIN/PAN/IFSC/phone regex on all payloads), HTML sanitiser applied on free-text, file upload magic-byte validation, server-side order price recompute (never trust `unit_price` from frontend).
+> - **Wave C** — Admin endpoint DB-level role checks, session security (logout invalidation), password-reset link expiry ≤ 30 min.
+> - **Wave D** — Supabase storage bucket privacy audit, signed URL TTL ≤ 60 min, dealer isolation on doc paths, frontend env-var leak audit.
+
+
 > **Latest (2026-06-30 — Wave 102 HOTFIX-1):** 4 dealer-experience fixes, all verified live:
 > 1. 🔴 **Magic link finally lands dealers INSIDE the dashboard (not /login).** Root cause: Supabase silently ignored every `redirect_to` URL not in its project allow-list and fell back to the bare Site URL (`https://www.tonerscart.com`), stranding dealers on the homepage with auth tokens trapped in the URL hash. Probed Supabase live: only `https://www.tonerscart.com/auth/callback?next=/supplier` is honored. Backend `admin.py` now hard-routes magic links to `MAGIC_LINK_BASE_URL` (defaults to `https://www.tonerscart.com`) + `/auth/callback?next=/supplier`. End-to-end verified by simulating the EXACT Supabase redirect URL `/auth/callback?next=/supplier#access_token=...&type=magiclink` — Playwright trace: T+0s callback page loaded → T+0.5s hash consumed → T+4.5s auto-redirect to `/supplier`. Dealer lands authenticated on dashboard. **0 login screens.**
 > 2. **Profile dropdown sections now show ALL fields** with em-dash placeholders (Business, Address, Tax, Bank section headers). No more sparse / empty-looking dialogs. Account number is masked (`••••7890`).

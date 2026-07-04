@@ -25,6 +25,10 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, UploadF
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field, ValidationError
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 
 from supabase_client import sb_admin, sb_anon, get_user_from_token
 from email_service import (
@@ -54,6 +58,23 @@ logger = logging.getLogger("tonerscart")
 
 app = FastAPI(title="TonersCart API (Supabase)")
 api = APIRouter(prefix="/api")
+
+
+# ===== Rate limiter (slowapi) =================================================
+# Wave 105 (Security Hardening A) — tiered per-IP rate limits applied via
+# decorators on sensitive endpoints. Uses x-forwarded-for (behind ingress) via
+# a small wrapper around get_remote_address so the real client IP is counted.
+def _rl_key(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=_rl_key, default_limits=[], headers_enabled=False)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 
 # ===== Helpers =================================================================

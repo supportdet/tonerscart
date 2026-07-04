@@ -12,11 +12,13 @@ from pydantic import BaseModel, EmailStr, Field
 from server import *  # noqa: F401,F403  shared kernel: clients, models, helpers, deps
 from server import _td, _re, _time, _dd  # noqa: F401  import-alias kernel helpers
 from server import _exec_dropping_cols, _run_ai_check, _client_ip  # underscore helpers
+from server import limiter  # slowapi limiter (Wave 105)
 
 router = APIRouter(prefix="/api")
 
 
 @router.post("/auth/oauth-bootstrap")
+@limiter.limit("20/minute")
 def oauth_bootstrap(payload: dict, request: Request):
     """Called after a Google OAuth redirect lands. Creates the public.users
     profile row if missing. Default role = customer."""
@@ -65,6 +67,7 @@ _LOGIN_BLOCK_SECS = 1800     # 30 minutes
 
 
 @router.post("/auth/login")
+@limiter.limit("10/minute")
 async def auth_login(payload: LoginRequest, request: Request):
     """Server-side Supabase password sign-in so login can be rate-limited.
     Only FAILED attempts count toward the limit: 5 fails / IP / 10 min → 30-min block.
@@ -110,7 +113,8 @@ async def auth_login(payload: LoginRequest, request: Request):
 
 
 @router.post("/auth/signup-customer")
-def signup_customer(payload: SignupCustomer):
+@limiter.limit("5/minute")
+def signup_customer(payload: SignupCustomer, request: Request):
     """Customer signup — creates Supabase Auth user + public.users row."""
     try:
         created = sb_admin.auth.admin.create_user({
@@ -140,7 +144,8 @@ def signup_customer(payload: SignupCustomer):
 
 
 @router.post("/auth/signup-supplier")
-async def signup_supplier(payload: SignupSupplier):
+@limiter.limit("5/minute")
+async def signup_supplier(payload: SignupSupplier, request: Request):
     """Wave 101 — dealer signup creates ONLY the auth user + the public.users
     row (role=supplier). No `suppliers_pending` row, no AI check, and no
     admin application-received email at this stage. The dealer must log in,
@@ -677,7 +682,8 @@ class PasswordResetRequest(BaseModel):
 
 
 @router.post("/auth/password-reset")
-async def password_reset(payload: PasswordResetRequest):
+@limiter.limit("5/minute")
+async def password_reset(payload: PasswordResetRequest, request: Request):
     """Wave 59 — TonersCart-branded password-reset email. Uses Supabase's admin
     `generate_link` endpoint via raw httpx (the Python SDK wrapper currently
     swallows the email and returns 404 for valid users — known issue). Sends
