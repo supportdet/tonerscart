@@ -18,6 +18,7 @@ from fastapi import APIRouter, HTTPException, Request, Depends, UploadFile, File
 from pydantic import BaseModel, EmailStr
 
 from supabase_client import sb_admin, get_user_from_token
+from server import require_file_type
 from email_service import (
     email_oem_application_received,
     email_oem_approved,
@@ -259,7 +260,9 @@ async def oem_product_image(file: UploadFile = File(...), ctx: dict = Depends(re
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(400, "Max 5 MB")
-    ext = (file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "jpg").lower()
+    # Wave 105-B — verify real image type via magic bytes
+    real_kind = require_file_type(content, allowed=("jpg", "png", "webp"))
+    ext = "jpg" if real_kind == "jpg" else real_kind
     path = f"oem/{ctx['partner']['id']}/{uuid.uuid4().hex}.{ext}"
     try:
         sb_admin.storage.from_("printer-images").upload(
@@ -278,7 +281,9 @@ async def oem_logo(file: UploadFile = File(...), ctx: dict = Depends(require_oem
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(400, "Max 5 MB")
-    ext = (file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "png").lower()
+    # Wave 105-B — verify real image type via magic bytes
+    real_kind = require_file_type(content, allowed=("jpg", "png", "webp"))
+    ext = "jpg" if real_kind == "jpg" else real_kind
     path = f"oem/{ctx['partner']['id']}/logo-{uuid.uuid4().hex}.{ext}"
     try:
         sb_admin.storage.from_("printer-images").upload(

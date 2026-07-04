@@ -1,7 +1,49 @@
 # TonersCart — Product Requirements (Supabase edition)
 
 
-> **Latest (2026-02 — Wave 105 Security Hardening A):** slowapi rate limiting installed and applied to sensitive auth endpoints. Wave A is one of four incremental waves (A/B/C/D) requested in the platform-wide security sweep — waves B/C/D still pending.
+> **Latest (2026-02 — Wave 105 Security Hardening B):** Input validation + file magic-byte enforcement. 42 pytest tests pass. Order-price server-side calculation audited & confirmed already correct across all order paths (uses `float(L["price"])` from DB, never trusts payload).
+>
+> ### What shipped
+> - **Centralised format validators** in `server.py`: `validate_gstin`, `validate_pan`, `validate_ifsc`, `validate_pincode`, `validate_phone`, `validate_account_number`. All normalise (uppercase / strip whitespace-dashes) and enforce canonical Indian government / RBI regex patterns. Empty strings pass (fields are Optional).
+> - **Pydantic `@field_validator`** applied on `SellerApplication` (GSTIN, PAN, IFSC, pincode, phone, account_number) and `SupplierProfilePhase2` (IFSC, account_number). Bad payloads → 422 with clear message (e.g. `"Invalid GSTIN — must be 15 chars, e.g. 22AAAAA0000A1Z5"`).
+> - **File magic-byte validation** — new `detect_file_type(content)` + `require_file_type(content, allowed)` helpers in `server.py`. Recognises PDF, JPG, PNG, WEBP, GIF from the first 8-16 bytes. Wired into every server-side file-upload endpoint:
+>   - `/auth/supplier-document-upload` (auth.py)
+>   - `/supplier/business-logo` (auth.py)
+>   - `/supplier/printer-image` (products.py)
+>   - `/supplier/listing-image` (products.py)
+>   - `/supplier/spec-pdf` (products.py)
+>   - `/oem/product-image` (oem.py)
+>   - `/oem/logo` (oem.py)
+>   - `/admin/suppliers/{id}/document` (admin.py)
+>   - `/admin/suppliers/{id}/featured-image` (admin.py)
+>   - `/featured/apply-image` (suppliers.py)
+>   - `/procurement/orders/{oid}/po` (procurement.py)
+> - **Order-price validation** — audited `create_order` (routes/orders.py), `_create_direct_order` (server.py) and `/quotation`: all three already use `float(L["price"])` / `float(L.get("price") or 0)` from the DB row, and `OrderCreate` has no `price` field. **No changes needed** — pricing is already server-authoritative. `gst_amount` on the payload is informational only (buyer receipt) and never affects the settled `total = unit_price * qty`.
+>
+> ### Verification
+> - `/app/backend/tests/test_wave105_wave_b_validation.py` — **42/42 pytest pass** covering all 6 validators (valid, normalised, empty, wrong length, wrong shape) + `SellerApplication` end-to-end validators + `detect_file_type` for PDF/JPG/PNG/WEBP/GIF + `require_file_type` rejection of spoofed extensions + correct type routing.
+> - **End-to-end curl on live preview URL**:
+>   - Admin login still works, `/auth/me` returns admin profile.
+>   - `/api/printers?limit=1` returns 60 listings (public feed unaffected).
+>   - `/auth/apply-seller` with `gst_number="BAD-GSTIN-HERE"` → 422 with the clear "Invalid GSTIN" message.
+>   - `/auth/supplier-document-upload?field=doc_gst` with a text file spoofed as `image/jpeg` → 400 "File type could not be detected (allowed: pdf, jpg, png, webp)".
+>
+> ### Files modified
+> - `backend/server.py` — validators + magic-byte helpers + `field_validator` import + SellerApplication validators
+> - `backend/routes/auth.py` — SupplierProfilePhase2 validators + magic-byte on doc/logo uploads
+> - `backend/routes/products.py` — magic-byte on printer/listing images + spec PDF
+> - `backend/routes/admin.py` — magic-byte on admin doc + featured-image uploads
+> - `backend/routes/suppliers.py` — magic-byte on featured/apply-image
+> - `backend/oem.py` — magic-byte on OEM product-image + logo (also new `from server import require_file_type`)
+> - `backend/procurement.py` — magic-byte on procurement PO upload (also new `from server import require_file_type`)
+> - `backend/tests/test_wave105_wave_b_validation.py` — 42 new tests
+>
+> ### Still pending (Waves C / D)
+> - **Wave C** — Admin endpoint DB-level role checks, session security (logout invalidation), password-reset link expiry ≤ 30 min.
+> - **Wave D** — Supabase storage bucket privacy audit, signed URL TTL ≤ 60 min (found a 1-year TTL on featured logo — needs fix), dealer isolation on doc paths, frontend env-var leak audit.
+
+
+> **Prev (2026-02 — Wave 105 Security Hardening A):** slowapi rate limiting installed and applied to sensitive auth endpoints. Wave A is one of four incremental waves (A/B/C/D) requested in the platform-wide security sweep — waves B/C/D still pending.
 >
 > ### What shipped
 > - `slowapi==0.1.9` added to `backend/requirements.txt`; `limits`, `Deprecated`, `wrapt` pulled in as transitive deps.

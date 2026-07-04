@@ -241,6 +241,8 @@ async def upload_printer_image(file: UploadFile = File(...), user: dict = Depend
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(400, "Max 5 MB")
+    # Wave 105-B — verify real image type via magic bytes
+    require_file_type(content, allowed=("jpg", "png", "webp"))
     ext = "jpg"
     path = f"{user['id']}/{uuid.uuid4().hex}.{ext}"
     # Compress / resize so storage stays cheap and pages load fast
@@ -267,6 +269,8 @@ async def upload_listing_image(file: UploadFile = File(...), user: dict = Depend
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(400, "Max 5 MB")
+    # Wave 105-B — verify real image type via magic bytes
+    require_file_type(content, allowed=("jpg", "png", "webp"))
     path = f"{user['id']}/{uuid.uuid4().hex}.jpg"
     content = compress_image(content, max_side=1200, quality=85, watermark=True)
     try:
@@ -609,6 +613,8 @@ async def upload_spec_pdf(file: UploadFile = File(...), user: dict = Depends(req
     content = await file.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(400, "Brochure must be under 10 MB")
+    # Wave 105-B — verify real PDF signature via magic bytes
+    require_file_type(content, allowed=("pdf",))
     path = f"{user['id']}/brochure-{uuid.uuid4().hex}.pdf"
     try:
         sb_admin.storage.from_("supplier-documents").upload(

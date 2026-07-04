@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException, Request, Depends, Response, Upload
 from pydantic import BaseModel, EmailStr, Field
 
 from supabase_client import sb_admin, get_user_from_token
+from server import require_file_type
 from email_service import (
     email_proc_registration_received,
     email_proc_approved,
@@ -684,7 +685,9 @@ async def upload_po_document(oid: str, file: UploadFile = File(...), user: dict 
     content = await file.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(400, "Max 10 MB")
-    ext = "pdf" if ct == "application/pdf" else (file.filename or "po.jpg").rsplit(".", 1)[-1].lower()[:5]
+    # Wave 105-B — verify real file type via magic bytes
+    real_kind = require_file_type(content, allowed=("pdf", "jpg", "png", "webp"))
+    ext = real_kind
     path = f"procurement-po/{user['id']}/{oid}.{ext}"
     try:
         sb_admin.storage.from_(_PO_BUCKET).upload(path, content, {"content-type": ct, "upsert": "true"})

@@ -80,9 +80,9 @@ async def featured_apply_image(file: UploadFile = File(...)):
     raw = await file.read()
     if len(raw) > 5 * 1024 * 1024:
         raise HTTPException(400, "Image too large (max 5 MB)")
-    ext = (file.filename or "banner.png").rsplit(".", 1)[-1].lower()
-    if ext not in ("png", "jpg", "jpeg", "webp"):
-        raise HTTPException(400, "Only PNG, JPG or WEBP images accepted")
+    # Wave 105-B — verify real image type via magic bytes (content-type is spoofable)
+    real_kind = require_file_type(raw, allowed=("jpg", "png", "webp"))
+    ext = "jpg" if real_kind == "jpg" else real_kind
     safe = secrets.token_hex(8)
     path = f"featured-applications/{int(datetime.now(timezone.utc).timestamp())}-{safe}.{ext}"
     try:

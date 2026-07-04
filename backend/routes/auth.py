@@ -7,7 +7,7 @@ import asyncio
 import httpx
 
 from fastapi import APIRouter, HTTPException, Depends, Request, UploadFile, File
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from server import *  # noqa: F401,F403  shared kernel: clients, models, helpers, deps
 from server import _td, _re, _time, _dd  # noqa: F401  import-alias kernel helpers
@@ -342,7 +342,10 @@ async def supplier_document_upload(
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(400, "Max 5 MB")
-    ext = (file.filename.split(".")[-1] if file.filename and "." in file.filename else "bin").lower()
+    # Wave 105-B — verify real file type via magic bytes (content-type is spoofable)
+    real_kind = require_file_type(content, allowed=("pdf", "jpg", "png", "webp"))
+    ext_map = {"pdf": "pdf", "jpg": "jpg", "png": "png", "webp": "webp"}
+    ext = ext_map[real_kind]
     path = f"{user['id']}/{field}-{uuid.uuid4().hex}.{ext}"
     try:
         sb_admin.storage.from_("supplier-documents").upload(
@@ -371,6 +374,17 @@ class SupplierProfilePhase2(BaseModel):
     doc_bank_proof: Optional[str] = None
     doc_id_proof: Optional[str] = None
     doc_address_proof: Optional[str] = None
+
+    # Wave 105-B — strict format validators
+    @field_validator("ifsc_code", mode="before")
+    @classmethod
+    def _v_ifsc(cls, v):
+        return validate_ifsc(v) if v else v
+
+    @field_validator("account_number", mode="before")
+    @classmethod
+    def _v_acct(cls, v):
+        return validate_account_number(v) if v else v
 
 
 @router.post("/auth/submit-for-review")
@@ -473,6 +487,8 @@ async def supplier_business_logo_upload(
     content = await file.read()
     if len(content) > 3 * 1024 * 1024:
         raise HTTPException(400, "Logo must be under 3 MB")
+    # Wave 105-B — verify real image type via magic bytes
+    require_file_type(content, allowed=("jpg", "png", "webp"))
     # Resize + JPEG re-encode for storage hygiene
     content = compress_image(content, max_side=600, quality=88)
 

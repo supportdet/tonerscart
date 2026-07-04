@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, UploadFile, File
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr, Field, ValidationError
+from pydantic import BaseModel, EmailStr, Field, ValidationError, field_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -277,6 +277,37 @@ class SellerApplication(BaseModel):
     # status='draft' (admin doesn't see it yet); the dealer submits for
     # verification only after Step 3 is filled inside the dashboard.
     submit_for_review: bool = True
+
+    # Wave 105-B — strict format validators (empty strings pass through)
+    @field_validator("gst_number", mode="before")
+    @classmethod
+    def _v_gstin(cls, v):
+        return validate_gstin(v) if v else ""
+
+    @field_validator("pan_number", mode="before")
+    @classmethod
+    def _v_pan(cls, v):
+        return validate_pan(v) if v else ""
+
+    @field_validator("ifsc_code", mode="before")
+    @classmethod
+    def _v_ifsc(cls, v):
+        return validate_ifsc(v) if v else ""
+
+    @field_validator("pincode", mode="before")
+    @classmethod
+    def _v_pin(cls, v):
+        return validate_pincode(v) if v else ""
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def _v_phone(cls, v):
+        return validate_phone(v) if v else v  # phone is required, keep truthiness
+
+    @field_validator("account_number", mode="before")
+    @classmethod
+    def _v_acct(cls, v):
+        return validate_account_number(v) if v else ""
 
 
 class SignupSupplier(BaseModel):
@@ -1080,6 +1111,117 @@ def sanitize(s: Optional[str], max_len: int = 2000) -> str:
         return ""
     s = _HTML_TAG_RX.sub("", str(s)).strip()
     return s[:max_len]
+
+
+# ---------- Wave 105-B — Strict format validators ----------
+# All accept empty strings (fields are typically Optional). Non-empty values
+# are normalized (upper-cased, whitespace-stripped) and validated against the
+# canonical Indian government / RBI patterns.
+_V_GSTIN_RE   = _re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$")
+_V_PAN_RE     = _re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
+_V_IFSC_RE    = _re.compile(r"^[A-Z]{4}0[A-Z0-9]{6}$")
+_V_PINCODE_RE = _re.compile(r"^[1-9][0-9]{5}$")
+# Indian phone: optional +91 / 0, then a 10-digit number starting 6-9.
+# Also accept a bare 10-15 digit international number.
+_V_PHONE_RE   = _re.compile(r"^(?:\+?\d{1,3}[-\s]?)?[6-9]\d{9}$|^\+?\d{10,15}$")
+_V_ACCOUNT_RE = _re.compile(r"^[0-9]{6,20}$")
+
+
+def _norm_upper(v):
+    return (v or "").strip().upper()
+
+
+def validate_gstin(v):
+    v = _norm_upper(v)
+    if not v:
+        return ""
+    if not _V_GSTIN_RE.match(v):
+        raise ValueError("Invalid GSTIN — must be 15 chars, e.g. 22AAAAA0000A1Z5")
+    return v
+
+
+def validate_pan(v):
+    v = _norm_upper(v)
+    if not v:
+        return ""
+    if not _V_PAN_RE.match(v):
+        raise ValueError("Invalid PAN — must be 10 chars, e.g. ABCDE1234F")
+    return v
+
+
+def validate_ifsc(v):
+    v = _norm_upper(v)
+    if not v:
+        return ""
+    if not _V_IFSC_RE.match(v):
+        raise ValueError("Invalid IFSC — must be 11 chars, e.g. SBIN0001234")
+    return v
+
+
+def validate_pincode(v):
+    v = (v or "").strip()
+    if not v:
+        return ""
+    if not _V_PINCODE_RE.match(v):
+        raise ValueError("Invalid pincode — must be 6 digits (100000-999999)")
+    return v
+
+
+def validate_phone(v):
+    v = _re.sub(r"[\s\-]", "", (v or "").strip())
+    if not v:
+        return ""
+    if not _V_PHONE_RE.match(v):
+        raise ValueError("Invalid phone number")
+    return v
+
+
+def validate_account_number(v):
+    v = _re.sub(r"[\s\-]", "", (v or "").strip())
+    if not v:
+        return ""
+    if not _V_ACCOUNT_RE.match(v):
+        raise ValueError("Invalid account number — 6-20 digits")
+    return v
+
+
+# ---------- Wave 105-B — File magic-byte validator ----------
+# Content-type headers are trivially spoofable; verify the first few bytes.
+_MAGIC_SIGNATURES = {
+    "pdf":  [b"%PDF-"],
+    "jpg":  [b"\xff\xd8\xff"],
+    "png":  [b"\x89PNG\r\n\x1a\n"],
+    "webp": [b"RIFF"],   # followed by size + "WEBP" at offset 8
+    "gif":  [b"GIF87a", b"GIF89a"],
+}
+
+
+def detect_file_type(content: bytes) -> Optional[str]:
+    """Return canonical short-name ('pdf' | 'jpg' | 'png' | 'webp' | 'gif')
+    based on the file's magic bytes. Returns None when nothing matches."""
+    if not content or len(content) < 8:
+        return None
+    head = content[:16]
+    for kind, sigs in _MAGIC_SIGNATURES.items():
+        for s in sigs:
+            if head.startswith(s):
+                if kind == "webp":
+                    if len(content) < 12 or content[8:12] != b"WEBP":
+                        continue
+                return kind
+    return None
+
+
+def require_file_type(content: bytes, allowed: tuple) -> str:
+    """Raise HTTPException(400) if the file's real type isn't in `allowed`.
+    Returns the detected kind on success."""
+    kind = detect_file_type(content)
+    if kind is None:
+        raise HTTPException(400, f"File type could not be detected (allowed: {', '.join(allowed)})")
+    if kind not in allowed:
+        raise HTTPException(400, f"File type '{kind}' not allowed (allowed: {', '.join(allowed)})")
+    return kind
+
 
 
 # ---------- Pillow image compression + watermarking ----------
