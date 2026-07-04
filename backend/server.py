@@ -1084,11 +1084,19 @@ def _load_watermark():
     return _WATERMARK_IMG
 
 
-def apply_watermark(im, *, opacity: float = 0.20, width_ratio: float = 0.20):
+def apply_watermark(im, *, opacity: float = 0.35, width_ratio: float = 0.22):
     """Composite the TonersCart logo onto the bottom-right corner of `im`.
-    Logo width = `width_ratio` × image width, opacity = `opacity` (20%).
+    Logo width = `width_ratio` × image width, opacity = `opacity` (final visible).
     Uses alpha channel as paste mask so ONLY the logo pixels blend onto
-    the photo — no background rectangle, no white box, no dark box."""
+    the photo — no background rectangle, no white box, no dark box.
+
+    Wave 105 fix — the source watermark PNG's alpha channel max was only
+    51/255 (already ~20% transparent by design). Multiplying by our 0.20
+    opacity gave a ~4% effective alpha → watermark invisible on new
+    uploads. We now NORMALIZE the alpha (rescale so max=255) BEFORE
+    applying opacity, so the watermark's visibility is controlled purely
+    by the `opacity` parameter regardless of how the source PNG is baked.
+    """
     try:
         from PIL import Image  # noqa: WPS433
         wm_src = _load_watermark()
@@ -1101,19 +1109,22 @@ def apply_watermark(im, *, opacity: float = 0.20, width_ratio: float = 0.20):
         scale = target_w / wm.width
         target_h = max(1, int(wm.height * scale))
         wm = wm.resize((target_w, target_h), Image.LANCZOS)
-        # Scale alpha by opacity so transparent stays transparent (0×k = 0)
-        # and opaque becomes opacity × 255.
-        alpha = wm.split()[3].point(lambda px: int(px * opacity))
+        # Normalize alpha so the source PNG's opacity level doesn't matter,
+        # then scale down by our opacity parameter.
+        alpha = wm.split()[3]
+        _min_a, max_a = alpha.getextrema()
+        if max_a and max_a < 255:
+            k = 255 / max_a
+            alpha = alpha.point(lambda px: min(255, int(px * k)))
+        alpha = alpha.point(lambda px: int(px * opacity))
         wm.putalpha(alpha)
         base = im.convert("RGBA")
         margin = max(8, int(im.width * 0.02))
         pos = (base.width - wm.width - margin, base.height - wm.height - margin)
-        # Use the watermark's alpha channel as the explicit mask — only the
-        # logo pixels are drawn, transparent regions are skipped.
         base.paste(wm, pos, mask=wm.split()[3])
         return base.convert("RGB")
     except Exception as e:
-        logger.debug("apply_watermark failed (%s) — returning un-watermarked", e)
+        logger.warning("apply_watermark failed (%s) — returning un-watermarked", e)
         return im
 
 
