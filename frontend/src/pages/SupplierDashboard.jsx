@@ -8,6 +8,7 @@ import { Label } from "../components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
 import { Plus, Trash2, Image as ImageIcon, Hourglass, CheckCircle2, XCircle, Camera, Loader2, Package, ShoppingCart, Clock, Printer, FileText, Pencil, X as XIcon, Eye } from "lucide-react";
+import { Popover, PopoverTrigger, PopoverContent } from "../components/ui/popover";
 import { GST_RATES, formatINR, withGst, priceFromInclusive, inclGstPrice } from "../lib/listingConstants";
 import { TONER_BRANDS } from "../lib/brands";
 import { supabase, PRODUCT_BUCKET } from "../lib/supabase";
@@ -422,6 +423,47 @@ export default function SupplierDashboard() {
 
     const openEditBulk = () => setEditBulkOpen(true);
 
+    // Wave 105.2 — Individual edit for an already-saved toner listing.
+    // Populates the single-toner dialog with the listing's current values so
+    // the dealer can add photos, tweak specs, adjust price etc. — everything
+    // the bulk grid can't do inline. Called from the "Edit individually"
+    // option on both the Toners grid card and the combined All-Listings row.
+    const openEditToner = (l) => {
+        reset();  // clear any prior form state
+        setEditingId(l.id);
+        setBrand(l.brand || "");
+        setColor(l.color || "Black");
+        setPrice(l.price != null ? String(l.price) : "");
+        setStock(l.stock != null ? String(l.stock) : "");
+        setTonerType(l.toner_type || "Original");
+        setPageYield(l.page_yield != null ? String(l.page_yield) : "");
+        setCompatibleModels(l.compatible_models || "");
+        setTonerModel(l.model_number || "");
+        setOemPartNumber(l.oem_part_number || "");
+        setCartridgeWeight(l.cartridge_weight != null ? String(l.cartridge_weight) : "");
+        // Warranty may be one of the presets or a custom "Other" value
+        const warrantyPresets = ["6 Months", "1 Year", "2 Years", "3 Years"];
+        if (l.warranty && !warrantyPresets.includes(l.warranty)) {
+            setWarranty("Other"); setWarrantyOther(l.warranty);
+        } else {
+            setWarranty(l.warranty || "1 Year"); setWarrantyOther("");
+        }
+        setPrintTechnology(l.print_technology || "Laser");
+        setIntercityCharge(l.intercity_delivery_charge != null ? String(l.intercity_delivery_charge) : "100");
+        setIntracityCharge(l.intracity_delivery_charge != null ? String(l.intracity_delivery_charge) : "0");
+        setGstRate(l.gst_rate ?? 18);
+        setPriceType(l.price_includes_gst === true ? "inclusive" : l.price_includes_gst === false ? "exclusive" : null);
+        // Variants: rehydrate from stored JSON or fall back to a single row.
+        const vs = Array.isArray(l.variants) && l.variants.length
+            ? l.variants.map((v) => ({ color: v.color || "Black", price: v.price != null ? String(v.price) : "", stock: v.stock != null ? String(v.stock) : "" }))
+            : [{ color: l.color || "Black", price: l.price != null ? String(l.price) : "", stock: l.stock != null ? String(l.stock) : "" }];
+        setVariants(vs);
+        // Existing image URLs — the form's ImageUploader will display them
+        // as removable thumbs alongside any newly-added files.
+        setExistingImages(Array.isArray(l.image_urls) ? l.image_urls : (l.image_url ? [l.image_url] : []));
+        setOpen(true);
+    };
+
     // Open the bulk-upload dialog for any category from the central Bulk hub.
     // Printer/Paper/Consumable bulk dialogs live INSIDE their tab components, so
     // we switch to that tab first (mounting the component + its event listener),
@@ -451,8 +493,19 @@ export default function SupplierDashboard() {
     };
 
     // Combined "All Listings" — edit jumps to the right tab+grid, delete hits the API.
+    // For toners specifically we route to the individual editor by default so
+    // dealers can add photos etc. (the bulk grid can't do inline image upload).
+    // The Toners grid also exposes a "Edit in bulk" affordance for the bulk grid path.
     const editProduct = (p) => {
-        if (p.kind === "toner") { setCatalog("toners"); openEditBulk(); return; }
+        if (p.kind === "toner") {
+            setCatalog("toners");
+            // Prefer the already-fetched full listing from `listings` (has all
+            // fields incl. variants + image_urls). Only if not found (rare —
+            // e.g. right after add) do we fall back to the trimmed row.
+            const full = listings.find((x) => x.id === p.id);
+            openEditToner(full || p);
+            return;
+        }
         const tabKey = { printer: "printers", paper: "papers", consumable: "consumables", scanner: "scanners" }[p.kind];
         const evt = { printer: "tc-open-edit-printer", paper: "tc-open-edit-paper", consumable: "tc-open-edit-consumable", scanner: "tc-open-edit-scanner" }[p.kind];
         setCatalog(tabKey);
@@ -1154,9 +1207,40 @@ export default function SupplierDashboard() {
                                         <InlineStock stock={l.stock} onSave={(v) => patchStock(l.id, v)} testId={`stock-edit-${l.id}`} />
                                     </div>
                                     <div className="mt-1 flex items-center gap-2 text-[11px]" onClick={(e) => e.stopPropagation()}>
-                                        <button onClick={openEditBulk} className="text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`edit-${l.id}`}>
-                                            <Pencil size={10} /> Edit
-                                        </button>
+                                        {/* Wave 105.2 — two-choice edit popover. Default is
+                                          * "Edit this listing" (individual dialog, supports
+                                          * photo upload). The bulk-grid path is preserved as
+                                          * a secondary option for dealers who prefer editing
+                                          * many rows at once. Compact, clean, spacious inside. */}
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <button className="text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`edit-${l.id}`}>
+                                                    <Pencil size={10} /> Edit
+                                                </button>
+                                            </PopoverTrigger>
+                                            <PopoverContent align="start" className="w-64 p-2">
+                                                <button
+                                                    onClick={() => openEditToner(l)}
+                                                    className="w-full flex items-start gap-3 px-3 py-2.5 rounded-md hover:bg-[#F5F5F7] text-left"
+                                                    data-testid={`edit-single-${l.id}`}>
+                                                    <Pencil size={14} className="mt-0.5 text-[#0A0A0B]" />
+                                                    <div className="min-w-0">
+                                                        <div className="text-[13px] font-semibold text-[#0A0A0B]">Edit this listing</div>
+                                                        <div className="text-[11px] text-[#6E6E73] mt-0.5">Add photos, tweak specs, change price</div>
+                                                    </div>
+                                                </button>
+                                                <button
+                                                    onClick={openEditBulk}
+                                                    className="w-full flex items-start gap-3 px-3 py-2.5 rounded-md hover:bg-[#F5F5F7] text-left mt-1"
+                                                    data-testid={`edit-bulk-${l.id}`}>
+                                                    <Layers size={14} className="mt-0.5 text-[#0A0A0B]" />
+                                                    <div className="min-w-0">
+                                                        <div className="text-[13px] font-semibold text-[#0A0A0B]">Edit in bulk grid</div>
+                                                        <div className="text-[11px] text-[#6E6E73] mt-0.5">Update many rows at once</div>
+                                                    </div>
+                                                </button>
+                                            </PopoverContent>
+                                        </Popover>
                                         <button onClick={() => duplicateListing(l.id)} className="text-[#0A0A0B] hover:text-[#00B7C7] inline-flex items-center gap-1" data-testid={`duplicate-${l.id}`}>
                                             <Copy size={10} /> Dup
                                         </button>
