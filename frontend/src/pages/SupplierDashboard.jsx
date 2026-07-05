@@ -452,7 +452,12 @@ export default function SupplierDashboard() {
         setIntercityCharge(l.intercity_delivery_charge != null ? String(l.intercity_delivery_charge) : "100");
         setIntracityCharge(l.intracity_delivery_charge != null ? String(l.intracity_delivery_charge) : "0");
         setGstRate(l.gst_rate ?? 18);
-        setPriceType(l.price_includes_gst === true ? "inclusive" : l.price_includes_gst === false ? "exclusive" : null);
+        // Wave 105.3 — bulk upload stores prices as GST-exclusive (base) with
+        // no toggle asked. When editing an already-saved listing, default to
+        // "excl" so the dealer isn't nagged to re-answer a question they never
+        // saw during bulk upload. They can still switch to "incl" if desired.
+        setPriceType("excl");
+        setPriceTypeError(false);
         // Variants: rehydrate from stored JSON or fall back to a single row.
         const vs = Array.isArray(l.variants) && l.variants.length
             ? l.variants.map((v) => ({ color: v.color || "Black", price: v.price != null ? String(v.price) : "", stock: v.stock != null ? String(v.stock) : "" }))
@@ -700,7 +705,12 @@ export default function SupplierDashboard() {
                     toast.error(`Image upload failed: ${formatApiError(e)}`);
                 }
             }
-            const finalImageUrls = [...(existingImages || []), ...uploadedUrls];
+            // Wave 105.3 — newly-uploaded images go FIRST so the freshly-added
+            // photo becomes the card's primary display image (image_url = [0]).
+            // Otherwise a bulk-uploaded listing with a placeholder image_url
+            // would keep showing the placeholder even after the dealer adds
+            // a real product photo.
+            const finalImageUrls = [...uploadedUrls, ...(existingImages || [])];
 
             // Top-level price/stock derived from cheapest variant for backward compatibility
             const cheapest = cleanedVariants.reduce((a, b) => (a.price <= b.price ? a : b));
@@ -1601,6 +1611,19 @@ export default function SupplierDashboard() {
                         <div className="mt-4">
                             <Label>Product images <span className="text-[#86868B] font-normal">(optional, up to 3 — 5&nbsp;MB each)</span></Label>
                             <div className="flex flex-wrap items-center gap-3 mt-1" data-testid="toner-images">
+                                {/* Wave 105.3 — existing image thumbs (only shown in edit mode).
+                                  * Dealer sees what's already stored on the listing and can
+                                  * remove any before saving. Without this the edit form looked
+                                  * empty and dealers couldn't tell if their new photo replaced
+                                  * or added to the existing ones. */}
+                                {existingImages.map((src, i) => (
+                                    <div key={`existing-${i}`} className="relative w-20 h-20 rounded-lg overflow-hidden border border-[#E5E5EA]" data-testid={`toner-existing-image-${i}`}>
+                                        <img src={src} alt={`existing ${i + 1}`} className="w-full h-full object-cover" />
+                                        <button type="button" onClick={() => setExistingImages(existingImages.filter((_, ii) => ii !== i))} className="absolute top-0.5 right-0.5 w-5 h-5 grid place-items-center rounded-full bg-black/60 text-white" aria-label="Remove image" data-testid={`toner-existing-image-remove-${i}`}>
+                                            <XIcon size={11} />
+                                        </button>
+                                    </div>
+                                ))}
                                 {imagePreviews.map((src, i) => (
                                     <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-[#E5E5EA]">
                                         <img src={src} alt={`preview ${i + 1}`} className="w-full h-full object-cover" />
@@ -1609,7 +1632,7 @@ export default function SupplierDashboard() {
                                         </button>
                                     </div>
                                 ))}
-                                {imageFiles.filter(Boolean).length < 3 && (
+                                {(existingImages.length + imageFiles.filter(Boolean).length) < 3 && (
                                     <label className="w-20 h-20 rounded-lg border-2 border-dashed border-[#00B7C7]/50 grid place-items-center cursor-pointer hover:border-[#00B7C7] text-[#00B7C7]" data-testid="toner-image-add">
                                         <ImageIcon size={20} />
                                         <input type="file" accept="image/*" multiple onChange={onPickFile} className="hidden" />
