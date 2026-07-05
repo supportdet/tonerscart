@@ -1816,7 +1816,8 @@ def compatible_resolve(q: str = Query(..., min_length=1, max_length=200)):
         ("consumable_listings", ["model_number"],                    lambda r: f"/consumable/{r['id']}", "consumable"),
         ("printer_listings",    ["model_number"],                    lambda r: f"/printer/{r['id']}",    "printer"),
         ("scanner_listings",    ["model_number"],                    lambda r: f"/scanner/{r['id']}",    "scanner"),
-        ("paper_listings",      ["model_number"],                    lambda r: f"/paper/{r['id']}",      "paper"),
+        # NOTE: paper_listings has no model_number column (papers aren't
+        # referenced by printer compatibility chips) — intentionally omitted.
     ]
 
     for table, cols, url_fn, kind in _TABLE_CONFIG:
@@ -1841,6 +1842,33 @@ def compatible_resolve(q: str = Query(..., min_length=1, max_length=200)):
             exact_matches.sort(key=lambda r: (-(int(r.get("stock") or 0)), float(r.get("price") or 1e12)))
             best = exact_matches[0]
             return {"tier": 1, "kind": kind, "url": url_fn(best), "listing": best}
+
+    # Wave 105.1 — Tier 2 substring pass. Handles the very common case where
+    # DB rows carry descriptive names ("CARTRIDGE CANON 925") but the printer's
+    # compatible chip is the bare model ("Canon 925" / "925"). We only accept
+    # this softer match when the query is at least 4 chars normalized so we
+    # don't cross-link on short/common tokens.
+    if len(query_norm) >= 4:
+        for table, cols, url_fn, kind in _TABLE_CONFIG:
+            try:
+                or_parts = ",".join([f"{c}.ilike.{prefilter}" for c in cols])
+                select_cols = "id,brand," + ",".join(cols) + ",stock,price" if table == "listings" else "id,brand," + ",".join(cols)
+                rows = sb_admin.table(table).select(select_cols).or_(or_parts).limit(500).execute().data or []
+            except Exception:
+                rows = []
+            contains_matches = []
+            for r in rows:
+                for c in cols:
+                    dbn = _norm(r.get(c))
+                    if not dbn:
+                        continue
+                    if query_norm in dbn or dbn in query_norm:
+                        contains_matches.append(r)
+                        break
+            if contains_matches:
+                contains_matches.sort(key=lambda r: (-(int(r.get("stock") or 0)), float(r.get("price") or 1e12)))
+                best = contains_matches[0]
+                return {"tier": 2, "kind": kind, "url": url_fn(best), "listing": best}
 
     # Tier 3 — genuine miss across all tables; hand off to universal search
     return {"tier": 3, "kind": "search", "url": f"/search?q={quote(q)}", "listing": None}

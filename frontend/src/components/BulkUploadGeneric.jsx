@@ -251,10 +251,10 @@ const CONNECTIVITY_VALUES = {
 // canonical so an Excel cell like "1200x1200 DPI" / "Air Print" /
 // "wifi direct" / "Print + Scan + Copy" attaches correctly.
 const RESOLUTION_VALUES = {
-    "203x203": "203x203", "203x203dpi": "203x203",
-    "300x300": "300x300", "300x300dpi": "300x300", "300dpi": "300x300",
-    "600x600": "600x600", "600x600dpi": "600x600", "600dpi": "600x600",
-    "1200x1200": "1200x1200", "1200x1200dpi": "1200x1200", "1200dpi": "1200x1200",
+    "203x203": "203x203", "203x203dpi": "203x203", "203dpi": "203x203", "203": "203x203",
+    "300x300": "300x300", "300x300dpi": "300x300", "300dpi": "300x300", "300": "300x300",
+    "600x600": "600x600", "600x600dpi": "600x600", "600dpi": "600x600", "600": "600x600",
+    "1200x1200": "1200x1200", "1200x1200dpi": "1200x1200", "1200dpi": "1200x1200", "1200": "1200x1200",
     "1440x720": "1440x720", "1440x720dpi": "1440x720",
     "2400x600": "2400x600", "2400x600dpi": "2400x600",
     "2400x1200": "2400x1200", "2400x1200dpi": "2400x1200",
@@ -456,10 +456,13 @@ const _coerceCell = (key, value) => {
             return snapped != null ? String(snapped) : "";
         }
         case "max_resolution": {
-            // Wave 103 — canonicalise each token so "1200x1200 DPI",
-            // "1200 x 1200", "600dpi" etc. all map to the dropdown's
-            // canonical value (e.g. "1200x1200"). Unknown tokens pass
-            // through so the dealer sees them in the chip and can correct.
+            // Wave 105.1 — normalise every token so all common Excel variants
+            // ("1200", "1200 x 1200 DPI", "1200x1200 DPI", "600 DPI", "600dpi")
+            // map to the dropdown's canonical value ("1200x1200", "600x600").
+            // The lookup table above handles the string-level canonicals; here
+            // we also expand bare "1200" → "1200x1200" via RESOLUTION_VALUES so
+            // Brother-style specs (which give a single number) auto-select the
+            // right chip after bulk upload just like connectivity / paper size.
             const parts = _splitMulti(raw).map((p) => _mapValue(p, RESOLUTION_VALUES) || p.trim());
             return Array.from(new Set(parts)).filter(Boolean).join(", ");
         }
@@ -660,7 +663,7 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
     const [rows, setRows] = useState(() =>
         (initialRows && initialRows.length)
             ? [...initialRows, config.emptyRow()]
-            : Array.from({ length: 10 }, config.emptyRow)
+            : Array.from({ length: 5 }, config.emptyRow)
     );
     // Wave 61 — single top-of-modal Incl/Excl GST toggle. Applies to every row.
     // Per-row `price_type` column was removed from each config; we copy this
@@ -820,7 +823,7 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
             }).filter((r) => !config.isRowEmpty(r));
             if (dataRows.length === 0) { toast.error("No data rows detected after parsing"); return; }
             const padded = [...dataRows];
-            while (padded.length < 10) padded.push(config.emptyRow());
+            while (padded.length < 5) padded.push(config.emptyRow());
             padded.push(config.emptyRow());
             setRows(padded);
             // Auto-show error highlighting if required columns are missing
