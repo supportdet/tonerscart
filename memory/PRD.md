@@ -1,7 +1,26 @@
 # TonersCart — Product Requirements (Supabase edition)
 
 
-> **Latest (2026-02 — Wave 105 Security Hardening D — COMPLETE):** Supabase storage audit + dealer isolation on document paths + env-var leak audit. **All 4 security-hardening waves (A/B/C/D) now shipped. 51/51 pytest green.**
+> **Latest (2026-02 — Wave 105.1 UX polish):** three targeted fixes on top of the security-hardening work.
+>
+> ### What shipped
+> 1. **Bulk-upload max_resolution auto-select** — `BulkUploadGeneric.jsx` `RESOLUTION_VALUES` now maps bare numbers `"203"` / `"300"` / `"600"` / `"1200"` → the canonical `"203x203"` / `"300x300"` / `"600x600"` / `"1200x1200"` dropdown IDs. The existing normalisation (strip DPI text, remove spaces around `x`) already handled `"1200 x 1200 DPI"` / `"600dpi"` — the gap was single-number Brother-style specs. Unit-tested 10/10 cases pass including `"9999"` unknown-passthrough.
+> 2. **Compatible-toner chips — Tier 2 substring resolver** — `/api/compatible-resolve` gained a new tier between exact-normalize (tier 1) and search fallback (tier 3). If normalized query is a substring of DB normalized model (or vice-versa) AND query is ≥ 4 chars normalized, resolve to that listing. Now `"Canon 925"` chip on a printer resolves to the `CARTRIDGE CANON 925` toner listing (tier 2) instead of falling through to search. Also removed `paper_listings` from the table config — that table has no `model_number` column so every request was silently swallowing a 42703 error.
+>    - Live-tested via Playwright on `/printer/54bbdf3d-...`: clicking the `TN-B028` chip navigates to `/search?q=TN-B028` with the "Couldn't find your toner? Request this toner" empty state. **HTTP 200, zero 404 signals anywhere on the page.** `BTD60BK` resolves to its consumable page (tier 1). `Canon 925` resolves to its toner page (tier 2).
+> 3. **Bulk upload default rows** — every bulk upload table now opens with **exactly 5 empty rows** (was 10). Applied in `BulkUploadGeneric.jsx` (line 663 initial state + line 823 post-parse padding). Since all product types (printers, toners, consumables, papers, scanners) share this component, the fix lands everywhere in one change.
+>
+> ### Files modified
+> - `frontend/src/components/BulkUploadGeneric.jsx` — RESOLUTION_VALUES + 2× row count
+> - `backend/routes/products.py` — new tier-2 substring pass in `compatible_resolve`; dropped `paper_listings` from the search config
+>
+> ### Verification
+> - Resolution mapping unit test (10 cases): 10/10 pass
+> - Compatible-resolve curl: BTD60BK (tier 1), Canon 925 (tier 2 — new), TN-2365 (tier 3 search fallback)
+> - Playwright live click on printer detail page: chip navigates to /search, HTTP 200, no 404 markers in page body
+> - Wave 105 regression pytest: 51/51 pass
+
+
+> **Prev (2026-02 — Wave 105 Security Hardening D — COMPLETE):** Supabase storage audit + dealer isolation on document paths + env-var leak audit. **All 4 security-hardening waves (A/B/C/D) now shipped. 51/51 pytest green.**
 >
 > ### What shipped
 > - **Supabase bucket privacy verified** — programmatic audit of Supabase buckets:
