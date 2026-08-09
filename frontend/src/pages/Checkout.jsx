@@ -152,6 +152,82 @@ export default function Checkout() {
         } finally { setLoading(false); }
     };
 
+    // Wave 105.4 — Razorpay Standard Checkout. Loads the checkout.js script
+    // once, creates a Razorpay order server-side, opens the modal, and on
+    // success verifies the signature on our backend BEFORE creating the
+    // marketplace order rows via the existing placeOrder() path.
+    const loadRazorpayScript = () => new Promise((resolve) => {
+        if (window.Razorpay) return resolve(true);
+        const s = document.createElement("script");
+        s.src = "https://checkout.razorpay.com/v1/checkout.js";
+        s.onload = () => resolve(true);
+        s.onerror = () => resolve(false);
+        document.body.appendChild(s);
+    });
+
+    const payWithRazorpay = async () => {
+        if (!policyAgreed) { toast.error("Please accept TonersCart's terms to continue"); return; }
+        if (!validateStep1()) return;
+        setLoading(true);
+        try {
+            await ensureAuth();
+            const ok = await loadRazorpayScript();
+            if (!ok) { toast.error("Payment gateway couldn't load. Check your connection and retry."); return; }
+
+            // Create Razorpay order on our backend (grandTotal ₹ → paise)
+            const amountPaise = Math.round(grandTotal * 100);
+            const receipt = `tc_${Date.now().toString(36)}`.slice(0, 40);
+            const { data: rpOrder } = await api.post("/payments/create-order", {
+                amount: amountPaise, currency: "INR", receipt,
+            });
+
+            const rzp = new window.Razorpay({
+                key: rpOrder.key_id || process.env.REACT_APP_RAZORPAY_KEY_ID,
+                amount: rpOrder.amount,
+                currency: rpOrder.currency,
+                order_id: rpOrder.order_id,
+                name: "TonersCart",
+                description: `${items.length} item${items.length > 1 ? "s" : ""} · order`,
+                prefill: {
+                    name: name || (user?.name || ""),
+                    email: authEmail || (user?.email || ""),
+                    contact: `+91${phone}`,
+                },
+                theme: { color: "#00B7C7" },
+                modal: {
+                    ondismiss: () => {
+                        setLoading(false);
+                        toast.info("Payment cancelled. Your cart is safe.");
+                    },
+                },
+                handler: async (resp) => {
+                    try {
+                        // Server-side signature verify (never trust the browser here)
+                        await api.post("/payments/verify-payment", {
+                            razorpay_order_id: resp.razorpay_order_id,
+                            razorpay_payment_id: resp.razorpay_payment_id,
+                            razorpay_signature: resp.razorpay_signature,
+                        });
+                        // Signature good — now create the marketplace order rows.
+                        await placeOrder();
+                    } catch (err) {
+                        toast.error(`Payment recorded but order creation failed: ${formatApiError(err)}. Please contact support with payment ID ${resp.razorpay_payment_id}.`);
+                        setLoading(false);
+                    }
+                },
+            });
+            rzp.on("payment.failed", (resp) => {
+                setLoading(false);
+                const reason = resp?.error?.description || "Payment failed";
+                toast.error(`${reason}. You can retry.`);
+            });
+            rzp.open();
+        } catch (err) {
+            toast.error(formatApiError(err));
+            setLoading(false);
+        }
+    };
+
     const proceedToSummary = (e) => {
         e.preventDefault();
         if (validateStep1()) setStep(2);
@@ -180,8 +256,8 @@ export default function Checkout() {
                 </h1>
                 <p className="text-white/65 mt-3 max-w-lg text-[14px]">
                     {step === 1
-                        ? "Suppliers receive your request and confirm pricing and delivery directly with you. No payment is taken online."
-                        : "Verify your items, delivery and total. You can place the order request now — online payments coming soon."}
+                        ? "Confirm your delivery details. On the next step you can pay online (UPI / cards / netbanking via Razorpay) or send an offline order request."
+                        : "Verify your items, delivery and total. Pay online for instant confirmation, or send a request to the supplier."}
                 </p>
 
                 <div className="grid lg:grid-cols-12 gap-6 mt-8 text-[#0A0A0B] min-w-0">
@@ -334,27 +410,26 @@ export default function Checkout() {
 
                                 <button
                                     type="button"
-                                    disabled
-                                    title="Online payments coming soon — your order will be confirmed as a request"
-                                    className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-[#F5C400]/40 text-[#0A0A0B]/60 font-semibold text-[14px] cursor-not-allowed border border-[#F5C400]/30"
+                                    onClick={payWithRazorpay}
+                                    disabled={loading}
+                                    className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-[#F5C400] hover:bg-[#F5C400]/90 text-[#0A0A0B] font-semibold text-[14px] border border-[#F5C400] disabled:opacity-60 disabled:cursor-not-allowed transition"
                                     data-testid="proceed-to-payment-btn"
                                 >
-                                    <Lock size={14} /> Proceed to Payment (coming soon)
+                                    <Lock size={14} /> {loading ? "Opening payment…" : `Pay Now ₹${grandTotal.toLocaleString("en-IN")}`}
                                 </button>
-                                <div className="text-[11.5px] text-[#6E6E73] text-center">Currently accepting order requests. Payment collected directly by supplier.</div>
+                                <div className="text-[11.5px] text-[#6E6E73] text-center">Secure payment via Razorpay · UPI, cards, netbanking</div>
                                 <Button
                                     type="button"
                                     onClick={placeOrder}
-                                    disabled
-                                    aria-disabled="true"
-                                    title="Orders will be enabled soon — we're onboarding more sellers to serve you better."
-                                    className="btn-cta w-full inline-flex items-center justify-center gap-2 opacity-60 cursor-not-allowed"
+                                    disabled={loading}
+                                    title="Send an offline order request — supplier will contact you to arrange payment"
+                                    className="btn-cta w-full inline-flex items-center justify-center gap-2"
                                     data-testid="place-order-request-btn"
                                 >
-                                    {`Place Order — ₹${grandTotal.toLocaleString("en-IN")}`}
+                                    {loading ? "Placing…" : `Send Order Request — ₹${grandTotal.toLocaleString("en-IN")}`}
                                 </Button>
                                 <div className="text-[11.5px] text-[#6E6E73] text-center mt-1.5" data-testid="place-order-disabled-hint">
-                                    Orders will be enabled soon — we&apos;re onboarding more sellers to serve you better.
+                                    Prefer to pay offline? Send a request and the supplier will contact you directly.
                                 </div>
                             </div>
                         </div>

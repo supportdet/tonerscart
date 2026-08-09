@@ -1,7 +1,28 @@
 # TonersCart — Product Requirements (Supabase edition)
 
 
-> **Latest (2026-02 — Wave 105.1 UX polish):** three targeted fixes on top of the security-hardening work.
+> **Latest (2026-02 — Wave 105.4 Razorpay Standard Checkout LIVE + Supabase key rotation recovered):**
+>
+> ### Razorpay integration shipped
+> - **`backend/routes/payments.py`** (new file, 150 lines) — two endpoints:
+>   - `POST /api/payments/create-order` — validates amount ≥ 100 paise, currency = INR, calls Razorpay orders API server-side (KEY_SECRET never touches browser), returns `{order_id, amount, currency, key_id}`. Auto-trims receipt to Razorpay's 40-char cap. Rate-limited 30/min per IP.
+>   - `POST /api/payments/verify-payment` — HMAC-SHA256 signature verify using `hmac.compare_digest()` (constant-time, guards against timing attacks). Returns 400 on mismatch or missing fields, 200 `{ok:true, verified:true}` on success.
+> - **`frontend/src/pages/Checkout.jsx`** — new `payWithRazorpay()` handler: lazy-loads `checkout.js` from Razorpay CDN, calls create-order, opens the Razorpay modal with prefill data, verifies signature server-side on success, THEN calls existing `placeOrder()` to insert DB order rows. `payment.failed` and modal-dismiss handlers both wired. Old disabled "Proceed to Payment (coming soon)" replaced with active `Pay Now ₹X` button. Old "Place Order" now shown as secondary "Send Order Request" for offline preference.
+> - **SDK**: `razorpay==2.0.1` in `requirements.txt`. Env vars in `backend/.env` (`RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`) + `frontend/.env` (`REACT_APP_RAZORPAY_KEY_ID` — PUBLIC key only). All `.env` gitignored.
+>
+> ### Verification — testing_agent report iteration_78
+> **18/18 backend tests passed** in `tests/test_wave105_razorpay_regression.py`:
+>   - Happy-path create-order, min-amount 400, non-INR 400, long-receipt trimmed
+>   - Valid HMAC signature verified, bad signature 400, missing-field cases 400
+>   - KEY_SECRET leakage grep on GET / and /static/js/*.js — zero hits
+>   - Rate limit 30/min confirmed firing 429 under burst
+>   - Supabase key rotation regression: admin login + role=admin, /api/printers, /api/compatible-resolve?q=BTD60BK tier=1, /api/auth/logout — all healthy
+>
+> ### Supabase key rotation note
+> The `sb_secret_` service key that was in place at session start became invalid mid-session ("Unregistered API key" 401 on all DB calls). User rotated to a fresh **JWT-format** service key (`eyJ...`) — now in `backend/.env`. All backend flows recovered. Root cause: unknown Supabase-side rotation — likely their own key-format migration.
+
+
+> **Prev (2026-02 — Wave 105.1 UX polish):** three targeted fixes on top of the security-hardening work.
 >
 > ### What shipped
 > 1. **Bulk-upload max_resolution auto-select** — `BulkUploadGeneric.jsx` `RESOLUTION_VALUES` now maps bare numbers `"203"` / `"300"` / `"600"` / `"1200"` → the canonical `"203x203"` / `"300x300"` / `"600x600"` / `"1200x1200"` dropdown IDs. The existing normalisation (strip DPI text, remove spaces around `x`) already handled `"1200 x 1200 DPI"` / `"600dpi"` — the gap was single-number Brother-style specs. Unit-tested 10/10 cases pass including `"9999"` unknown-passthrough.

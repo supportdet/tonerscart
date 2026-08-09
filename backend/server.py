@@ -2069,6 +2069,8 @@ from routes.suppliers import router as suppliers_router  # noqa: E402
 app.include_router(suppliers_router)
 from routes.compat import router as compat_router  # noqa: E402
 app.include_router(compat_router)
+from routes.payments import router as payments_router  # noqa: E402  Wave 105.4
+app.include_router(payments_router)
 
 # Procurement module (Govt & Corporate) — self-contained, separate from the
 # regular Supabase-Auth customer/dealer/admin flow.

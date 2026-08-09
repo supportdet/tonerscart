@@ -1,0 +1,34 @@
+{
+  "summary": "Wave 105.4 Razorpay Standard Checkout integration + Supabase key rotation regression fully validated. Created /app/backend/tests/test_wave105_razorpay_regression.py with 18 tests covering create-order (happy path, min-amount 400, non-INR 400, receipt >40 chars trimmed & accepted), verify-payment (valid HMAC-SHA256 signature returns {ok:true, verified:true}, bad signature 400, empty order_id/payment_id/signature all 400), KEY_SECRET leakage checks against GET / and /static/js/*.js bundles (zero hits), rate limit 30/min triggering 429 within a rapid burst, and all four regression endpoints after Supabase service key rotation (admin login + /api/auth/me returning role=admin, /api/printers?limit=3 public feed, /api/compatible-resolve?q=BTD60BK returning tier=1 with /consumable/ url, /api/auth/logout with & without token both 200). Result: 18/18 passed in 11.36s.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave105_razorpay_regression.py",
+    "/app/test_reports/pytest/wave105_razorpay_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/payments.py cleanly uses constant-time HMAC compare (hmac.compare_digest) — good.",
+    "KEY_SECRET is read from env and only KEY_ID (public) is ever returned in responses — verified no leak in HTML or JS bundles.",
+    "Endpoints are correctly rate-limited with slowapi @limiter.limit('30/minute'); confirmed 429 fires under burst.",
+    "Receipt >40 chars silently trimmed rather than 400ing — good UX choice, matches Razorpay's 40-char cap.",
+    "Both payment endpoints are unauthenticated by design (guest checkout supported); signature verification is the trust boundary — this is acceptable and documented.",
+    "No _id serialization or async issues observed in this router."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_wave105_razorpay_regression.py (new)"
+  ],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "N/A (backend-only request)"},
+  "test_credentials": "admin: support@tonerscart.com / Bangara1@# (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None — only Razorpay TEST mode orders created via test key rzp_test_TNmhleNQpa6wN4 (no DB writes).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Wave 105.4 Razorpay integration verified end-to-end at the API layer. Frontend Checkout.jsx payWithRazorpay() UI flow was NOT tested (backend-only scope) — if user reports checkout UI issue, use Playwright with data-testid='proceed-to-payment-btn'. Supabase service key rotation confirmed non-breaking: admin login, /api/auth/me, printers feed, compatible-resolve, and logout all healthy."
+}

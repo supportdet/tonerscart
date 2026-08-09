@@ -108,6 +108,7 @@ python-multipart==0.0.24
 pytokens==0.4.1
 PyYAML==6.0.3
 qrcode==8.2
+razorpay==2.0.1
 realtime==2.29.0
 referencing==0.37.0
 regex==2026.4.4
