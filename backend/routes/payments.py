@@ -32,22 +32,45 @@ logger = logging.getLogger("payments")
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
-_KEY_ID = os.environ.get("RAZORPAY_KEY_ID")
-_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET")
+# Wave 105.4-fix — Read env vars lazily at request time, not at import time.
+# On some hosts (Railway seen in prod) the Python process starts before env
+# vars are injected, so an import-time initialisation captures _KEY_ID=None
+# and never recovers even after the vars appear. `_get_client()` re-reads
+# os.environ on every call and caches a client only once the vars are
+# actually present.
+_client_cache: Optional[razorpay.Client] = None
+_cached_key_id: Optional[str] = None
 
-# Client is initialised at import time. If the keys are missing, requests will
-# raise 500 with a clear message rather than crashing the whole app.
-_client: Optional[razorpay.Client] = None
-if _KEY_ID and _KEY_SECRET:
-    _client = razorpay.Client(auth=(_KEY_ID, _KEY_SECRET))
-else:
-    logger.warning("RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET missing — payment endpoints will 503")
+
+def _get_client() -> Optional[razorpay.Client]:
+    """Return an initialised Razorpay client, or None if env vars still absent.
+    Reads os.environ at CALL time so late-injected env vars are picked up."""
+    global _client_cache, _cached_key_id
+    kid = os.environ.get("RAZORPAY_KEY_ID")
+    ksecret = os.environ.get("RAZORPAY_KEY_SECRET")
+    if not (kid and ksecret):
+        return None
+    # If keys rotated at runtime, rebuild the client
+    if _client_cache is None or _cached_key_id != kid:
+        _client_cache = razorpay.Client(auth=(kid, ksecret))
+        _cached_key_id = kid
+        logger.info("razorpay client initialised (key_id=%s...)", kid[:12])
+    return _client_cache
 
 
 def _require_client() -> razorpay.Client:
-    if not _client:
+    client = _get_client()
+    if not client:
         raise HTTPException(503, "Payment gateway not configured on server")
-    return _client
+    return client
+
+
+def _key_id() -> str:
+    return os.environ.get("RAZORPAY_KEY_ID") or ""
+
+
+def _key_secret() -> str:
+    return os.environ.get("RAZORPAY_KEY_SECRET") or ""
 
 
 def _optional_user(request: Request) -> Optional[dict]:
@@ -93,6 +116,27 @@ class VerifyPaymentRequest(BaseModel):
 # Endpoints
 # ============================================================================
 
+@router.get("/config-check")
+def config_check():
+    """Wave 105.4-fix — lightweight prod diagnostic. Returns whether the
+    Razorpay env vars are visible to the process AT THIS MOMENT (not just
+    at import time). Never returns the secret itself — only booleans and
+    a redacted key prefix. Safe to leave enabled in prod.
+
+    Curl this in Railway to confirm env vars propagated after a redeploy:
+        curl https://<your-backend>.railway.app/api/payments/config-check
+    """
+    kid = os.environ.get("RAZORPAY_KEY_ID") or ""
+    ksecret = os.environ.get("RAZORPAY_KEY_SECRET") or ""
+    return {
+        "key_id_present": bool(kid),
+        "key_id_prefix": kid[:12] + "…" if kid else None,
+        "key_secret_present": bool(ksecret),
+        "key_secret_len": len(ksecret) if ksecret else 0,
+        "client_initialised": _get_client() is not None,
+    }
+
+
 @router.post("/create-order", response_model=CreateOrderResponse)
 @limiter.limit("30/minute")
 def create_order(request: Request, payload: CreateOrderRequest):
@@ -129,7 +173,7 @@ def create_order(request: Request, payload: CreateOrderRequest):
         order_id=order["id"],
         amount=order["amount"],
         currency=order["currency"],
-        key_id=_KEY_ID or "",
+        key_id=_key_id(),
     )
 
 
@@ -145,11 +189,14 @@ def verify_payment(request: Request, payload: VerifyPaymentRequest):
     """
     if not (payload.razorpay_order_id and payload.razorpay_payment_id and payload.razorpay_signature):
         raise HTTPException(400, "Missing payment identifiers")
-    if not _KEY_SECRET:
+    # Wave 105.4-fix — read env at request time so late-injected Railway
+    # vars are picked up even if the process started before them.
+    key_secret = _key_secret()
+    if not key_secret:
         raise HTTPException(503, "Payment gateway not configured on server")
 
     body = f"{payload.razorpay_order_id}|{payload.razorpay_payment_id}".encode()
-    expected = hmac.new(_KEY_SECRET.encode(), body, hashlib.sha256).hexdigest()
+    expected = hmac.new(key_secret.encode(), body, hashlib.sha256).hexdigest()
 
     if not hmac.compare_digest(expected, payload.razorpay_signature):
         logger.warning("payment signature mismatch order=%s payment=%s",
