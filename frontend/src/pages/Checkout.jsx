@@ -10,7 +10,7 @@ import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import { INDIAN_STATES } from "../lib/listingConstants";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
-import { CheckCircle2, ShoppingBag, Lock, ArrowRight, ChevronLeft } from "lucide-react";
+import { CheckCircle2, ShoppingBag, Lock, ArrowRight, ChevronLeft, ShieldCheck } from "lucide-react";
 import PhonePrefixInput from "../components/PhonePrefixInput";
 import { computeCartDelivery } from "../lib/delivery";
 import { inclGstPrice } from "../lib/listingConstants";
@@ -412,24 +412,43 @@ export default function Checkout() {
                                     type="button"
                                     onClick={payWithRazorpay}
                                     disabled={loading}
-                                    className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-[#F5C400] hover:bg-[#F5C400]/90 text-[#0A0A0B] font-semibold text-[14px] border border-[#F5C400] disabled:opacity-60 disabled:cursor-not-allowed transition"
+                                    className="group w-full inline-flex items-center justify-center gap-2.5 py-3.5 rounded-xl bg-[#F5C400] hover:bg-[#e6b800] text-[#0A0A0B] font-semibold text-[15px] border border-[#F5C400] shadow-[0_2px_10px_rgba(245,196,0,0.35)] hover:shadow-[0_4px_14px_rgba(245,196,0,0.45)] disabled:opacity-60 disabled:cursor-not-allowed transition-all"
                                     data-testid="proceed-to-payment-btn"
                                 >
-                                    <Lock size={14} /> {loading ? "Opening payment…" : `Pay Now ₹${grandTotal.toLocaleString("en-IN")}`}
+                                    <ShieldCheck size={17} strokeWidth={2.3} className="shrink-0" />
+                                    <span>{loading ? "Opening payment…" : `Pay Securely  ·  ₹${grandTotal.toLocaleString("en-IN")}`}</span>
+                                    {!loading && <ArrowRight size={15} className="shrink-0 transition-transform group-hover:translate-x-0.5" />}
                                 </button>
-                                <div className="text-[11.5px] text-[#6E6E73] text-center">Secure payment via Razorpay · UPI, cards, netbanking</div>
+                                {/* Trust row — payment methods + secure badge, replaces the previous plain grey caption */}
+                                <div className="flex items-center justify-center gap-3 pt-1.5 pb-0.5" data-testid="payment-trust-row">
+                                    <span className="inline-flex items-center gap-1.5 text-[11px] text-[#0A0A0B]/70 font-medium">
+                                        <Lock size={11} strokeWidth={2.5} /> 256-bit secure
+                                    </span>
+                                    <span className="w-px h-3 bg-[#D2D2D7]" aria-hidden="true" />
+                                    <span className="text-[11px] text-[#6E6E73]">UPI · Cards · Netbanking · Wallets</span>
+                                </div>
+                                <div className="text-[10.5px] text-[#86868B] text-center">Payments processed by Razorpay · India's most trusted payment gateway</div>
+
+                                {/* Divider — "or" between primary (pay) and secondary (offline request) */}
+                                <div className="flex items-center gap-3 py-2" aria-hidden="true">
+                                    <span className="flex-1 h-px bg-[#E8E8EC]" />
+                                    <span className="text-[10.5px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">or</span>
+                                    <span className="flex-1 h-px bg-[#E8E8EC]" />
+                                </div>
+
                                 <Button
                                     type="button"
                                     onClick={placeOrder}
                                     disabled={loading}
+                                    variant="outline"
                                     title="Send an offline order request — supplier will contact you to arrange payment"
-                                    className="btn-cta w-full inline-flex items-center justify-center gap-2"
+                                    className="w-full inline-flex items-center justify-center gap-2 h-11 bg-white border border-[#D2D2D7] hover:bg-[#F5F5F7] text-[#0A0A0B] font-medium text-[13.5px] rounded-xl"
                                     data-testid="place-order-request-btn"
                                 >
-                                    {loading ? "Placing…" : `Send Order Request — ₹${grandTotal.toLocaleString("en-IN")}`}
+                                    {loading ? "Placing…" : `Send Order Request instead`}
                                 </Button>
-                                <div className="text-[11.5px] text-[#6E6E73] text-center mt-1.5" data-testid="place-order-disabled-hint">
-                                    Prefer to pay offline? Send a request and the supplier will contact you directly.
+                                <div className="text-[11px] text-[#86868B] text-center" data-testid="place-order-disabled-hint">
+                                    Prefer to pay the supplier directly? We&apos;ll notify them and they&apos;ll reach out.
                                 </div>
                             </div>
                         </div>
