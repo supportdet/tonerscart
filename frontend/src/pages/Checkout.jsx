@@ -10,7 +10,7 @@ import { useCity, KNOWN_CITIES } from "../context/CityContext";
 import { INDIAN_STATES } from "../lib/listingConstants";
 import api, { formatApiError } from "../lib/api";
 import { toast } from "sonner";
-import { CheckCircle2, ShoppingBag, Lock, ArrowRight, ChevronLeft } from "lucide-react";
+import { CheckCircle2, ShoppingBag, Lock, ArrowRight, ChevronLeft, ShieldCheck } from "lucide-react";
 import PhonePrefixInput from "../components/PhonePrefixInput";
 import { computeCartDelivery } from "../lib/delivery";
 import { inclGstPrice } from "../lib/listingConstants";
@@ -20,10 +20,9 @@ export default function Checkout() {
     const { items, subtotal, subtotalIncl, count, clear } = useCart();
     const { city: appCity } = useCity();
     const navigate = useNavigate();
-    const [step, setStep] = useState(1); // 1 = details, 2 = summary
+    const [step, setStep] = useState(1);
     const [name, setName] = useState(user?.name || "");
     const [phone, setPhone] = useState((user?.phone || "").replace(/^\+?91[\s-]?/, "").replace(/\D/g, ""));
-    // Structured address
     const [streetAddress, setStreetAddress] = useState("");
     const [area, setArea] = useState("");
     const [orderCity, setOrderCity] = useState(appCity || "");
@@ -35,8 +34,6 @@ export default function Checkout() {
     const [loading, setLoading] = useState(false);
     const [policyAgreed, setPolicyAgreed] = useState(false);
 
-    // System-defined delivery: free same-city, flat intercity rate per category,
-    // charged ONCE per dealer. GST is per item on the base price.
     const delivery = useMemo(() => computeCartDelivery(items, orderCity), [items, orderCity]);
     const deliveryBreakdown = useMemo(() => {
         return items.map((it) => {
@@ -55,10 +52,6 @@ export default function Checkout() {
         });
     }, [items, delivery]);
     const totalDelivery = delivery.total;
-    // GST = inclusive total − base. Computing it this way guarantees that
-    // breakdown (Items subtotal + GST + Delivery) ALWAYS reconciles to the
-    // same incl-GST total that was shown on cards / detail / cart — no
-    // per-line rounding drift across screens.
     const totalGst = Math.max(0, subtotalIncl - subtotal);
     const grandTotal = subtotalIncl + totalDelivery;
 
@@ -152,10 +145,6 @@ export default function Checkout() {
         } finally { setLoading(false); }
     };
 
-    // Wave 105.4 — Razorpay Standard Checkout. Loads the checkout.js script
-    // once, creates a Razorpay order server-side, opens the modal, and on
-    // success verifies the signature on our backend BEFORE creating the
-    // marketplace order rows via the existing placeOrder() path.
     const loadRazorpayScript = () => new Promise((resolve) => {
         if (window.Razorpay) return resolve(true);
         const s = document.createElement("script");
@@ -174,7 +163,6 @@ export default function Checkout() {
             const ok = await loadRazorpayScript();
             if (!ok) { toast.error("Payment gateway couldn't load. Check your connection and retry."); return; }
 
-            // Create Razorpay order on our backend (grandTotal ₹ → paise)
             const amountPaise = Math.round(grandTotal * 100);
             const receipt = `tc_${Date.now().toString(36)}`.slice(0, 40);
             const { data: rpOrder } = await api.post("/payments/create-order", {
@@ -202,13 +190,11 @@ export default function Checkout() {
                 },
                 handler: async (resp) => {
                     try {
-                        // Server-side signature verify (never trust the browser here)
                         await api.post("/payments/verify-payment", {
                             razorpay_order_id: resp.razorpay_order_id,
                             razorpay_payment_id: resp.razorpay_payment_id,
                             razorpay_signature: resp.razorpay_signature,
                         });
-                        // Signature good — now create the marketplace order rows.
                         await placeOrder();
                     } catch (err) {
                         toast.error(`Payment recorded but order creation failed: ${formatApiError(err)}. Please contact support with payment ID ${resp.razorpay_payment_id}.`);
@@ -390,7 +376,6 @@ export default function Checkout() {
                             </div>
 
                             <div className="space-y-2 pt-2">
-                                {/* Policy agreement gate */}
                                 <label
                                     className="flex items-start gap-2.5 p-3.5 rounded-xl bg-[#F5F5F7] border border-[#E8E8EC] cursor-pointer hover:bg-[#EEEEF1] transition"
                                     data-testid="policy-agreement-block"
@@ -412,24 +397,39 @@ export default function Checkout() {
                                     type="button"
                                     onClick={payWithRazorpay}
                                     disabled={loading}
-                                    className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-[#F5C400] hover:bg-[#F5C400]/90 text-[#0A0A0B] font-semibold text-[14px] border border-[#F5C400] disabled:opacity-60 disabled:cursor-not-allowed transition"
+                                    className="group w-full inline-flex items-center justify-center gap-2.5 py-3.5 rounded-xl bg-[#F5C400] hover:bg-[#e6b800] text-[#0A0A0B] font-semibold text-[15px] border border-[#F5C400] shadow-[0_2px_10px_rgba(245,196,0,0.35)] hover:shadow-[0_4px_14px_rgba(245,196,0,0.45)] disabled:opacity-60 disabled:cursor-not-allowed transition-all"
                                     data-testid="proceed-to-payment-btn"
                                 >
-                                    <Lock size={14} /> {loading ? "Opening payment…" : `Pay Now ₹${grandTotal.toLocaleString("en-IN")}`}
+                                    <ShieldCheck size={17} strokeWidth={2.3} className="shrink-0" />
+                                    <span>{loading ? "Opening payment…" : `Pay Securely  ·  ₹${grandTotal.toLocaleString("en-IN")}`}</span>
+                                    {!loading && <ArrowRight size={15} className="shrink-0 transition-transform group-hover:translate-x-0.5" />}
                                 </button>
-                                <div className="text-[11.5px] text-[#6E6E73] text-center">Secure payment via Razorpay · UPI, cards, netbanking</div>
+                                <div className="flex items-center justify-center gap-3 pt-1.5 pb-0.5" data-testid="payment-trust-row">
+                                    <span className="inline-flex items-center gap-1.5 text-[11px] text-[#0A0A0B]/70 font-medium">
+                                        <Lock size={11} strokeWidth={2.5} /> 256-bit secure
+                                    </span>
+                                    <span className="w-px h-3 bg-[#D2D2D7]" aria-hidden="true" />
+                                    <span className="text-[11px] text-[#6E6E73]">UPI · Cards · Netbanking · Wallets</span>
+                                </div>
+                                <div className="text-[10.5px] text-[#86868B] text-center">Payments processed by Razorpay · India&apos;s most trusted payment gateway</div>
+                                <div className="flex items-center gap-3 py-2" aria-hidden="true">
+                                    <span className="flex-1 h-px bg-[#E8E8EC]" />
+                                    <span className="text-[10.5px] tracking-[0.16em] uppercase font-semibold text-[#86868B]">or</span>
+                                    <span className="flex-1 h-px bg-[#E8E8EC]" />
+                                </div>
                                 <Button
                                     type="button"
                                     onClick={placeOrder}
                                     disabled={loading}
+                                    variant="outline"
                                     title="Send an offline order request — supplier will contact you to arrange payment"
-                                    className="btn-cta w-full inline-flex items-center justify-center gap-2"
+                                    className="w-full inline-flex items-center justify-center gap-2 h-11 bg-white border border-[#D2D2D7] hover:bg-[#F5F5F7] text-[#0A0A0B] font-medium text-[13.5px] rounded-xl"
                                     data-testid="place-order-request-btn"
                                 >
-                                    {loading ? "Placing…" : `Send Order Request — ₹${grandTotal.toLocaleString("en-IN")}`}
+                                    {loading ? "Placing…" : `Send Order Request instead`}
                                 </Button>
-                                <div className="text-[11.5px] text-[#6E6E73] text-center mt-1.5" data-testid="place-order-disabled-hint">
-                                    Prefer to pay offline? Send a request and the supplier will contact you directly.
+                                <div className="text-[11px] text-[#86868B] text-center" data-testid="place-order-disabled-hint">
+                                    Prefer to pay the supplier directly? We&apos;ll notify them and they&apos;ll reach out.
                                 </div>
                             </div>
                         </div>
