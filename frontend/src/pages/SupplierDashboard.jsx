@@ -121,7 +121,7 @@ function CenterAction({ title, subtitle, children }) {
     return (
         <div className="mb-6 rounded-2xl border border-dashed border-black/[0.14] bg-[#FAFAFB] px-5 py-6 flex flex-col items-center text-center gap-3" data-testid="tab-action-panel">
             <div>
-                <div className="text-[16px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>{title}</div>
+                <div className="text-[16px] font-bold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>{title}</div>
                 {subtitle && <div className="text-[12.5px] text-[#6E6E73] mt-1 max-w-md">{subtitle}</div>}
             </div>
             <div className="flex flex-wrap items-center justify-center gap-3">{children}</div>
@@ -130,13 +130,26 @@ function CenterAction({ title, subtitle, children }) {
 }
 
 const ORDER_STATUS = {
-    requested: "Requested",
+    requested: "Paid · Ready to ship",
     accepted: "Confirmed",
     shipped: "Dispatched",
     delivered: "Delivered",
     completed: "Completed",
     rejected: "Rejected",
     cancelled: "Cancelled",
+};
+
+// Wave 105.5 — format an ISO timestamp as "14 Aug 2026, 03:45 PM" for the
+// dealer orders table. Falls back gracefully when timestamp is missing.
+const formatOrderTime = (iso) => {
+    if (!iso) return "—";
+    try {
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return "—";
+        const date = d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+        const time = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+        return `${date}, ${time}`;
+    } catch { return "—"; }
 };
 
 function PendingScreen({ application }) {
@@ -935,7 +948,7 @@ export default function SupplierDashboard() {
                                 >
                                     <Icon size={14} className="text-[#0A0A0B]/55" />
                                     <span className="text-left leading-none">
-                                        <span className="block text-[15px] font-semibold text-[#0A0A0B]">{v}</span>
+                                        <span className="block text-[15px] font-bold text-[#0A0A0B]">{v}</span>
                                         <span className="block text-[9px] tracking-[0.12em] uppercase text-[#0A0A0B]/55 mt-0.5">{k}</span>
                                     </span>
                                 </button>
@@ -982,7 +995,7 @@ export default function SupplierDashboard() {
             <div className="tc-container py-8 sm:py-10">
                 {catalog === "printers" ? (
                     <>
-                        <h2 id="printers" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your printers</h2>
+                        <h2 id="printers" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 700 }}>Your printers</h2>
                         <CenterAction title="Manage your printers" subtitle="Add a single printer with full specs, edit your catalogue inline, or upload many at once.">
                             <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-add-printer")))} data-testid="add-printer-cta-btn"><Plus size={16} /> Add Printer</Button>
                             <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-bulk-printer")))} data-testid="bulk-upload-printer-btn"><Upload size={15} /> Bulk upload</Button>
@@ -993,7 +1006,7 @@ export default function SupplierDashboard() {
                     </>
                 ) : catalog === "papers" ? (
                     <>
-                        <h2 id="papers" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your papers</h2>
+                        <h2 id="papers" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 700 }}>Your papers</h2>
                         <CenterAction title="Manage your papers" subtitle="Add a single paper SKU, edit your catalogue inline, or upload many at once.">
                             <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-add-paper")))} data-testid="add-paper-cta-btn"><Plus size={16} /> Add Paper</Button>
                             <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-bulk-paper")))} data-testid="bulk-upload-paper-btn"><Upload size={15} /> Bulk upload</Button>
@@ -1004,7 +1017,7 @@ export default function SupplierDashboard() {
                     </>
                 ) : catalog === "consumables" ? (
                     <>
-                        <h2 id="consumables" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your consumables</h2>
+                        <h2 id="consumables" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 700 }}>Your consumables</h2>
                         <CenterAction title="Manage your consumables" subtitle="Add a single consumable SKU, edit your catalogue inline, or upload many at once.">
                             <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-add-consumable")))} data-testid="add-consumable-cta-btn"><Plus size={16} /> Add Consumable</Button>
                             <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-bulk-consumable")))} data-testid="bulk-upload-consumable-btn"><Upload size={15} /> Bulk upload</Button>
@@ -1015,7 +1028,7 @@ export default function SupplierDashboard() {
                     </>
                 ) : catalog === "scanners" ? (
                     <>
-                        <h2 id="scanners" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your scanners</h2>
+                        <h2 id="scanners" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 700 }}>Your scanners</h2>
                         <CenterAction title="Manage your scanners" subtitle="Add a single scanner SKU, edit your catalogue inline, or upload many at once.">
                             <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-add-scanner")))} data-testid="add-scanner-cta-btn"><Plus size={16} /> Add Scanner</Button>
                             <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => window.dispatchEvent(new CustomEvent("tc-open-bulk-scanner")))} data-testid="bulk-upload-scanner-btn"><Upload size={15} /> Bulk upload</Button>
@@ -1025,18 +1038,18 @@ export default function SupplierDashboard() {
                     </>
                 ) : catalog === "earnings" ? (
                     <>
-                        <h2 id="earnings" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>My earnings</h2>
+                        <h2 id="earnings" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 700 }}>My earnings</h2>
                         <SupplierEarnings />
                     </>
                 ) : catalog === "insights" ? (
                     <>
-                        <h2 id="insights" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Listing insights</h2>
+                        <h2 id="insights" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 700 }}>Listing insights</h2>
                         <SupplierInsights />
                     </>
                 ) : catalog === "orders" ? (
                     <>
                         <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-                            <h2 id="orders" className="text-[#0A0A0B] scroll-mt-[130px]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Incoming orders</h2>
+                            <h2 id="orders" className="text-[#0A0A0B] scroll-mt-[130px]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 700 }}>Incoming orders</h2>
                             {orderFilter === "pending" && (
                                 <button onClick={() => setOrderFilter("all")} className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#4F46E5] bg-[#EEF0FE] border border-[#CBD2FA] rounded-full px-3 py-1.5 hover:bg-[#DDE1FC]" data-testid="orders-filter-clear">
                                     Showing pending only · Clear
@@ -1044,64 +1057,71 @@ export default function SupplierDashboard() {
                             )}
                         </div>
                         {visibleOrders.length === 0 ? (
-                            <div className="tc-card-flat p-10 text-center text-[#6E6E73]" data-testid="seller-orders-empty">
+                            <div className="tc-card-flat p-10 text-center text-[#6E6E73] font-medium" data-testid="seller-orders-empty">
                                 {orderFilter === "pending"
-                                    ? "No pending orders right now. New order requests will appear here for you to accept or reject."
-                                    : "No orders yet. Once buyers place orders against your listings, they will appear here for you to accept, reject, ship and track."}
+                                    ? "No pending orders right now. Paid orders will appear here for you to dispatch."
+                                    : "No orders yet. Once buyers pay for your listings, they appear here for you to dispatch and track."}
                             </div>
                         ) : (
                             <div className="tc-card-flat p-0 overflow-x-auto">
                                 <table className="w-full text-[13px]">
-                                    <thead className="bg-black/[0.03] text-[10px] tracking-[0.16em] uppercase text-[#6E6E73]">
-                                        <tr><th className="text-left p-3">Order #</th><th className="text-left p-3">Product</th><th className="text-left p-3">Customer</th><th className="text-left p-3">Qty</th><th className="text-left p-3">Total</th><th className="text-left p-3">Status</th><th className="text-left p-3">Action</th></tr>
+                                    <thead className="bg-black/[0.03] text-[10.5px] tracking-[0.16em] uppercase text-[#3a3a40] font-bold">
+                                        <tr>
+                                            <th className="text-left p-3 font-bold">Order #</th>
+                                            <th className="text-left p-3 font-bold">Placed</th>
+                                            <th className="text-left p-3 font-bold">Product</th>
+                                            <th className="text-left p-3 font-bold">Customer</th>
+                                            <th className="text-left p-3 font-bold">Qty</th>
+                                            <th className="text-left p-3 font-bold">Total</th>
+                                            <th className="text-left p-3 font-bold">Status</th>
+                                            <th className="text-left p-3 font-bold">Action</th>
+                                        </tr>
                                     </thead>
                                     <tbody>
                                         {visibleOrders.map((o) => (
                                             <tr key={o.id} className="border-t border-black/[0.05]">
-                                                <td className="p-3 font-mono text-[11.5px] text-[#0A0A0B]">{o.order_number || `#${(o.id||"").slice(0,8).toUpperCase()}`}</td>
-                                                <td className="p-3 font-mono">{o.listings?.brand} {o.listings?.model_number || "—"}</td>
-                                                <td className="p-3">{o.customer_name}<div className="text-[11px] text-[#86868B]">{o.customer_phone}</div></td>
-                                                <td className="p-3 font-mono">{o.qty}</td>
-                                                <td className="p-3 font-mono">
+                                                <td className="p-3 font-mono font-semibold text-[11.5px] text-[#0A0A0B]">{o.order_number || `#${(o.id||"").slice(0,8).toUpperCase()}`}</td>
+                                                <td className="p-3 text-[11.5px] text-[#0A0A0B] font-semibold whitespace-nowrap" data-testid={`order-placed-${o.id}`}>{formatOrderTime(o.created_at)}</td>
+                                                <td className="p-3 font-mono font-semibold text-[#0A0A0B]">{o.listings?.brand} {o.listings?.model_number || "—"}</td>
+                                                <td className="p-3"><span className="font-semibold text-[#0A0A0B]">{o.customer_name}</span><div className="text-[11.5px] text-[#3a3a40] font-medium">{o.customer_phone}</div></td>
+                                                <td className="p-3 font-mono font-bold text-[#0A0A0B]">{o.qty}</td>
+                                                <td className="p-3 font-mono font-bold text-[#0A0A0B]">
                                                     ₹{Number(o.total).toLocaleString("en-IN")}
                                                     {(() => {
                                                         const c = commissionFor(o.total);
                                                         if (!c || c.commission === null) {
-                                                            return <div className="text-[10.5px] text-[#86868B] mt-0.5">Deal basis · contact team</div>;
+                                                            return <div className="text-[10.5px] text-[#3a3a40] font-medium mt-0.5">Deal basis · contact team</div>;
                                                         }
                                                         return (
                                                             <div className="mt-0.5 leading-tight" data-testid={`order-payout-${o.id}`}>
-                                                                <div className="text-[10.5px] text-[#86868B]">Referral fee ({c.rateLabel}): −₹{c.commission.toLocaleString("en-IN")}</div>
-                                                                <div className="text-[11px] text-emerald-700 font-semibold">Payout: ₹{c.payout.toLocaleString("en-IN")}</div>
+                                                                <div className="text-[10.5px] text-[#3a3a40] font-medium">Referral fee ({c.rateLabel}): −₹{c.commission.toLocaleString("en-IN")}</div>
+                                                                <div className="text-[11.5px] text-emerald-700 font-bold">Payout: ₹{c.payout.toLocaleString("en-IN")}</div>
                                                             </div>
                                                         );
                                                     })()}
                                                 </td>
-                                                <td className="p-3 text-[11px] uppercase font-semibold tracking-[0.1em] text-[#0A0A0B]">{ORDER_STATUS[o.status]}</td>
+                                                <td className="p-3 text-[11px] uppercase font-bold tracking-[0.1em] text-[#0A0A0B]">{ORDER_STATUS[o.status]}</td>
                                                 <td className="p-3">
-                                                    {o.status === "requested" && (
-                                                        <div className="flex gap-1">
-                                                            <button onClick={() => updateOrder(o.id, "accepted")} className="text-[11px] px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200" data-testid={`accept-order-${o.id}`}>Accept</button>
-                                                            <button onClick={() => updateOrder(o.id, "rejected")} className="text-[11px] px-2 py-1 rounded bg-red-50 text-red-700 border border-red-200" data-testid={`reject-order-${o.id}`}>Reject</button>
-                                                        </div>
-                                                    )}
-                                                    {o.status === "accepted" && (
+                                                    {/* Wave 105.5 — Razorpay-paid orders skip the Accept step entirely.
+                                                      * A "requested" row is already paid & auto-confirmed, so the
+                                                      * dealer's next action is to dispatch (same UI as "accepted"). */}
+                                                    {(o.status === "requested" || o.status === "accepted") && (
                                                         <CourierDispatchInput onSubmit={(d) => updateOrder(o.id, "shipped", d)} testIdSuffix={o.id} />
                                                     )}
                                                     {o.status === "shipped" && (
                                                         <div className="space-y-1.5">
-                                                            <div className="text-[10.5px] text-[#6E6E73]">
-                                                                {o.courier_name && <div>Courier: <span className="text-[#0A0A0B] font-semibold">{o.courier_name}</span></div>}
-                                                                <div className="font-mono text-[#0A0A0B]">Tracking: {o.tracking_number || "—"}</div>
+                                                            <div className="text-[11px] text-[#3a3a40] font-medium">
+                                                                {o.courier_name && <div>Courier: <span className="text-[#0A0A0B] font-bold">{o.courier_name}</span></div>}
+                                                                <div className="font-mono text-[#0A0A0B] font-semibold">Tracking: {o.tracking_number || "—"}</div>
                                                             </div>
-                                                            <button onClick={() => updateOrder(o.id, "delivered")} className="text-[11px] px-2 py-1 rounded bg-teal-50 text-teal-700 border border-teal-200" data-testid={`mark-delivered-${o.id}`}>Mark Delivered</button>
+                                                            <button onClick={() => updateOrder(o.id, "delivered")} className="text-[11.5px] font-semibold px-2.5 py-1 rounded bg-teal-50 text-teal-700 border border-teal-200" data-testid={`mark-delivered-${o.id}`}>Mark Delivered</button>
                                                         </div>
                                                     )}
                                                     {o.status === "delivered" && (
-                                                        <div className="text-[10.5px] text-[#6E6E73]">Awaiting customer confirmation…<div className="text-[#86868B]">Auto-confirms in 5 days</div></div>
+                                                        <div className="text-[11px] text-[#3a3a40] font-medium">Awaiting customer confirmation…<div className="text-[#86868B] font-medium">Auto-confirms in 5 days</div></div>
                                                     )}
                                                     {o.status === "completed" && (
-                                                        <div className="text-[10.5px] text-emerald-700 font-semibold">Completed{o.payout_eligible_at ? <div className="text-[#86868B] font-normal">Payout eligible {new Date(o.payout_eligible_at).toLocaleDateString("en-IN")}</div> : null}</div>
+                                                        <div className="text-[11.5px] text-emerald-700 font-bold">Completed{o.payout_eligible_at ? <div className="text-[#3a3a40] font-medium">Payout eligible {new Date(o.payout_eligible_at).toLocaleDateString("en-IN")}</div> : null}</div>
                                                     )}
                                                 </td>
                                             </tr>
@@ -1113,7 +1133,7 @@ export default function SupplierDashboard() {
                     </>
                 ) : catalog === "bulk" ? (
                     <>
-                        <h2 className="text-[#0A0A0B] mb-1 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Bulk orders &amp; uploads</h2>
+                        <h2 className="text-[#0A0A0B] mb-1 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 700 }}>Bulk orders &amp; uploads</h2>
                         <p className="text-[13px] text-[#6E6E73] mb-5 max-w-xl">List large quantities fast. Download a spreadsheet template, fill in your catalogue, and upload many products at once — for any category.</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" data-testid="bulk-hub">
                             {[
@@ -1125,7 +1145,7 @@ export default function SupplierDashboard() {
                             ].map((b) => (
                                 <button key={b.label} onClick={b.onClick} className="tc-card-flat p-6 text-left hover:shadow-md hover:border-black/[0.12] transition group" data-testid={b.tid}>
                                     <div className="w-10 h-10 rounded-xl bg-[#0A0A0B]/[0.05] grid place-items-center mb-3 group-hover:bg-[#0A0A0B] group-hover:text-white transition"><Upload size={18} /></div>
-                                    <div className="text-[15px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Bulk upload {b.label.toLowerCase()}</div>
+                                    <div className="text-[15px] font-bold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Bulk upload {b.label.toLowerCase()}</div>
                                     <div className="text-[12px] text-[#6E6E73] mt-1 inline-flex items-center gap-1">Open spreadsheet <ArrowRight size={12} /></div>
                                 </button>
                             ))}
@@ -1133,22 +1153,22 @@ export default function SupplierDashboard() {
                     </>
                 ) : catalog === "d2d" ? (
                     <>
-                        <h2 className="text-[#0A0A0B] mb-1 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Dealer to Dealer</h2>
+                        <h2 className="text-[#0A0A0B] mb-1 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 700 }}>Dealer to Dealer</h2>
                         <p className="text-[13px] text-[#6E6E73] mb-5 max-w-xl">Sell surplus stock to other verified dealers at special D2D prices. Turn on the <strong>D2D</strong> toggle on any product card (Toners / Printers / Papers tabs) and set a dealer price.</p>
                         <div className="tc-card-flat p-8 text-center" data-testid="d2d-panel">
                             <div className="w-12 h-12 rounded-2xl bg-[#5E8CB5]/15 text-[#5E8CB5] grid place-items-center mx-auto mb-4"><Store size={22} /></div>
-                            <div className="text-[16px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Browse the Dealer-to-Dealer marketplace</div>
+                            <div className="text-[16px] font-bold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Browse the Dealer-to-Dealer marketplace</div>
                             <p className="text-[13px] text-[#6E6E73] mt-2 max-w-md mx-auto">See D2D listings from other verified dealers and source stock at better prices.</p>
                             <Button className="btn-cta h-11 px-6 mt-5 inline-flex items-center gap-2" onClick={() => navigate("/dealer")} data-testid="d2d-open-btn">Open D2D marketplace <ArrowRight size={15} /></Button>
                         </div>
                     </>
                 ) : catalog === "oem" ? (
                     <>
-                        <h2 className="text-[#0A0A0B] mb-1 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>OEM Marketplace</h2>
+                        <h2 className="text-[#0A0A0B] mb-1 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 700 }}>OEM Marketplace</h2>
                         <p className="text-[13px] text-[#6E6E73] mb-5 max-w-xl">The OEM Marketplace showcases official manufacturer products. Explore brand-direct listings and partnership opportunities.</p>
                         <div className="tc-card-flat p-8 text-center" data-testid="oem-panel">
                             <div className="w-12 h-12 rounded-2xl bg-[#B58A75]/15 text-[#B58A75] grid place-items-center mx-auto mb-4"><Building2 size={22} /></div>
-                            <div className="text-[16px] font-semibold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Explore the OEM Marketplace</div>
+                            <div className="text-[16px] font-bold text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif" }}>Explore the OEM Marketplace</div>
                             <p className="text-[13px] text-[#6E6E73] mt-2 max-w-md mx-auto">Discover official, brand-direct printer and supply products from verified manufacturers.</p>
                             <Button className="btn-cta h-11 px-6 mt-5 inline-flex items-center gap-2" onClick={() => navigate("/oem")} data-testid="oem-open-btn">View OEM marketplace <ArrowRight size={15} /></Button>
                         </div>
@@ -1156,7 +1176,7 @@ export default function SupplierDashboard() {
                 ) : (
                 <>
                 {/* Listings */}
-                <h2 id="listings" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>Your toners</h2>
+                <h2 id="listings" className="text-[#0A0A0B] mb-4 scroll-mt-24" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 700 }}>Your toners</h2>
                 <CenterAction title="Manage your toners" subtitle="Add a single toner, edit your whole catalogue inline, or upload many at once.">
                     <Button className="btn-cta h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => requestAddAction("single"))} data-testid="add-listing-btn"><Plus size={16} /> Add Toner</Button>
                     <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(() => requestAddAction("bulk"))} data-testid="bulk-upload-btn"><Upload size={15} /> Bulk upload</Button>
@@ -1205,13 +1225,13 @@ export default function SupplierDashboard() {
                                 </div>
                                 <div className="p-3.5 flex flex-col gap-2 flex-1">
                                     <div className="flex items-center justify-between gap-1">
-                                        <div className="text-[13px] font-semibold text-[#0A0A0B] truncate" style={{ fontFamily: "'Montserrat', sans-serif" }}>{l.brand}</div>
+                                        <div className="text-[13px] font-bold text-[#0A0A0B] truncate" style={{ fontFamily: "'Montserrat', sans-serif" }}>{l.brand}</div>
                                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-[0.06em] shrink-0 ${typeStyle}`}>{l.toner_type}</span>
                                     </div>
                                     <div className="text-[11px] text-[#6E6E73] truncate" title={l.model_number}>{l.model_number || l.color || "—"}</div>
                                     <div className="mt-0.5 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
                                         <div className="leading-tight">
-                                            <div className="font-mono text-[14px] font-semibold text-[#0A0A0B]" data-testid={`listing-incl-price-${l.id}`}>{formatINR(inclGstPrice(l.price, l.gst_rate))}</div>
+                                            <div className="font-mono text-[14px] font-bold text-[#0A0A0B]" data-testid={`listing-incl-price-${l.id}`}>{formatINR(inclGstPrice(l.price, l.gst_rate))}</div>
                                             <div className="text-[9px] text-[#86868B]">incl. {l.gst_rate ?? 18}% GST</div>
                                         </div>
                                         <InlineStock stock={l.stock} onSave={(v) => patchStock(l.id, v)} testId={`stock-edit-${l.id}`} />
@@ -1282,7 +1302,7 @@ export default function SupplierDashboard() {
             <section id="all-listings" className="mt-10 scroll-mt-[130px]" data-testid="all-listings-section">
                 <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
                     <div>
-                        <h2 className="text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 500 }}>All listings</h2>
+                        <h2 className="text-[#0A0A0B]" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "20px", fontWeight: 700 }}>All listings</h2>
                         <p className="text-[12.5px] text-[#6E6E73] mt-0.5">Every product across all categories in one place.</p>
                     </div>
                     {listingFilter === "active" && (
@@ -1377,7 +1397,7 @@ export default function SupplierDashboard() {
                         >
                             <ChevronLeft size={14} /> Back to Dashboard
                         </button>
-                        <DialogTitle className="text-[22px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500, letterSpacing: "-0.01em" }}>
+                        <DialogTitle className="text-[22px]" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700, letterSpacing: "-0.01em" }}>
                             {editingId ? "Edit toner listing" : "Add a toner"}
                         </DialogTitle>
                     </DialogHeader>
