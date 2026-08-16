@@ -991,11 +991,7 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
           </a>
         </p>
         """
-await _send(seller_email, f"New order received — {brand} {model}", seller_html)
 
-    # ---------- Support inbox notification (Wave 105.6) ----------
-    # Every paid order is copied to support@tonerscart.com with full details
-    # so ops has a single-inbox record for reconciliation, disputes, refunds.
     if SUPPORT_INBOX:
         payout_note = f"{_money(payout)} (referral fee {rate_label} = {_money(commission)})" if rate_label != "Deal basis" else "Deal basis"
         support_html = f"""
@@ -1015,6 +1011,7 @@ await _send(seller_email, f"New order received — {brand} {model}", seller_html
           <tr><td style='padding:4px 12px;color:#86868B;'>Seller</td><td style='padding:4px 12px;'><strong>{seller_biz}</strong>{f' · {seller_city}' if seller_city else ''}{seller_id_html}</td></tr>
           {f"<tr><td style='padding:4px 12px;color:#86868B;'>Seller email</td><td style='padding:4px 12px;'><a href='mailto:{seller_email}' style='color:#00838f;'>{seller_email}</a></td></tr>" if seller_email else ""}
         </table>
+        
         """
         await _send(SUPPORT_INBOX, f"[TonersCart Order] #{order_id_short} — {brand} {model} — {_money(total)}", support_html)
 
