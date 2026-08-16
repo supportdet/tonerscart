@@ -876,8 +876,8 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
         if is_intercity
         else "Please confirm delivery charges with the buyer for intercity orders before dispatching."
     )
-    customer_name = order.get("customer_name") or (buyer or {}).get("name") or "Buyer"
-    customer_phone = order.get("customer_phone") or "—"
+customer_name = order.get("customer_name") or (buyer or {}).get("name") or "Buyer"
+customer_phone = order.get("customer_phone") or "—"
     customer_email = (buyer or {}).get("email") or order.get("customer_email") or "—"
     # Placed-at timestamp — DD MMM YYYY HH:MM (Wave 105.6)
     try:
@@ -890,7 +890,6 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
             placed_at = _dt.now().strftime("%d %b %Y %H:%M")
     except Exception:
         placed_at = ""
-
     commission, payout, rate_label = _commission_breakdown(total)
     gst_block_b = ""
     if buyer_gst or seller_gst:
@@ -974,10 +973,9 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
           <tr><td style='padding:4px 12px;color:#86868B;'>Order value</td><td style='padding:4px 12px;'><strong>{_money(total)}</strong></td></tr>
           {payout_line}
           {seller_id_row}
-          <tr><td style='padding:4px 12px;color:#86868B;'>Placed at</td><td style='padding:4px 12px;'><strong>{placed_at}</strong></td></tr>
+ <tr><td style='padding:4px 12px;color:#86868B;'>Placed at</td><td style='padding:4px 12px;'><strong>{placed_at}</strong></td></tr>
           <tr><td style='padding:4px 12px;color:#86868B;'>Buyer</td><td style='padding:4px 12px;'>{customer_name}{f' · {customer_phone}' if customer_phone else ''}</td></tr>
-          <tr><td style='padding:4px 12px;color:#86868B;'>Buyer email</td><td style='padding:4px 12px;'><a href="mailto:{customer_email}" style="color:#00838f;text-decoration:none;">{customer_email}</a></td></tr>
-          {("<tr><td style='padding:4px 12px;color:#86868B;'>Buyer city</td><td style='padding:4px 12px;'><strong>" + (order_city or delivery_city or '—') + "</strong>" + (" <span style='display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;background:#FFF3CD;color:#8C6A00;font-size:11px;font-weight:600;'>Intercity</span>" if is_intercity else " <span style='display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;background:#E6F7EC;color:#0A8754;font-size:11px;font-weight:600;'>Local · free delivery</span>") + "</td></tr>")}
+          <tr><td style='padding:4px 12px;color:#86868B;'>Buyer email</td><td style='padding:4px 12px;'><a href="mailto:{customer_email}" style="color:#00838f;text-decoration:none;">{customer_email}</a></td></tr>          {("<tr><td style='padding:4px 12px;color:#86868B;'>Buyer city</td><td style='padding:4px 12px;'><strong>" + (order_city or delivery_city or '—') + "</strong>" + (" <span style='display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;background:#FFF3CD;color:#8C6A00;font-size:11px;font-weight:600;'>Intercity</span>" if is_intercity else " <span style='display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;background:#E6F7EC;color:#0A8754;font-size:11px;font-weight:600;'>Local · free delivery</span>") + "</td></tr>")}
           <tr><td style='padding:4px 12px;color:#86868B;'>Delivery</td><td style='padding:4px 12px;'>{delivery_full}</td></tr>
           {("<tr><td style='padding:4px 12px;color:#86868B;'>Delivery charge</td><td style='padding:4px 12px;'><strong>" + _money(delivery_charge) + "</strong></td></tr>") if delivery_charge > 0 else ""}
         </table>
@@ -993,11 +991,7 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
           </a>
         </p>
         """
-        await _send(seller_email, f"New order received — {brand} {model}", seller_html)
 
-    # ---------- Support inbox notification (Wave 105.6) ----------
-    # Every paid order is copied to support@tonerscart.com with full details
-    # so ops has a single-inbox record for reconciliation, disputes, refunds.
     if SUPPORT_INBOX:
         payout_note = f"{_money(payout)} (referral fee {rate_label} = {_money(commission)})" if rate_label != "Deal basis" else "Deal basis"
         support_html = f"""
@@ -1017,9 +1011,9 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
           <tr><td style='padding:4px 12px;color:#86868B;'>Seller</td><td style='padding:4px 12px;'><strong>{seller_biz}</strong>{f' · {seller_city}' if seller_city else ''}{seller_id_html}</td></tr>
           {f"<tr><td style='padding:4px 12px;color:#86868B;'>Seller email</td><td style='padding:4px 12px;'><a href='mailto:{seller_email}' style='color:#00838f;'>{seller_email}</a></td></tr>" if seller_email else ""}
         </table>
+        
         """
         await _send(SUPPORT_INBOX, f"[TonersCart Order] #{order_id_short} — {brand} {model} — {_money(total)}", support_html)
-
 
 
 async def email_order_shipped(order: dict, listing: dict, buyer: dict):

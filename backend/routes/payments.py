@@ -22,7 +22,7 @@ import os
 from typing import Optional
 
 import razorpay
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from supabase_client import get_user_from_token
@@ -32,50 +32,30 @@ logger = logging.getLogger("payments")
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
-# Wave 105.4-fix — Read env vars lazily at request time, not at import time.
-# On some hosts (Railway seen in prod) the Python process starts before env
-# vars are injected, so an import-time initialisation captures _KEY_ID=None
-# and never recovers even after the vars appear. `_get_client()` re-reads
-# os.environ on every call and caches a client only once the vars are
-# actually present.
-_client_cache: Optional[razorpay.Client] = None
-_cached_key_id: Optional[str] = None
 
-
-def _get_client() -> Optional[razorpay.Client]:
-    """Return an initialised Razorpay client, or None if env vars still absent.
-    Reads os.environ at CALL time so late-injected env vars are picked up."""
-    global _client_cache, _cached_key_id
-    kid = os.environ.get("RAZORPAY_KEY_ID")
-    ksecret = os.environ.get("RAZORPAY_KEY_SECRET")
-    if not (kid and ksecret):
-        return None
-    # If keys rotated at runtime, rebuild the client
-    if _client_cache is None or _cached_key_id != kid:
-        _client_cache = razorpay.Client(auth=(kid, ksecret))
-        _cached_key_id = kid
-        logger.info("razorpay client initialised (key_id=%s...)", kid[:12])
-    return _client_cache
-
-
-def _require_client() -> razorpay.Client:
-    client = _get_client()
-    if not client:
+def _get_client() -> razorpay.Client:
+    key_id = os.environ.get("RAZORPAY_KEY_ID")
+    key_secret = os.environ.get("RAZORPAY_KEY_SECRET")
+    if not key_id or not key_secret:
         raise HTTPException(503, "Payment gateway not configured on server")
-    return client
+    return razorpay.Client(auth=(key_id, key_secret))
 
 
 def _key_id() -> str:
-    return os.environ.get("RAZORPAY_KEY_ID") or ""
+    val = os.environ.get("RAZORPAY_KEY_ID", "")
+    if not val:
+        raise HTTPException(503, "Payment gateway not configured on server")
+    return val
 
 
 def _key_secret() -> str:
-    return os.environ.get("RAZORPAY_KEY_SECRET") or ""
+    val = os.environ.get("RAZORPAY_KEY_SECRET", "")
+    if not val:
+        raise HTTPException(503, "Payment gateway not configured on server")
+    return val
 
 
 def _optional_user(request: Request) -> Optional[dict]:
-    """Payment endpoints work for both logged-in customers (normal checkout)
-    and guest carts (rare fallback). Returns None if no valid token."""
     tok = request.headers.get("authorization", "")
     if not tok.lower().startswith("bearer "):
         return None
@@ -95,15 +75,14 @@ def _optional_user(request: Request) -> Optional[dict]:
 class CreateOrderRequest(BaseModel):
     amount: int = Field(..., description="Amount in paise (INR). Minimum 100.")
     currency: str = Field(default="INR", max_length=3)
-    receipt: Optional[str] = Field(default=None, max_length=120,
-                                   description="Merchant receipt ID; auto-trimmed to Razorpay's 40-char cap")
+    receipt: Optional[str] = Field(default=None, max_length=120)
 
 
 class CreateOrderResponse(BaseModel):
     order_id: str
     amount: int
     currency: str
-    key_id: str  # public key, safe to return so the frontend doesn't need env access
+    key_id: str
 
 
 class VerifyPaymentRequest(BaseModel):
@@ -140,16 +119,12 @@ def config_check():
 @router.post("/create-order", response_model=CreateOrderResponse)
 @limiter.limit("30/minute")
 def create_order(request: Request, payload: CreateOrderRequest):
-    """Create a Razorpay order. Frontend uses the returned order_id to open the
-    Razorpay checkout modal. Amount is enforced server-side (Wave 105-B trust
-    boundary) — the client-supplied value must be at least ₹1."""
     if payload.amount < 100:
         raise HTTPException(400, "Amount must be at least 100 paise (₹1)")
     if payload.currency != "INR":
         raise HTTPException(400, "Only INR supported")
-    client = _require_client()
 
-    # Razorpay caps receipt at 40 chars — trim silently rather than 400ing.
+    client = _get_client()
     receipt = (payload.receipt or "").strip()[:40] or None
 
     try:
@@ -157,7 +132,7 @@ def create_order(request: Request, payload: CreateOrderRequest):
             "amount": int(payload.amount),
             "currency": payload.currency,
             "receipt": receipt,
-            "payment_capture": 1,  # auto-capture on success
+            "payment_capture": 1,
         })
     except razorpay.errors.BadRequestError as e:
         logger.warning("razorpay bad request: %s", e)
@@ -180,23 +155,12 @@ def create_order(request: Request, payload: CreateOrderRequest):
 @router.post("/verify-payment")
 @limiter.limit("30/minute")
 def verify_payment(request: Request, payload: VerifyPaymentRequest):
-    """HMAC-SHA256 verify the Razorpay signature. Only after this succeeds
-    should the caller (frontend) trigger the actual DB order insert.
-
-    Algorithm (per Razorpay docs):
-        expected = HMAC-SHA256(order_id + "|" + payment_id, KEY_SECRET)
-        compare with razorpay_signature (constant-time)
-    """
     if not (payload.razorpay_order_id and payload.razorpay_payment_id and payload.razorpay_signature):
         raise HTTPException(400, "Missing payment identifiers")
-    # Wave 105.4-fix — read env at request time so late-injected Railway
-    # vars are picked up even if the process started before them.
-    key_secret = _key_secret()
-    if not key_secret:
-        raise HTTPException(503, "Payment gateway not configured on server")
 
+    secret = _key_secret()
     body = f"{payload.razorpay_order_id}|{payload.razorpay_payment_id}".encode()
-    expected = hmac.new(key_secret.encode(), body, hashlib.sha256).hexdigest()
+    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
     if not hmac.compare_digest(expected, payload.razorpay_signature):
         logger.warning("payment signature mismatch order=%s payment=%s",
@@ -208,4 +172,17 @@ def verify_payment(request: Request, payload: VerifyPaymentRequest):
         "verified": True,
         "order_id": payload.razorpay_order_id,
         "payment_id": payload.razorpay_payment_id,
+    }
+
+
+@router.get("/config-check")
+def config_check():
+    key_id = os.environ.get("RAZORPAY_KEY_ID", "")
+    key_secret = os.environ.get("RAZORPAY_KEY_SECRET", "")
+    return {
+        "key_id_present": bool(key_id),
+        "key_id_prefix": key_id[:12] + "..." if key_id else "",
+        "key_secret_present": bool(key_secret),
+        "key_secret_len": len(key_secret),
+        "client_initialised": bool(key_id and key_secret),
     }
