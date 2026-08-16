@@ -876,7 +876,7 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
         if is_intercity
         else "Please confirm delivery charges with the buyer for intercity orders before dispatching."
     )
-    customer_name = order.get("customer_name") or (buyer or {}).get("name") or "Buyer"
+        customer_name = order.get("customer_name") or (buyer or {}).get("name") or "Buyer"
     customer_phone = order.get("customer_phone") or "—"
 
     commission, payout, rate_label = _commission_breakdown(total)
