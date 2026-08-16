@@ -877,7 +877,7 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
         else "Please confirm delivery charges with the buyer for intercity orders before dispatching."
     )
 customer_name = order.get("customer_name") or (buyer or {}).get("name") or "Buyer"
-customer_phone = order.get("customer_phone") or "—"
+    customer_phone = order.get("customer_phone") or "—"
     customer_email = (buyer or {}).get("email") or order.get("customer_email") or "—"
     # Placed-at timestamp — DD MMM YYYY HH:MM (Wave 105.6)
     try:
