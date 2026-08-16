@@ -95,6 +95,27 @@ class VerifyPaymentRequest(BaseModel):
 # Endpoints
 # ============================================================================
 
+@router.get("/config-check")
+def config_check():
+    """Wave 105.4-fix — lightweight prod diagnostic. Returns whether the
+    Razorpay env vars are visible to the process AT THIS MOMENT (not just
+    at import time). Never returns the secret itself — only booleans and
+    a redacted key prefix. Safe to leave enabled in prod.
+
+    Curl this in Railway to confirm env vars propagated after a redeploy:
+        curl https://<your-backend>.railway.app/api/payments/config-check
+    """
+    kid = os.environ.get("RAZORPAY_KEY_ID") or ""
+    ksecret = os.environ.get("RAZORPAY_KEY_SECRET") or ""
+    return {
+        "key_id_present": bool(kid),
+        "key_id_prefix": kid[:12] + "…" if kid else None,
+        "key_secret_present": bool(ksecret),
+        "key_secret_len": len(ksecret) if ksecret else 0,
+        "client_initialised": _get_client() is not None,
+    }
+
+
 @router.post("/create-order", response_model=CreateOrderResponse)
 @limiter.limit("30/minute")
 def create_order(request: Request, payload: CreateOrderRequest):
