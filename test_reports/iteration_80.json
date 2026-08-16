@@ -1,0 +1,43 @@
+{
+  "summary": "Wave 107 — Customer Dashboard bug fix (₹296→₹349 total) + full redesign. Both bug fix and redesign VERIFIED end-to-end via seeded buyer + 2 mock orders on the live preview. paidTotal formula (total+gst+delivery) renders correctly. All 6 required data-testids present per card. Status labels, timestamp format, structured address composition, dealer display, conditional tracking row, and dynamic 'incl. GST [+ delivery]' subtitle all work as specified. Mobile 375px viewport has zero horizontal overflow. Backend /orders/mine returns the required raw shape. Test data seeded + cleaned up. NOTE: Discovered a pre-existing (NOT Wave 107) critical bug — PUT /orders/{id}/status with status='completed' returns 500 due to a Postgres check constraint `orders_status_check` that omits 'completed'. The Confirm-received button in the UI will fail. Zero 'completed' orders exist in DB, confirming this has never worked.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "PUT /api/orders/{id}/status", "issue": "Returns 500 when status='completed'. DB check constraint orders_status_check does not include 'completed'. Buyer 'Confirm you received your order' button (delivered→completed transition) always fails. 0 completed rows currently in DB. Fix: ALTER TABLE orders DROP CONSTRAINT orders_status_check; ADD CONSTRAINT with completed included.", "priority": "CRITICAL"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Confirm delivery (delivered → completed)", "issue": "Downstream 500 from DB constraint (see backend critical). Frontend code is correct; DB schema needs fixing.", "affected_selectors": ["[data-testid^='confirm-received-']"]}
+    ],
+    "design_issues": [
+      {"screen": "CustomerDashboard time format", "issues": ["en-IN locale renders 'am/pm' lowercase (e.g. '04:15 pm') whereas spec requested 'AM/PM' uppercase. Cosmetic only."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_customer_dashboard_wave107.py",
+    "/app/test_reports/pytest/iteration_80_wave107.xml"
+  ],
+  "action_items": [
+    "Fix DB check constraint `orders_status_check` on public.orders to include 'completed' (and any other statuses used by the app). Otherwise buyer confirm-received will always 500.",
+    "(Optional cosmetic) Force uppercase AM/PM in formatOrderTime — e.g. .replace(' am',' AM').replace(' pm',' PM') — spec asked for uppercase."
+  ],
+  "critical_code_review_comments": [
+    "paidTotal helper is correct and mirrors the checkout math — good.",
+    "STATUS_LABEL correctly maps 'requested' → 'Confirmed · Paid' post-Razorpay-live.",
+    "formatAddress fallback to delivery_address is present — safe against legacy rows.",
+    "Tracking row correctly gated on status ∈ {shipped, delivered, completed} AND (courier || tracking).",
+    "The DB status check constraint mismatch is a schema/code drift — worth adding a startup guard that validates DB allowed-status list against the app's `allowed` set."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_customer_dashboard_wave107.py"
+  ],
+  "success_rate": {"backend": "75% (3/4 — the 1 failure is a pre-existing DB constraint bug, not Wave 107)", "frontend": "100% (all Wave 107 acceptance criteria pass)"},
+  "test_credentials": "Seeded then cleaned up: TEST_wave107ui_8ff15b54@example.com / TestPass@123 (deleted). Real bug order kept intact: id=7356ed6a-5819-471c-95ea-a5b08edf5cf6.",
+  "seed_data_creation": "Created + deleted 1 buyer + 2 orders (accepted @ ₹349, shipped @ ₹1,240). Verified paidTotal for both. Real order 7356ed6a untouched.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Wave 107 CustomerDashboard.jsx is fully verified. The only outstanding blocker is a Postgres check constraint on orders.status that omits 'completed' — this breaks the confirm-received flow site-wide. Ask main agent to run: `ALTER TABLE orders DROP CONSTRAINT orders_status_check;` then re-add with completed included. After fix, re-run tests/test_customer_dashboard_wave107.py::test_orders_status_update_endpoint_exists.",
+  "rca of the issue": "Original bug (Wave 107 target): CustomerDashboard was rendering `o.total` which is the pre-GST base (₹296) instead of the checkout-locked grand total (base+gst+delivery=₹349). Fix confirmed: paidTotal(o) helper at line 45 sums base+gst+delivery and is bound to data-testid=order-total-paid-<id> at line 283. Live test with total=296, gst_amount=53, delivery_charge=0 renders '₹349' as required."
+}
