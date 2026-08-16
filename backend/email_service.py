@@ -876,9 +876,20 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
         if is_intercity
         else "Please confirm delivery charges with the buyer for intercity orders before dispatching."
     )
-        customer_name = order.get("customer_name") or (buyer or {}).get("name") or "Buyer"
+         customer_name = order.get("customer_name") or (buyer or {}).get("name") or "Buyer"
     customer_phone = order.get("customer_phone") or "—"
-
+    customer_email = (buyer or {}).get("email") or order.get("customer_email") or "—"
+    # Placed-at timestamp — DD MMM YYYY HH:MM (Wave 105.6)
+    try:
+        from datetime import datetime as _dt
+        _ts = order.get("created_at")
+        if _ts:
+            _dtobj = _dt.fromisoformat(str(_ts).replace("Z", "+00:00"))
+            placed_at = _dtobj.strftime("%d %b %Y %H:%M")
+        else:
+            placed_at = _dt.now().strftime("%d %b %Y %H:%M")
+    except Exception:
+        placed_at = ""
     commission, payout, rate_label = _commission_breakdown(total)
     gst_block_b = ""
     if buyer_gst or seller_gst:
