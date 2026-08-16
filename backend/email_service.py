@@ -991,8 +991,32 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
           </a>
         </p>
         """
-        await _send(seller_email, f"New order received — {brand} {model}", seller_html)
+await _send(seller_email, f"New order received — {brand} {model}", seller_html)
 
+    # ---------- Support inbox notification (Wave 105.6) ----------
+    # Every paid order is copied to support@tonerscart.com with full details
+    # so ops has a single-inbox record for reconciliation, disputes, refunds.
+    if SUPPORT_INBOX:
+        payout_note = f"{_money(payout)} (referral fee {rate_label} = {_money(commission)})" if rate_label != "Deal basis" else "Deal basis"
+        support_html = f"""
+        <h2 style="margin:0 0 6px 0;font-size:18px;">New order placed — {brand} {model}</h2>
+        <p style="margin:0 0 14px 0;color:#6E6E73;">Full record for ops. Buyer + seller have been notified separately.</p>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <tr><td style='padding:4px 12px;color:#86868B;width:180px;'>Order ID</td><td style='padding:4px 12px;'><strong style='font-family:monospace;'>#{order_id_short}</strong></td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Placed at</td><td style='padding:4px 12px;'><strong>{placed_at}</strong></td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Product</td><td style='padding:4px 12px;'><strong>{brand} · {model}</strong>{f' · {toner_type}' if toner_type else ''}</td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Qty × Unit</td><td style='padding:4px 12px;'>{qty} × {_money(unit_price)}</td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Order total</td><td style='padding:4px 12px;'><strong>{_money(total)}</strong></td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Dealer payout</td><td style='padding:4px 12px;'><strong style='color:#0A8754;'>{payout_note}</strong></td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Customer</td><td style='padding:4px 12px;'><strong>{customer_name}</strong></td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Customer email</td><td style='padding:4px 12px;'><a href="mailto:{customer_email}" style="color:#00838f;">{customer_email}</a></td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Customer phone</td><td style='padding:4px 12px;'>{customer_phone}</td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Delivery</td><td style='padding:4px 12px;'>{delivery_full}</td></tr>
+          <tr><td style='padding:4px 12px;color:#86868B;'>Seller</td><td style='padding:4px 12px;'><strong>{seller_biz}</strong>{f' · {seller_city}' if seller_city else ''}{seller_id_html}</td></tr>
+          {f"<tr><td style='padding:4px 12px;color:#86868B;'>Seller email</td><td style='padding:4px 12px;'><a href='mailto:{seller_email}' style='color:#00838f;'>{seller_email}</a></td></tr>" if seller_email else ""}
+        </table>
+        """
+        await _send(SUPPORT_INBOX, f"[TonersCart Order] #{order_id_short} — {brand} {model} — {_money(total)}", support_html)
 
 
 async def email_order_shipped(order: dict, listing: dict, buyer: dict):
