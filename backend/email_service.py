@@ -837,7 +837,7 @@ async def email_order_placed(order: dict, listing: dict, supplier: dict, buyer: 
     seller_id = (supplier or {}).get("seller_id") or order.get("seller_id") or ""
     seller_id_html = f" · <span style=\"font-family:monospace;color:#00838f;\">{seller_id}</span>" if seller_id else ""
     seller_gst = (supplier or {}).get("gst_number") or order.get("supplier_gst_number")
-    buyer_gst = order.get("buyer_gst_number") or buyer.get("gst_number")
+    buyer_gst = order.get("buyer_gst_number") or (buyer or {}).get("gst_number")
     order_id_short = str(order.get("id", ""))[:8].upper()
     qty = order.get("qty", 1)
     unit_price = order.get("unit_price", 0)
