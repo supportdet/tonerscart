@@ -1,0 +1,59 @@
+{
+  "summary": "Wave 105.8/105.9/105.10 e2e testing. Backend: new pytest suite (18 tests, 16 pass) covering bulk toner upload color persistence, supplier listing/printer feeds, image_urls PUT persistence, upload guards, auth/me roles. Frontend: real dealer login (fresh approved QA supplier) → verified bulk-upload grid row alignment (BUG FIX 1), color coercion via real CSV import (BUG FIX 2), listing search/brand/max-price filters + reset (FEATURE 3), /supplier/bulk-images page incl. a REAL image upload that persisted (FEATURE 4), plus 390px mobile layout. No JSX runtime errors, no console/pageerror on /supplier or /supplier/bulk-images. 2 real defects found: BulkImageUpload calls a non-existent GET /supplier/printers (405 → printers never appear), and Razorpay create-order fails with 'Authentication failed'.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/supplier/printers", "issue": "Route does not exist (405 Method Not Allowed — only POST + GET /supplier/printers/mine exist). BulkImageUpload.jsx line 63 calls api.get('/supplier/printers') and swallows the error with .catch(()=>({data:[]})), so PRINTER listings without photos NEVER show on /supplier/bulk-images. Fix: use '/supplier/printers/mine'.", "priority": "HIGH"},
+      {"endpoint": "POST /api/payments/create-order", "issue": "Returns 400 'Razorpay rejected the order: Authentication failed'. /api/payments/config-check shows key_id rzp_test_TNm… + secret len 24 + client initialised, so the KEY_ID/KEY_SECRET pair in the preview env is mismatched/invalid. No payment was attempted. Checkout payment cannot be started in preview.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/payments/create-order", "issue": "Endpoint is unauthenticated — any anonymous caller can create Razorpay orders (abuse/noise risk). Consider require_user + server-side amount derivation from the cart/order."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BulkImageUpload", "issue": "After uploading the 1st photo the row is immediately filtered out of the list (rows memo only keeps listings with zero images), so slots 1 and 2 become unreachable — the '3 upload slots per row' promise only ever delivers 1 photo per visit. Suggest keeping the row visible until the user leaves/reloads (e.g. freeze the row set on load, or keep rows that were rendered).", "selector": "[data-testid='bulk-img-slot-1']", "priority": "MEDIUM"},
+      {"component": "BulkImageUpload", "issue": "data-testid 'bulk-img-slot-0/1/2' is duplicated for every row (non-unique). Scope it per row, e.g. bulk-img-slot-{id}-{index}.", "selector": "[data-testid='bulk-img-slot-0']", "priority": "LOW"},
+      {"component": "BulkImageUpload", "issue": "No success toast was detected after a successful upload in the automated run (upload itself worked and persisted). Toast may be rendering outside the sonner container or too briefly — worth a manual confirm.", "selector": "[data-sonner-toast]", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Bulk image upload — printers", "issue": "Printer listings are silently dropped due to the wrong endpoint (see backend_issues). Page only ever shows toners.", "affected_selectors": ["[data-testid='bulk-img-list']", "[data-testid='bulk-img-remaining']"]}
+    ],
+    "design_issues": [
+      {"screen": "/supplier bulk-upload dialog (toners)", "issues": ["VERIFIED FIXED: all 4 imported rows measured exactly 77px pitch (y = 377.1 / 454.1 / 531.1 / 608.1); filled rows show bulk-breakdown-{idx}, empty rows show the '·' placeholder — no zig-zag."]},
+      {"screen": "/supplier listing filters @390px", "issues": ["Row wraps to 2 lines cleanly, document scrollWidth == innerWidth (390) — no overflow.", "The floating 'Feedback' tab sits on the right edge at the same vertical band as the 'Add photos in bulk' button (button ends x=366, viewport 390) — visually crowded on mobile."]},
+      {"screen": "/supplier/bulk-images @390px", "issues": ["No horizontal overflow (390 == 390).", "Left model column is squeezed to ~60px by the 3 fixed 56px slots — model text truncates to 'HP · T…'; consider stacking slots below the model line at <420px."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave105_10_bulk_color_images.py",
+    "/app/backend/tests/seed_w10510_supplier.py",
+    "/app/test_reports/pytest/w105_10.xml"
+  ],
+  "action_items": [
+    "BulkImageUpload.jsx: change api.get('/supplier/printers') → '/supplier/printers/mine' (printers currently never listed).",
+    "Fix RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET pair in the preview backend env — create-order returns 400 'Authentication failed'.",
+    "Keep bulk-image rows visible after the first upload so slots 1/2 are usable.",
+    "Make bulk-img-slot testids unique per row.",
+    "Optional: require auth on POST /api/payments/create-order.",
+    "Delete QA supplier qa.w10510.ui.76ecfbca@example.com after sign-off (cleanup command in /app/memory/test_credentials.md)."
+  ],
+  "critical_code_review_comments": [
+    "BulkImageUpload.uploadFor(): the PUT→PATCH fallback swallows the real error of the PUT (e.g. a 422 validation) and retries a PATCH that does not exist for these routes; log/report the original error instead.",
+    "BulkImageUpload nextUrls[slotIdx] = url on a sparse array then .filter(Boolean) silently re-indexes slots, so a photo dropped into slot 2 becomes slot 0 — acceptable but surprising; document or block out-of-order slots.",
+    "SupplierDashboard.jsx is 1814 lines — split (filters bar, toner grid, orders table, bulk sections) per the 700-line guideline.",
+    "listing-filter-count always prints 'N of listings.length' even when the Printers/Papers tab is active (visibleAllProducts is the filtered set there) — count can mismatch what is on screen.",
+    "eslint warning still present: SupplierDashboard.jsx:392 useEffect missing deps 'load'/'loadAllProducts'."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_wave105_10_bulk_color_images.py",
+    "/app/backend/tests/seed_w10510_supplier.py",
+    "/app/memory/test_credentials.md"
+  ],
+  "success_rate": {"backend": "89% (16/18)", "frontend": "90% — all 4 target features work; 1 integration gap (printers) + minor UX issues"},
+  "seed_data_creation": "Approved QA supplier qa.w10510.ui.76ecfbca@example.com / Test@1234 with 3 toner listings (TEST-UI-HP-26A, TEST-UI-CN-052 both photo-less at first, TEST-UI-EP-664 with photo). One real image uploaded to the Canon row during testing. Temp per-test supplier created+deleted by the pytest suite; stray user from a failed seed run was cleaned up.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "Admin support@tonerscart.com / Bangara1@# (works, /auth/me role=admin). Supplier qa.w10510.ui.76ecfbca@example.com / Test@1234 (approved, seller agreement accepted).",
+  "context_for_next_testing_agent": "Verified working: (1) bulk-upload toner grid alignment — measure y of [data-testid=bulk-cell-{i}-price], pitch must be constant (was 77px); (2) color coercion — import /tmp/qa_toner_bulk.csv style CSV, Black→Black, cyan→Cyan, MAGENTA→Magenta, Neon→Neon; (3) listing search/brand/price filters + reset all correct (counts 3→1→0→3); (4) /supplier/bulk-images lists only photo-less listings, real upload persisted after reload (2→1). NOTE: a Marketplace Seller Agreement modal (data-testid=agreement-gate) blocks all clicks for a brand-new dealer — check the 'I agree' checkbox and click 'Start listing' first; also dismiss the cookie 'Accept' banner. Backend suite: pytest /app/backend/tests/test_wave105_10_bulk_color_images.py (2 known failures = the two reported defects). Razorpay was NOT charged; only create-order/config-check probed.",
+  "rca_of_the_issue": "Printers gap: BulkImageUpload.jsx uses GET /supplier/printers, but backend only registers POST /supplier/printers, POST /supplier/printers/bulk and GET /supplier/printers/mine, so FastAPI answers 405; the .catch fallback returns an empty array, so the page silently renders toners only and the 'N listings without photos' count under-reports. Razorpay: /api/payments/config-check confirms both env vars are loaded and the client initialises, so the 400 comes from Razorpay itself rejecting the key/secret pair (invalid or mixed test key_id with live secret) in the preview environment."
+}

@@ -189,6 +189,7 @@ const CONDITION_VALUES = {
     openbox: "open-box",
 };
 const COLOR_VALUES = {
+    // Printer palette (color mode)
     color: "color",
     colour: "color",
     bw: "bw",
@@ -197,6 +198,22 @@ const COLOR_VALUES = {
     mono: "bw",
     monochrome: "bw",
     both: "both",
+    // Toner palette — cartridge colors. Same lookup table since Excel
+    // uses "Color" column for both product types.
+    black: "Black",
+    k: "Black",
+    cyan: "Cyan",
+    c: "Cyan",
+    magenta: "Magenta",
+    m: "Magenta",
+    yellow: "Yellow",
+    y: "Yellow",
+    tricolor: "Tri-Color",
+    tricolour: "Tri-Color",
+    tricolorcmy: "Tri-Color",
+    cmy: "Tri-Color",
+    photoblack: "Photo Black",
+    pbk: "Photo Black",
 };
 const TONER_TYPE_VALUES = { original: "Original", oem: "Original", compatible: "Compatible", refilled: "Refilled" };
 
@@ -339,7 +356,18 @@ const _coerceCell = (key, value) => {
             return "";
         }
         case "condition":    return _mapValue(raw, CONDITION_VALUES);
-        case "color":        return _mapValue(raw, COLOR_VALUES);
+        case "color":        {
+            // Wave 105.8 — bulk-upload color bug. Excel values like "Black",
+            // "Cyan" were being dropped because COLOR_VALUES only covered the
+            // printer color-mode palette. Now the table covers both printer
+            // modes AND toner cartridge colors. If nothing matches, pass the
+            // raw value through capitalized so dealers can still see + fix
+            // it inline rather than losing the data silently.
+            const mapped = _mapValue(raw, COLOR_VALUES);
+            if (mapped) return mapped;
+            const s = _strip(raw);
+            return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
+        }
         case "color_mode":   return _mapValue(raw, COLOR_VALUES);
         case "toner_type":   return _mapValue(raw, TONER_TYPE_VALUES);
         case "warranty":
@@ -1127,39 +1155,57 @@ export default function BulkUploadGeneric({ config, onClose, onSuccess, editMode
                                                 );
                                             }
                                             return (
-                                                <td key={c.key} className="px-1 py-1 border-b border-black/[0.04] align-top">
-                                                    <input
-                                                        type={c.type === "number" ? "number" : "text"}
-                                                        value={val}
-                                                        onChange={(e) => updateCell(idx, c.key, e.target.value)}
-                                                        min={c.type === "number" ? "0" : undefined}
-                                                        className={base + (c.type === "number" ? " font-mono" : "")}
-                                                        data-testid={`bulk-cell-${idx}-${c.key}`}
-                                                    />
-                                                    {c.key === PRICE_KEY && Number(val) > 0 && (() => {
-                                                        // Wave 61 — live per-row payout breakdown.
-                                                        const typed = Number(val);
-                                                        const gst = r.gst_rate !== "" && r.gst_rate != null ? Number(r.gst_rate) : 18;
-                                                        const basePrice = priceType === "incl"
-                                                            ? Math.round((typed / (1 + gst / 100)) * 100) / 100
-                                                            : typed;
-                                                        const c2 = commissionFor(basePrice);
-                                                        if (!c2) return null;
-                                                        const gstAmt = Math.round(basePrice * gst / 100);
-                                                        const payout = Math.max(0, Math.round(basePrice - c2.commission));
-                                                        return (
-                                                            <div className="mt-1.5 text-[10.5px] leading-[1.45] space-y-[1px] font-mono" data-testid={`bulk-breakdown-${idx}`}>
-                                                                <div className="flex justify-between text-emerald-700 font-semibold">
-                                                                    <span>You&rsquo;ll receive:</span>
-                                                                    <span>{formatINR(payout)}</span>
-                                                                </div>
-                                                                <div className="flex justify-between text-[#6E6E73]">
-                                                                    <span>GST ({gst}%):</span>
-                                                                    <span>{formatINR(gstAmt)}</span>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })()}
+                                                <td key={c.key} className={"px-1 py-1 border-b border-black/[0.04] align-top" + (c.key === PRICE_KEY ? " min-w-[140px]" : "")}>
+                                                    {c.key === PRICE_KEY ? (
+                                                        // Wave 105.8 — price cell wraps input + breakdown in a
+                                                        // fixed-height container so ALL rows line up vertically
+                                                        // regardless of whether the breakdown is showing. Was
+                                                        // zig-zagging when 50-100 toner rows had prices set.
+                                                        <div className="min-h-[68px] flex flex-col">
+                                                            <input
+                                                                type={c.type === "number" ? "number" : "text"}
+                                                                value={val}
+                                                                onChange={(e) => updateCell(idx, c.key, e.target.value)}
+                                                                min="0"
+                                                                className={base + " font-mono"}
+                                                                data-testid={`bulk-cell-${idx}-${c.key}`}
+                                                            />
+                                                            {Number(val) > 0 ? (() => {
+                                                                const typed = Number(val);
+                                                                const gst = r.gst_rate !== "" && r.gst_rate != null ? Number(r.gst_rate) : 18;
+                                                                const basePrice = priceType === "incl"
+                                                                    ? Math.round((typed / (1 + gst / 100)) * 100) / 100
+                                                                    : typed;
+                                                                const c2 = commissionFor(basePrice);
+                                                                if (!c2) return null;
+                                                                const gstAmt = Math.round(basePrice * gst / 100);
+                                                                const payout = Math.max(0, Math.round(basePrice - c2.commission));
+                                                                return (
+                                                                    <div className="mt-1 text-[10px] leading-[1.35] space-y-[1px] font-mono" data-testid={`bulk-breakdown-${idx}`}>
+                                                                        <div className="flex justify-between text-emerald-700 font-bold">
+                                                                            <span>Payout:</span>
+                                                                            <span>{formatINR(payout)}</span>
+                                                                        </div>
+                                                                        <div className="flex justify-between text-[#6E6E73]">
+                                                                            <span>GST&nbsp;({gst}%):</span>
+                                                                            <span>{formatINR(gstAmt)}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })() : (
+                                                                <div className="mt-1 text-[10px] text-[#C7C7CC] font-mono" aria-hidden="true">·</div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <input
+                                                            type={c.type === "number" ? "number" : "text"}
+                                                            value={val}
+                                                            onChange={(e) => updateCell(idx, c.key, e.target.value)}
+                                                            min={c.type === "number" ? "0" : undefined}
+                                                            className={base + (c.type === "number" ? " font-mono" : "")}
+                                                            data-testid={`bulk-cell-${idx}-${c.key}`}
+                                                        />
+                                                    )}
                                                 </td>
                                             );
                                         })}

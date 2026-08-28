@@ -278,6 +278,9 @@ export default function SupplierDashboard() {
     };
     const [catalog, setCatalog] = useState("toners"); // 'toners' | 'printers' | 'papers' | 'consumables' | 'orders' | 'earnings' | 'insights' | 'bulk' | 'd2d' | 'oem'
     const [listingFilter, setListingFilter] = useState("all"); // 'all' | 'active' — toner listings
+    const [listingSearch, setListingSearch] = useState("");    // Wave 105.9 — search + filters
+    const [listingBrandFilter, setListingBrandFilter] = useState("");
+    const [listingPriceMax, setListingPriceMax] = useState("");
     const [orderFilter, setOrderFilter] = useState("all"); // 'all' | 'pending' — orders
     const [bulkOpen, setBulkOpen] = useState(false);
     const [editBulkOpen, setEditBulkOpen] = useState(false);
@@ -815,16 +818,43 @@ export default function SupplierDashboard() {
     }), [listings, orders]);
 
     const visibleListings = useMemo(
-        () => (listingFilter === "active" ? listings.filter((l) => l.stock > 0) : listings),
-        [listings, listingFilter]
+        () => {
+            let out = listingFilter === "active" ? listings.filter((l) => l.stock > 0) : listings;
+            const q = listingSearch.trim().toLowerCase();
+            if (q) {
+                out = out.filter((l) => {
+                    const hay = `${l.brand || ""} ${l.model_number || ""} ${l.compatible_models || ""} ${l.oem_part_number || ""}`.toLowerCase();
+                    return hay.includes(q);
+                });
+            }
+            if (listingBrandFilter) out = out.filter((l) => (l.brand || "").toLowerCase() === listingBrandFilter.toLowerCase());
+            const maxP = Number(listingPriceMax);
+            if (listingPriceMax && !isNaN(maxP) && maxP > 0) out = out.filter((l) => Number(l.price || 0) <= maxP);
+            return out;
+        },
+        [listings, listingFilter, listingSearch, listingBrandFilter, listingPriceMax]
+    );
+    const listingBrandOptions = useMemo(
+        () => Array.from(new Set(listings.map((l) => l.brand).filter(Boolean))).sort(),
+        [listings]
     );
     const visibleOrders = useMemo(
         () => (orderFilter === "pending" ? orders.filter((o) => o.status === "requested") : orders),
         [orders, orderFilter]
     );
     const visibleAllProducts = useMemo(
-        () => (listingFilter === "active" ? allProducts.filter((p) => Number(p.stock) > 0) : allProducts),
-        [allProducts, listingFilter]
+        () => {
+            let out = listingFilter === "active" ? allProducts.filter((p) => Number(p.stock) > 0) : allProducts;
+            const q = listingSearch.trim().toLowerCase();
+            if (q) {
+                out = out.filter((p) => `${p.brand || ""} ${p.model_number || ""}`.toLowerCase().includes(q));
+            }
+            if (listingBrandFilter) out = out.filter((p) => (p.brand || "").toLowerCase() === listingBrandFilter.toLowerCase());
+            const maxP = Number(listingPriceMax);
+            if (listingPriceMax && !isNaN(maxP) && maxP > 0) out = out.filter((p) => Number(p.price || 0) <= maxP);
+            return out;
+        },
+        [allProducts, listingFilter, listingSearch, listingBrandFilter, listingPriceMax]
     );
 
     if (!isApproved && !isPending) {
@@ -1193,6 +1223,57 @@ export default function SupplierDashboard() {
                         </button>
                     </div>
                 )}
+            {/* Wave 105.9 — search + brand + price filter for the dealer's own listings */}
+            {(listings.length > 0 || allProducts.length > 0) && (
+                <div className="mb-4 flex flex-wrap items-center gap-2" data-testid="listing-filters">
+                    <div className="relative flex-1 min-w-[180px] max-w-[320px]">
+                        <input
+                            type="text"
+                            value={listingSearch}
+                            onChange={(e) => setListingSearch(e.target.value)}
+                            placeholder="Search by brand, model, part #…"
+                            className="w-full h-9 pl-3 pr-8 text-[13px] font-semibold rounded-lg border border-[#D2D2D7] bg-white text-[#0A0A0B] placeholder:text-[#86868B] placeholder:font-medium focus:outline-none focus:border-[#00B7C7]"
+                            data-testid="listing-search-input"
+                        />
+                        {listingSearch && (
+                            <button onClick={() => setListingSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#86868B] hover:text-[#0A0A0B]" aria-label="Clear" data-testid="listing-search-clear">×</button>
+                        )}
+                    </div>
+                    <select
+                        value={listingBrandFilter}
+                        onChange={(e) => setListingBrandFilter(e.target.value)}
+                        className="h-9 px-2 text-[13px] font-semibold rounded-lg border border-[#D2D2D7] bg-white text-[#0A0A0B] focus:outline-none focus:border-[#00B7C7]"
+                        data-testid="listing-brand-filter"
+                    >
+                        <option value="">All brands</option>
+                        {listingBrandOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                    <input
+                        type="number"
+                        value={listingPriceMax}
+                        onChange={(e) => setListingPriceMax(e.target.value)}
+                        placeholder="Max ₹"
+                        min="0"
+                        className="h-9 w-28 px-2 text-[13px] font-semibold rounded-lg border border-[#D2D2D7] bg-white text-[#0A0A0B] placeholder:text-[#86868B] placeholder:font-medium focus:outline-none focus:border-[#00B7C7] font-mono"
+                        data-testid="listing-price-max"
+                    />
+                    {(listingSearch || listingBrandFilter || listingPriceMax) && (
+                        <button
+                            onClick={() => { setListingSearch(""); setListingBrandFilter(""); setListingPriceMax(""); }}
+                            className="h-9 px-3 text-[12px] font-bold rounded-lg border border-[#D2D2D7] bg-white text-[#0A0A0B] hover:bg-[#F5F5F7]"
+                            data-testid="listing-filters-reset"
+                        >Reset</button>
+                    )}
+                    <div className="text-[11.5px] text-[#3a3a40] font-bold ml-auto whitespace-nowrap" data-testid="listing-filter-count">
+                        {visibleListings.length} of {listings.length}
+                    </div>
+                    <button
+                        onClick={() => navigate("/supplier/bulk-images")}
+                        className="h-9 px-3 text-[12px] font-bold rounded-lg border border-[#00B7C7] bg-[#00B7C7]/5 text-[#00838f] hover:bg-[#00B7C7]/10 inline-flex items-center gap-1.5 whitespace-nowrap"
+                        data-testid="bulk-images-link"
+                    >Add photos in bulk</button>
+                </div>
+            )}
             {visibleListings.length === 0 ? (
                 <div className="tc-card-flat p-8 text-center text-[#6E6E73]">
                     {listingFilter === "active"
