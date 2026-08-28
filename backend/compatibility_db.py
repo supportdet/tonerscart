@@ -1021,9 +1021,7 @@ EXTRA_TONERS = [
 ]
 
 
-import re
 from difflib import get_close_matches
-from functools import lru_cache
 
 # Marketing / sub-brand words commonly omitted from SEO slugs. They never
 # distinguish two distinct models, so stripping them yields clean canonical

@@ -47,6 +47,7 @@ import PrintersResults from "./pages/PrintersResults";
 import Papers from "./pages/Papers";
 import CustomerDashboard from "./pages/CustomerDashboard";
 import SupplierDashboard from "./pages/SupplierDashboard";
+import BulkImageUpload from "./pages/BulkImageUpload";
 import AdminDashboard from "./pages/AdminDashboard";
 import DealerProfile from "./pages/DealerProfile";
 import Cart from "./pages/Cart";
@@ -202,6 +203,7 @@ function App() {
                                     <Route path="/procurement" element={<ProcProtectedRoute><ProcurementDashboard /></ProcProtectedRoute>} />
                                     <Route path="/customer" element={<ProtectedRoute roles={["customer"]}><CustomerDashboard /></ProtectedRoute>} />
                                     <Route path="/supplier" element={<ProtectedRoute roles={["supplier"]} allowApplicationStatus={["pending"]}><SupplierDashboard /></ProtectedRoute>} />
+                                    <Route path="/supplier/bulk-images" element={<ProtectedRoute roles={["supplier"]}><BulkImageUpload /></ProtectedRoute>} />
                                     <Route path="/oem-dashboard" element={<ProtectedRoute roles={["oem"]}><OemDashboard /></ProtectedRoute>} />
                                     <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
                                     <Route path="/admin/dealers/:id" element={<ProtectedRoute roles={["admin"]}><DealerProfile /></ProtectedRoute>} />
