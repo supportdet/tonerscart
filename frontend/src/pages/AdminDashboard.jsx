@@ -13,6 +13,7 @@ import OrdersTab from "./admin/OrdersTab";
 import ContentTab from "./admin/ContentTab";
 import FinanceTab from "./admin/FinanceTab";
 import ProcurementTab from "./admin/ProcurementTab";
+import ExportProductsButton from "../components/ExportProductsButton";
 import OemTab from "./admin/OemTab";
 import AgreementsTab from "./admin/AgreementsTab";
 import CustomersTab from "./admin/CustomersTab";
@@ -250,6 +251,9 @@ export default function AdminDashboard() {
                     TonersCart — Operations
                 </h1>
                 <p className="text-[14px] text-[#6E6E73] mt-1">Welcome, {user?.name}</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                    <ExportProductsButton label="Download full product list (Excel)" testId="admin-export-products-btn" />
+                </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
