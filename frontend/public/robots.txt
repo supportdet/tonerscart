@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
+Allow: /seo/
 Disallow: /admin
 Disallow: /supplier
 Disallow: /procurement

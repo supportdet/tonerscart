@@ -1796,6 +1796,7 @@ def robots_txt():
     txt = (
         "User-agent: *\n"
         "Allow: /\n"
+        "Allow: /seo/\n"
         "Disallow: /admin\n"
         "Disallow: /supplier\n"
         "Disallow: /procurement\n"
@@ -2071,6 +2072,9 @@ from routes.compat import router as compat_router  # noqa: E402
 app.include_router(compat_router)
 from routes.payments import router as payments_router  # noqa: E402  Wave 105.4
 app.include_router(payments_router)
+from routes.export_seo import router as export_seo_router, api_router as export_seo_api_router  # noqa: E402
+app.include_router(export_seo_router)
+app.include_router(export_seo_api_router)
 
 # Procurement module (Govt & Corporate) — self-contained, separate from the
 # regular Supabase-Auth customer/dealer/admin flow.

@@ -1,7 +1,30 @@
 # TonersCart — Product Requirements (Supabase edition)
 
 
-> **Latest (2026-02 — Wave 105.4 Razorpay Standard Checkout LIVE + Supabase key rotation recovered):**
+> **Latest (2026-02 — Wave 106 Excel export + AI/SEO prerender):**
+>
+> ### Product & price Excel export
+> - **`backend/routes/export_seo.py`** (new) — `GET /api/export/products.xlsx`.
+>   Admin → every row across `listings`, `printer_listings`, `consumable_listings`, `paper_listings`, `scanner_listings` (200 rows live). Supplier → filtered to their own `supplier_id`. Guests/customers → 401/403.
+>   Single sheet "Products" (12 cols: Category, Brand, Model, Subtype/Color, Price, GST%, Price incl. GST, Stock, City, Supplier, Listing ID, Created) + "About" meta sheet (generated-at timestamp, scope label, row count). GST-inclusive price computed server-side.
+> - **`frontend/src/components/ExportProductsButton.jsx`** (new) — authenticated axios blob download, Content-Disposition filename parse, sonner toasts, data-testid.
+> - Wired into `SupplierDashboard` (`supplier-export-products-btn`, under the Manage toners CTA row) and `AdminDashboard` (`admin-export-products-btn`, under the Operations header).
+>
+> ### AI/SEO prerender for product pages
+> - **`backend/routes/export_seo.py`** — `GET /seo/{kind}/{id}` + `/api/seo/{kind}/{id}` alias. Returns a complete static HTML page per product (toner / consumable / printer / paper / scanner) with `<title>`, meta description, canonical, OpenGraph/Twitter tags, JSON-LD `Product` schema (price, availability, seller) and a visible crawler-readable spec table. 10-min edge cache header. 404 on missing id. Verified live against real toner, printer and paper IDs — JSON-LD and OG tags render cleanly.
+> - **`frontend/middleware.js`** (new, Vercel Edge Middleware) — matches `/toner/:id`, `/printer/:id`, `/consumable/:id`, `/paper/:id`, `/scanner/:id`. Detects ~40 bot UA signatures (ClaudeBot, GPTBot, Googlebot, Perplexity, Applebot, Bytespider, CCBot, FacebookExternalHit, Slackbot, WhatsApp, etc.). For bot requests it fetches the matching `${BACKEND_URL}/seo/{kind}/{id}` from Railway and returns the HTML; human visitors still get the React SPA. Fails open: falls through to SPA on any fetch error so bots never see a 5xx.
+> - **Deploy note**: set `BACKEND_URL=https://<your-railway-origin>` in Vercel Project Settings → Env Vars for the middleware to activate. Backend is already deployed; no backend env change needed.
+> - **`backend/server.py` + `frontend/public/robots.txt`** — allow `/seo/` in robots so bots know the prerendered path is crawlable.
+>
+> ### Verification
+> - Admin login + `/api/export/products.xlsx` → HTTP 200, 22KB, 200 product rows, correct 12-column header, GST-inclusive column populated, About sheet correct.
+> - Anonymous → 401.
+> - `/api/seo/toner/<real-id>` → full HTML with JSON-LD Product (price `9912.00`, availability InStock, seller business name). `/api/seo/printer/<real-id>` → Epson L1250 Printer page. `/api/seo/toner/<missing>` → 404.
+> - oxlint `src/` → 0 errors (82 pre-existing warnings unchanged).
+> - Homepage SPA smoke screenshot clean.
+
+
+> **Prev (2026-02 — Wave 105.4 Razorpay Standard Checkout LIVE + Supabase key rotation recovered):**
 >
 > ### Razorpay integration shipped
 > - **`backend/routes/payments.py`** (new file, 150 lines) — two endpoints:

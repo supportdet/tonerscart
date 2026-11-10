@@ -25,7 +25,8 @@ import CompetitivePricingNote from "../components/CompetitivePricingNote";
 import TonerModelSearchSelect from "../components/TonerModelSearchSelect";
 import CommissionCalculator from "../components/CommissionCalculator";
 import { commissionFor, payoutBreakdown } from "../lib/commission";
-import { Copy, Check, ChevronLeft, Upload, ArrowRight, Store, Building2, Layers } from "lucide-react";
+import ExportProductsButton from "../components/ExportProductsButton";
+import { Copy, Check, ChevronLeft, Upload, ArrowRight, Store, Building2, Layers, Download } from "lucide-react";
 import { colorSwatch as _colorSwatch } from "../lib/colors";
 import BulkUploadGeneric from "../components/BulkUploadGeneric";
 import { tonerBulkConfig } from "../lib/bulkConfigs";
@@ -1214,6 +1215,7 @@ export default function SupplierDashboard() {
                     {listings.length > 0 && (
                         <Button variant="outline" className="h-12 px-6 text-[14px] inline-flex items-center gap-2" disabled={!isApproved} title={!isApproved ? lockReason : undefined} onClick={guardedClick(openEditBulk)} data-testid="edit-toners-btn"><Layers size={15} /> Edit toners</Button>
                     )}
+                    <ExportProductsButton disabled={!isApproved} label="Download my products (Excel)" testId="supplier-export-products-btn" />
                 </CenterAction>
                 <D2DExplainer />
                 {listingFilter === "active" && (
